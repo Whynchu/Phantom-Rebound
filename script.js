@@ -35,84 +35,13 @@ function resize() {
 }
 resize();
 
-// ── COLORS ───────────────────────────────────────────────────────────────────
-const C = {
-  bg:'#161616', grid:'rgba(255,255,255,0.025)', border:'rgba(255,255,255,0.1)',
-  danger:'#60a5fa', dangerCore:'rgba(200,230,255,0.9)',
-  grey:'#888', green:'#4ade80', ghost:'#b8ffcc', siphon:'#a78bfa',
-};
-
-// ── ROOM DEFINITIONS ─────────────────────────────────────────────────────────
-// All enemies spawn at d:0 — full room visible from the start.
-// Rushers/siphons always paired with at least one shooter.
-// Chaos is purely RNG jitter on fire timing, not spawn order.
-const ROOM_SCRIPTS = [
-  // Room 1 — just one chaser. Learn the basics.
-  { name:'ARRIVAL',   chaos:0,    waves:[ [{t:'chaser',   n:1, d:0}] ] },
-  // Room 2 — two chasers.
-  { name:'PATROL',    chaos:0,    waves:[ [{t:'chaser',   n:2, d:0}] ] },
-  // Room 3 — meet the rusher, but a chaser is always there too.
-  { name:'RUSH',      chaos:0,    waves:[ [{t:'chaser',   n:1, d:0},{t:'rusher', n:1, d:0}] ] },
-  // Room 4 — sniper introduced. Just one of each, slow fire.
-  { name:'MARKSMAN',  chaos:0.05, waves:[ [{t:'chaser',   n:2, d:0},{t:'sniper', n:1, d:0}] ] },
-  // Room 5 — zoner introduced. Chasers keep pressure.
-  { name:'ZONE',      chaos:0.1,  waves:[ [{t:'chaser',   n:2, d:0},{t:'zoner',  n:1, d:0}] ] },
-  // Room 6 — rusher + sniper combo. Sniper provides bullets to harvest.
-  { name:'PINCER',    chaos:0.1,  waves:[ [{t:'sniper',   n:2, d:0},{t:'rusher', n:2, d:0}] ] },
-  // Room 7 — siphon introduced, always with chasers shooting.
-  { name:'DRAIN',     chaos:0.15, waves:[ [{t:'chaser',   n:2, d:0},{t:'siphon', n:1, d:0}] ] },
-  // Room 8 — disruptor introduced alongside chasers.
-  { name:'STATIC',    chaos:0.15, waves:[ [{t:'chaser',   n:2, d:0},{t:'disruptor',n:1,d:0}] ] },
-  // Room 9 — mixed: sniper + zoner + rusher (rushers always have shooters).
-  { name:'CROSSFIRE', chaos:0.2,  waves:[ [{t:'sniper',   n:1, d:0},{t:'zoner',  n:1, d:0},{t:'rusher',n:1,d:0}] ] },
-  // Room 10 — heavier: disruptors + rushers + siphon (siphon always with shooters).
-  { name:'BARRAGE',   chaos:0.25, waves:[ [{t:'disruptor',n:2, d:0},{t:'rusher', n:1, d:0},{t:'siphon',n:1,d:0}] ] },
-  // Room 11 — everything except siphon, real pressure.
-  { name:'SIEGE',     chaos:0.3,  waves:[ [{t:'chaser',   n:2, d:0},{t:'zoner',  n:1, d:0},{t:'sniper',n:1,d:0},{t:'rusher',n:2,d:0}] ] },
-  // Room 12 — full kit.
-  { name:'VORTEX',    chaos:0.35, waves:[ [{t:'disruptor',n:2, d:0},{t:'sniper', n:1, d:0},{t:'rusher',n:2,d:0},{t:'siphon',n:1,d:0}] ] },
-  // Room 13+ handled by getRoomDef
-];
-
-// ── ENEMY DEFS ────────────────────────────────────────────────────────────────
-const EDEFS = {
-  chaser:    {col:'#3b82f6', glowCol:'rgba(59,130,246,0.7)',  r:12,hp:3, spd:55, fRate:1800,burst:1,spread:.22,pts:50,  flee:true,  fleeRange:110, strafeSpd:0.6},
-  zoner:     {col:'#2563eb', glowCol:'rgba(37,99,235,0.7)',   r:15,hp:5, spd:24, fRate:2200,burst:8,spread:6.28,pts:80, flee:true,  fleeRange:130, strafeSpd:0.5},
-  sniper:    {col:'#93c5fd', glowCol:'rgba(147,197,253,0.7)', r:9, hp:2, spd:30, fRate:2800,burst:1,spread:0,  pts:100, flee:true,  fleeRange:150, strafeSpd:0.8},
-  disruptor: {col:'#1d4ed8', glowCol:'rgba(29,78,216,0.7)',   r:11,hp:4, spd:46, fRate:750, burst:1,spread:.9, pts:60,  flee:true,  fleeRange:100, strafeSpd:0.7},
-  siphon:    {col:'#a78bfa', glowCol:'rgba(167,139,250,0.7)', r:13,hp:3, spd:28, fRate:9999,burst:0,spread:0,  pts:120, isSiphon:true},
-  rusher:    {col:'#f472b6', glowCol:'rgba(244,114,182,0.8)', r:13,hp:4, spd:90, fRate:9999,burst:0,spread:0,  pts:70,  isRusher:true},
-};
+import { C, ROOM_SCRIPTS, EDEFS, SPS_LADDER, DECAY_BASE, M, UPGRADES, getDefaultUpgrades } from './gameData.js';
 
 // ── PLAYER UPGRADES ───────────────────────────────────────────────────────────
-// Archero-style kit — persistent multipliers stored here
-let UPG = {
-  speedMult:1, sps:.5, spsTier:0, shapeTier:0, maxCharge:10,
-  decayBonus:0, pierceTier:0, bounceTier:0, homingTier:0,
-  shotSize:1, shotSpd:1, critChance:0, absorbRange:0, regenTick:0
-};
+let UPG = getDefaultUpgrades();
 function resetUpgrades() {
-  UPG = {
-    speedMult:   1,    // movement speed
-    sps:         0.5,  // shots per second
-    spsTier:     0,
-    shapeTier:   0,    // 0=single 1=triple 2=penta 3=ring 4=double 5=snipe
-    maxCharge:   10,
-    decayBonus:  0,    // ms added to grey bullet lifetime
-    pierceTier:  0,    // 0=none, 1=pierce 1 extra
-    bounceTier:  0,    // output bullets bounce off walls
-    homingTier:  0,    // output bullets curve toward nearest enemy
-    shotSize:    1,    // bullet radius multiplier
-    shotSpd:     1,    // output bullet speed mult
-    critChance:  0,    // 0..1 chance to deal 2x damage
-    absorbRange: 0,    // extra absorb radius
-    regenTick:   0,    // hp regen per room clear
-  };
+  UPG = getDefaultUpgrades();
 }
-
-const SPS_LADDER = [0.5,1.0,1.8,3.0,5.0,8.0];
-const DECAY_BASE = 3500; // ms — was 8000, now faster
-const M = 18;
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let gstate = 'start';
