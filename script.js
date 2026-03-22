@@ -12,6 +12,7 @@ function fixSafariViewport() {
   if (isSafari && /Mobile/.test(navigator.userAgent)) {
     document.body.style.height = `${window.innerHeight}px`;
     document.body.style.minHeight = `${window.innerHeight}px`;
+    document.body.style.position = 'relative';
   }
 }
 

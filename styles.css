@@ -29,11 +29,8 @@ body {
   min-height: 100dvh; /* Dynamic viewport height */
   min-height: -webkit-fill-available; /* Safari fallback */
   min-height: calc(var(--vh, 1vh) * 100); /* JavaScript fallback */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  -webkit-box-align: center; /* Safari flexbox */
-  -webkit-box-pack: center; /* Safari flexbox */
+  position: relative; /* For absolute positioning of #wrap */
+  display: block; /* Remove flexbox for Safari compatibility */
   touch-action: none;
   user-select: none;
 }
@@ -44,13 +41,16 @@ body::before {
   pointer-events:none; z-index:100;
 }
 #wrap {
-  position: relative;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  -webkit-transform: translate(-50%, -50%); /* Safari prefix */
   width: min(400px, 95vw);
   max-width: 400px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 0 auto;
 }
 /* TOP HUD */
 #top-hud {
