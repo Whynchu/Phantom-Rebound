@@ -4,14 +4,17 @@ const ctx = cv.getContext('2d');
 // ── SAFARI MOBILE VIEWPORT FIX ───────────────────────────────────────────────
 // Safari mobile has issues with 100vh including the address bar
 function fixSafariViewport() {
-  const vh = window.innerHeight * 0.01;
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  const vh = viewportHeight * 0.01;
   document.documentElement.style.setProperty('--vh', `${vh}px`);
 
-  // Also set height directly for Safari
+  // Set fallback heights for iOS Safari hot-address-bar resizing
   const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
   if (isSafari && /Mobile/.test(navigator.userAgent)) {
-    document.body.style.height = `${window.innerHeight}px`;
-    document.body.style.minHeight = `${window.innerHeight}px`;
+    document.documentElement.style.height = `${viewportHeight}px`;
+    document.documentElement.style.minHeight = `${viewportHeight}px`;
+    document.body.style.height = `${viewportHeight}px`;
+    document.body.style.minHeight = `${viewportHeight}px`;
     document.body.style.position = 'relative';
   }
 }
@@ -20,6 +23,9 @@ window.addEventListener('resize', fixSafariViewport);
 window.addEventListener('orientationchange', () => {
   setTimeout(fixSafariViewport, 100);
 });
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', fixSafariViewport);
+}
 fixSafariViewport(); // Initial call
 
 function resize() {
