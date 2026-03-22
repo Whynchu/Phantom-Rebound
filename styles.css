@@ -16,6 +16,8 @@
 html, body {
   width: 100vw;
   height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for modern browsers */
+  height: -webkit-fill-available; /* Safari fallback */
   overflow: hidden;
 }
 body {
@@ -23,9 +25,13 @@ body {
   color: var(--text);
   font-family: 'IBM Plex Mono', monospace;
   min-height: 100vh;
+  min-height: 100dvh; /* Dynamic viewport height */
+  min-height: -webkit-fill-available; /* Safari fallback */
   display: flex;
   align-items: center;
   justify-content: center;
+  -webkit-box-align: center; /* Safari flexbox */
+  -webkit-box-pack: center; /* Safari flexbox */
   touch-action: none;
   user-select: none;
 }
@@ -160,4 +166,16 @@ body::before {
   font-family:'Syne',sans-serif; font-weight:800; font-size:28px;
   color:#4ade80; letter-spacing:.15em; text-shadow:0 0 20px rgba(74,222,128,0.6);
   text-transform:uppercase;
+}
+
+/* Mobile Safari centering fix */
+@media screen and (max-width: 768px) {
+  html, body {
+    height: -webkit-fill-available;
+    min-height: -webkit-fill-available;
+  }
+  body {
+    min-height: -webkit-fill-available;
+  }
+}
 }
