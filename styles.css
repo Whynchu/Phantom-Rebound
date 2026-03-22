@@ -13,12 +13,16 @@
   --siphon:  #a78bfa;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
 body {
   background: #000;
   color: var(--text);
   font-family: 'IBM Plex Mono', monospace;
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -34,9 +38,11 @@ body::before {
 #wrap {
   position: relative;
   width: min(400px, 95vw);
+  max-width: 400px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin: 0 auto;
 }
 /* TOP HUD */
 #top-hud {
