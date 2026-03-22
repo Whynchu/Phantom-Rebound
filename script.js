@@ -213,7 +213,10 @@ function showUpgrades() {
       <div class="up-desc">${u.desc}</div>
       <div class="up-tag" style="color:${tagColor}">${u.tag}</div>`;
     el.onclick=()=>{
-      u.apply();
+      const state = { hp, maxHp };
+      u.apply(UPG, state);
+      hp = state.hp;
+      maxHp = state.maxHp;
       document.getElementById('s-up').classList.add('off');
       startRoom(roomIndex+1);
       gstate='playing'; lastT=performance.now();
