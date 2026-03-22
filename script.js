@@ -2,6 +2,12 @@ import { C, ROOM_SCRIPTS, EDEFS, SPS_LADDER, DECAY_BASE, M, UPGRADES, getDefault
 
 const cv  = document.getElementById('cv');
 const ctx = cv.getContext('2d');
+const LB_KEY = 'phantom-rebound-leaderboard-v1';
+
+const nameInputStart = document.getElementById('name-input-start');
+const nameInputGo = document.getElementById('name-input-go');
+const lbCurrent = document.getElementById('lb-current');
+const lbList = document.getElementById('leaderboard-list');
 
 // ── SAFARI MOBILE VIEWPORT FIX ───────────────────────────────────────────────
 // Safari mobile has issues with 100vh including the address bar
@@ -59,13 +65,12 @@ let gstate = 'start';
 let player = {};
 let bullets = [], enemies = [], particles = [];
 let score=0, kills=0;
-let charge=0, fireT=0, stillTimer=0, prevStill=false;
+let charge=0, fireT=0;
 let hp=100, maxHp=100;
-// ── JOYSTICK STATE ────────────────────────────────────────────────────────────
-// Virtual joystick: anchor set on press, direction from delta
-let joy = { active:false, ax:0, ay:0, dx:0, dy:0, mag:0 };
-const JOY_DEADZONE = 6;   // px — ignore tiny wiggles
-const JOY_MAX     = 55;   // px — full speed at this delta
+let ptr = { x:0, y:0, on:false };
+let enemyIdSeq = 1;
+let playerName = 'RUNNER';
+let leaderboard = [];
 let raf=0, lastT=0;
 
 // Room system
@@ -136,7 +141,16 @@ function spawnEnemy(type) {
   else{x=M+d.r;y=M+Math.random()*(H-2*M);}
   // Scale HP with room index
   const hpScale = 1 + roomIndex * 0.10;
-  enemies.push({...d, x, y, type, hp:Math.ceil(d.hp*hpScale), maxHp:Math.ceil(d.hp*hpScale), fT:Math.random()*d.fRate});
+  enemies.push({
+    ...d,
+    eid: enemyIdSeq++,
+    x,
+    y,
+    type,
+    hp:Math.ceil(d.hp*hpScale),
+    maxHp:Math.ceil(d.hp*hpScale),
+    fT:Math.random()*d.fRate,
+  });
 }
 
 // Bullet speed scales with room — slow at room 1, ramps up
@@ -159,29 +173,40 @@ function spawnZB(ex,ey,idx,total) {
 function firePlayer(tx,ty) {
   if(charge<1) return;
   const base=Math.atan2(ty-player.y,tx-player.x);
-  const tier=UPG.shapeTier;
-  let angs;
-  if(tier===0)       angs=[base];
-  else if(tier===1)  angs=[base-.28,base,base+.28];           // triple
-  else if(tier===2)  angs=[base-.45,base-.22,base,base+.22,base+.45]; // penta
-  else if(tier===3)  angs=Array.from({length:8},(_,i)=>Math.PI*2/8*i); // ring
-  else if(tier===4)  angs=[base, base+Math.PI];               // double (front+back)
-  else               angs=[base];                              // snipe (handled via big bullet)
+  const angs=[base];
 
-  const bspd = 230 * UPG.shotSpd;
-  const br   = 4.5 * UPG.shotSize;
-  const snipe = tier===5;
+  if(UPG.spreadTier>=1){
+    angs.push(base-0.28, base+0.28);
+  }
+  if(UPG.spreadTier>=2){
+    angs.push(base-0.45, base-0.22, base+0.22, base+0.45);
+  }
+  if(UPG.dualShot>0){
+    angs.push(base + Math.PI);
+  }
+  if(UPG.ringShots>0){
+    for(let i=0;i<UPG.ringShots;i++){
+      angs.push((Math.PI*2/UPG.ringShots)*i);
+    }
+  }
+
+  const snipeScale = 1 + UPG.snipePower * 0.18;
+  const bspd = 230 * UPG.shotSpd * snipeScale;
+  const br   = 4.5 * UPG.shotSize * (1 + UPG.snipePower * 0.15);
+  const baseDmg = 1 + UPG.snipePower * 0.35;
 
   for(const a of angs) {
     bullets.push({
       x:player.x, y:player.y,
-      vx:Math.cos(a)*bspd*(snipe?1.6:1),
-      vy:Math.sin(a)*bspd*(snipe?1.6:1),
-      state:'output', r:snipe?7.5:br, decayStart:null,
+      vx:Math.cos(a)*bspd,
+      vy:Math.sin(a)*bspd,
+      state:'output', r:br, decayStart:null,
       bounceLeft: UPG.bounceTier>0?2:0,
-      pierce: UPG.pierceTier>0,
+      pierceLeft: UPG.pierceTier,
       homing: UPG.homingTier>0,
       crit: Math.random()<UPG.critChance,
+      dmg: baseDmg,
+      hitIds: new Set(),
     });
   }
   charge=Math.max(0,charge-1);
@@ -200,7 +225,15 @@ function sparks(x,y,col,n=6,spd=80) {
 
 function showUpgrades() {
   gstate='upgrade'; cancelAnimationFrame(raf);
-  const pool=[...UPGRADES].sort(()=>Math.random()-.5).slice(0,3);
+  const useful = UPGRADES.filter((u)=>{
+    const before = JSON.stringify(UPG);
+    const probe = JSON.parse(before);
+    const hpState = { hp, maxHp };
+    u.apply(probe, hpState);
+    return JSON.stringify(probe) !== before || hpState.hp !== hp || hpState.maxHp !== maxHp;
+  });
+  const source = useful.length >= 3 ? useful : UPGRADES;
+  const pool=[...source].sort(()=>Math.random()-.5).slice(0,3);
   const c=document.getElementById('up-cards');
   c.innerHTML='';
   for(const u of pool){
@@ -227,8 +260,64 @@ function showUpgrades() {
   document.getElementById('s-up').classList.remove('off');
 }
 
+function sanitizeName(v) {
+  const cleaned = (v || '').toUpperCase().replace(/[^A-Z0-9 _-]/g, '').trim();
+  return cleaned.slice(0, 14) || 'RUNNER';
+}
+
+function loadLeaderboard() {
+  try {
+    const raw = localStorage.getItem(LB_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if(Array.isArray(parsed)) {
+      leaderboard = parsed
+        .filter((x)=>x && typeof x.name==='string' && Number.isFinite(x.score))
+        .slice(0, 20);
+      leaderboard.sort((a,b)=>b.score-a.score);
+    }
+  } catch {
+    leaderboard = [];
+  }
+}
+
+function saveLeaderboard() {
+  localStorage.setItem(LB_KEY, JSON.stringify(leaderboard.slice(0, 20)));
+}
+
+function renderLeaderboard() {
+  lbCurrent.textContent = `RUNNER: ${playerName}`;
+  lbList.innerHTML = '';
+  if(leaderboard.length===0){
+    const li = document.createElement('li');
+    li.className = 'lb-empty';
+    li.textContent = 'No runs saved yet.';
+    lbList.appendChild(li);
+    return;
+  }
+  for(let i=0;i<Math.min(10, leaderboard.length);i++){
+    const row = leaderboard[i];
+    const li = document.createElement('li');
+    li.textContent = `${row.name} — ${row.score} pts (R${row.room})`;
+    lbList.appendChild(li);
+  }
+}
+
+function pushLeaderboardEntry() {
+  leaderboard.push({
+    name: playerName,
+    score,
+    room: roomIndex + 1,
+    ts: Date.now(),
+  });
+  leaderboard.sort((a,b)=>b.score-a.score || b.ts-a.ts);
+  leaderboard = leaderboard.slice(0, 20);
+  saveLeaderboard();
+  renderLeaderboard();
+}
+
 function gameOver(){
   gstate='gameover'; cancelAnimationFrame(raf);
+  pushLeaderboardEntry();
   document.getElementById('go-score').textContent=score;
   document.getElementById('go-note').textContent=`Room ${roomIndex+1} · ${kills} enemies eliminated`;
   document.getElementById('s-go').classList.remove('off');
@@ -236,10 +325,11 @@ function gameOver(){
 
 function init() {
   score=0; kills=0;
-  charge=0; fireT=0; stillTimer=0; prevStill=false; hp=100; maxHp=100;
+  charge=0; fireT=0; hp=100; maxHp=100;
+  enemyIdSeq = 1;
   player={x:cv.width/2,y:cv.height/2,r:10,vx:0,vy:0,invincible:0,distort:0};
   bullets=[];enemies=[];particles=[];
-  joy={active:false,ax:0,ay:0,dx:0,dy:0,mag:0};
+  ptr={x:player.x,y:player.y,on:false};
   resetUpgrades();
   startRoom(0);
   hudUpdate();
@@ -258,15 +348,21 @@ function update(dt,ts){
   const W=cv.width,H=cv.height;
   const BASE_SPD=165*UPG.speedMult;
 
-  // ── Player movement — virtual joystick
-  if(joy.active && joy.mag > JOY_DEADZONE){
-    const t = Math.min((joy.mag - JOY_DEADZONE) / (JOY_MAX - JOY_DEADZONE), 1);
-    player.vx = joy.dx * BASE_SPD * t;
-    player.vy = joy.dy * BASE_SPD * t;
-  } else {
-    // Finger lifted or in deadzone — hard stop
-    player.vx = 0;
-    player.vy = 0;
+  // ── Player movement — pointer follow (desired control scheme)
+  if(ptr.on){
+    const dx=ptr.x-player.x, dy=ptr.y-player.y, d=Math.hypot(dx,dy);
+    if(d>5){
+      const f=Math.min(d/35,1);
+      player.vx += (dx/d)*BASE_SPD*f*dt*10;
+      player.vy += (dy/d)*BASE_SPD*f*dt*10;
+    }
+  }
+  player.vx*=Math.pow(.87,dt*60);
+  player.vy*=Math.pow(.87,dt*60);
+  const pSpd=Math.hypot(player.vx,player.vy);
+  if(pSpd>BASE_SPD){
+    player.vx=player.vx/pSpd*BASE_SPD;
+    player.vy=player.vy/pSpd*BASE_SPD;
   }
   player.x=Math.max(M+player.r,Math.min(W-M-player.r,player.x+player.vx*dt));
   player.y=Math.max(M+player.r,Math.min(H-M-player.r,player.y+player.vy*dt));
@@ -306,27 +402,18 @@ function update(dt,ts){
 
   // 'reward' and 'between' phases are handled by showUpgrades / card click callbacks
 
-  // ── Auto-fire: fires when joystick released (player stopped)
-  const isStill = !joy.active || joy.mag <= JOY_DEADZONE;
-
-  if(!isStill){
-    stillTimer = 0;
-    // don't reset fireT — keep it primed so shot is instant on release
-  } else {
-    stillTimer += dt;
-  }
-
-  if(charge >= 1 && isStill){
+  // ── Auto-fire while charged
+  if(charge >= 1){
     fireT += dt;
-    const interval = 1 / (UPG.sps * 2);
+    const interval = 1 / UPG.sps;
     if(fireT >= interval){
       fireT = fireT % interval;
       const tgt=enemies.reduce((b,e)=>{const d=Math.hypot(e.x-player.x,e.y-player.y);return(!b||d<b.d)?{e,d}:b;},null);
       if(tgt) firePlayer(tgt.e.x,tgt.e.y);
     }
+  } else {
+    fireT = 0;
   }
-
-  prevStill = isStill;
 
   // ── Enemies
   const WINDUP_MS = 520; // tell duration before firing
@@ -429,7 +516,7 @@ function update(dt,ts){
       if(ts-b.decayStart>decayMS){bullets.splice(i,1);continue;}
       b.vx*=Math.pow(.97,dt*60); b.vy*=Math.pow(.97,dt*60);
       if(Math.hypot(b.x-player.x,b.y-player.y)<absorbR+b.r){
-        charge=Math.min(UPG.maxCharge,charge+1);
+        charge=Math.min(UPG.maxCharge,charge+UPG.absorbValue);
         sparks(b.x,b.y,C.ghost,5,45);
         bullets.splice(i,1);continue;
       }
@@ -446,14 +533,15 @@ function update(dt,ts){
     }
 
     if(b.state==='output'){
-      let hit=false;
+      let removeBullet=false;
       for(let j=enemies.length-1;j>=0;j--){
         const e=enemies[j];
+        if(b.hitIds.has(e.eid)) continue;
         if(Math.hypot(b.x-e.x,b.y-e.y)<b.r+e.r){
-          const dmg = b.crit ? 2 : 1;
+          b.hitIds.add(e.eid);
+          const dmg = (b.crit ? 2 : 1) * b.dmg;
           e.hp-=dmg;
           sparks(b.x,b.y,b.crit?'#fbbf24':C.green,b.crit?8:5,b.crit?70:55);
-          hit=true;
           if(e.hp<=0){
             score+=e.pts*(b.crit?2:1);kills++;
             sparks(e.x,e.y,e.col,14,95);
@@ -464,10 +552,15 @@ function update(dt,ts){
             }
             enemies.splice(j,1);
           }
-          if(!b.pierce){break;}
+          if(b.pierceLeft>0){
+            b.pierceLeft--;
+          } else {
+            removeBullet=true;
+            break;
+          }
         }
       }
-      if(hit&&!b.pierce){bullets.splice(i,1);continue;}
+      if(removeBullet){bullets.splice(i,1);continue;}
       if(b.x<-10||b.x>W+10||b.y<-10||b.y>H+10){bullets.splice(i,1);continue;}
     }
   }
@@ -607,16 +700,19 @@ function draw(ts){
   const show=player.invincible<=0||Math.floor(ts/90)%2===0;
   if(show){ drawGhost(ts); }
 
-  // Joystick anchor — tiny subtle dot where finger landed
-  if(joy.active){
-    ctx.globalAlpha=0.18;
-    ctx.strokeStyle='#fff';
-    ctx.lineWidth=1;
-    ctx.beginPath();ctx.arc(joy.ax,joy.ay,JOY_MAX,0,Math.PI*2);ctx.stroke();
-    ctx.globalAlpha=0.35;
-    ctx.fillStyle='#fff';
-    ctx.beginPath();ctx.arc(joy.ax,joy.ay,3,0,Math.PI*2);ctx.fill();
-    ctx.globalAlpha=1;
+  // Pointer guide line
+  if(ptr.on){
+    const dd=Math.hypot(ptr.x-player.x,ptr.y-player.y);
+    if(dd>22){
+      ctx.strokeStyle='rgba(184,255,204,0.1)';
+      ctx.lineWidth=1;
+      ctx.setLineDash([3,9]);
+      ctx.beginPath();
+      ctx.moveTo(player.x,player.y);
+      ctx.lineTo(ptr.x,ptr.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
 }
 
@@ -711,10 +807,10 @@ function hudUpdate(){
   document.getElementById('score-txt').textContent=score;
   document.getElementById('charge-fill').style.width=(charge/UPG.maxCharge*100)+'%';
   document.getElementById('charge-badge').textContent=`${Math.floor(charge)} / ${UPG.maxCharge}`;
-  document.getElementById('sps-num').textContent=(UPG.sps*2).toFixed(1);
+  document.getElementById('sps-num').textContent=UPG.sps.toFixed(1);
 }
 
-// ── INPUT — virtual joystick ──────────────────────────────────────────────────
+// ── INPUT — pointer follow control scheme ────────────────────────────────────
 function canvasPos(clientX, clientY){
   const r=cv.getBoundingClientRect();
   return {
@@ -723,46 +819,58 @@ function canvasPos(clientX, clientY){
   };
 }
 
-function joyStart(cx,cy){
+function pointerStart(clientX, clientY){
   if(gstate!=='playing') return;
-  const p=canvasPos(cx,cy);
-  joy.active=true; joy.ax=p.x; joy.ay=p.y; joy.dx=0; joy.dy=0; joy.mag=0;
-  // Prime fireT so the NEXT stop after this drag fires immediately
-  fireT = 1/(UPG.sps*2);
+  const p=canvasPos(clientX,clientY);
+  ptr.x=p.x;
+  ptr.y=p.y;
+  ptr.on=true;
 }
 
-function joyMove(cx,cy){
-  if(!joy.active) return;
-  const p=canvasPos(cx,cy);
-  const dx=p.x-joy.ax, dy=p.y-joy.ay;
-  joy.mag=Math.hypot(dx,dy);
-  if(joy.mag>JOY_DEADZONE){ joy.dx=dx/joy.mag; joy.dy=dy/joy.mag; }
-  else { joy.dx=0; joy.dy=0; }
+function pointerMove(clientX, clientY){
+  if(!ptr.on || gstate!=='playing') return;
+  const p=canvasPos(clientX,clientY);
+  ptr.x=p.x;
+  ptr.y=p.y;
 }
 
-function joyEnd(){
-  joy.active=false; joy.dx=0; joy.dy=0; joy.mag=0;
-  // Prime fireT — shot fires on the very next update frame
-  fireT = 1/(UPG.sps*2);
+function pointerEnd(){
+  ptr.on=false;
 }
 
-cv.addEventListener('mousedown',  e=>{ joyStart(e.clientX,e.clientY); });
-cv.addEventListener('mousemove',  e=>{ joyMove(e.clientX,e.clientY); });
-cv.addEventListener('mouseup',    ()=>joyEnd());
-cv.addEventListener('mouseleave', ()=>joyEnd());
+cv.addEventListener('mousedown',  e=>{ pointerStart(e.clientX,e.clientY); });
+cv.addEventListener('mousemove',  e=>{ if(gstate==='playing'){ pointerStart(e.clientX,e.clientY); } });
+cv.addEventListener('mouseup',    ()=>pointerEnd());
+cv.addEventListener('mouseleave', ()=>pointerEnd());
 
-cv.addEventListener('touchstart', e=>{ e.preventDefault(); const t=e.touches[0]; joyStart(t.clientX,t.clientY); },{passive:false});
-cv.addEventListener('touchmove',  e=>{ e.preventDefault(); const t=e.touches[0]; joyMove(t.clientX,t.clientY); },{passive:false});
-cv.addEventListener('touchend',   e=>{ e.preventDefault(); joyEnd(); },{passive:false});
-cv.addEventListener('touchcancel',e=>{ e.preventDefault(); joyEnd(); },{passive:false});
+cv.addEventListener('touchstart', e=>{ e.preventDefault(); const t=e.touches[0]; pointerStart(t.clientX,t.clientY); },{passive:false});
+cv.addEventListener('touchmove',  e=>{ e.preventDefault(); const t=e.touches[0]; pointerMove(t.clientX,t.clientY); },{passive:false});
+cv.addEventListener('touchend',   e=>{ e.preventDefault(); pointerEnd(); },{passive:false});
+cv.addEventListener('touchcancel',e=>{ e.preventDefault(); pointerEnd(); },{passive:false});
+
+function setPlayerName(v){
+  playerName = sanitizeName(v);
+  nameInputStart.value = playerName;
+  nameInputGo.value = playerName;
+  renderLeaderboard();
+}
+
+nameInputStart.addEventListener('input', (e)=>setPlayerName(e.target.value));
+nameInputGo.addEventListener('input', (e)=>setPlayerName(e.target.value));
 
 document.getElementById('btn-start').onclick=()=>{
+  setPlayerName(nameInputStart.value);
   document.getElementById('s-start').classList.add('off');
   init();gstate='playing';lastT=performance.now();raf=requestAnimationFrame(loop);
 };
 document.getElementById('btn-restart').onclick=()=>{
+  setPlayerName(nameInputGo.value);
   document.getElementById('s-go').classList.add('off');
   init();gstate='playing';lastT=performance.now();raf=requestAnimationFrame(loop);
 };
+
+loadLeaderboard();
+setPlayerName('RUNNER');
+renderLeaderboard();
 
 draw(0);

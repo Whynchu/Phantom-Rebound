@@ -24,6 +24,10 @@
       <div class="eyebrow">// prototype v0.4</div>
       <div class="big-title">Phantom<span>Rebound</span></div>
       <div class="rule-line"></div>
+      <div class="name-row">
+        <label class="name-lbl" for="name-input-start">Runner Name</label>
+        <input id="name-input-start" class="name-input" type="text" maxlength="14" placeholder="ENTER CALLSIGN">
+      </div>
       <div class="screen-body">
         Hunters fire <span class="hi">blue rounds</span>.<br>
         Rounds bounce off walls and turn <span class="gr">grey</span>.<br>
@@ -44,6 +48,10 @@
       <div id="go-sub">Final Score</div>
       <div id="go-score">0</div>
       <div id="go-note"></div>
+      <div class="name-row">
+        <label class="name-lbl" for="name-input-go">Runner Name</label>
+        <input id="name-input-go" class="name-input" type="text" maxlength="14" placeholder="ENTER CALLSIGN">
+      </div>
       <button class="btn" id="btn-restart">New Run</button>
     </div>
   </div>
@@ -58,7 +66,7 @@
     </div>
     <div id="sps-box">
       <div id="sps-num">0.5</div>
-      <div id="sps-lbl">SPS (STILL)</div>
+      <div id="sps-lbl">SPS</div>
     </div>
   </div>
 
@@ -70,10 +78,16 @@
     <div class="leg"><div class="leg-dot" style="background:#4ade80"></div>Output</div>
     <div class="leg"><div class="leg-dot" style="background:#b8ffcc"></div>You</div>
   </div>
+
+  <div id="leaderboard-panel">
+    <div id="lb-head">
+      <span id="lb-title">Leaderboard</span>
+      <span id="lb-current"></span>
+    </div>
+    <ol id="leaderboard-list"></ol>
+  </div>
 </div>
 
 <script type="module" src="script.js"></script>
-</body>
-</html>
 </body>
 </html>
