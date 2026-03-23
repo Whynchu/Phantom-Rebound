@@ -65,9 +65,11 @@ let gstate = 'start';
 let player = {};
 let bullets = [], enemies = [], particles = [];
 let score=0, kills=0;
-let charge=0, fireT=0;
+let charge=0, fireT=0, stillTimer=0, prevStill=false;
 let hp=100, maxHp=100;
-let ptr = { x:0, y:0, on:false };
+let joy = { active:false, ax:0, ay:0, dx:0, dy:0, mag:0 };
+const JOY_DEADZONE = 6;
+const JOY_MAX = 55;
 let enemyIdSeq = 1;
 let playerName = 'RUNNER';
 let leaderboard = [];
@@ -325,11 +327,11 @@ function gameOver(){
 
 function init() {
   score=0; kills=0;
-  charge=0; fireT=0; hp=100; maxHp=100;
+  charge=0; fireT=0; stillTimer=0; prevStill=false; hp=100; maxHp=100;
   enemyIdSeq = 1;
   player={x:cv.width/2,y:cv.height/2,r:10,vx:0,vy:0,invincible:0,distort:0};
   bullets=[];enemies=[];particles=[];
-  ptr={x:player.x,y:player.y,on:false};
+  joy={active:false,ax:0,ay:0,dx:0,dy:0,mag:0};
   resetUpgrades();
   startRoom(0);
   hudUpdate();
@@ -348,21 +350,14 @@ function update(dt,ts){
   const W=cv.width,H=cv.height;
   const BASE_SPD=165*UPG.speedMult;
 
-  // ── Player movement — pointer follow (desired control scheme)
-  if(ptr.on){
-    const dx=ptr.x-player.x, dy=ptr.y-player.y, d=Math.hypot(dx,dy);
-    if(d>5){
-      const f=Math.min(d/35,1);
-      player.vx += (dx/d)*BASE_SPD*f*dt*10;
-      player.vy += (dy/d)*BASE_SPD*f*dt*10;
-    }
-  }
-  player.vx*=Math.pow(.87,dt*60);
-  player.vy*=Math.pow(.87,dt*60);
-  const pSpd=Math.hypot(player.vx,player.vy);
-  if(pSpd>BASE_SPD){
-    player.vx=player.vx/pSpd*BASE_SPD;
-    player.vy=player.vy/pSpd*BASE_SPD;
+  // ── Player movement — virtual joystick
+  if(joy.active && joy.mag > JOY_DEADZONE){
+    const t = Math.min((joy.mag - JOY_DEADZONE) / (JOY_MAX - JOY_DEADZONE), 1);
+    player.vx = joy.dx * BASE_SPD * t;
+    player.vy = joy.dy * BASE_SPD * t;
+  } else {
+    player.vx = 0;
+    player.vy = 0;
   }
   player.x=Math.max(M+player.r,Math.min(W-M-player.r,player.x+player.vx*dt));
   player.y=Math.max(M+player.r,Math.min(H-M-player.r,player.y+player.vy*dt));
@@ -402,18 +397,26 @@ function update(dt,ts){
 
   // 'reward' and 'between' phases are handled by showUpgrades / card click callbacks
 
-  // ── Auto-fire while charged
-  if(charge >= 1){
+  // ── Auto-fire: fires when joystick released (player stopped)
+  const isStill = !joy.active || joy.mag <= JOY_DEADZONE;
+
+  if(!isStill){
+    stillTimer = 0;
+  } else {
+    stillTimer += dt;
+  }
+
+  if(charge >= 1 && isStill){
     fireT += dt;
-    const interval = 1 / UPG.sps;
+    const interval = 1 / (UPG.sps * 2);
     if(fireT >= interval){
       fireT = fireT % interval;
       const tgt=enemies.reduce((b,e)=>{const d=Math.hypot(e.x-player.x,e.y-player.y);return(!b||d<b.d)?{e,d}:b;},null);
       if(tgt) firePlayer(tgt.e.x,tgt.e.y);
     }
-  } else {
-    fireT = 0;
   }
+
+  prevStill = isStill;
 
   // ── Enemies
   const WINDUP_MS = 520; // tell duration before firing
@@ -700,19 +703,16 @@ function draw(ts){
   const show=player.invincible<=0||Math.floor(ts/90)%2===0;
   if(show){ drawGhost(ts); }
 
-  // Pointer guide line
-  if(ptr.on){
-    const dd=Math.hypot(ptr.x-player.x,ptr.y-player.y);
-    if(dd>22){
-      ctx.strokeStyle='rgba(184,255,204,0.1)';
-      ctx.lineWidth=1;
-      ctx.setLineDash([3,9]);
-      ctx.beginPath();
-      ctx.moveTo(player.x,player.y);
-      ctx.lineTo(ptr.x,ptr.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
+  // Joystick anchor — tiny subtle dot where finger landed
+  if(joy.active){
+    ctx.globalAlpha=0.18;
+    ctx.strokeStyle='#fff';
+    ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(joy.ax,joy.ay,JOY_MAX,0,Math.PI*2);ctx.stroke();
+    ctx.globalAlpha=0.35;
+    ctx.fillStyle='#fff';
+    ctx.beginPath();ctx.arc(joy.ax,joy.ay,3,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
   }
 }
 
@@ -819,34 +819,36 @@ function canvasPos(clientX, clientY){
   };
 }
 
-function pointerStart(clientX, clientY){
+function joyStart(clientX, clientY){
   if(gstate!=='playing') return;
   const p=canvasPos(clientX,clientY);
-  ptr.x=p.x;
-  ptr.y=p.y;
-  ptr.on=true;
+  joy.active=true; joy.ax=p.x; joy.ay=p.y; joy.dx=0; joy.dy=0; joy.mag=0;
+  fireT = 1/(UPG.sps*2);
 }
 
-function pointerMove(clientX, clientY){
-  if(!ptr.on || gstate!=='playing') return;
+function joyMove(clientX, clientY){
+  if(!joy.active) return;
   const p=canvasPos(clientX,clientY);
-  ptr.x=p.x;
-  ptr.y=p.y;
+  const dx=p.x-joy.ax, dy=p.y-joy.ay;
+  joy.mag=Math.hypot(dx,dy);
+  if(joy.mag>JOY_DEADZONE){ joy.dx=dx/joy.mag; joy.dy=dy/joy.mag; }
+  else { joy.dx=0; joy.dy=0; }
 }
 
-function pointerEnd(){
-  ptr.on=false;
+function joyEnd(){
+  joy.active=false; joy.dx=0; joy.dy=0; joy.mag=0;
+  fireT = 1/(UPG.sps*2);
 }
 
-cv.addEventListener('mousedown',  e=>{ pointerStart(e.clientX,e.clientY); });
-cv.addEventListener('mousemove',  e=>{ if(gstate==='playing'){ pointerStart(e.clientX,e.clientY); } });
-cv.addEventListener('mouseup',    ()=>pointerEnd());
-cv.addEventListener('mouseleave', ()=>pointerEnd());
+// Global joystick listeners — work anywhere on screen
+document.addEventListener('mousedown',  e=>{ joyStart(e.clientX,e.clientY); });
+document.addEventListener('mousemove',  e=>{ joyMove(e.clientX,e.clientY); });
+document.addEventListener('mouseup',    ()=>joyEnd());
 
-cv.addEventListener('touchstart', e=>{ e.preventDefault(); const t=e.touches[0]; pointerStart(t.clientX,t.clientY); },{passive:false});
-cv.addEventListener('touchmove',  e=>{ e.preventDefault(); const t=e.touches[0]; pointerMove(t.clientX,t.clientY); },{passive:false});
-cv.addEventListener('touchend',   e=>{ e.preventDefault(); pointerEnd(); },{passive:false});
-cv.addEventListener('touchcancel',e=>{ e.preventDefault(); pointerEnd(); },{passive:false});
+document.addEventListener('touchstart', e=>{ const t=e.touches[0]; joyStart(t.clientX,t.clientY); },{passive:true});
+document.addEventListener('touchmove',  e=>{ const t=e.touches[0]; joyMove(t.clientX,t.clientY); },{passive:true});
+document.addEventListener('touchend',   ()=>joyEnd(),{passive:true});
+document.addEventListener('touchcancel',()=>joyEnd(),{passive:true});
 
 function setPlayerName(v){
   playerName = sanitizeName(v);
