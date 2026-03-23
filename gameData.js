@@ -36,6 +36,8 @@ const SPS_LADDER = [0.5,1.0,1.8,3.0,5.0,8.0];
 const DECAY_BASE = 3500;
 const M = 18;
 
+const MAX_SHIELD_TIER = 4;
+
 function getDefaultUpgrades() {
   return {
     speedMult:   1,
@@ -56,6 +58,8 @@ function getDefaultUpgrades() {
     critChance:  0,
     absorbRange: 0,
     regenTick:   0,
+    shieldTier:  0,
+    orbitSpheres: false,
   };
 }
 
@@ -80,6 +84,8 @@ const UPGRADES = [
   {name:'Extra Life',tag:'SURVIVE',icon:'◉',desc:'Gain 25 max HP and restore it.',apply(upg, state){state.maxHp+=25;state.hp=Math.min(state.hp+25,state.maxHp);}},
   {name:'Ghost Velocity',tag:'SURVIVE',icon:'👻',desc:'Move 18% faster through the arena.',apply(upg){upg.speedMult*=1.18;}},
   {name:'Room Regen',tag:'SURVIVE',icon:'💚',desc:'Restore 20 HP whenever you clear a room.',apply(upg){upg.regenTick+=20;}},
+  {name:'Protective Shield',tag:'SURVIVE',icon:'🛡️',desc:`Orbiting shield absorbs one danger bullet then regenerates. Each upgrade adds another shield (max ${MAX_SHIELD_TIER}).`,apply(upg){upg.shieldTier=Math.min(MAX_SHIELD_TIER,upg.shieldTier+1);}},
+  {name:'Orbit Spheres',tag:'UTILITY',icon:'🔮',desc:'3 passive spheres orbit you constantly once unlocked.',apply(upg){upg.orbitSpheres=true;}},
 ];
 
-export { C, ROOM_SCRIPTS, EDEFS, SPS_LADDER, DECAY_BASE, M, UPGRADES, getDefaultUpgrades };
+export { C, ROOM_SCRIPTS, EDEFS, SPS_LADDER, DECAY_BASE, M, UPGRADES, getDefaultUpgrades, MAX_SHIELD_TIER };

@@ -1,4 +1,4 @@
-import { C, ROOM_SCRIPTS, EDEFS, SPS_LADDER, DECAY_BASE, M, UPGRADES, getDefaultUpgrades } from './gameData.js?v=20260322a';
+import { C, ROOM_SCRIPTS, EDEFS, SPS_LADDER, DECAY_BASE, M, UPGRADES, getDefaultUpgrades } from './gameData.js?v=20260323a';
 
 const cv  = document.getElementById('cv');
 const ctx = cv.getContext('2d');
@@ -70,6 +70,11 @@ let hp=100, maxHp=100;
 let joy = { active:false, ax:0, ay:0, dx:0, dy:0, mag:0 };
 const JOY_DEADZONE = 3;
 const JOY_MAX = 40;
+const SHIELD_ORBIT_R    = 35;   // orbital radius of shield orbs from player center (px)
+const SHIELD_COOLDOWN   = 1.5;  // seconds a shield is inactive after absorbing a bullet
+const SHIELD_ROTATION_SPD  = 0.001; // radians per millisecond (≈1 rev / 6.3 s)
+const ORBIT_SPHERE_R    = 30;   // orbital radius of passive orbit spheres (px)
+const ORBIT_ROTATION_SPD   = 0.003; // radians per millisecond (≈1 rev / 2.1 s)
 let enemyIdSeq = 1;
 let playerName = 'RUNNER';
 let leaderboard = [];
@@ -330,6 +335,7 @@ function init() {
   charge=0; fireT=0; stillTimer=0; prevStill=false; hp=100; maxHp=100;
   enemyIdSeq = 1;
   player={x:cv.width/2,y:cv.height/2,r:10,vx:0,vy:0,invincible:0,distort:0};
+  player.shields=[];
   bullets=[];enemies=[];particles=[];
   joy={active:false,ax:0,ay:0,dx:0,dy:0,mag:0};
   resetUpgrades();
@@ -363,6 +369,10 @@ function update(dt,ts){
   player.y=Math.max(M+player.r,Math.min(H-M-player.r,player.y+player.vy*dt));
   if(player.invincible>0)player.invincible-=dt;
   if(player.distort>0)player.distort-=dt;
+
+  // ── Shields — sync count to tier, tick cooldowns
+  while(player.shields.length < UPG.shieldTier) player.shields.push({cooldown:0});
+  for(const s of player.shields){ if(s.cooldown>0) s.cooldown=Math.max(0,s.cooldown-dt); }
 
   // ── Room state machine
   roomTimer += dt*1000;
@@ -522,6 +532,29 @@ function update(dt,ts){
         charge=Math.min(UPG.maxCharge,charge+UPG.absorbValue);
         sparks(b.x,b.y,C.ghost,5,45);
         bullets.splice(i,1);continue;
+      }
+    }
+
+    if(b.state==='danger' && player.shields.length>0){
+      const total=player.shields.length;
+      // Quick proximity guard: bullet must be near the orbital ring
+      if(Math.hypot(b.x-player.x,b.y-player.y)<SHIELD_ORBIT_R+8+b.r){
+        let shieldHit=false;
+        for(let si=0;si<total;si++){
+          const s=player.shields[si];
+          if(s.cooldown>0) continue;
+          const sAngle=Math.PI*2/total*si+ts*SHIELD_ROTATION_SPD;
+          const sx=player.x+Math.cos(sAngle)*SHIELD_ORBIT_R;
+          const sy=player.y+Math.sin(sAngle)*SHIELD_ORBIT_R;
+          if(Math.hypot(b.x-sx,b.y-sy)<8+b.r){
+            s.cooldown=SHIELD_COOLDOWN;
+            sparks(sx,sy,'#67e8f9',8,60);
+            bullets.splice(i,1);
+            shieldHit=true;
+            break;
+          }
+        }
+        if(shieldHit) continue;
       }
     }
 
@@ -702,6 +735,57 @@ function draw(ts){
   // Ghost player sprite
   const show=player.invincible<=0||Math.floor(ts/90)%2===0;
   if(show){ drawGhost(ts); }
+
+  // Shields
+  if(player.shields && player.shields.length>0){
+    const total=player.shields.length;
+    for(let si=0;si<total;si++){
+      const s=player.shields[si];
+      const sAngle=Math.PI*2/total*si+ts*SHIELD_ROTATION_SPD;
+      const sx=player.x+Math.cos(sAngle)*SHIELD_ORBIT_R;
+      const sy=player.y+Math.sin(sAngle)*SHIELD_ORBIT_R;
+      ctx.save();
+      if(s.cooldown>0){
+        const frac=s.cooldown/SHIELD_COOLDOWN;
+        ctx.globalAlpha=0.25+0.15*frac;
+        ctx.strokeStyle='#67e8f9';
+        ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.arc(sx,sy,8,0,Math.PI*2);ctx.stroke();
+        // Partial fill showing regeneration progress
+        ctx.globalAlpha=0.12*(1-frac);
+        ctx.fillStyle='#67e8f9';
+        ctx.beginPath();ctx.arc(sx,sy,8,0,Math.PI*2);ctx.fill();
+      } else {
+        ctx.shadowColor='#67e8f9';ctx.shadowBlur=14;
+        ctx.strokeStyle='#67e8f9';
+        ctx.lineWidth=2;
+        ctx.globalAlpha=0.9;
+        ctx.beginPath();ctx.arc(sx,sy,8,0,Math.PI*2);ctx.stroke();
+        ctx.shadowBlur=0;
+        ctx.fillStyle='rgba(103,232,249,0.18)';
+        ctx.beginPath();ctx.arc(sx,sy,8,0,Math.PI*2);ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  // Orbit Spheres
+  if(UPG.orbitSpheres){
+    for(let si=0;si<3;si++){
+      const sAngle=Math.PI*2/3*si+ts*ORBIT_ROTATION_SPD;
+      const sx=player.x+Math.cos(sAngle)*ORBIT_SPHERE_R;
+      const sy=player.y+Math.sin(sAngle)*ORBIT_SPHERE_R;
+      ctx.save();
+      ctx.shadowColor='#a78bfa';ctx.shadowBlur=12;
+      ctx.fillStyle='#a78bfa';
+      ctx.globalAlpha=0.85;
+      ctx.beginPath();ctx.arc(sx,sy,5,0,Math.PI*2);ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.fillStyle='rgba(220,200,255,0.9)';
+      ctx.beginPath();ctx.arc(sx,sy,2,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+    }
+  }
 
   // Joystick anchor — tiny subtle dot where finger landed
   if(joy.active){
