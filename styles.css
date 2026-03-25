@@ -63,7 +63,11 @@ body::before {
   transform: none !important;
   top: auto !important;
   left: auto !important;
+  opacity: 1;
+  transition: opacity .18s ease;
 }
+body.app-loading #wrap { opacity: 0; }
+body.app-ready #wrap { opacity: 1; }
 /* TOP HUD */
 #top-hud {
   display: flex;

@@ -8,6 +8,13 @@ import { renderVersionTag } from './src/ui/versionTag.js';
 
 renderVersionTag(VERSION);
 
+function revealAppShell() {
+  requestAnimationFrame(() => {
+    document.body.classList.remove('app-loading');
+    document.body.classList.add('app-ready');
+  });
+}
+
 const cv  = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 const LB_KEY = 'phantom-rebound-leaderboard-v1';
@@ -959,5 +966,6 @@ document.getElementById('btn-restart').onclick=()=>{
 loadLeaderboard();
 setPlayerName('RUNNER');
 renderLeaderboard();
+revealAppShell();
 
 draw(0);
