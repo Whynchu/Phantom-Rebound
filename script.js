@@ -83,6 +83,7 @@ let roomPhase = 'spawning';
 let roomTimer = 0;
 let spawnQueue = [];
 let roomClearTimer = 0;
+let roomPurpleShooterAssigned = false;
 
 function getRoomDef(idx) {
   if(idx < ROOM_SCRIPTS.length) return ROOM_SCRIPTS[idx];
@@ -120,6 +121,7 @@ function buildSpawnQueue(roomDef) {
 
 function startRoom(idx) {
   roomIndex = idx;
+  roomPurpleShooterAssigned = false;
   const def = getRoomDef(idx);
   spawnQueue = buildSpawnQueue(def);
   roomTimer = 0;
@@ -135,13 +137,23 @@ function updateRoomBadge(def) {
 }
 
 function spawnEnemy(type) {
-  enemies.push(createEnemy(type, {
+  const enemy = createEnemy(type, {
     width: cv.width,
     height: cv.height,
     margin: M,
     roomIndex,
     nextEnemyId: enemyIdSeq++,
-  }));
+  });
+  if(enemy.doubleBounce && roomIndex >= 9){
+    const purpleTargetCount = Math.min(3, 1 + Math.floor((roomIndex - 9) / 2));
+    if(!roomPurpleShooterAssigned || enemies.filter((entry) => entry.forcePurpleShots).length < purpleTargetCount) {
+      enemy.forcePurpleShots = true;
+      roomPurpleShooterAssigned = true;
+      enemy.col = '#a855f7';
+      enemy.glowCol = 'rgba(168,85,247,0.78)';
+    }
+  }
+  enemies.push(enemy);
 }
 
 function pickFallbackShooterType() {
@@ -286,7 +298,7 @@ function showUpgrades() {
 
 function sanitizeName(v) {
   const cleaned = (v || '').toUpperCase().replace(/[^A-Z0-9 _-]/g, '').trim();
-  return cleaned.slice(0, 14) || 'RUNNER';
+  return cleaned.slice(0, 14);
 }
 
 function loadLeaderboard() {
@@ -341,7 +353,9 @@ function renderLeaderboard() {
   lbCurrent.textContent = `RUNNER: ${playerName} · ${periodLabel} · ${scopeLabel}`;
   lbStatus.textContent = lbStatusText;
   lbList.innerHTML = '';
-  const rows = useRemoteLeaderboardRows ? remoteLeaderboardRows : getVisibleLeaderboardRows();
+  const rows = lbStatusMode === 'syncing'
+    ? []
+    : (useRemoteLeaderboardRows ? remoteLeaderboardRows : getVisibleLeaderboardRows());
   if(rows.length===0){
     const li = document.createElement('li');
     li.className = 'lb-empty';
@@ -430,11 +444,11 @@ function gameOver(){
 
 function init() {
   score=0; kills=0;
-  charge=0; fireT=0; stillTimer=0; prevStill=false; hp=100; maxHp=100;
+  charge=0; fireT=0; stillTimer=0; prevStill=false; hp=120; maxHp=120;
   gameOverShown = false;
   lastStallSpawnAt = -99999;
   enemyIdSeq = 1;
-  player={x:cv.width/2,y:cv.height/2,r:10,vx:0,vy:0,invincible:0,distort:0,deadAt:0,popAt:0,deadPop:false,deadPulse:0};
+  player={x:cv.width/2,y:cv.height/2,r:9,vx:0,vy:0,invincible:0,distort:0,deadAt:0,popAt:0,deadPop:false,deadPulse:0};
   player.shields=[];
   bullets=[];enemies=[];particles=[];
   resetJoystickState(joy);
@@ -968,7 +982,7 @@ function drawGhost(ts){
   const wobble=Math.sin(t*3)*2;
   const deathFrac = gstate === 'dying' ? Math.max(0, Math.min(1, (ts - player.deadAt) / GAME_OVER_ANIM_MS)) : 0;
   const popFrac = gstate === 'dying' ? Math.max(0, Math.min(1, (ts - player.popAt) / (GAME_OVER_ANIM_MS * 0.28))) : 0;
-  const size=12+chargeFrac*5.5 - deathFrac*1.2;
+  const size=10.8+chargeFrac*5.1 - deathFrac*1.2;
 
   ctx.save();
   if(player.distort>0 || gstate === 'dying'){
@@ -1106,10 +1120,13 @@ lbScopeBtns.forEach((btn) => {
   });
 });
 
-function setPlayerName(v){
-  playerName = sanitizeName(v);
-  nameInputStart.value = playerName;
-  nameInputGo.value = playerName;
+function setPlayerName(v, { syncInputs = false } = {}){
+  const sanitized = sanitizeName(v);
+  playerName = sanitized || 'RUNNER';
+  if(syncInputs){
+    nameInputStart.value = sanitized;
+    nameInputGo.value = sanitized;
+  }
   refreshLeaderboardView();
 }
 
@@ -1117,19 +1134,19 @@ nameInputStart.addEventListener('input', (e)=>setPlayerName(e.target.value));
 nameInputGo.addEventListener('input', (e)=>setPlayerName(e.target.value));
 
 document.getElementById('btn-start').onclick=()=>{
-  setPlayerName(nameInputStart.value);
+  setPlayerName(nameInputStart.value, { syncInputs: true });
   document.getElementById('s-start').classList.add('off');
   init();gstate='playing';lastT=performance.now();raf=requestAnimationFrame(loop);
 };
 document.getElementById('btn-restart').onclick=()=>{
-  setPlayerName(nameInputGo.value);
+  setPlayerName(nameInputGo.value, { syncInputs: true });
   document.getElementById('s-go').classList.add('off');
   init();gstate='playing';lastT=performance.now();raf=requestAnimationFrame(loop);
 };
 
 loadLeaderboard();
 setLeaderboardStatus('local', 'LOCAL FALLBACK');
-setPlayerName('RUNNER');
+setPlayerName('');
 renderLeaderboard();
 revealAppShell();
 
