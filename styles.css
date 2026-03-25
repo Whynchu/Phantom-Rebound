@@ -235,6 +235,16 @@ body.app-ready #wrap { opacity: 1; }
   text-transform: uppercase;
   color: var(--accent);
 }
+.lb-status {
+  font-size: 9px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.lb-status.syncing { color: #93c5fd; }
+.lb-status.synced { color: var(--accent); }
+.lb-status.local { color: #fbbf24; }
+.lb-status.error { color: #f87171; }
 .lb-toggle-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

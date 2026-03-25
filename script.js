@@ -2,6 +2,7 @@ import { C, ROOM_SCRIPTS, DECAY_BASE, M, VERSION } from './src/data/gameData.js'
 import { getDefaultUpgrades } from './src/data/boons.js';
 import { createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';
 import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoystickControls } from './src/input/joystick.js';
+import { fetchRemoteLeaderboard, submitRemoteScore } from './src/platform/leaderboardService.js';
 import { bindResponsiveViewport } from './src/platform/viewport.js';
 import { showBoonSelection } from './src/ui/boonSelection.js';
 import { renderVersionTag } from './src/ui/versionTag.js';
@@ -25,6 +26,7 @@ const lbScreen = document.getElementById('s-lb');
 const lbOpenBtn = document.getElementById('btn-lb-open');
 const lbCloseBtn = document.getElementById('btn-lb-close');
 const lbCurrent = document.getElementById('lb-current');
+const lbStatus = document.getElementById('lb-status');
 const lbList = document.getElementById('leaderboard-list');
 const lbPeriodBtns = document.querySelectorAll('[data-lb-period]');
 const lbScopeBtns = document.querySelectorAll('[data-lb-scope]');
@@ -66,6 +68,11 @@ let playerName = 'RUNNER';
 let leaderboard = [];
 let lbPeriod = 'daily';
 let lbScope = 'everyone';
+let remoteLeaderboardRows = [];
+let useRemoteLeaderboardRows = false;
+let lbStatusMode = 'local';
+let lbStatusText = 'LOCAL ONLY';
+let lbRequestSeq = 0;
 let raf=0, lastT=0;
 let gameOverShown = false;
 let lastStallSpawnAt = -99999;
@@ -315,6 +322,14 @@ function getVisibleLeaderboardRows() {
   return rows.slice(0, 10);
 }
 
+function setLeaderboardStatus(mode, text) {
+  lbStatusMode = mode;
+  lbStatusText = text;
+  lbStatus.textContent = text;
+  lbStatus.classList.remove('syncing', 'synced', 'local', 'error');
+  lbStatus.classList.add(mode);
+}
+
 function updateLeaderboardToggleStates() {
   lbPeriodBtns.forEach((btn)=>btn.classList.toggle('active', btn.dataset.lbPeriod === lbPeriod));
   lbScopeBtns.forEach((btn)=>btn.classList.toggle('active', btn.dataset.lbScope === lbScope));
@@ -324,12 +339,13 @@ function renderLeaderboard() {
   const periodLabel = lbPeriod === 'daily' ? 'DAILY' : 'ALL TIME';
   const scopeLabel = lbScope === 'personal' ? 'PERSONAL' : 'EVERYONE';
   lbCurrent.textContent = `RUNNER: ${playerName} · ${periodLabel} · ${scopeLabel}`;
+  lbStatus.textContent = lbStatusText;
   lbList.innerHTML = '';
-  const rows = getVisibleLeaderboardRows();
+  const rows = useRemoteLeaderboardRows ? remoteLeaderboardRows : getVisibleLeaderboardRows();
   if(rows.length===0){
     const li = document.createElement('li');
     li.className = 'lb-empty';
-    li.textContent = 'No runs match this view yet.';
+    li.textContent = lbStatusMode === 'syncing' ? 'Syncing records...' : 'No runs match this view yet.';
     lbList.appendChild(li);
     updateLeaderboardToggleStates();
     return;
@@ -347,16 +363,57 @@ function renderLeaderboard() {
   updateLeaderboardToggleStates();
 }
 
+async function refreshLeaderboardView() {
+  const requestId = ++lbRequestSeq;
+  remoteLeaderboardRows = [];
+  useRemoteLeaderboardRows = false;
+  setLeaderboardStatus('syncing', 'SYNCING');
+  renderLeaderboard();
+  try {
+    const rows = await fetchRemoteLeaderboard({
+      period: lbPeriod,
+      scope: lbScope,
+      playerName,
+      limit: 10,
+    });
+    if(requestId !== lbRequestSeq) return;
+    remoteLeaderboardRows = rows;
+    useRemoteLeaderboardRows = true;
+    setLeaderboardStatus('synced', 'SUPABASE LIVE');
+  } catch (error) {
+    if(requestId !== lbRequestSeq) return;
+    remoteLeaderboardRows = [];
+    useRemoteLeaderboardRows = false;
+    setLeaderboardStatus('local', 'LOCAL FALLBACK');
+  }
+  renderLeaderboard();
+}
+
 function pushLeaderboardEntry() {
-  leaderboard.push({
+  const entry = {
     name: playerName,
     score,
     room: roomIndex + 1,
     ts: Date.now(),
-  });
+  };
+  leaderboard.push(entry);
   leaderboard.sort((a,b)=>b.score-a.score || b.ts-a.ts);
   leaderboard = leaderboard.slice(0, 500);
   saveLeaderboard();
+  submitRemoteScore({
+    playerName: entry.name,
+    score: entry.score,
+    room: entry.room,
+    gameVersion: VERSION.num,
+  }).then(() => {
+    if(lbScope !== 'personal' || playerName === entry.name) {
+      refreshLeaderboardView();
+    }
+  }).catch(() => {
+    useRemoteLeaderboardRows = false;
+    setLeaderboardStatus('local', 'LOCAL FALLBACK');
+    renderLeaderboard();
+  });
   renderLeaderboard();
 }
 
@@ -1033,19 +1090,19 @@ bindJoystickControls({
 
 lbOpenBtn.addEventListener('click', () => {
   lbScreen.classList.remove('off');
-  renderLeaderboard();
+  refreshLeaderboardView();
 });
 lbCloseBtn.addEventListener('click', () => lbScreen.classList.add('off'));
 lbPeriodBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
     lbPeriod = btn.dataset.lbPeriod;
-    renderLeaderboard();
+    refreshLeaderboardView();
   });
 });
 lbScopeBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
     lbScope = btn.dataset.lbScope;
-    renderLeaderboard();
+    refreshLeaderboardView();
   });
 });
 
@@ -1053,7 +1110,7 @@ function setPlayerName(v){
   playerName = sanitizeName(v);
   nameInputStart.value = playerName;
   nameInputGo.value = playerName;
-  renderLeaderboard();
+  refreshLeaderboardView();
 }
 
 nameInputStart.addEventListener('input', (e)=>setPlayerName(e.target.value));
@@ -1071,6 +1128,7 @@ document.getElementById('btn-restart').onclick=()=>{
 };
 
 loadLeaderboard();
+setLeaderboardStatus('local', 'LOCAL FALLBACK');
 setPlayerName('RUNNER');
 renderLeaderboard();
 revealAppShell();
