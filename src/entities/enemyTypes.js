@@ -20,7 +20,9 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId }) {
   else if(edge === 2){x = margin + Math.random() * (width - 2 * margin); y = height - margin - def.r;}
   else {x = margin + def.r; y = margin + Math.random() * (height - 2 * margin);}
 
-  const hpScale = 1 + Math.log(roomIndex + 1) * 0.5;
+  // Early rooms start much lighter, then ramp back toward the old curve.
+  const roomRamp = Math.min(1, roomIndex / 6);
+  const hpScale = (0.52 + roomRamp * 0.48) * (1 + Math.log(roomIndex + 1) * 0.35);
 
   return {
     ...def,
@@ -28,8 +30,8 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId }) {
     x,
     y,
     type,
-    hp: Math.ceil(def.hp * hpScale),
-    maxHp: Math.ceil(def.hp * hpScale),
+    hp: Math.max(1, Math.round(def.hp * hpScale)),
+    maxHp: Math.max(1, Math.round(def.hp * hpScale)),
     fT: Math.random() * def.fRate,
   };
 }

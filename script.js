@@ -53,6 +53,9 @@ let charge=0, fireT=0, stillTimer=0, prevStill=false;
 let hp=100, maxHp=100;
 const joy = createJoystickState();
 const GAME_OVER_ANIM_MS = 850;
+const SHIELD_HALF_W = 9;
+const SHIELD_HALF_H = 4.5;
+const STALL_SPAWN_COOLDOWN_MS = 2600;
 const SHIELD_ORBIT_R    = 35;   // orbital radius of shield orbs from player center (px)
 const SHIELD_COOLDOWN   = 1.5;  // seconds a shield is inactive after absorbing a bullet
 const SHIELD_ROTATION_SPD  = 0.001; // radians per millisecond (≈1 rev / 6.3 s)
@@ -65,6 +68,7 @@ let lbPeriod = 'daily';
 let lbScope = 'everyone';
 let raf=0, lastT=0;
 let gameOverShown = false;
+let lastStallSpawnAt = -99999;
 
 // Room system
 let roomIndex = 0;
@@ -131,6 +135,37 @@ function spawnEnemy(type) {
     roomIndex,
     nextEnemyId: enemyIdSeq++,
   }));
+}
+
+function pickFallbackShooterType() {
+  if(roomIndex < 2) return 'chaser';
+  if(roomIndex < 5) return Math.random() < 0.7 ? 'chaser' : 'sniper';
+  const pool = ['chaser', 'sniper', 'disruptor', 'zoner'];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function ensureShooterPressure() {
+  const onlyDryEnemiesRemain = enemies.length > 0
+    && bullets.length === 0
+    && enemies.every((enemy) => enemy.isRusher || enemy.isSiphon);
+  if(!onlyDryEnemiesRemain) return;
+  if(roomTimer - lastStallSpawnAt < STALL_SPAWN_COOLDOWN_MS) return;
+  spawnEnemy(pickFallbackShooterType());
+  lastStallSpawnAt = roomTimer;
+}
+
+function circleIntersectsShieldPlate(cx, cy, radius, sx, sy, angle) {
+  const dx = cx - sx;
+  const dy = cy - sy;
+  const cosA = Math.cos(-angle);
+  const sinA = Math.sin(-angle);
+  const lx = dx * cosA - dy * sinA;
+  const ly = dx * sinA + dy * cosA;
+  const nearestX = Math.max(-SHIELD_HALF_W, Math.min(SHIELD_HALF_W, lx));
+  const nearestY = Math.max(-SHIELD_HALF_H, Math.min(SHIELD_HALF_H, ly));
+  const hitDx = lx - nearestX;
+  const hitDy = ly - nearestY;
+  return hitDx * hitDx + hitDy * hitDy < radius * radius;
 }
 
 // Bullet speed scales with room — slow at room 1, ramps up
@@ -340,6 +375,7 @@ function init() {
   score=0; kills=0;
   charge=0; fireT=0; stillTimer=0; prevStill=false; hp=100; maxHp=100;
   gameOverShown = false;
+  lastStallSpawnAt = -99999;
   enemyIdSeq = 1;
   player={x:cv.width/2,y:cv.height/2,r:10,vx:0,vy:0,invincible:0,distort:0,deadAt:0,popAt:0,deadPop:false,deadPulse:0};
   player.shields=[];
@@ -425,6 +461,10 @@ function update(dt,ts){
       if(UPG.regenTick>0) hp=Math.min(maxHp, hp+UPG.regenTick);
       showRoomClear();
     }
+  }
+
+  if(roomPhase==='fighting' || roomPhase==='spawning'){
+    ensureShooterPressure();
   }
 
   if(roomPhase==='clear'){
@@ -592,7 +632,8 @@ function update(dt,ts){
           const sAngle=Math.PI*2/total*si+ts*SHIELD_ROTATION_SPD;
           const sx=player.x+Math.cos(sAngle)*SHIELD_ORBIT_R;
           const sy=player.y+Math.sin(sAngle)*SHIELD_ORBIT_R;
-          if(Math.hypot(b.x-sx,b.y-sy)<8+b.r){
+          const shieldFacing = sAngle + Math.PI * 0.5;
+          if(circleIntersectsShieldPlate(b.x, b.y, b.r, sx, sy, shieldFacing)){
             s.cooldown=SHIELD_COOLDOWN;
             sparks(sx,sy,'#67e8f9',8,60);
             bullets.splice(i,1);
@@ -797,26 +838,29 @@ function draw(ts){
       const sAngle=Math.PI*2/total*si+ts*SHIELD_ROTATION_SPD;
       const sx=player.x+Math.cos(sAngle)*SHIELD_ORBIT_R;
       const sy=player.y+Math.sin(sAngle)*SHIELD_ORBIT_R;
+      const shieldFacing = sAngle + Math.PI * 0.5;
       ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(shieldFacing);
       if(s.cooldown>0){
         const frac=s.cooldown/SHIELD_COOLDOWN;
         ctx.globalAlpha=0.25+0.15*frac;
         ctx.strokeStyle='#67e8f9';
         ctx.lineWidth=1.5;
-        ctx.strokeRect(sx-8,sy-5,16,10);
+        ctx.strokeRect(-SHIELD_HALF_W,-SHIELD_HALF_H,SHIELD_HALF_W * 2,SHIELD_HALF_H * 2);
         // Partial fill showing regeneration progress
         ctx.globalAlpha=0.12*(1-frac);
         ctx.fillStyle='#67e8f9';
-        ctx.fillRect(sx-8,sy-5,16,10);
+        ctx.fillRect(-SHIELD_HALF_W,-SHIELD_HALF_H,SHIELD_HALF_W * 2,SHIELD_HALF_H * 2);
       } else {
         ctx.shadowColor='#67e8f9';ctx.shadowBlur=14;
         ctx.strokeStyle='#67e8f9';
         ctx.lineWidth=2;
         ctx.globalAlpha=0.9;
-        ctx.strokeRect(sx-8,sy-5,16,10);
+        ctx.strokeRect(-SHIELD_HALF_W,-SHIELD_HALF_H,SHIELD_HALF_W * 2,SHIELD_HALF_H * 2);
         ctx.shadowBlur=0;
         ctx.fillStyle='rgba(103,232,249,0.18)';
-        ctx.fillRect(sx-8,sy-5,16,10);
+        ctx.fillRect(-SHIELD_HALF_W,-SHIELD_HALF_H,SHIELD_HALF_W * 2,SHIELD_HALF_H * 2);
       }
       ctx.restore();
     }
