@@ -151,8 +151,8 @@ function spawnEnemy(type) {
   else if(edge===1){x=W-M-d.r;y=M+Math.random()*(H-2*M);}
   else if(edge===2){x=M+Math.random()*(W-2*M);y=H-M-d.r;}
   else{x=M+d.r;y=M+Math.random()*(H-2*M);}
-  // Scale HP with room index
-  const hpScale = 1 + roomIndex * 0.15;
+  // Scale HP logarithmically with room index for more manageable progression
+  const hpScale = 1 + Math.log(roomIndex + 1) * 0.5;
   enemies.push({
     ...d,
     eid: enemyIdSeq++,
@@ -243,15 +243,30 @@ function sparks(x,y,col,n=6,spd=80) {
 
 function showUpgrades() {
   gstate='upgrade'; cancelAnimationFrame(raf);
+  const RARE_NAMES = new Set(['Triple Shot', 'Penta Shot']);
   const useful = UPGRADES.filter((u)=>{
+    if(RARE_NAMES.has(u.name) && UPG.spreadTierObtained) return false;
     const before = JSON.stringify(UPG);
     const probe = JSON.parse(before);
     const hpState = { hp, maxHp };
     u.apply(probe, hpState);
     return JSON.stringify(probe) !== before || hpState.hp !== hp || hpState.maxHp !== maxHp;
   });
-  const source = useful.length >= 3 ? useful : UPGRADES;
-  const pool=[...source].sort(()=>Math.random()-.5).slice(0,3);
+  const fallback = UPGRADES.filter(u => !(RARE_NAMES.has(u.name) && UPG.spreadTierObtained));
+  const source = useful.length >= 3 ? useful : fallback;
+  // Separate rare (once-per-run) and common upgrades for pool construction
+  const commons = [...source].filter(u => !RARE_NAMES.has(u.name)).sort(()=>Math.random()-.5);
+  const availRares = [...source].filter(u => RARE_NAMES.has(u.name)).sort(()=>Math.random()-.5);
+  const pool = commons.slice(0, 3);
+  // Fill any remaining slots with rares if the common pool was too small
+  for(const r of availRares) {
+    if(pool.length >= 3) break;
+    pool.push(r);
+  }
+  // Rare upgrades have only a ~15% chance to replace one common slot
+  if(availRares.length > 0 && pool.length === 3 && Math.random() < 0.15) {
+    pool[Math.floor(Math.random() * 3)] = availRares[0];
+  }
   const c=document.getElementById('up-cards');
   c.innerHTML='';
   for(const u of pool){
@@ -576,7 +591,8 @@ function update(dt,ts){
 
     if(b.state==='danger'&&player.invincible<=0){
       if(Math.hypot(b.x-player.x,b.y-player.y)<player.r+b.r-2){
-        hp-=22; player.invincible=1.2; player.distort=.45;
+        const dmgScale = 1 + Math.log(roomIndex + 1) * 0.5;
+        hp-=Math.ceil(22*dmgScale); player.invincible=1.2; player.distort=.45;
         sparks(player.x,player.y,C.danger,10,85);
         bullets.splice(i,1);
         if(hp<=0){gameOver();return;}

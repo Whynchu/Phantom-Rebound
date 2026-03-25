@@ -52,6 +52,7 @@ function getDefaultUpgrades() {
     sps:              0.5,
     spsTier:          0,
     spreadTier:       0,
+    spreadTierObtained: false,
     ringShots:        0,
     dualShot:         0,
     snipePower:       0,
@@ -80,8 +81,8 @@ function getDefaultUpgrades() {
 
 const UPGRADES = [
   {name:'Rapid Fire', tag:'OFFENSE', icon:'⚡', desc:'Unlock next fire rate tier. Shoot faster.', apply(upg){ if(upg.spsTier<SPS_LADDER.length-1){upg.spsTier++;upg.sps=SPS_LADDER[upg.spsTier];}}},
-  {name:'Triple Shot',tag:'OFFENSE',icon:'🔱',desc:'Add two side bullets to each shot.',apply(upg){upg.spreadTier=Math.max(upg.spreadTier,1);}},
-  {name:'Penta Shot', tag:'OFFENSE',icon:'✦',desc:'Add two wider side bullets on top of spread.', apply(upg){upg.spreadTier=Math.max(upg.spreadTier,2);}},
+  {name:'Triple Shot',tag:'OFFENSE',icon:'🔱',desc:'Add two side bullets to each shot.',apply(upg){upg.spreadTier=Math.max(upg.spreadTier,1);upg.spreadTierObtained=true;}},
+  {name:'Penta Shot', tag:'OFFENSE',icon:'✦',desc:'Add two wider side bullets on top of spread.', apply(upg){upg.spreadTier=Math.max(upg.spreadTier,2);upg.spreadTierObtained=true;}},
   {name:'Ring Blast',tag:'OFFENSE',icon:'◎',desc:'Add one radial bullet per cycle (max 8 total).',apply(upg){upg.ringShots=Math.min(8,upg.ringShots+1);}},
   {name:'Front+Back',tag:'OFFENSE',icon:'↕',desc:'Add a reverse shot behind you.',apply(upg){upg.dualShot=1;}},
   {name:'Snipe Shot',tag:'OFFENSE',icon:'🎯',desc:'All output bullets gain size, speed, and damage.',apply(upg){upg.snipePower=Math.min(3,upg.snipePower+1);}},
