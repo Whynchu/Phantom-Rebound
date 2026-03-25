@@ -2,7 +2,7 @@
  * Static game data definitions separated for easier iteration and content updates.
  */
 
-const VERSION = { num: '0.41', label: 'Hyperbolic Scaling' };
+const VERSION = { num: '0.42', label: 'Difficulty Tuning' };
 
 const C = {
   bg:'#161616', grid:'rgba(255,255,255,0.025)', border:'rgba(255,255,255,0.1)',
@@ -82,7 +82,7 @@ const UPGRADES = [
   {name:'Rapid Fire', tag:'OFFENSE', icon:'⚡', desc:'Unlock next fire rate tier. Shoot faster.', apply(upg){ if(upg.spsTier<SPS_LADDER.length-1){upg.spsTier++;upg.sps=SPS_LADDER[upg.spsTier];}}},
   {name:'Triple Shot',tag:'OFFENSE',icon:'🔱',desc:'Add two side bullets to each shot.',apply(upg){upg.spreadTier=Math.max(upg.spreadTier,1);}},
   {name:'Penta Shot', tag:'OFFENSE',icon:'✦',desc:'Add two wider side bullets on top of spread.', apply(upg){upg.spreadTier=Math.max(upg.spreadTier,2);}},
-  {name:'Ring Blast',tag:'OFFENSE',icon:'◎',desc:'Add 8 radial bullets per firing cycle.',apply(upg){upg.ringShots+=8;}},
+  {name:'Ring Blast',tag:'OFFENSE',icon:'◎',desc:'Add one radial bullet per cycle (max 8 total).',apply(upg){upg.ringShots=Math.min(8,upg.ringShots+1);}},
   {name:'Front+Back',tag:'OFFENSE',icon:'↕',desc:'Add a reverse shot behind you.',apply(upg){upg.dualShot=1;}},
   {name:'Snipe Shot',tag:'OFFENSE',icon:'🎯',desc:'All output bullets gain size, speed, and damage.',apply(upg){upg.snipePower=Math.min(3,upg.snipePower+1);}},
   {name:'Bigger Bullets',tag:'OFFENSE',icon:'🔵',desc:'Output bullets grow larger (diminishing returns).',apply(upg){upg.biggerBulletsTier++;upg.shotSize=getHyperbolicScale(upg.biggerBulletsTier);}},
@@ -95,9 +95,9 @@ const UPGRADES = [
   {name:'Decay Extension',tag:'UTILITY',icon:'⏳',desc:'Grey bullets linger 1s longer for easier harvest (max 3s bonus).',apply(upg){upg.decayBonus=Math.min(3000,upg.decayBonus+1000);}},
   {name:'Charge Cap Up',tag:'UTILITY',icon:'◆',desc:'Expand your charge capacity (diminishing returns).',apply(upg){upg.chargeCapTier++;const bonus=Math.round(8*getHyperbolicScale(upg.chargeCapTier));upg.maxCharge+=bonus;}},
   {name:'Wider Absorb',tag:'UTILITY',icon:'🧲',desc:'Pull grey bullets from farther away (max +50).',apply(upg){upg.absorbRange=Math.min(50,upg.absorbRange+12);}},
-  {name:'Extra Life',tag:'SURVIVE',icon:'◉',desc:'Gain max HP and restore it (diminishing bonus per pick).',apply(upg, state){upg.extraLifeTier++;const heal=Math.max(5,25-(upg.extraLifeTier-1)*3);state.maxHp+=heal;state.hp=Math.min(state.hp+heal,state.maxHp);}},
+  {name:'Extra Life',tag:'SURVIVE',icon:'◉',desc:'Gain max HP and restore it (diminishing bonus per pick).',apply(upg, state){upg.extraLifeTier++;const heal=Math.max(3,15-(upg.extraLifeTier-1)*2);state.maxHp+=heal;state.hp=Math.min(state.hp+heal,state.maxHp);}},
   {name:'Ghost Velocity',tag:'SURVIVE',icon:'👻',desc:'Move faster through the arena (diminishing returns).',apply(upg){upg.speedTier++;upg.speedMult=getHyperbolicScale(upg.speedTier);}},
-  {name:'Room Regen',tag:'SURVIVE',icon:'💚',desc:'Restore HP whenever you clear a room (max 60 HP/room).',apply(upg){upg.regenTick=Math.min(60,upg.regenTick+20);}},
+  {name:'Room Regen',tag:'SURVIVE',icon:'💚',desc:'Restore HP whenever you clear a room (max 30 HP/room).',apply(upg){upg.regenTick=Math.min(30,upg.regenTick+10);}},
   {name:'Protective Shield',tag:'SURVIVE',icon:'🛡️',desc:`Orbiting shield absorbs one danger bullet then regenerates. Each upgrade adds another shield (max ${MAX_SHIELD_TIER}).`,apply(upg){upg.shieldTier=Math.min(MAX_SHIELD_TIER,upg.shieldTier+1);}},
   {name:'Orbit Spheres',tag:'UTILITY',icon:'🔮',desc:'3 passive spheres orbit you constantly once unlocked.',apply(upg){upg.orbitSpheres=true;}},
 ];

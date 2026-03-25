@@ -152,7 +152,7 @@ function spawnEnemy(type) {
   else if(edge===2){x=M+Math.random()*(W-2*M);y=H-M-d.r;}
   else{x=M+d.r;y=M+Math.random()*(H-2*M);}
   // Scale HP with room index
-  const hpScale = 1 + roomIndex * 0.05;
+  const hpScale = 1 + roomIndex * 0.15;
   enemies.push({
     ...d,
     eid: enemyIdSeq++,
@@ -587,10 +587,8 @@ function update(dt,ts){
             score+=e.pts*(b.crit?2:1);kills++;
             sparks(e.x,e.y,e.col,14,95);
             // Death bullets scatter as grey
-            for(let k=0;k<4;k++){
-              const a=Math.random()*Math.PI*2,s=50+Math.random()*50;
-              bullets.push({x:e.x,y:e.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,state:'grey',r:4.5,decayStart:ts,bounces:0});
-            }
+            const a=Math.random()*Math.PI*2,s=50+Math.random()*50;
+            bullets.push({x:e.x,y:e.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,state:'grey',r:4.5,decayStart:ts,bounces:0});
             enemies.splice(j,1);
           }
           if(b.pierceLeft>0){
