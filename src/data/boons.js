@@ -1,6 +1,5 @@
 const SPS_LADDER = [0.5,1.0,1.8,3.0,5.0,8.0];
 const MAX_SHIELD_TIER = 4;
-const RARE_BOON_NAMES = new Set(['Triple Shot', 'Penta Shot']);
 
 // Returns a multiplier with diminishing returns approaching ~1.45x ceiling.
 // tier 1: ~1.18x, tier 2: ~1.26x, tier 5: ~1.35x, tier 10: ~1.39x
@@ -43,8 +42,6 @@ function getDefaultUpgrades() {
 
 const BOONS = [
   {name:'Rapid Fire', tag:'OFFENSE', icon:'⚡', desc:'Unlock next fire rate tier. Shoot faster.', apply(upg){ if(upg.spsTier<SPS_LADDER.length-1){upg.spsTier++;upg.sps=SPS_LADDER[upg.spsTier];}}},
-  {name:'Triple Shot',tag:'OFFENSE',icon:'🔱',desc:'Add two side bullets to each shot.',apply(upg){upg.spreadTier=Math.max(upg.spreadTier,1);upg.spreadTierObtained=true;}},
-  {name:'Penta Shot', tag:'OFFENSE',icon:'✦',desc:'Add two wider side bullets on top of spread.', apply(upg){upg.spreadTier=Math.max(upg.spreadTier,2);upg.spreadTierObtained=true;}},
   {name:'Ring Blast',tag:'OFFENSE',icon:'◎',desc:'Add one radial bullet per cycle (max 8 total).',apply(upg){upg.ringShots=Math.min(8,upg.ringShots+1);}},
   {name:'Front+Back',tag:'OFFENSE',icon:'↕',desc:'Add a reverse shot behind you.',apply(upg){upg.dualShot=1;}},
   {name:'Snipe Shot',tag:'OFFENSE',icon:'🎯',desc:'All output bullets gain size, speed, and damage.',apply(upg){upg.snipePower=Math.min(3,upg.snipePower+1);}},
@@ -66,31 +63,8 @@ const BOONS = [
 ];
 
 function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
-  const useful = BOONS.filter((boon) => {
-    if(RARE_BOON_NAMES.has(boon.name) && upg.spreadTierObtained) return false;
-    const before = JSON.stringify(upg);
-    const probe = JSON.parse(before);
-    const hpState = { hp, maxHp };
-    boon.apply(probe, hpState);
-    return JSON.stringify(probe) !== before || hpState.hp !== hp || hpState.maxHp !== maxHp;
-  });
-
-  const fallback = BOONS.filter((boon) => !(RARE_BOON_NAMES.has(boon.name) && upg.spreadTierObtained));
-  const source = useful.length >= choiceCount ? useful : fallback;
-  const commons = [...source].filter((boon) => !RARE_BOON_NAMES.has(boon.name)).sort(() => Math.random() - 0.5);
-  const availRares = [...source].filter((boon) => RARE_BOON_NAMES.has(boon.name)).sort(() => Math.random() - 0.5);
-  const pool = commons.slice(0, choiceCount);
-
-  for(const rare of availRares) {
-    if(pool.length >= choiceCount) break;
-    pool.push(rare);
-  }
-
-  if(availRares.length > 0 && pool.length === choiceCount && Math.random() < 0.15) {
-    pool[Math.floor(Math.random() * choiceCount)] = availRares[0];
-  }
-
-  return pool;
+  const source = [...BOONS].sort(() => Math.random() - 0.5);
+  return source.slice(0, choiceCount);
 }
 
 export { BOONS, SPS_LADDER, getHyperbolicScale, getDefaultUpgrades, pickBoonChoices };
