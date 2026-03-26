@@ -4,9 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Phantom Rebound</title>
+<script>
+window.__APP_BUILD__ = '0.59';
+(function () {
+  const currentBuild = window.__APP_BUILD__;
+  const reloadKey = 'phantom-rebound-build-reload';
+  fetch(`version.json?ts=${Date.now()}`, { cache: 'no-store' })
+    .then((response) => response.ok ? response.json() : null)
+    .then((data) => {
+      if (!data || !data.version || data.version === currentBuild) return;
+      const lastReloaded = sessionStorage.getItem(reloadKey);
+      if (lastReloaded === data.version) return;
+      sessionStorage.setItem(reloadKey, data.version);
+      const url = new URL(window.location.href);
+      url.searchParams.set('build', data.version);
+      window.location.replace(url.toString());
+    })
+    .catch(() => {});
+}());
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260325b">
+<link rel="stylesheet" href="styles.css?v=20260325c">
 </head>
 <body class="app-loading">
 <div id="wrap">
@@ -21,7 +40,7 @@
     <div id="room-clear"><div id="room-clear-txt">ROOM CLEAR</div></div>
 
     <div class="screen" id="s-start">
-      <div class="eyebrow" id="version-tag">// prototype v0.58 - Room 10 Clamp</div>
+      <div class="eyebrow" id="version-tag">// prototype v0.59 - Build Check</div>
       <div class="big-title">Phantom<span>Rebound</span></div>
       <div class="rule-line"></div>
       <div class="name-row">
@@ -102,6 +121,6 @@
   </div>
 </div>
 
-<script type="module" src="script.js?v=20260325b"></script>
+<script type="module" src="script.js?v=20260325c"></script>
 </body>
 </html>
