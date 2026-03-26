@@ -19,6 +19,7 @@ function revealAppShell() {
 const cv  = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 const LB_KEY = 'phantom-rebound-leaderboard-v1';
+const NAME_KEY = 'phantom-rebound-runner-name';
 
 const nameInputStart = document.getElementById('name-input-start');
 const nameInputGo = document.getElementById('name-input-go');
@@ -316,12 +317,20 @@ function loadLeaderboard() {
     const parsed = raw ? JSON.parse(raw) : [];
     if(Array.isArray(parsed)) {
       leaderboard = parsed
-        .filter((x)=>x && typeof x.name==='string' && Number.isFinite(x.score) && Number.isFinite(x.ts))
+        .filter((x)=>x && typeof x.name==='string' && Number.isFinite(x.score) && Number.isFinite(x.ts) && x.version === VERSION.num)
         .slice(0, 500);
       leaderboard.sort((a,b)=>b.score-a.score || b.ts-a.ts);
     }
   } catch {
     leaderboard = [];
+  }
+}
+
+function loadSavedPlayerName() {
+  try {
+    return sanitizeName(localStorage.getItem(NAME_KEY) || '');
+  } catch {
+    return '';
   }
 }
 
@@ -397,6 +406,7 @@ async function refreshLeaderboardView() {
       period: lbPeriod,
       scope: lbScope,
       playerName,
+      gameVersion: VERSION.num,
       limit: 10,
     });
     if(requestId !== lbRequestSeq) return;
@@ -418,6 +428,7 @@ function pushLeaderboardEntry() {
     score,
     room: roomIndex + 1,
     ts: Date.now(),
+    version: VERSION.num,
   };
   leaderboard.push(entry);
   leaderboard.sort((a,b)=>b.score-a.score || b.ts-a.ts);
@@ -1157,6 +1168,9 @@ lbScopeBtns.forEach((btn) => {
 function setPlayerName(v, { syncInputs = false } = {}){
   const sanitized = sanitizeName(v);
   playerName = sanitized || 'RUNNER';
+  try {
+    localStorage.setItem(NAME_KEY, sanitized);
+  } catch {}
   if(syncInputs){
     nameInputStart.value = sanitized;
     nameInputGo.value = sanitized;
@@ -1180,7 +1194,7 @@ document.getElementById('btn-restart').onclick=()=>{
 
 loadLeaderboard();
 setLeaderboardStatus('local', 'LOCAL FALLBACK');
-setPlayerName('');
+setPlayerName(loadSavedPlayerName(), { syncInputs: true });
 renderLeaderboard();
 revealAppShell();
 

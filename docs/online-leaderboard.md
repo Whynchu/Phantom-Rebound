@@ -5,7 +5,7 @@ This repo now expects Supabase RPC functions rather than direct table writes.
 ## What the game calls
 
 - `submit_score(p_player_name, p_score, p_room, p_game_version)`
-- `get_leaderboard(p_period, p_scope, p_player_name, p_limit)`
+- `get_leaderboard(p_period, p_scope, p_player_name, p_game_version, p_limit)`
 
 The browser client uses the public Supabase URL and publishable key already wired in `src/data/leaderboardConfig.js`.
 
@@ -15,6 +15,12 @@ The browser client uses the public Supabase URL and publishable key already wire
 2. Run `supabase/leaderboard.sql`.
 3. Confirm both RPC functions exist under Database -> Functions.
 4. Open the game and the leaderboard should switch from `LOCAL FALLBACK` to `SUPABASE LIVE` once calls succeed.
+
+## Version scoping
+
+- Leaderboards are now filtered to the current game version.
+- After pulling this update, rerun `supabase/leaderboard.sql` so the live `get_leaderboard` function accepts `p_game_version`.
+- Local saved runs are also filtered to the current version only.
 
 ## Notes
 

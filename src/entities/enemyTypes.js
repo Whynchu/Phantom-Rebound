@@ -20,9 +20,9 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId }) {
   else if(edge === 2){x = margin + Math.random() * (width - 2 * margin); y = height - margin - def.r;}
   else {x = margin + def.r; y = margin + Math.random() * (height - 2 * margin);}
 
-  // Early rooms start much lighter, then ramp back toward full strength.
-  const roomRamp = Math.min(1, roomIndex / 8);
-  const hpScale = (0.32 + roomRamp * 0.68) * (1 + Math.log(roomIndex + 1) * 0.24);
+  // Early rooms start much lighter, then ramp back toward full strength gradually.
+  const roomRamp = Math.min(1, roomIndex / 10);
+  const hpScale = (0.28 + roomRamp * 0.72) * (1 + Math.log(roomIndex + 1) * 0.17);
 
   return {
     ...def,

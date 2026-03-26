@@ -181,11 +181,14 @@ body.app-ready #wrap { opacity: 1; }
   border-radius: 4px;
   color: var(--text);
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
+  font-size: 16px;
   letter-spacing: .08em;
   text-transform: uppercase;
   padding: 10px 11px;
   outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .name-input:focus {
   border-color: var(--accent2);
