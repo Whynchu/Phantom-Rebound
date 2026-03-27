@@ -1219,10 +1219,12 @@ bindJoystickControls({
   getGameState: () => gstate,
 });
 
-lbOpenBtn.addEventListener('click', () => {
-  lbScreen.classList.remove('off');
-  refreshLeaderboardView();
-});
+if(lbOpenBtn){
+  lbOpenBtn.addEventListener('click', () => {
+    lbScreen.classList.remove('off');
+    refreshLeaderboardView();
+  });
+}
 lbCloseBtn.addEventListener('click', () => lbScreen.classList.add('off'));
 lbPeriodBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
