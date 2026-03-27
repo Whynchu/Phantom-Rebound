@@ -215,6 +215,11 @@ body.app-ready #wrap { opacity: 1; }
   border-color:rgba(74,222,128,0.22);
   color:var(--accent);
 }
+.btn-menu-sub {
+  padding:10px 22px;
+  font-size:10px;
+  letter-spacing:.15em;
+}
 .btn-mini { padding:10px 14px; font-size:9px; letter-spacing:.14em; }
 /* UPGRADE SCREEN — horizontal 3 cards */
 #up-title { font-size:9px; letter-spacing:.25em; text-transform:uppercase; color:var(--accent); margin-bottom:4px; }
@@ -391,4 +396,7 @@ body.app-ready #wrap { opacity: 1; }
     min-height: -webkit-fill-available;
     min-height: calc(var(--vh, 1vh) * 100);
   }
+  .screen { gap: 12px; padding: 24px; }
+  .eyebrow { letter-spacing: .2em; }
+  .btn-menu-sub { padding: 8px 18px; font-size: 9px; }
 }
