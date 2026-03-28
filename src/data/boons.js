@@ -19,10 +19,14 @@ function getRequiredShotCount(upg) {
 
 function syncChargeCapacity(upg) {
   const shotCount = getRequiredShotCount(upg);
-  const baseCap = BASE_CHARGE_CAP + Math.max(0, shotCount - 1);
+  const baseCap = BASE_CHARGE_CAP + Math.max(0, shotCount - 1) + (upg.chargeCapFlatBonus || 0);
   const capMult = upg.chargeCapMult || 1;
   upg.maxCharge = Math.max(baseCap, Math.round(baseCap * capMult));
   return upg.maxCharge;
+}
+
+function getFlatChargeGain(tier) {
+  return Math.max(8, Math.round(30 / getHyperbolicScale(Math.max(0, tier - 1))));
 }
 
 function getDefaultUpgrades() {
@@ -37,6 +41,8 @@ function getDefaultUpgrades() {
     snipePower:       0,
     maxCharge:        BASE_CHARGE_CAP,
     chargeCapMult:    1,
+    chargeCapFlatBonus: 0,
+    chargeCapFlatTier: 0,
     decayBonus:       0,
     absorbValue:      1,
     pierceTier:       0,
@@ -65,6 +71,7 @@ function getDefaultUpgrades() {
     capacitorTier:    0,
     kineticTier:      0,
     titanTier:        0,
+    miniTaken:        false,
     playerSizeMult:   1,
     playerDamageMult: 1,
     titanSlowMult:    1,
@@ -90,6 +97,7 @@ const BOONS = [
   {name:'Quick Harvest',tag:'UTILITY',icon:'⬇',desc:'Absorbing grey bullets grants more charge (diminishing returns).',apply(upg){upg.absorbTier++;upg.absorbValue=1+0.4*getHyperbolicScale(upg.absorbTier);}},
   {name:'Decay Extension',tag:'UTILITY',icon:'⏳',desc:'Grey bullets linger 1s longer for easier harvest (max 3s bonus).',apply(upg){upg.decayBonus=Math.min(3000,upg.decayBonus+1000);}},
   {name:'Charge Cap Up',tag:'UTILITY',icon:'◆',desc:'Increase your charge pool by 25% per pick.',apply(upg){upg.chargeCapTier++;upg.chargeCapMult = 1 + upg.chargeCapTier * CHARGE_CAP_PCT;syncChargeCapacity(upg);}},
+  {name:'Deep Reserve',tag:'UTILITY',icon:'▣',desc:'Gain a flat charge increase with diminishing returns. Starts at +30.',apply(upg){upg.chargeCapFlatTier++;upg.chargeCapFlatBonus += getFlatChargeGain(upg.chargeCapFlatTier);syncChargeCapacity(upg);}},
   {name:'Wider Absorb',tag:'UTILITY',icon:'🧲',desc:'Pull grey bullets from farther away (max +50).',apply(upg){upg.absorbRange=Math.min(50,upg.absorbRange+12);}},
   {name:'Long Reach',tag:'UTILITY',icon:'➶',desc:'Your output shots last longer and travel farther.',apply(upg){upg.shotLifeTier++;upg.shotLifeMult=1+upg.shotLifeTier*0.3;}},
   {name:'Kinetic Harvest',tag:'UTILITY',icon:'🌀',desc:'Gain charge while moving (diminishing per pick).',apply(upg){upg.kineticTier++;upg.moveChargeRate=Math.min(1.8,upg.moveChargeRate+0.35);}},
@@ -98,7 +106,8 @@ const BOONS = [
   {name:'Room Regen',tag:'SURVIVE',icon:'💚',desc:'Restore HP whenever you clear a room (max 30 HP/room).',apply(upg){upg.regenTick=Math.min(30,upg.regenTick+10);}},
   {name:'Armor Weave',tag:'SURVIVE',icon:'🧱',desc:'Reduce incoming danger-bullet damage (max 3 picks).',apply(upg){upg.armorTier=Math.min(3,upg.armorTier+1);upg.damageTakenMult=Math.max(0.72,1-upg.armorTier*0.09);}},
   {name:'Emergency Capacitor',tag:'SURVIVE',icon:'⚕️',desc:'Taking damage grants instant charge (max 3 picks).',apply(upg){upg.capacitorTier=Math.min(3,upg.capacitorTier+1);upg.hitChargeGain=Math.min(4.5,upg.hitChargeGain+1.5);}},
-  {name:'Titan Heart',tag:'SURVIVE',icon:'⬢',desc:'Grow 25% larger each time, gain max HP at +100%, +50%, +25%, +10%, then +5%, add +5% damage, and lose a little speed per pick.',apply(upg, state){if(upg.titanTier >= TITAN_HP_PCT.length) return; const hpPct = TITAN_HP_PCT[upg.titanTier]; upg.titanTier++; upg.playerSizeMult = 1 + upg.titanTier * 0.25; upg.playerDamageMult = 1 + upg.titanTier * 0.05; upg.titanSlowMult = Math.max(0.7, 1 - upg.titanTier * TITAN_SLOW_PCT); const gain = Math.max(1, Math.round(state.maxHp * hpPct)); state.maxHp += gain; state.hp = Math.min(state.hp, state.maxHp);}},
+  {name:'MINI',tag:'SURVIVE',icon:'·',desc:'Become 50% smaller, but lose 25% max HP. Exclusive with Titan Heart.',apply(upg, state){if(upg.miniTaken || upg.titanTier > 0) return; upg.miniTaken = true; upg.playerSizeMult *= 0.5; state.maxHp = Math.max(10, Math.round(state.maxHp * 0.75)); state.hp = Math.min(state.maxHp, Math.max(1, Math.round(state.hp * 0.75)));}},
+  {name:'Titan Heart',tag:'SURVIVE',icon:'⬢',desc:'Grow 25% larger each time, gain max HP at +100%, +50%, +25%, +10%, then +5%, add +5% damage, and lose a little speed per pick. Exclusive with MINI.',apply(upg, state){if(upg.miniTaken || upg.titanTier >= TITAN_HP_PCT.length) return; const hpPct = TITAN_HP_PCT[upg.titanTier]; upg.titanTier++; upg.playerSizeMult = 1 + upg.titanTier * 0.25; upg.playerDamageMult = 1 + upg.titanTier * 0.05; upg.titanSlowMult = Math.max(0.7, 1 - upg.titanTier * TITAN_SLOW_PCT); const gain = Math.max(1, Math.round(state.maxHp * hpPct)); state.maxHp += gain; state.hp = Math.min(state.hp, state.maxHp);}},
   {name:'Protective Shield',tag:'SURVIVE',icon:'🛡️',desc:`Orbiting shield absorbs one danger bullet then regenerates. Each upgrade adds another shield (max ${MAX_SHIELD_TIER}).`,apply(upg){upg.shieldTier=Math.min(MAX_SHIELD_TIER,upg.shieldTier+1);}},
   {name:'Orbit Spheres',tag:'UTILITY',icon:'🔮',desc:'Add one orbiting sphere (up to 5). Each pick adds another.',apply(upg){upg.orbitSphereTier=Math.min(5,upg.orbitSphereTier+1);}},
 ];
@@ -163,6 +172,7 @@ function getActiveBoonEntries(upg) {
   if(upg.absorbTier > 0) entries.push({ icon:'⬇', name:'Quick Harvest', detail:`+${Math.round((upg.absorbValue - 1) * 100)}% absorb value` });
   if(upg.decayBonus > 0) entries.push({ icon:'⏳', name:'Decay Extension', detail:`+${Math.round(upg.decayBonus / 1000)}s linger` });
   if(upg.chargeCapTier > 0) entries.push({ icon:'◆', name:'Charge Cap Up', detail:`+${Math.round((upg.chargeCapMult - 1) * 100)}% capacity` });
+  if(upg.chargeCapFlatTier > 0) entries.push({ icon:'▣', name:'Deep Reserve', detail:`+${upg.chargeCapFlatBonus} flat charge` });
   if(upg.absorbRange > 0) entries.push({ icon:'🧲', name:'Wider Absorb', detail:`+${upg.absorbRange} absorb range` });
   if(upg.kineticTier > 0) entries.push({ icon:'🌀', name:'Kinetic Harvest', detail:`${upg.moveChargeRate.toFixed(2)} charge/sec while moving` });
   if(upg.shotLifeTier > 0) entries.push({ icon:'➶', name:'Long Reach', detail:`+${Math.round((upg.shotLifeMult - 1) * 100)}% shot lifespan` });
@@ -171,6 +181,7 @@ function getActiveBoonEntries(upg) {
   if(upg.regenTick > 0) entries.push({ icon:'💚', name:'Room Regen', detail:`${upg.regenTick} HP per room clear` });
   if(upg.armorTier > 0) entries.push({ icon:'🧱', name:'Armor Weave', detail:`${Math.round((1 - upg.damageTakenMult) * 100)}% damage reduction` });
   if(upg.capacitorTier > 0) entries.push({ icon:'⚕️', name:'Emergency Capacitor', detail:`+${upg.hitChargeGain.toFixed(1)} charge on hit` });
+  if(upg.miniTaken) entries.push({ icon:'·', name:'MINI', detail:'50% smaller, 25% less max HP' });
   if(upg.titanTier > 0) entries.push({ icon:'⬢', name:'Titan Heart', detail:`Tier ${upg.titanTier} - +${Math.round((upg.playerDamageMult - 1) * 100)}% dmg, -${Math.round((1 - upg.titanSlowMult) * 100)}% speed` });
   if(upg.shieldTier > 0) entries.push({ icon:'🛡️', name:'Protective Shield', detail:`${upg.shieldTier} shield plate${upg.shieldTier === 1 ? '' : 's'}` });
   if(upg.orbitSphereTier > 0) entries.push({ icon:'🔮', name:'Orbit Spheres', detail:`${upg.orbitSphereTier} sphere${upg.orbitSphereTier === 1 ? '' : 's'}` });
