@@ -1,7 +1,8 @@
 const SPS_LADDER = [0.5,1.0,1.8,3.0,5.0,8.0];
 const MAX_SHIELD_TIER = 4;
 const TITAN_HP_PCT = [1.00, 0.50, 0.25, 0.10, 0.05];
-const HEAL_PCT = [1.00, 0.50, 0.25, 0.10, 0.05];
+const TITAN_SLOW_PCT = 0.05;
+const HEAL_PCT = [1.00, 0.50, 0.50];
 
 function getHyperbolicScale(tier) {
   return 1 + (tier * 0.45) / (tier + 1.5);
@@ -46,6 +47,7 @@ function getDefaultUpgrades() {
     titanTier:        0,
     playerSizeMult:   1,
     playerDamageMult: 1,
+    titanSlowMult:    1,
     healTier:         0,
     forwardShotTier:  0,
   };
@@ -73,7 +75,7 @@ const BOONS = [
   {name:'Room Regen',tag:'SURVIVE',icon:'💚',desc:'Restore HP whenever you clear a room (max 30 HP/room).',apply(upg){upg.regenTick=Math.min(30,upg.regenTick+10);}},
   {name:'Armor Weave',tag:'SURVIVE',icon:'🧱',desc:'Reduce incoming danger-bullet damage (max 3 picks).',apply(upg){upg.armorTier=Math.min(3,upg.armorTier+1);upg.damageTakenMult=Math.max(0.72,1-upg.armorTier*0.09);}},
   {name:'Emergency Capacitor',tag:'SURVIVE',icon:'⚕️',desc:'Taking damage grants instant charge (max 3 picks).',apply(upg){upg.capacitorTier=Math.min(3,upg.capacitorTier+1);upg.hitChargeGain=Math.min(4.5,upg.hitChargeGain+1.5);}},
-  {name:'Titan Heart',tag:'SURVIVE',icon:'⬢',desc:'Grow 25% larger each time, gain max HP at +100%, +50%, +25%, +10%, then +5%, and add +5% damage per pick.',apply(upg, state){if(upg.titanTier >= TITAN_HP_PCT.length) return; const hpPct = TITAN_HP_PCT[upg.titanTier]; upg.titanTier++; upg.playerSizeMult = 1 + upg.titanTier * 0.25; upg.playerDamageMult = 1 + upg.titanTier * 0.05; const gain = Math.max(1, Math.round(state.maxHp * hpPct)); state.maxHp += gain; state.hp = Math.min(state.maxHp, state.hp + gain);}},
+  {name:'Titan Heart',tag:'SURVIVE',icon:'⬢',desc:'Grow 25% larger each time, gain max HP at +100%, +50%, +25%, +10%, then +5%, add +5% damage, and lose a little speed per pick.',apply(upg, state){if(upg.titanTier >= TITAN_HP_PCT.length) return; const hpPct = TITAN_HP_PCT[upg.titanTier]; upg.titanTier++; upg.playerSizeMult = 1 + upg.titanTier * 0.25; upg.playerDamageMult = 1 + upg.titanTier * 0.05; upg.titanSlowMult = Math.max(0.7, 1 - upg.titanTier * TITAN_SLOW_PCT); const gain = Math.max(1, Math.round(state.maxHp * hpPct)); state.maxHp += gain; state.hp = Math.min(state.hp, state.maxHp);}},
   {name:'Protective Shield',tag:'SURVIVE',icon:'🛡️',desc:`Orbiting shield absorbs one danger bullet then regenerates. Each upgrade adds another shield (max ${MAX_SHIELD_TIER}).`,apply(upg){upg.shieldTier=Math.min(MAX_SHIELD_TIER,upg.shieldTier+1);}},
   {name:'Orbit Spheres',tag:'UTILITY',icon:'🔮',desc:'Add one orbiting sphere (up to 5). Each pick adds another.',apply(upg){upg.orbitSphereTier=Math.min(5,upg.orbitSphereTier+1);}},
 ];
@@ -103,18 +105,52 @@ function weightedPickBoon(pool, upg) {
 }
 
 function createHealBoon(upg) {
-  const healPct = HEAL_PCT[Math.min(upg.healTier, HEAL_PCT.length - 1)];
+  const healSpent = upg.healTier >= HEAL_PCT.length;
+  const healPct = healSpent ? 0 : HEAL_PCT[upg.healTier];
   return {
     name: 'Recover',
     tag: 'HEAL',
     icon: '♥',
-    desc: `Heal ${Math.round(healPct * 100)}% of max HP. Permanent fourth option.`,
+    disabled: healSpent,
+    desc: healSpent
+      ? 'Recover is spent for this run.'
+      : `Heal ${Math.round(healPct * 100)}% of max HP. Permanent fourth option.`,
     apply(_, state) {
+      if(healSpent) return;
       const healAmount = Math.max(1, Math.round(state.maxHp * healPct));
       state.hp = Math.min(state.maxHp, state.hp + healAmount);
       upg.healTier++;
     },
   };
+}
+
+function getActiveBoonEntries(upg) {
+  const entries = [];
+  if(upg.spsTier > 0) entries.push({ icon:'⚡', name:'Rapid Fire', detail:`Tier ${upg.spsTier} - ${upg.sps.toFixed(1)} SPS` });
+  if(upg.ringShots > 0) entries.push({ icon:'◎', name:'Ring Blast', detail:`${upg.ringShots} radial shot${upg.ringShots === 1 ? '' : 's'}` });
+  if(upg.dualShot > 0) entries.push({ icon:'↕', name:'Front+Back', detail:'Rear shot enabled' });
+  if(upg.snipePower > 0) entries.push({ icon:'🎯', name:'Snipe Shot', detail:`Tier ${upg.snipePower}` });
+  if(upg.forwardShotTier > 0) entries.push({ icon:'≫', name:'Twin Lance', detail:`+${upg.forwardShotTier} forward lane${upg.forwardShotTier === 1 ? '' : 's'}` });
+  if(upg.biggerBulletsTier > 0) entries.push({ icon:'🔵', name:'Bigger Bullets', detail:`Tier ${upg.biggerBulletsTier}` });
+  if(upg.fasterBulletsTier > 0) entries.push({ icon:'💨', name:'Faster Bullets', detail:`Tier ${upg.fasterBulletsTier}` });
+  if(upg.critTier > 0) entries.push({ icon:'💥', name:'Critical Hit', detail:`${Math.round(upg.critChance * 100)}% crit chance` });
+  if(upg.bounceTier > 0) entries.push({ icon:'↯', name:'Ricochet', detail:'Bullets bounce on walls' });
+  if(upg.homingTier > 0) entries.push({ icon:'🌀', name:'Homing', detail:'Shots curve into targets' });
+  if(upg.pierceTier > 0) entries.push({ icon:'→', name:'Pierce', detail:`Tier ${upg.pierceTier}` });
+  if(upg.absorbTier > 0) entries.push({ icon:'⬇', name:'Quick Harvest', detail:`+${Math.round((upg.absorbValue - 1) * 100)}% absorb value` });
+  if(upg.decayBonus > 0) entries.push({ icon:'⏳', name:'Decay Extension', detail:`+${Math.round(upg.decayBonus / 1000)}s linger` });
+  if(upg.chargeCapTier > 0) entries.push({ icon:'◆', name:'Charge Cap Up', detail:`Max charge ${upg.maxCharge}` });
+  if(upg.absorbRange > 0) entries.push({ icon:'🧲', name:'Wider Absorb', detail:`+${upg.absorbRange} absorb range` });
+  if(upg.kineticTier > 0) entries.push({ icon:'🌀', name:'Kinetic Harvest', detail:`${upg.moveChargeRate.toFixed(2)} charge/sec while moving` });
+  if(upg.extraLifeTier > 0) entries.push({ icon:'◉', name:'Extra Life', detail:`Tier ${upg.extraLifeTier}` });
+  if(upg.speedTier > 0) entries.push({ icon:'👻', name:'Ghost Velocity', detail:`+${Math.round((upg.speedMult - 1) * 100)}% move speed` });
+  if(upg.regenTick > 0) entries.push({ icon:'💚', name:'Room Regen', detail:`${upg.regenTick} HP per room clear` });
+  if(upg.armorTier > 0) entries.push({ icon:'🧱', name:'Armor Weave', detail:`${Math.round((1 - upg.damageTakenMult) * 100)}% damage reduction` });
+  if(upg.capacitorTier > 0) entries.push({ icon:'⚕️', name:'Emergency Capacitor', detail:`+${upg.hitChargeGain.toFixed(1)} charge on hit` });
+  if(upg.titanTier > 0) entries.push({ icon:'⬢', name:'Titan Heart', detail:`Tier ${upg.titanTier} - +${Math.round((upg.playerDamageMult - 1) * 100)}% dmg, -${Math.round((1 - upg.titanSlowMult) * 100)}% speed` });
+  if(upg.shieldTier > 0) entries.push({ icon:'🛡️', name:'Protective Shield', detail:`${upg.shieldTier} shield plate${upg.shieldTier === 1 ? '' : 's'}` });
+  if(upg.orbitSphereTier > 0) entries.push({ icon:'🔮', name:'Orbit Spheres', detail:`${upg.orbitSphereTier} sphere${upg.orbitSphereTier === 1 ? '' : 's'}` });
+  return entries;
 }
 
 function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
@@ -141,4 +177,4 @@ function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
   return picks;
 }
 
-export { BOONS, SPS_LADDER, getHyperbolicScale, getDefaultUpgrades, pickBoonChoices, createHealBoon };
+export { BOONS, SPS_LADDER, getHyperbolicScale, getDefaultUpgrades, pickBoonChoices, createHealBoon, getActiveBoonEntries };

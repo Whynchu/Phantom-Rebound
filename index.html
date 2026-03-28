@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Phantom Rebound - v0.72</title>
+<title>Phantom Rebound - v0.73</title>
 <script>
-window.__APP_BUILD__ = '0.72';
+window.__APP_BUILD__ = '0.73';
 (function () {
   const currentBuild = window.__APP_BUILD__;
   const reloadKey = 'phantom-rebound-build-reload';
@@ -25,7 +25,7 @@ window.__APP_BUILD__ = '0.72';
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20260327g">
+<link rel="stylesheet" href="styles.css?v=20260327h">
 </head>
 <body class="app-loading">
 <div id="wrap">
@@ -41,7 +41,7 @@ window.__APP_BUILD__ = '0.72';
     <div id="room-intro"><div id="room-intro-txt">READY?</div></div>
 
     <div class="screen" id="s-start">
-      <div class="eyebrow" id="version-tag">// prototype v0.72 - Kinetic Gate</div>
+      <div class="eyebrow" id="version-tag">// prototype v0.73 - Boon Audit</div>
       <div class="big-title">Phantom<span>Rebound</span></div>
       <div class="rule-line"></div>
       <div class="name-row">
@@ -61,7 +61,13 @@ window.__APP_BUILD__ = '0.72';
 
     <div class="screen off" id="s-up">
       <div id="up-title">// Room Clear — Choose a Reward</div>
+      <div id="up-toolbar"><button class="btn btn-secondary btn-up-sub" id="btn-up-active" type="button">Active Boons</button></div>
       <div id="up-cards"></div>
+      <div id="up-active-panel" class="off">
+        <div class="up-active-head">Current Loadout</div>
+        <div id="up-active-list"></div>
+        <button class="btn btn-secondary btn-up-sub" id="btn-up-active-close" type="button">Back</button>
+      </div>
     </div>
 
     <div class="screen off" id="s-go">
@@ -123,6 +129,6 @@ window.__APP_BUILD__ = '0.72';
   </div>
 </div>
 
-<script type="module" src="script.js?v=20260327g"></script>
+<script type="module" src="script.js?v=20260327h"></script>
 </body>
 </html>

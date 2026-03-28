@@ -223,8 +223,79 @@ body.app-ready #wrap { opacity: 1; }
 .btn-mini { padding:10px 14px; font-size:9px; letter-spacing:.14em; }
 /* UPGRADE SCREEN — horizontal 3 cards */
 #up-title { font-size:9px; letter-spacing:.25em; text-transform:uppercase; color:var(--accent); margin-bottom:4px; }
+#up-toolbar {
+  width:100%;
+  display:flex;
+  justify-content:flex-end;
+  margin-top:-2px;
+}
+.btn-up-sub {
+  padding:8px 14px;
+  font-size:9px;
+}
 #up-cards {
   display:flex; flex-direction:column; gap:10px; width:100%;
+}
+#up-active-panel {
+  position:absolute;
+  inset:20px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding:16px 14px;
+  background:rgba(22,22,22,0.98);
+  border:1px solid var(--border2);
+  border-radius:8px;
+  box-shadow:0 0 30px rgba(0,0,0,0.35);
+}
+#up-active-panel.off { display:none; }
+.up-active-head {
+  font-size:9px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--accent);
+}
+#up-active-list {
+  flex:1;
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  overflow:auto;
+  padding-right:2px;
+}
+.up-active-item {
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  padding:10px;
+  background:var(--bg3);
+  border:1px solid var(--border);
+  border-radius:6px;
+  text-align:left;
+}
+.up-active-icon {
+  font-size:18px;
+  line-height:1;
+}
+.up-active-copy {
+  flex:1;
+}
+.up-active-name {
+  font-family:'Syne',sans-serif;
+  font-size:11px;
+  color:#fff;
+}
+.up-active-detail {
+  margin-top:3px;
+  font-size:9px;
+  line-height:1.45;
+  color:var(--muted);
+}
+.up-active-empty {
+  padding:16px 10px;
+  font-size:10px;
+  color:var(--muted);
 }
 .up-cards-main {
   display:flex; flex-direction:row; gap:10px; width:100%;
@@ -242,6 +313,8 @@ body.app-ready #wrap { opacity: 1; }
 .up-card:hover { border-color:var(--accent2); background:rgba(74,222,128,0.06); box-shadow:0 0 20px rgba(74,222,128,0.12); transform:translateY(-3px); }
 .up-card.heal-card { border-color: rgba(248,113,113,0.24); }
 .up-card.heal-card:hover { border-color: #f87171; background: rgba(248,113,113,0.08); }
+.up-card.disabled { opacity:.42; cursor:default; filter:saturate(.35); }
+.up-card.disabled:hover { border-color: rgba(248,113,113,0.24); background:var(--bg3); box-shadow:none; transform:none; }
 .heal-card-small {
   flex:0 0 auto;
   width:min(150px, 52%);

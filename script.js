@@ -583,7 +583,7 @@ function update(dt,ts){
   }
 
   const W=cv.width,H=cv.height;
-  const BASE_SPD=165*Math.min(2.5,UPG.speedMult);
+  const BASE_SPD=165*Math.min(2.5,(UPG.speedMult || 1) * (UPG.titanSlowMult || 1));
   const joyMax = joy.max || JOY_MAX;
 
   // ── Player movement — virtual joystick
