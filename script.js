@@ -99,7 +99,7 @@ const SHIELD_COOLDOWN   = 1.5;  // seconds a shield is inactive after absorbing 
 const SHIELD_ROTATION_SPD  = 0.001; // radians per millisecond (≈1 rev / 6.3 s)
 const ORBIT_SPHERE_R    = 40;   // orbital radius of passive orbit spheres (px)
 const ORBIT_ROTATION_SPD   = 0.003; // radians per millisecond (≈1 rev / 2.1 s)
-const PLAYER_SHOT_LIFE_MS = 920;
+const PLAYER_SHOT_LIFE_MS = 1100;
 let enemyIdSeq = 1;
 let playerName = 'RUNNER';
 let leaderboard = [];
@@ -267,7 +267,7 @@ function circleIntersectsShieldPlate(cx, cy, radius, sx, sy, angle) {
 
 // Bullet speed scales with room — slow at room 1, ramps up
 function bulletSpeedScale() {
-  return 0.52 + Math.min(roomIndex, 10) * 0.042;
+  return 0.52 + Math.min(roomIndex, 10) * 0.028;
 }
 
 function spawnEB(ex,ey) {
@@ -286,6 +286,22 @@ function spawnDBB(ex,ey) {
   const a=Math.atan2(player.y-ey,player.x-ex)+(Math.random()-.5)*.22;
   const spd=(145+Math.random()*40) * bulletSpeedScale();
   bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:4.5,decayStart:null,bounces:0,doubleBounce:true,bounceCount:0});
+}
+
+function spawnTB(ex,ey) {
+  const a=Math.atan2(player.y-ey,player.x-ex)+(Math.random()-.5)*.18;
+  const spd=(145+Math.random()*40) * bulletSpeedScale();
+  bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:5,decayStart:null,bounces:0,isTriangle:true,wallBounces:0});
+}
+
+function spawnTriangleBurst(ex, ey, origVx, origVy) {
+  const baseAngle = Math.atan2(origVy, origVx);
+  const burstSpd = 140 * bulletSpeedScale();
+  for(let i = 0; i < 3; i++) {
+    const angle = baseAngle + (i - 1) * (Math.PI * 2 / 3);
+    bullets.push({x:ex,y:ey,vx:Math.cos(angle)*burstSpd,vy:Math.sin(angle)*burstSpd,state:'danger',r:4,decayStart:null,bounces:0});
+  }
+  sparks(ex, ey, '#ec4899', 6, 50);
 }
 
 function createLaneOffsets(count, spacing) {
@@ -704,7 +720,7 @@ function update(dt,ts){
   if(!isStill){
     stillTimer = 0;
     if(UPG.moveChargeRate > 0 && (roomPhase === 'spawning' || roomPhase === 'fighting')){
-      charge = Math.min(UPG.maxCharge, charge + UPG.moveChargeRate * dt);
+      charge = Math.min(UPG.maxCharge, charge + UPG.moveChargeRate * UPG.maxCharge * dt);
     }
   } else {
     stillTimer += dt;
@@ -779,6 +795,8 @@ function update(dt,ts){
         e.fT = 0;
         if(e.type==='zoner'){
           for(let i=0;i<e.burst;i++) spawnZB(e.x,e.y,i,e.burst);
+        } else if(e.type==='triangle'){
+          for(let i=0;i<e.burst;i++) spawnTB(e.x,e.y);
         } else {
           const canShootPurple = canEnemyUsePurpleShots(e, roomIndex);
           for(let i=0;i<e.burst;i++){
@@ -844,7 +862,13 @@ function update(dt,ts){
     if(bounced){
       if(b.state==='danger'){
         burstBlueDissipate(b.x, b.y);
-        if(b.doubleBounce){
+        if(b.isTriangle){
+          b.wallBounces++;
+          if(b.wallBounces>=2){
+            spawnTriangleBurst(b.x, b.y, b.vx, b.vy);
+            bullets.splice(i,1);continue;
+          }
+        } else if(b.doubleBounce){
           b.bounceCount++;
           if(b.bounceCount>=2){b.state='grey';b.decayStart=ts;sparks(b.x,b.y,C.grey,4,35);}
         } else {
@@ -1006,14 +1030,36 @@ function draw(ts){
   for(const b of bullets){
     if(b.state==='danger'){
       const pulse=.75+.25*Math.sin(ts*.014);
-      const bCol=b.doubleBounce&&b.bounceCount===0?'#c084fc':C.danger;
-      const bCore=b.doubleBounce&&b.bounceCount===0?'rgba(230,200,255,0.9)':C.dangerCore;
+      let bCol, bCore;
+      if(b.isTriangle){
+        bCol='#ec4899';
+        bCore='rgba(255,200,230,0.9)';
+      } else {
+        bCol=b.doubleBounce&&b.bounceCount===0?'#c084fc':C.danger;
+        bCore=b.doubleBounce&&b.bounceCount===0?'rgba(230,200,255,0.9)':C.dangerCore;
+      }
       ctx.globalAlpha = 0.88;
       ctx.shadowColor=bCol;ctx.shadowBlur=16*pulse;
       ctx.fillStyle=bCol;
-      ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();
+      if(b.isTriangle){
+        const angle = Math.atan2(b.vy, b.vx);
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(b.r, 0);
+        ctx.lineTo(-b.r*.6, b.r*.6);
+        ctx.lineTo(-b.r*.6, -b.r*.6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      } else {
+        ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();
+      }
       ctx.shadowBlur=0;ctx.fillStyle=bCore;
-      ctx.beginPath();ctx.arc(b.x,b.y,b.r*.42,0,Math.PI*2);ctx.fill();
+      if(!b.isTriangle){
+        ctx.beginPath();ctx.arc(b.x,b.y,b.r*.42,0,Math.PI*2);ctx.fill();
+      }
       ctx.globalAlpha = 1;
 
     } else if(b.state==='grey'){

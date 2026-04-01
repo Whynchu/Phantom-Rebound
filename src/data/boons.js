@@ -99,8 +99,8 @@ const BOONS = [
   {name:'Charge Cap Up',tag:'UTILITY',icon:'◆',desc:'Increase your charge pool by 25% per pick.',apply(upg){upg.chargeCapTier++;upg.chargeCapMult = 1 + upg.chargeCapTier * CHARGE_CAP_PCT;syncChargeCapacity(upg);}},
   {name:'Deep Reserve',tag:'UTILITY',icon:'▣',desc:'Gain a flat charge increase with diminishing returns. Starts at +30.',apply(upg){upg.chargeCapFlatTier++;upg.chargeCapFlatBonus += getFlatChargeGain(upg.chargeCapFlatTier);syncChargeCapacity(upg);}},
   {name:'Wider Absorb',tag:'UTILITY',icon:'🧲',desc:'Pull grey bullets from farther away (max +50).',apply(upg){upg.absorbRange=Math.min(50,upg.absorbRange+12);}},
-  {name:'Long Reach',tag:'UTILITY',icon:'➶',desc:'Your output shots last longer and travel farther.',apply(upg){upg.shotLifeTier++;upg.shotLifeMult=1+upg.shotLifeTier*0.3;}},
-  {name:'Kinetic Harvest',tag:'UTILITY',icon:'🌀',desc:'Gain charge while moving (diminishing per pick).',apply(upg){upg.kineticTier++;upg.moveChargeRate=Math.min(1.8,upg.moveChargeRate+0.35);}},
+  {name:'Long Reach',tag:'UTILITY',icon:'➶',desc:'Your output shots last longer and travel farther.',apply(upg){upg.shotLifeTier++;upg.shotLifeMult=getHyperbolicScale(upg.shotLifeTier);}},
+  {name:'Kinetic Harvest',tag:'UTILITY',icon:'🌀',desc:'Gain charge while moving (diminishing per pick).',apply(upg){upg.kineticTier++;upg.moveChargeRate=getHyperbolicScale(upg.kineticTier)*0.08;}},
   {name:'Extra Life',tag:'SURVIVE',icon:'◉',desc:'Gain max HP and restore it (diminishing bonus per pick).',apply(upg, state){upg.extraLifeTier++;const heal=Math.max(3,15-(upg.extraLifeTier-1)*2);state.maxHp+=heal;state.hp=Math.min(state.hp+heal,state.maxHp);}},
   {name:'Ghost Velocity',tag:'SURVIVE',icon:'👻',desc:'Move faster through the arena (diminishing returns).',apply(upg){upg.speedTier++;upg.speedMult=getHyperbolicScale(upg.speedTier);}},
   {name:'Room Regen',tag:'SURVIVE',icon:'💚',desc:'Restore HP whenever you clear a room (max 30 HP/room).',apply(upg){upg.regenTick=Math.min(30,upg.regenTick+10);}},
@@ -213,3 +213,4 @@ function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
 }
 
 export { BOONS, SPS_LADDER, getHyperbolicScale, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity, pickBoonChoices, createHealBoon, getActiveBoonEntries };
+
