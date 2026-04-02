@@ -9,6 +9,9 @@ import { renderVersionTag } from './src/ui/versionTag.js';
 
 renderVersionTag(VERSION);
 
+// Suppress iOS Safari magnifier / long-press context menu on the whole page
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
 function revealAppShell() {
   requestAnimationFrame(() => {
     document.body.classList.remove('app-loading');
@@ -112,6 +115,9 @@ let lbStatusText = 'LOCAL ONLY';
 let lbRequestSeq = 0;
 let raf=0, lastT=0;
 let gameOverShown = false;
+let boonRerolls = 1;
+let damagelessRooms = 0;
+let tookDamageThisRoom = false;
 let lastStallSpawnAt = -99999;
 
 // Room system
@@ -200,6 +206,7 @@ function buildSpawnQueue(roomDef) {
 }
 
 function startRoom(idx) {
+  tookDamageThisRoom = false;
   roomIndex = idx;
   roomPurpleShooterAssigned = false;
   const def = getRoomDef(idx);
@@ -422,6 +429,8 @@ function showUpgrades() {
     upg: UPG,
     hp,
     maxHp,
+    rerolls: boonRerolls,
+    onReroll: () => { boonRerolls--; },
     onSelect: (boon) => {
       const state = { hp, maxHp };
       boon.apply(UPG, state);
@@ -597,6 +606,9 @@ function init() {
   score=0; kills=0;
   charge=0; fireT=0; stillTimer=0; prevStill=false; hp=120; maxHp=120;
   gameOverShown = false;
+  boonRerolls = 1;
+  damagelessRooms = 0;
+  tookDamageThisRoom = false;
   lastStallSpawnAt = -99999;
   enemyIdSeq = 1;
   player={x:cv.width/2,y:cv.height/2,r:9,vx:0,vy:0,invincible:0,distort:0,deadAt:0,popAt:0,deadPop:false,deadPulse:0};
@@ -696,6 +708,16 @@ function update(dt,ts){
       bullets=[]; particles=[];
       // Room clear regen
       if(UPG.regenTick>0) hp=Math.min(maxHp, hp+UPG.regenTick);
+      // Damageless streak → earn reroll (cap 3)
+      if(!tookDamageThisRoom){
+        damagelessRooms++;
+        if(damagelessRooms >= 3){
+          boonRerolls = Math.min(3, boonRerolls + 1);
+          damagelessRooms = 0;
+        }
+      } else {
+        damagelessRooms = 0;
+      }
       showRoomClear();
     }
   }
@@ -921,6 +943,7 @@ function update(dt,ts){
         const rawDamage = Math.ceil(18 * dmgScale);
         const finalDamage = Math.max(1, Math.ceil(rawDamage * (UPG.damageTakenMult || 1)));
         hp-=finalDamage; player.invincible=1.2; player.distort=.45;
+        tookDamageThisRoom = true;
         if(UPG.hitChargeGain > 0){
           charge = Math.min(UPG.maxCharge, charge + UPG.hitChargeGain);
         }

@@ -1,5 +1,5 @@
 const JOY_DEADZONE = 3;
-const JOY_MAX = 40;
+const JOY_MAX = 28;
 
 function createJoystickState() {
   return { active:false, ax:0, ay:0, dx:0, dy:0, mag:0, max:JOY_MAX };
@@ -18,7 +18,7 @@ function bindJoystickControls({ canvas, joy, getGameState }) {
   function getDynamicJoyMax() {
     const rect = canvas.getBoundingClientRect();
     const scaleDown = Math.min(1, 390 / Math.max(rect.width, rect.height));
-    const cssRadius = Math.max(24, JOY_MAX * scaleDown);
+    const cssRadius = Math.max(16, JOY_MAX * scaleDown);
     return cssRadius * (canvas.width / rect.width);
   }
 

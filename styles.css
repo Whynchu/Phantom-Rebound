@@ -12,7 +12,7 @@
   --ghost:   #b8ffcc;
   --siphon:  #a78bfa;
 }
-* { margin:0; padding:0; box-sizing:border-box; }
+* { margin:0; padding:0; box-sizing:border-box; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
 html, body {
   width: 100vw;
   height: 100vh;
@@ -301,7 +301,7 @@ body.app-ready #wrap { opacity: 1; }
   display:flex; flex-direction:row; gap:10px; width:100%;
 }
 .up-heal-row {
-  display:flex; justify-content:center; width:100%;
+  display:flex; justify-content:center; gap:10px; width:100%;
 }
 .up-card {
   flex:1; min-width:0;
@@ -313,18 +313,20 @@ body.app-ready #wrap { opacity: 1; }
 .up-card:hover { border-color:var(--accent2); background:rgba(74,222,128,0.06); box-shadow:0 0 20px rgba(74,222,128,0.12); transform:translateY(-3px); }
 .up-card.heal-card { border-color: rgba(248,113,113,0.24); }
 .up-card.heal-card:hover { border-color: #f87171; background: rgba(248,113,113,0.08); }
+.up-card.reroll-card { border-color: rgba(251,191,36,0.24); }
+.up-card.reroll-card:hover { border-color: #fbbf24; background: rgba(251,191,36,0.08); }
 .up-card.disabled { opacity:.42; cursor:default; filter:saturate(.35); }
 .up-card.disabled:hover { border-color: rgba(248,113,113,0.24); background:var(--bg3); box-shadow:none; transform:none; }
-.heal-card-small {
+.heal-card-small, .reroll-card-small {
   flex:0 0 auto;
-  width:min(150px, 52%);
+  width:min(140px, 44%);
   padding:12px 10px;
   gap:6px;
 }
-.heal-card-small .up-icon { font-size:22px; }
-.heal-card-small .up-name { font-size:11px; }
-.heal-card-small .up-desc { font-size:8px; line-height:1.35; }
-.heal-card-small .up-tag { font-size:6px; }
+.heal-card-small .up-icon, .reroll-card-small .up-icon { font-size:22px; }
+.heal-card-small .up-name, .reroll-card-small .up-name { font-size:11px; }
+.heal-card-small .up-desc, .reroll-card-small .up-desc { font-size:8px; line-height:1.35; }
+.heal-card-small .up-tag,  .reroll-card-small .up-tag  { font-size:6px; }
 .up-icon { font-size:26px; }
 .up-name { font-family:'Syne',sans-serif; font-weight:700; font-size:12px; color:#fff; letter-spacing:-.01em; line-height:1.2; }
 .up-desc { font-size:9px; color:var(--muted); line-height:1.45; }
