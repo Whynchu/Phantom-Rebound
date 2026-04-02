@@ -11,16 +11,8 @@ renderVersionTag(VERSION);
 
 // Suppress iOS Safari magnifier / long-press context menu on the whole page
 document.addEventListener('contextmenu', (e) => e.preventDefault());
-// Block dblclick — iOS can route double-tap zoom through this even when touchstart is guarded
+// Block dblclick — iOS can route double-tap zoom through this even when CSS manipulation is set
 document.addEventListener('dblclick', (e) => e.preventDefault());
-
-// Prevent iOS Safari double-tap zoom — must catch touchstart (touchend is too late)
-let _lastTap = 0;
-document.addEventListener('touchstart', (e) => {
-  const now = Date.now();
-  if (now - _lastTap < 300) e.preventDefault();
-  _lastTap = now;
-}, { passive: false });
 
 function revealAppShell() {
   requestAnimationFrame(() => {
@@ -182,6 +174,13 @@ function generateWeightedWave(roomIdx) {
       .filter((type) => roomIdx > 9 || (type !== 'purple_chaser' && type !== 'purple_disruptor'))
       .filter((type) => type !== 'purple_disruptor' || roomIdx >= 11)
       .filter((type) => ENEMY_TYPES[type].spawnValue <= budget + 0.5)
+      .filter((type) => {
+        // Rooms 20-29: once a triangle is in the wave, reduce bullet pressure from other heavy shooters
+        if(roomIdx >= 20 && roomIdx < 30 && entries.has('triangle')) {
+          return !['zoner','purple_disruptor','purple_chaser','disruptor'].includes(type);
+        }
+        return true;
+      })
       .map((type) => {
         const def = ENEMY_TYPES[type];
         const pressureBias = def.ammoPressure > 0 ? 0.9 : 0.75;
@@ -308,7 +307,7 @@ function spawnDBB(ex,ey) {
 function spawnTB(ex,ey) {
   const a=Math.atan2(player.y-ey,player.x-ex)+(Math.random()-.5)*.18;
   const spd=(145+Math.random()*40) * bulletSpeedScale();
-  bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:5,decayStart:null,bounces:0,isTriangle:true,wallBounces:0});
+  bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:8,decayStart:null,bounces:0,isTriangle:true,wallBounces:0});
 }
 
 function spawnTriangleBurst(ex, ey, origVx, origVy) {
@@ -316,9 +315,9 @@ function spawnTriangleBurst(ex, ey, origVx, origVy) {
   const burstSpd = 140 * bulletSpeedScale();
   for(let i = 0; i < 3; i++) {
     const angle = baseAngle + (i - 1) * (Math.PI * 2 / 3);
-    bullets.push({x:ex,y:ey,vx:Math.cos(angle)*burstSpd,vy:Math.sin(angle)*burstSpd,state:'danger',r:4,decayStart:null,bounces:0});
+    bullets.push({x:ex,y:ey,vx:Math.cos(angle)*burstSpd,vy:Math.sin(angle)*burstSpd,state:'danger',r:7,decayStart:null,bounces:0,isTriangle:true});
   }
-  sparks(ex, ey, '#ec4899', 6, 50);
+  sparks(ex, ey, '#60a5fa', 6, 50);
 }
 
 function createLaneOffsets(count, spacing) {
@@ -1068,8 +1067,8 @@ function draw(ts){
       const pulse=.75+.25*Math.sin(ts*.014);
       let bCol, bCore;
       if(b.isTriangle){
-        bCol='#ec4899';
-        bCore='rgba(255,200,230,0.9)';
+        bCol='#60a5fa';
+        bCore='rgba(180,220,255,0.9)';
       } else {
         bCol=b.doubleBounce&&b.bounceCount===0?'#c084fc':C.danger;
         bCore=b.doubleBounce&&b.bounceCount===0?'rgba(230,200,255,0.9)':C.dangerCore;
@@ -1154,13 +1153,34 @@ function draw(ts){
     ctx.shadowColor=e.glowCol;
     ctx.shadowBlur = 16;
     ctx.fillStyle = e.col;
-    ctx.beginPath();ctx.arc(e.x,e.y,drawR,0,Math.PI*2);ctx.fill();
-    ctx.shadowBlur=0;
-
-    // Inner glint
-    ctx.fillStyle = inWindup ? `rgba(${e.col},0.5)` : 'rgba(255,255,255,0.18)';
-    ctx.fillStyle='rgba(255,255,255,0.18)';
-    ctx.beginPath();ctx.arc(e.x,e.y,drawR*.38,0,Math.PI*2);ctx.fill();
+    if(e.isTriangle){
+      const angle = Math.atan2(player.y - e.y, player.x - e.x);
+      ctx.save();
+      ctx.translate(e.x, e.y);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(drawR, 0);
+      ctx.lineTo(-drawR * 0.55, drawR * 0.9);
+      ctx.lineTo(-drawR * 0.55, -drawR * 0.9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      // Inner glint along the tip axis
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.beginPath();
+      ctx.moveTo(drawR * 0.55, 0);
+      ctx.lineTo(-drawR * 0.22, drawR * 0.36);
+      ctx.lineTo(-drawR * 0.22, -drawR * 0.36);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else {
+      ctx.beginPath();ctx.arc(e.x,e.y,drawR,0,Math.PI*2);ctx.fill();
+      ctx.shadowBlur=0;
+      // Inner glint
+      ctx.fillStyle='rgba(255,255,255,0.18)';
+      ctx.beginPath();ctx.arc(e.x,e.y,drawR*.38,0,Math.PI*2);ctx.fill();
+    }
 
     if(e.hp<e.maxHp){
       const bw=e.r*2.4,bx=e.x-bw/2,by=e.y-e.r-8;

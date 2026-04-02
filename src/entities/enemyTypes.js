@@ -7,7 +7,7 @@ const ENEMY_TYPES = {
   zoner:          {col:'#2563eb', glowCol:'rgba(37,99,235,0.7)',   r:15,hp:5, spd:24, fRate:2200,burst:8,spread:6.28,pts:80, flee:true,  fleeRange:130, strafeSpd:0.5, doubleBounce:false, spawnValue:8, unlockRoom:4, ammoPressure:8},
   purple_chaser:  {col:'#a855f7', glowCol:'rgba(168,85,247,0.78)', r:12,hp:4, spd:55, fRate:1800,burst:1,spread:.22,pts:75,  flee:true, fleeRange:110, strafeSpd:0.6, doubleBounce:true, forcePurpleShots:true, spawnValue:6, unlockRoom:9, ammoPressure:2},
   purple_disruptor:{col:'#9333ea', glowCol:'rgba(147,51,234,0.82)',r:11,hp:5, spd:46, fRate:780, burst:1,spread:.9, pts:95,  flee:true, fleeRange:100, strafeSpd:0.7, doubleBounce:true, forcePurpleShots:true, spawnValue:9, unlockRoom:11, ammoPressure:2},
-   triangle:       {col:'#ec4899', glowCol:'rgba(236,72,153,0.8)',  r:14,hp:6, spd:52, fRate:2000,burst:1,spread:.18,pts:110, flee:true, fleeRange:100, strafeSpd:0.7, doubleBounce:false, spawnValue:6, unlockRoom:20, ammoPressure:1, isTriangle:true},
+   triangle:       {col:'#60a5fa', glowCol:'rgba(96,165,250,0.8)',   r:14,hp:6, spd:52, fRate:2000,burst:1,spread:.18,pts:110, flee:true, fleeRange:100, strafeSpd:0.7, doubleBounce:false, spawnValue:6, unlockRoom:20, ammoPressure:1, isTriangle:true},
 };
 
 const PURPLE_BULLET_ROOM_THRESHOLD = 9;
