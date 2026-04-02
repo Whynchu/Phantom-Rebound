@@ -11,6 +11,8 @@ renderVersionTag(VERSION);
 
 // Suppress iOS Safari magnifier / long-press context menu on the whole page
 document.addEventListener('contextmenu', (e) => e.preventDefault());
+// Block dblclick — iOS can route double-tap zoom through this even when touchstart is guarded
+document.addEventListener('dblclick', (e) => e.preventDefault());
 
 // Prevent iOS Safari double-tap zoom — must catch touchstart (touchend is too late)
 let _lastTap = 0;
