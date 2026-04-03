@@ -315,7 +315,7 @@ function spawnTriangleBurst(ex, ey, origVx, origVy) {
   const burstSpd = 140 * bulletSpeedScale();
   for(let i = 0; i < 3; i++) {
     const angle = baseAngle + (i - 1) * (Math.PI * 2 / 3);
-    bullets.push({x:ex,y:ey,vx:Math.cos(angle)*burstSpd,vy:Math.sin(angle)*burstSpd,state:'danger',r:7,decayStart:null,bounces:0,isTriangle:true});
+    bullets.push({x:ex,y:ey,vx:Math.cos(angle)*burstSpd,vy:Math.sin(angle)*burstSpd,state:'danger',r:7,decayStart:null,bounces:0});
   }
   sparks(ex, ey, '#60a5fa', 6, 50);
 }
@@ -898,7 +898,7 @@ function update(dt,ts){
         burstBlueDissipate(b.x, b.y);
         if(b.isTriangle){
           b.wallBounces++;
-          if(b.wallBounces>=2){
+          if(b.wallBounces>=1){
             spawnTriangleBurst(b.x, b.y, b.vx, b.vy);
             bullets.splice(i,1);continue;
           }
