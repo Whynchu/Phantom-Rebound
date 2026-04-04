@@ -211,33 +211,33 @@ const LEGENDARY_SEQUENCES = [
   {
     id: 'aegisTitan',
     check: (h) => ['Mirror Shield','Shield Burst','Tempered Shield'].every(n => h.includes(n)),
-    boon: { name:'AEGIS TITAN', tag:'LEGENDARY', icon:'🏛️', desc:"Shields never truly break — they recharge in 6s instead.",
+    boon: { name:'AEGIS TITAN', tag:'LEGENDARY', icon:'🏛️', desc:'Shield Burst fires 8-way. Mirror reflects deal ×2 damage. All shields share one cooldown.',
       apply(upg){ upg.aegisTitan=true; } }
   },
   {
     id: 'ghostFlow',
     check: (h) => ['Kinetic Harvest','Quick Harvest'].every(n => h.includes(n)) &&
                   (h.includes('Slipstream') || h.includes('Flux State')),
-    boon: { name:'GHOST FLOW', tag:'LEGENDARY', icon:'🌊', desc:'Moving through grey bullets auto-absorbs them.',
+    boon: { name:'GHOST FLOW', tag:'LEGENDARY', icon:'🌊', desc:'Absorb value scales with speed: +60% at full speed, −50% still. Near-miss charge ×2.',
       apply(upg){ upg.ghostFlow=true; } }
   },
   {
     id: 'corona',
     check: (h) => h.filter(n => n==='Ring Blast').length >= 3,
-    boon: { name:'CORONA', tag:'LEGENDARY', icon:'☀️', desc:'All ring shots become homing. Ring cap +4.',
-      apply(upg){ upg.corona=true; upg.ringShots=Math.min(12,upg.ringShots+4); syncChargeCapacity(upg); } }
+    boon: { name:'CORONA', tag:'LEGENDARY', icon:'☀️', desc:'Ring shots pierce once. Kills by ring shots refund 1 charge. No extra ring cap.',
+      apply(upg){ upg.corona=true; } }
   },
   {
     id: 'finalForm',
     check: (h) => ['Berserker',"Dead Man's Trigger"].every(n => h.includes(n)) &&
                   (h.includes('Lifeline') || h.includes('Last Stand')),
-    boon: { name:'FINAL FORM', tag:'LEGENDARY', icon:'💀', desc:'Lifeline gains 2 uses. Dead Man activates at ≤2 HP. +50% speed.',
-      apply(upg){ upg.finalForm=true; upg.lifelineUses=(upg.lifelineUses||1)+1; upg.speedMult*=1.5; } }
+    boon: { name:'FINAL FORM', tag:'LEGENDARY', icon:'💀', desc:"Dead Man activates at ≤3 HP but deals ×2 (not ×3). Kills at low HP grant +0.5 charge.",
+      apply(upg){ upg.finalForm=true; } }
   },
   {
     id: 'colossus',
     check: (h) => h.filter(n => n==='Titan Heart').length >= 3,
-    boon: { name:'COLOSSUS', tag:'LEGENDARY', icon:'⬡', desc:'Danger bullets that hit you are nullified. Regen 1 HP/s.',
+    boon: { name:'COLOSSUS', tag:'LEGENDARY', icon:'⬡', desc:'Taking damage releases a shockwave (4s cd) converting nearby danger bullets to grey. Titan speed penalty halved.',
       apply(upg){ upg.colossus=true; } }
   },
 ];
@@ -328,11 +328,11 @@ function getActiveBoonEntries(upg) {
   if(upg.echoFire) entries.push({icon:'↺',name:'Echo Fire',detail:'Every 5th shot fires free echo'});
   if(upg.splitShot) entries.push({icon: upg.splitShotEvolved?'⋔+':'⋔', name: upg.splitShotEvolved?'Fracture':'Split Shot', detail:'Bullets split on wall bounce'});
   if(upg.volatileRounds) entries.push({icon: upg.volatileAllTargets?'💢+':'💢', name: upg.volatileAllTargets?'Chain Reaction':'Volatile Rounds', detail:'Pierce shots burst on final hit'});
-  if(upg.aegisTitan) entries.push({icon:'🏛️',name:'AEGIS TITAN',detail:'Shields use cooldown, never break'});
-  if(upg.ghostFlow) entries.push({icon:'🌊',name:'GHOST FLOW',detail:'Move through grey = absorb'});
-  if(upg.corona) entries.push({icon:'☀️',name:'CORONA',detail:'Ring shots are homing'});
-  if(upg.finalForm) entries.push({icon:'💀',name:'FINAL FORM',detail:'2× lifeline, Dead Man at ≤2 HP'});
-  if(upg.colossus) entries.push({icon:'⬡',name:'COLOSSUS',detail:'Bullets nullified on hit, regen 1/s'});
+  if(upg.aegisTitan) entries.push({icon:'🏛️',name:'AEGIS TITAN',detail:'8-way burst, ×2 reflect, shared cd'});
+  if(upg.ghostFlow) entries.push({icon:'🌊',name:'GHOST FLOW',detail:'Speed-scaled absorb, ×2 near-miss'});
+  if(upg.corona) entries.push({icon:'☀️',name:'CORONA',detail:'Ring pierce +1, kills refund charge'});
+  if(upg.finalForm) entries.push({icon:'💀',name:'FINAL FORM',detail:'Dead Man ≤3 HP ×2, kill→charge'});
+  if(upg.colossus) entries.push({icon:'⬡',name:'COLOSSUS',detail:'Hit→shockwave, halved titan slow'});
   if(upg.volatileOrbs) entries.push({icon:'💥',name:'Volatile Orbs',detail:'Orbs explode danger bullets'});
   if(upg.chargedOrbs) entries.push({icon:'⚡',name:'Charged Orbs',detail:'Orbs fire shot every 1.2s'});
   if(upg.absorbOrbs) entries.push({icon:'🌀',name:'Absorb Orbs',detail:'Orbs absorb nearby grey bullets'});

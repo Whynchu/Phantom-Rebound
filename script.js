@@ -127,6 +127,7 @@ let _absorbComboCount = 0, _absorbComboTimer = 0;
 let _chainMagnetTimer = 0;
 let _echoCounter = 0;
 let _vampiricRestoresThisRoom = 0;
+let _colossusShockwaveCd = 0;
 let _orbFireTimers = [];
 let _orbCooldown = [];
 let boonHistory = [];
@@ -383,7 +384,7 @@ function firePlayer(tx,ty) {
   }
   if(UPG.ringShots>0){
     for(let i=0;i<UPG.ringShots;i++){
-      angs.push({ angle: (Math.PI*2/UPG.ringShots)*i, offset: 0, coronaHoming: !!UPG.corona });
+      angs.push({ angle: (Math.PI*2/UPG.ringShots)*i, offset: 0, isRing: true });
     }
   }
 
@@ -409,12 +410,13 @@ function firePlayer(tx,ty) {
       vy:Math.sin(a)*bspd,
       state:'output', r:crit ? baseRadius * 1.28 : baseRadius, decayStart:null,
       bounceLeft: UPG.bounceTier>0?2:0,
-      pierceLeft: UPG.pierceTier,
-      homing: UPG.homingTier>0 || (shot.coronaHoming||false),
+      pierceLeft: UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),
+      homing: UPG.homingTier>0,
       crit,
       dmg: baseDmg * overchargeBonus,
       expireAt: now + lifeMs,
       hitIds: new Set(),
+      isRing: shot.isRing || false,
     });
   }
   charge=Math.max(0,charge-availableShots);
@@ -680,7 +682,7 @@ function init() {
   player.shields=[];
   _barrierPulseTimer=0;
   _slipCooldown=0; _absorbComboCount=0; _absorbComboTimer=0;
-  _chainMagnetTimer=0; _echoCounter=0; _vampiricRestoresThisRoom=0;
+  _chainMagnetTimer=0; _echoCounter=0; _vampiricRestoresThisRoom=0; _colossusShockwaveCd=0;
   _orbFireTimers=[]; _orbCooldown=[];
   boonHistory=[]; pendingLegendary=null; legendaryOffered=false;
   bullets=[];enemies=[];particles=[];
@@ -728,7 +730,8 @@ function update(dt,ts){
   }
 
   const W=cv.width,H=cv.height;
-  const BASE_SPD=165*Math.min(2.5,(UPG.speedMult || 1) * (UPG.titanSlowMult || 1));
+  const titanSlow = UPG.colossus ? 1 - (1 - (UPG.titanSlowMult || 1)) * 0.5 : (UPG.titanSlowMult || 1);
+  const BASE_SPD=165*Math.min(2.5,(UPG.speedMult || 1) * titanSlow);
   const joyMax = joy.max || JOY_MAX;
 
   // Drift anchor when thumb wanders far past max radius
@@ -761,7 +764,7 @@ function update(dt,ts){
   if(_absorbComboTimer>0){ _absorbComboTimer-=dt*1000; if(_absorbComboTimer<=0){_absorbComboCount=0;} }
   if(_chainMagnetTimer>0) _chainMagnetTimer-=dt*1000;
   if(_slipCooldown>0) _slipCooldown-=dt*1000;
-  if(UPG.colossus) hp=Math.min(maxHp, hp+dt);
+  if(UPG.colossus && _colossusShockwaveCd>0) _colossusShockwaveCd-=dt;
   // Volatile Orb cooldowns — recharge after 8s
   for(let si=0;si<_orbCooldown.length;si++){
     if(_orbCooldown[si]>0) _orbCooldown[si]=Math.max(0,_orbCooldown[si]-dt);
@@ -869,6 +872,11 @@ function update(dt,ts){
       if(d<player.r+e.r+2 && player.invincible<=0){
         hp-=18; player.invincible=1.0; player.distort=.4;
         sparks(player.x,player.y,'#f472b6',10,90);
+        if(UPG.colossus && _colossusShockwaveCd <= 0){
+          _colossusShockwaveCd = 4.0;
+          for(let ci=bullets.length-1;ci>=0;ci--){ const cb=bullets[ci]; if(cb.state==='danger' && Math.hypot(cb.x-player.x,cb.y-player.y)<120){ cb.state='grey'; cb.decayStart=ts; } }
+          sparks(player.x,player.y,'#a78bfa',14,120);
+        }
         if(hp<=0){
           if(UPG.lifeline && UPG.lifelineTriggerCount < (UPG.lifelineUses||1)){
             UPG.lifelineTriggerCount++; UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,'#f0abfc',16,100);
@@ -943,6 +951,7 @@ function update(dt,ts){
             score+=e.pts;kills++;
             sparks(e.x,e.y,e.col,14,95);
             spawnGreyDrops(e.x,e.y,ts);
+            if(UPG.finalForm && hp <= 3){ charge=Math.min(UPG.maxCharge,charge+0.5); }
             enemies.splice(ei,1);
             break;
           }
@@ -1046,9 +1055,16 @@ function update(dt,ts){
     if(b.state==='grey'){
       if(ts-b.decayStart>decayMS){bullets.splice(i,1);continue;}
       b.vx*=Math.pow(.97,dt*60); b.vy*=Math.pow(.97,dt*60);
-      const ghostFlowR = (UPG.ghostFlow && (Math.abs(player.vx)>5 || Math.abs(player.vy)>5)) ? player.r + b.r + 8 : -1;
-      if(Math.hypot(b.x-player.x,b.y-player.y)<absorbR+b.r || (ghostFlowR>0 && Math.hypot(b.x-player.x,b.y-player.y)<ghostFlowR)){
-        charge=Math.min(UPG.maxCharge,charge+UPG.absorbValue);
+      if(Math.hypot(b.x-player.x,b.y-player.y)<absorbR+b.r){
+        let absorbGain = UPG.absorbValue;
+        if(UPG.ghostFlow){
+          const spd = Math.hypot(player.vx, player.vy);
+          const titanSlow = UPG.colossus ? 1 - (1 - (UPG.titanSlowMult || 1)) * 0.5 : (UPG.titanSlowMult || 1);
+          const maxSpd = 165 * Math.min(2.5, (UPG.speedMult || 1) * titanSlow);
+          const frac = Math.min(1, spd / Math.max(1, maxSpd));
+          absorbGain *= 0.5 + frac * 1.1;
+        }
+        charge=Math.min(UPG.maxCharge,charge+absorbGain);
         // Resonant Absorb
         if(UPG.resonantAbsorb){
           _absorbComboTimer=1500;
@@ -1119,7 +1135,7 @@ function update(dt,ts){
             if(UPG.shieldMirror && (ts - (s.mirrorCooldown||0)) > 300){
               s.mirrorCooldown = ts;
               const mNow = performance.now();
-              bullets.push({x:sx,y:sy,vx:b.vx,vy:b.vy,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:UPG.homingTier>0,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:mNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
+              bullets.push({x:sx,y:sy,vx:b.vx,vy:b.vy,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:UPG.homingTier>0,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*(UPG.aegisTitan?2:1),expireAt:mNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
             }
             // Tempered Shield: two-stage (purple -> blue -> pop)
             if(UPG.shieldTempered && s.hardened){
@@ -1127,11 +1143,12 @@ function update(dt,ts){
               sparks(sx,sy,'#c084fc',8,60);
               bullets.splice(i,1); shieldHit=true; break;
             }
-            // Shield pops — Shield Burst fires 4-way output
+            // Shield pops — Shield Burst fires 4/8-way output
             if(UPG.shieldBurst){
               const bNow=performance.now();
-              for(let ba=0;ba<4;ba++){
-                const bang=ba*Math.PI/2;
+              const burstCount = UPG.aegisTitan ? 8 : 4;
+              for(let ba=0;ba<burstCount;ba++){
+                const bang=ba*Math.PI*2/burstCount;
                 bullets.push({x:player.x,y:player.y,vx:Math.cos(bang)*230,vy:Math.sin(bang)*230,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:UPG.homingTier>0,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:bNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
               }
             }
@@ -1140,8 +1157,10 @@ function update(dt,ts){
               charge=Math.min(UPG.maxCharge,charge+1.5);
               _barrierPulseTimer=600;
             }
-            const cd = UPG.aegisTitan ? 8.0 : getShieldCooldown();
+            const cd = getShieldCooldown();
             s.cooldown = cd; s.maxCooldown = cd;
+            // AEGIS TITAN: all shields share one cooldown
+            if(UPG.aegisTitan){ for(const os of player.shields){ if(os!==s && os.cooldown<=0){ os.cooldown=cd; os.maxCooldown=cd; os.hardened=false; } } }
             sparks(sx,sy,'#67e8f9',8,60);
             bullets.splice(i,1); shieldHit=true; break;
           }
@@ -1151,7 +1170,6 @@ function update(dt,ts){
     }
 
     if(b.state==='danger'&&player.invincible<=0){
-      if(UPG.colossus){ bullets.splice(i,1); continue; }
       if(Math.hypot(b.x-player.x,b.y-player.y)<player.r+b.r-2){
         const dmgScale = 1 + Math.log(roomIndex + 1) * 0.24;
         const rawDamage = Math.ceil(18 * dmgScale);
@@ -1163,6 +1181,12 @@ function update(dt,ts){
         }
         sparks(player.x,player.y,C.danger,10,85);
         bullets.splice(i,1);
+        // Colossus: shockwave converts nearby danger bullets to grey
+        if(UPG.colossus && _colossusShockwaveCd <= 0){
+          _colossusShockwaveCd = 4.0;
+          for(let ci=bullets.length-1;ci>=0;ci--){ const cb=bullets[ci]; if(cb.state==='danger' && Math.hypot(cb.x-player.x,cb.y-player.y)<120){ cb.state='grey'; cb.decayStart=ts; } }
+          sparks(player.x,player.y,'#a78bfa',14,120);
+        }
         if(hp<=0){
           if(UPG.lifeline && UPG.lifelineTriggerCount < (UPG.lifelineUses||1)){
             UPG.lifelineTriggerCount++; UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,'#f0abfc',16,100);
@@ -1176,7 +1200,8 @@ function update(dt,ts){
       if(UPG.slipTier>0 && _slipCooldown<=0){
         const dist=Math.hypot(b.x-player.x,b.y-player.y);
         if(dist < player.r+b.r+10 && dist >= player.r+b.r-2){
-          charge=Math.min(UPG.maxCharge,charge+UPG.slipChargeGain);
+          const slipGain = UPG.slipChargeGain * (UPG.ghostFlow ? 2 : 1);
+          charge=Math.min(UPG.maxCharge,charge+slipGain);
           _slipCooldown=150;
         }
       }
@@ -1189,8 +1214,9 @@ function update(dt,ts){
         if(b.hitIds.has(e.eid)) continue;
         if(Math.hypot(b.x-e.x,b.y-e.y)<b.r+e.r){
           b.hitIds.add(e.eid);
-          const deadManMult = (UPG.deadManTrigger && hp <= (UPG.finalForm ? 2 : 1)) ? 3 : 1;
-          const deadManPierce = UPG.deadManTrigger && hp <= (UPG.finalForm ? 2 : 1);
+          const deadManThreshold = UPG.finalForm ? 3 : 1;
+          const deadManMult = (UPG.deadManTrigger && hp <= deadManThreshold) ? (UPG.finalForm ? 2 : 3) : 1;
+          const deadManPierce = UPG.deadManTrigger && hp <= deadManThreshold;
           const dmg = (b.crit ? 2 : 1) * b.dmg * deadManMult;
           e.hp-=dmg;
           sparks(b.x,b.y,b.crit?'#7dff9b':C.green,b.crit?8:5,b.crit?70:55);
@@ -1200,6 +1226,10 @@ function update(dt,ts){
             // Death bullets scatter as grey
             spawnGreyDrops(e.x,e.y,ts);
             if(UPG.vampiric && _vampiricRestoresThisRoom < 3){ hp=Math.min(maxHp,hp+2); _vampiricRestoresThisRoom++; }
+            // Corona: ring kills refund 1 charge
+            if(b.isRing && UPG.corona){ charge=Math.min(UPG.maxCharge,charge+1); }
+            // Final Form: low-HP kills grant charge
+            if(UPG.finalForm && hp <= 3){ charge=Math.min(UPG.maxCharge,charge+0.5); }
             enemies.splice(j,1);
           }
           if(deadManPierce || b.pierceLeft>0){
