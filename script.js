@@ -894,6 +894,8 @@ function update(dt,ts){
   if(_slipCooldown>0) _slipCooldown-=dt*1000;
   if(UPG.colossus && _colossusShockwaveCd>0) _colossusShockwaveCd-=dt;
   if(UPG.shockwave && UPG.shockwaveCooldown > 0) UPG.shockwaveCooldown -= dt*1000;
+  if(UPG.refraction && UPG.refractionCooldown > 0) UPG.refractionCooldown -= dt*1000;
+  if(UPG.mirrorTide && UPG.mirrorTideCooldown > 0) UPG.mirrorTideCooldown -= dt*1000;
   // Predator's Instinct: decay kill streak if window expires
   if(UPG.predatorInstinct && UPG.predatorKillStreakTime > 0 && ts > UPG.predatorKillStreakTime){
     UPG.predatorKillStreak = 0;
@@ -1075,6 +1077,11 @@ function update(dt,ts){
       
       // Gravity Well tier 2: apply 20% enemy movement slowdown
       if(UPG.gravityWell2) spd *= 0.8;
+      
+      // Decay Field: apply temporary slow from transmute conversions
+      if(UPG.decayFieldEvolved && e.slowedUntil && ts < e.slowedUntil){
+        spd *= 0.5;
+      }
 
       // Advance fire timer
       e.fT += dt*1000;
@@ -1274,6 +1281,28 @@ function update(dt,ts){
         } else if(b.doubleBounce){
           b.bounceCount++;
           if(b.bounceCount>=2){b.state='grey';b.decayStart=ts;sparks(b.x,b.y,C.grey,4,35);}
+        } else if(UPG.transmute){
+          // Transmute: every 4th bounce converts danger to grey
+          b.bounceCount = (b.bounceCount || 0) + 1;
+          if(b.bounceCount >= 4){
+            b.state = 'grey';
+            b.decayStart = ts;
+            sparks(b.x, b.y, '#a78bfa', 6, 50);
+            
+            // Decay Field: if transmute evolved, slow nearby enemies 1s
+            const decayFieldActive = UPG.transmute && UPG.gravityWell && UPG.decayFieldEvolved;
+            if(decayFieldActive){
+              const slowRadius = 100;
+              for(const e of enemies){
+                if(Math.hypot(e.x - b.x, e.y - b.y) < slowRadius + e.r){
+                  e.slowedUntil = Math.max(e.slowedUntil || 0, ts + 1000);
+                }
+              }
+            }
+          } else {
+            b.state='grey';b.decayStart=ts;
+            sparks(b.x,b.y,C.grey,4,35);
+          }
         } else {
           b.state='grey';b.decayStart=ts;
           sparks(b.x,b.y,C.grey,4,35);
@@ -1327,6 +1356,19 @@ function update(dt,ts){
           if(_absorbComboCount>=3){
             charge=Math.min(UPG.maxCharge, charge + UPG.absorbValue * 0.5);
             _absorbComboCount=0;
+          }
+        }
+        // Refraction: fire weak homing shot from absorbed grey bullet
+        if(UPG.refraction && UPG.refractionCooldown <= 0){
+          UPG.refractionCount = (UPG.refractionCount || 0) + 1;
+          if(UPG.refractionCount <= 3){
+            const angle = Math.atan2(player.y - b.y, player.x - b.x);
+            const rNow = performance.now();
+            bullets.push({x: b.x, y: b.y, vx: Math.cos(angle) * 120, vy: Math.sin(angle) * 120, state: 'output', r: 3, decayStart: null, bounceLeft: 0, pierceLeft: 0, homing: true, crit: false, dmg: 0.5, expireAt: rNow + 1500, hitIds: new Set()});
+            if(UPG.refractionCount >= 3){
+              UPG.refractionCooldown = 1000;
+              UPG.refractionCount = 0;
+            }
           }
         }
         // Chain Magnet
@@ -1445,6 +1487,17 @@ function update(dt,ts){
       }
       
       if(Math.hypot(b.x-player.x,b.y-player.y)<player.r+b.r-2){
+        // Mirror Tide: reflect danger hit as output bullet
+        if(UPG.mirrorTide && UPG.mirrorTideCooldown <= 0){
+          UPG.mirrorTideCooldown = 2000;
+          const reflectAngle = Math.atan2(b.vy, b.vx) + Math.PI;
+          const mNow = performance.now();
+          bullets.push({x: player.x, y: player.y, vx: Math.cos(reflectAngle) * 200, vy: Math.sin(reflectAngle) * 200, state: 'output', r: b.r, decayStart: null, bounceLeft: 0, pierceLeft: 0, homing: false, crit: false, dmg: (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1), expireAt: mNow + 2000, hitIds: new Set()});
+          sparks(player.x, player.y, '#fbbf24', 12, 150);
+          bullets.splice(i, 1);
+          continue;
+        }
+        
         // Damage scaling: log-based for early game, reduced scaling post-30 (enemies have more health instead)
         const tierOver = Math.max(0, roomIndex - 29);
         const dmgScale = (1 + Math.log(roomIndex + 1) * 0.24) * (tierOver > 0 ? 1 + tierOver * 0.04 : 1);

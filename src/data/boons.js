@@ -128,6 +128,9 @@ function getDefaultUpgrades() {
     pulseMine: false, mines: [], pulseAbsorbCount: 0,
     nullZone: false, nullZoneActive: false, nullZoneTimer: 0, nullZoneAbsorbCount: 0,
     gravityWell2: false,
+    transmute: false, transmuteBounceCount: 0, decayFieldEvolved: false,
+    refraction: false, refractionCooldown: 0, refractionCount: 0,
+    mirrorTide: false, mirrorTideCooldown: 0,
   };
   syncChargeCapacity(upg);
   return upg;
@@ -196,6 +199,11 @@ const BOONS = [
   {name:'Pulse Mine',tag:'UTILITY',icon:'⛏️',desc:'Absorbing 5 grey bullets plants a mine at your position. Max 3. Converts danger→grey nearby.',apply(upg){if(upg.pulseMine)return; upg.pulseMine=true;}},
   {name:'Null Zone',tag:'UTILITY',icon:'🔵',desc:'Absorbing 5 grey bullets creates a 2s danger-free zone around you.',requires:upg=>upg.absorbRange>0,apply(upg){if(upg.nullZone)return; upg.nullZone=true;}},
   {name:'Gravity Well',tag:'UTILITY',icon:'⊙',desc:'Picking this a 2nd time adds: enemies move 20% slower within 90px.',evolvesWith:['Gravity Well'],evolvedVersion:{name:'Gravity Well II',icon:'⊙+',desc:'Slows both danger bullets AND enemies 30%.'},apply(upg){if(!upg.gravityWell)return; if(upg.gravityWell2)return; upg.gravityWell2=true;}},
+  
+  // Phase 5: Bullet Alchemy
+  {name:'Transmute',tag:'UTILITY',icon:'🔄',desc:'Every 4th wall bounce, converts a danger bullet to grey. Deterministic.',evolvesWith:['Gravity Well'],evolvedVersion:{name:'Decay Field',icon:'🌀',desc:'Converted bullets slow enemies 1s within 100px.',apply(upg){if(upg.transmute)return; upg.transmute=true; upg.decayFieldEvolved=true;}},apply(upg){if(upg.transmute)return; upg.transmute=true;}},
+  {name:'Refraction',tag:'OFFENSE',icon:'💡',desc:'Absorbed grey bullets fire weak homing shots (0.5× dmg). Max 3/sec.',requires:upg=>upg.absorbTier>0,apply(upg){if(upg.refraction)return; upg.refraction=true;}},
+  {name:'Mirror Tide',tag:'OFFENSE',icon:'🪞',desc:'Next danger hit reflects as an output bullet. 2s cooldown.',requires:upg=>upg.armorTier>0,apply(upg){if(upg.mirrorTide)return; upg.mirrorTide=true;}},
 ];
 
 function boonHasEffect(boon, upg, hp, maxHp) {
@@ -387,6 +395,10 @@ function getActiveBoonEntries(upg) {
   if(upg.nullZone) entries.push({icon:'🔵',name:'Null Zone',detail:`Timer: ${Math.max(0,(upg.nullZoneTimer||0)-ts).toFixed(1)}s`});
   if(upg.gravityWell2) entries.push({icon:'⊙+',name:'Gravity Well II',detail:'Slows bullets & enemies'});
   else if(upg.gravityWell) entries.push({icon:'⊙',name:'Gravity Well',detail:'Slows nearby danger bullets'});
+  if(upg.transmute && !upg.decayFieldEvolved) entries.push({icon:'🔄',name:'Transmute',detail:`Bounce count: ${upg.transmuteBounceCount||0}/4`});
+  if(upg.decayFieldEvolved) entries.push({icon:'🌀',name:'Decay Field',detail:'Converted bullets slow enemies'});
+  if(upg.refraction) entries.push({icon:'💡',name:'Refraction',detail:`Cooldown: ${Math.max(0, (upg.refractionCooldown||0)/1000).toFixed(1)}s`});
+  if(upg.mirrorTide) entries.push({icon:'🪞',name:'Mirror Tide',detail:`Cooldown: ${Math.max(0, (upg.mirrorTideCooldown||0)/1000).toFixed(1)}s`});
   if(upg.chargedOrbs) entries.push({icon:'⚡',name:'Charged Orbs',detail:'Orbs fire shot every 1.2s'});
   if(upg.absorbOrbs) entries.push({icon:'🌀',name:'Absorb Orbs',detail:'Orbs absorb nearby grey bullets'});
   return entries;
