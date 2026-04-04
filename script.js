@@ -230,6 +230,7 @@ function startRoom(idx) {
   tookDamageThisRoom = false;
   _vampiricRestoresThisRoom = 0;
   _orbFireTimers = []; _orbCooldown = [];
+  UPG.predatorKillStreak = 0; UPG.predatorKillStreakTime = 0;
   roomIndex = idx;
   roomPurpleShooterAssigned = false;
   const def = getRoomDef(idx);
@@ -394,7 +395,9 @@ function firePlayer(tx,ty) {
   const snipeScale = 1 + UPG.snipePower * 0.18;
   const bspd = 230 * Math.min(2.0, UPG.shotSpd) * snipeScale;
   const baseRadius = 4.5 * Math.min(2.5, UPG.shotSize) * (1 + UPG.snipePower * 0.15);
-  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1);
+  // Predator's Instinct: apply kill streak damage multiplier (20% per kill, max +100%)
+  const predatorBonus = UPG.predatorInstinct && UPG.predatorKillStreak >= 2 ? 1 + Math.min(UPG.predatorKillStreak * 0.2, 1.0) : 1;
+  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * predatorBonus;
   const lifeMs = PLAYER_SHOT_LIFE_MS * (UPG.shotLifeMult || 1);
   const now = performance.now();
   const overchargeBonus = (UPG.overchargeVent && charge >= UPG.maxCharge) ? 1.4 : 1;
@@ -765,6 +768,10 @@ function update(dt,ts){
   if(_chainMagnetTimer>0) _chainMagnetTimer-=dt*1000;
   if(_slipCooldown>0) _slipCooldown-=dt*1000;
   if(UPG.colossus && _colossusShockwaveCd>0) _colossusShockwaveCd-=dt;
+  // Predator's Instinct: decay kill streak if window expires
+  if(UPG.predatorInstinct && UPG.predatorKillStreakTime > 0 && ts > UPG.predatorKillStreakTime){
+    UPG.predatorKillStreak = 0;
+  }
   // Volatile Orb cooldowns — recharge after 8s
   for(let si=0;si<_orbCooldown.length;si++){
     if(_orbCooldown[si]>0) _orbCooldown[si]=Math.max(0,_orbCooldown[si]-dt);
@@ -1220,12 +1227,23 @@ function update(dt,ts){
           const dmg = (b.crit ? 2 : 1) * b.dmg * deadManMult;
           e.hp-=dmg;
           sparks(b.x,b.y,b.crit?'#7dff9b':C.green,b.crit?8:5,b.crit?70:55);
+          // Blood Pact: piercing shots restore 1 HP per enemy hit
+          if(UPG.bloodPact && b.pierceLeft > 0){
+            hp=Math.min(maxHp,hp+1);
+          }
           if(e.hp<=0){
             score+=e.pts*(b.crit?2:1);kills++;
             sparks(e.x,e.y,e.col,14,95);
             // Death bullets scatter as grey
             spawnGreyDrops(e.x,e.y,ts);
-            if(UPG.vampiric && _vampiricRestoresThisRoom < 3){ hp=Math.min(maxHp,hp+2); _vampiricRestoresThisRoom++; }
+            // Vampiric Return: +4 HP and +0.3 charge per kill
+            if(UPG.vampiric){ 
+              hp=Math.min(maxHp,hp+4); 
+              charge=Math.min(UPG.maxCharge,charge+0.3);
+              // Predator's Instinct: track kill streak (5s window)
+              UPG.predatorKillStreak++;
+              UPG.predatorKillStreakTime = ts + 5000;
+            }
             // Corona: ring kills refund 1 charge
             if(b.isRing && UPG.corona){ charge=Math.min(UPG.maxCharge,charge+1); }
             // Final Form: low-HP kills grant charge

@@ -93,6 +93,8 @@ function getDefaultUpgrades() {
     gravityWell: false,
     sliver: false,
     vampiric: false,
+    predatorInstinct: false, predatorKillStreak: 0, predatorKillStreakTime: 0,
+    bloodPact: false,
     lifeline: false, lifelineUsed: false,
     berserker: false,
     deadManTrigger: false,
@@ -160,7 +162,9 @@ const BOONS = [
   {name:'Overcharge Vent',tag:'UTILITY',icon:'⬆',desc:'Firing at full charge gives +40% bullet damage.',apply(upg){if(upg.overchargeVent)return; upg.overchargeVent=true;}},
   {name:'Gravity Well',tag:'UTILITY',icon:'⊙',desc:'Danger bullets within 80px move 30% slower.',apply(upg){if(upg.gravityWell)return; upg.gravityWell=true;}},
   {name:'Sliver',tag:'SURVIVE',icon:'◌',desc:'At ≤25% HP: +30% speed, −25% size.',apply(upg){if(upg.sliver)return; upg.sliver=true;}},
-  {name:'Vampiric Return',tag:'SURVIVE',icon:'🩸',desc:'Killing blows restore 2 HP. Up to 3×/room.',apply(upg){if(upg.vampiric)return; upg.vampiric=true;}},
+  {name:'Vampiric Return',tag:'SURVIVE',icon:'🩸',desc:'Each kill restores 4 HP and grants +0.3 charge. No limit.',apply(upg){if(upg.vampiric)return; upg.vampiric=true;}},
+  {name:'Predator\'s Instinct',tag:'OFFENSE',icon:'🐺',desc:'2+ kills within 5s grants +20% damage per kill (max +100%).',requires:upg=>upg.vampiric,apply(upg){if(upg.predatorInstinct)return; upg.predatorInstinct=true;}},
+  {name:'Blood Pact',tag:'SURVIVE',icon:'🩸+',desc:'Piercing shots restore 1 HP per enemy hit.',requires:upg=>upg.vampiric&&upg.pierceTier>0,apply(upg){if(upg.bloodPact)return; upg.bloodPact=true;}},
   {name:'Lifeline',tag:'SURVIVE',icon:'♾',desc:'Once per run: a killing blow leaves you at 1 HP.',apply(upg){if(upg.lifeline)return; upg.lifeline=true;},evolvesWith:['Berserker'],evolvedVersion:{name:'Last Stand',icon:'♾+',desc:'Lifeline triggers AND fires a full charge burst.',apply(upg){if(upg.lifeline)return; upg.lifeline=true; upg.lastStand=true;}}},
   {name:'Berserker',tag:'SURVIVE',icon:'🔴',desc:'Max HP→10, +3 SPS tiers, +30% speed. Exclusive.',isActive:upg=>upg.berserker,apply(upg,state){if(upg.berserker||upg.titanTier>0||upg.extraLifeTier>0||upg.regenTick>0)return; upg.berserker=true; state.maxHp=10; state.hp=Math.min(state.hp,10); upg.spsTier=Math.min(SPS_LADDER.length-1,upg.spsTier+3); upg.sps=SPS_LADDER[upg.spsTier]; upg.speedMult*=1.3;}},
   {name:"Dead Man's Trigger",tag:'SURVIVE',icon:'☠',desc:'At ≤15% HP: ×2 damage and free pierce. Risk for reward.',apply(upg){if(upg.deadManTrigger)return; upg.deadManTrigger=true;}},
@@ -321,7 +325,9 @@ function getActiveBoonEntries(upg) {
   if(upg.overchargeVent) entries.push({icon:'⬆',name:'Overcharge Vent',detail:'+40% dmg at full charge'});
   if(upg.gravityWell) entries.push({icon:'⊙',name:'Gravity Well',detail:'Slows nearby danger bullets 30%'});
   if(upg.sliver) entries.push({icon:'◌',name:'Sliver',detail:'Low HP speed+size boost'});
-  if(upg.vampiric) entries.push({icon:'🩸',name:'Vampiric Return',detail:'+2 HP per kill, max 3/room'});
+  if(upg.vampiric) entries.push({icon:'🩸',name:'Vampiric Return',detail:'+4 HP per kill, +0.3 charge'});
+  if(upg.predatorInstinct) entries.push({icon:'🐺',name:'Predator\'s Instinct',detail:`Kill streak: +${Math.round((upg.predatorKillStreak||0)*20)}% damage (max +100%)`});
+  if(upg.bloodPact) entries.push({icon:'🩸+',name:'Blood Pact',detail:'+1 HP per enemy hit (pierce only)'});
   if(upg.lifeline) entries.push({icon: upg.lastStand?'♾+':'♾', name: upg.lastStand?'Last Stand':'Lifeline', detail:upg.lifelineUsed?'SPENT':'1× death save'});
   if(upg.berserker) entries.push({icon:'🔴',name:'Berserker',detail:'HP:10, +3 SPS, +30% spd'});
   if(upg.deadManTrigger) entries.push({icon:'☠',name:"Dead Man's Trigger",detail:'At ≤15% HP: ×2 dmg + free pierce'});
