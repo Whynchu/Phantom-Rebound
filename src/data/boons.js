@@ -107,6 +107,7 @@ function getDefaultUpgrades() {
     splitShotEvolved: false,
     aegisTitan: false, ghostFlow: false, corona: false, finalForm: false,
     colossus: false, lifelineUses: 1, lifelineTriggerCount: 0,
+    volatileOrbs: false, chargedOrbs: false, absorbOrbs: false,
   };
   syncChargeCapacity(upg);
   return upg;
@@ -144,6 +145,9 @@ const BOONS = [
   {name:'Shield Burst',tag:'SURVIVE',icon:'💠',desc:'When a shield breaks, fire a 4-way output burst.',apply(upg){if(upg.shieldBurst)return; upg.shieldBurst=true;},evolvesWith:['Mirror Shield'],evolvedVersion:{name:'Aegis Nova',icon:'💠+',desc:'Reflected bullets also trigger the 4-way burst.',apply(upg){if(upg.shieldBurst)return; upg.shieldBurst=true; upg.aegisNova=true;}}},
   {name:'Barrier Pulse',tag:'SURVIVE',icon:'⬡',desc:'Shield break grants 1.5 charge + magnet pulse.',apply(upg){if(upg.barrierPulse)return; upg.barrierPulse=true;}},
   {name:'Orbit Spheres',tag:'UTILITY',icon:'🔮',desc:'+1 orbiting sphere per pick. Max 5.',apply(upg){upg.orbitSphereTier=Math.min(5,upg.orbitSphereTier+1);}},
+  {name:'Volatile Orbs',tag:'OFFENSE',icon:'💥',desc:'Orbit spheres explode on contact with a danger bullet, destroying it.',requires:upg=>upg.orbitSphereTier>0,apply(upg){if(upg.volatileOrbs)return; upg.volatileOrbs=true;}},
+  {name:'Charged Orbs',tag:'OFFENSE',icon:'⚡',desc:'Each orbit sphere fires a small shot at the nearest enemy every 1.2s.',requires:upg=>upg.orbitSphereTier>0,apply(upg){if(upg.chargedOrbs)return; upg.chargedOrbs=true;}},
+  {name:'Absorb Orbs',tag:'UTILITY',icon:'🌀',desc:'Grey bullets near an orbit sphere are absorbed automatically.',requires:upg=>upg.orbitSphereTier>0,apply(upg){if(upg.absorbOrbs)return; upg.absorbOrbs=true;}},
   {name:'Dense Core',tag:'OFFENSE',icon:'◈',desc:'−2 charge cap, output bullets hit harder. Max 3.',apply(upg){if(upg.denseTier>=3)return; upg.denseTier++; upg.denseDamageMult=1+upg.denseTier*0.2; syncChargeCapacity(upg);}},
   {name:'Echo Fire',tag:'OFFENSE',icon:'↺',desc:'Every 5th shot fires a free echo burst.',apply(upg){if(upg.echoFire)return; upg.echoFire=true;}},
   {name:'Split Shot',tag:'OFFENSE',icon:'⋔',desc:'Output bullets split in two on first wall bounce.',apply(upg){if(upg.splitShot||upg.bounceTier===0)return; upg.splitShot=true;},evolvesWith:['Ricochet'],evolvedVersion:{name:'Fracture',icon:'⋔+',desc:'Bullets split into 3 on bounce, +20% damage.',apply(upg){if(upg.splitShot||upg.bounceTier===0)return; upg.splitShot=true; upg.splitShotEvolved=true; upg.denseDamageMult=(upg.denseDamageMult||1)*1.2;}}},
@@ -161,6 +165,7 @@ const BOONS = [
 ];
 
 function boonHasEffect(boon, upg, hp, maxHp) {
+  if(boon.requires && !boon.requires(upg)) return false;
   const probe = JSON.parse(JSON.stringify(upg));
   const state = { hp, maxHp };
   const beforeState = JSON.stringify({ upg: probe, hp: state.hp, maxHp: state.maxHp });
@@ -270,6 +275,9 @@ function getActiveBoonEntries(upg) {
   if(upg.corona) entries.push({icon:'☀️',name:'CORONA',detail:'Ring shots are homing'});
   if(upg.finalForm) entries.push({icon:'💀',name:'FINAL FORM',detail:'2× lifeline, Dead Man at ≤2 HP'});
   if(upg.colossus) entries.push({icon:'⬡',name:'COLOSSUS',detail:'Bullets nullified on hit, regen 1/s'});
+  if(upg.volatileOrbs) entries.push({icon:'💥',name:'Volatile Orbs',detail:'Orbs explode danger bullets'});
+  if(upg.chargedOrbs) entries.push({icon:'⚡',name:'Charged Orbs',detail:'Orbs fire shot every 1.2s'});
+  if(upg.absorbOrbs) entries.push({icon:'🌀',name:'Absorb Orbs',detail:'Orbs absorb nearby grey bullets'});
   return entries;
 }
 

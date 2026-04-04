@@ -127,6 +127,8 @@ let _absorbComboCount = 0, _absorbComboTimer = 0;
 let _chainMagnetTimer = 0;
 let _echoCounter = 0;
 let _vampiricRestoresThisRoom = 0;
+let _orbFireTimers = [];
+let _orbAlive = [];
 let boonHistory = [];
 let pendingLegendary = null;
 let legendaryOffered = false;
@@ -226,6 +228,7 @@ function buildSpawnQueue(roomDef) {
 function startRoom(idx) {
   tookDamageThisRoom = false;
   _vampiricRestoresThisRoom = 0;
+  _orbFireTimers = []; _orbAlive = [];
   roomIndex = idx;
   roomPurpleShooterAssigned = false;
   const def = getRoomDef(idx);
@@ -669,6 +672,7 @@ function init() {
   _barrierPulseTimer=0;
   _slipCooldown=0; _absorbComboCount=0; _absorbComboTimer=0;
   _chainMagnetTimer=0; _echoCounter=0; _vampiricRestoresThisRoom=0;
+  _orbFireTimers=[]; _orbAlive=[];
   boonHistory=[]; pendingLegendary=null; legendaryOffered=false;
   bullets=[];enemies=[];particles=[];
   resetJoystickState(joy);
@@ -905,8 +909,12 @@ function update(dt,ts){
     }
 
     if(UPG.orbitSphereTier > 0){
+      // Sync arrays
+      while(_orbFireTimers.length < UPG.orbitSphereTier) _orbFireTimers.push(0);
+      while(_orbAlive.length < UPG.orbitSphereTier) _orbAlive.push(true);
       if(!e.orbitHitAt) e.orbitHitAt = {};
       for(let si=0;si<UPG.orbitSphereTier;si++){
+        if(_orbAlive[si]===false) continue;
         const sAngle=Math.PI*2/UPG.orbitSphereTier*si+ts*ORBIT_ROTATION_SPD;
         const sx=player.x+Math.cos(sAngle)*ORBIT_SPHERE_R;
         const sy=player.y+Math.sin(sAngle)*ORBIT_SPHERE_R;
@@ -923,6 +931,27 @@ function update(dt,ts){
             enemies.splice(ei,1);
             break;
           }
+        }
+      }
+    }
+  }
+
+  // ── Charged Orbs: each alive orb fires at nearest enemy every 1.2s
+  if(UPG.chargedOrbs && UPG.orbitSphereTier>0 && enemies.length>0){
+    while(_orbFireTimers.length < UPG.orbitSphereTier) _orbFireTimers.push(0);
+    for(let si=0;si<UPG.orbitSphereTier;si++){
+      if(_orbAlive[si]===false) continue;
+      _orbFireTimers[si]=((_orbFireTimers[si]||0)+dt*1000);
+      if(_orbFireTimers[si]>=1200){
+        _orbFireTimers[si]=0;
+        const sAngle=Math.PI*2/UPG.orbitSphereTier*si+ts*ORBIT_ROTATION_SPD;
+        const ox=player.x+Math.cos(sAngle)*ORBIT_SPHERE_R;
+        const oy=player.y+Math.sin(sAngle)*ORBIT_SPHERE_R;
+        const tgt=enemies.reduce((b,e)=>{const d=Math.hypot(e.x-ox,e.y-oy);return(!b||d<b.d)?{e,d}:b;},null);
+        if(tgt){
+          const ang=Math.atan2(tgt.e.y-oy,tgt.e.x-ox);
+          const oNow=performance.now();
+          bullets.push({x:ox,y:oy,vx:Math.cos(ang)*200,vy:Math.sin(ang)*200,state:'output',r:3.5,decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:1,expireAt:oNow+1200,hitIds:new Set()});
         }
       }
     }
@@ -1015,6 +1044,41 @@ function update(dt,ts){
         sparks(b.x,b.y,C.ghost,5,45);
         bullets.splice(i,1);continue;
       }
+      // Absorb Orbs: grey bullets near any alive orbit sphere are absorbed
+      if(UPG.absorbOrbs && UPG.orbitSphereTier>0){
+        while(_orbAlive.length < UPG.orbitSphereTier) _orbAlive.push(true);
+        let absorbed=false;
+        for(let si=0;si<UPG.orbitSphereTier;si++){
+          if(_orbAlive[si]===false) continue;
+          const sAngle=Math.PI*2/UPG.orbitSphereTier*si+ts*ORBIT_ROTATION_SPD;
+          const sx=player.x+Math.cos(sAngle)*ORBIT_SPHERE_R;
+          const sy=player.y+Math.sin(sAngle)*ORBIT_SPHERE_R;
+          if(Math.hypot(b.x-sx,b.y-sy)<b.r+12){
+            charge=Math.min(UPG.maxCharge,charge+UPG.absorbValue);
+            sparks(sx,sy,C.ghost,4,40);
+            bullets.splice(i,1); absorbed=true; break;
+          }
+        }
+        if(absorbed) continue;
+      }
+    }
+
+    // Volatile Orbs: a danger bullet near any alive orbit sphere destroys the sphere + bullet
+    if(b.state==='danger' && UPG.volatileOrbs && UPG.orbitSphereTier>0){
+      while(_orbAlive.length < UPG.orbitSphereTier) _orbAlive.push(true);
+      let orbHit=false;
+      for(let si=0;si<UPG.orbitSphereTier;si++){
+        if(_orbAlive[si]===false) continue;
+        const sAngle=Math.PI*2/UPG.orbitSphereTier*si+ts*ORBIT_ROTATION_SPD;
+        const sx=player.x+Math.cos(sAngle)*ORBIT_SPHERE_R;
+        const sy=player.y+Math.sin(sAngle)*ORBIT_SPHERE_R;
+        if(Math.hypot(b.x-sx,b.y-sy)<b.r+7){
+          _orbAlive[si]=false;
+          sparks(sx,sy,C.green,10,80);
+          bullets.splice(i,1); orbHit=true; break;
+        }
+      }
+      if(orbHit) continue;
     }
 
     if(b.state==='danger' && player.shields.length>0){
@@ -1378,6 +1442,7 @@ function draw(ts){
   // Orbit Spheres
   if(UPG.orbitSphereTier>0){
     for(let si=0;si<UPG.orbitSphereTier;si++){
+      if(_orbAlive[si]===false) continue;
       const sAngle=Math.PI*2/UPG.orbitSphereTier*si+ts*ORBIT_ROTATION_SPD;
       const sx=player.x+Math.cos(sAngle)*ORBIT_SPHERE_R;
       const sy=player.y+Math.sin(sAngle)*ORBIT_SPHERE_R;
