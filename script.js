@@ -1317,9 +1317,9 @@ function update(dt,ts){
 
     if(b.state==='danger'&&player.invincible<=0){
       if(Math.hypot(b.x-player.x,b.y-player.y)<player.r+b.r-2){
-        // Damage scaling: log-based for early game, polynomial ramp post-30
+        // Damage scaling: log-based for early game, reduced scaling post-30 (enemies have more health instead)
         const tierOver = Math.max(0, roomIndex - 29);
-        const dmgScale = (1 + Math.log(roomIndex + 1) * 0.24) * (tierOver > 0 ? 1 + tierOver * 0.048 : 1);
+        const dmgScale = (1 + Math.log(roomIndex + 1) * 0.24) * (tierOver > 0 ? 1 + tierOver * 0.018 : 1);
         const rawDamage = Math.ceil(18 * dmgScale);
         const finalDamage = Math.max(1, Math.ceil(rawDamage * (UPG.damageTakenMult || 1)));
         hp-=finalDamage; player.invincible=1.2; player.distort=.45;
