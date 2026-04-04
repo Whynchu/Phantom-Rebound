@@ -193,6 +193,49 @@ function getEvolvedBoon(boon, upg) {
   return { ...boon, ...boon.evolvedVersion, apply: boon.evolvedVersion.apply || boon.apply };
 }
 
+const LEGENDARY_SEQUENCES = [
+  {
+    id: 'aegisTitan',
+    check: (h) => ['Mirror Shield','Shield Burst','Tempered Shield'].every(n => h.includes(n)),
+    boon: { name:'AEGIS TITAN', tag:'LEGENDARY', icon:'🏛️', desc:"Shields never truly break — they recharge in 6s instead.",
+      apply(upg){ upg.aegisTitan=true; } }
+  },
+  {
+    id: 'ghostFlow',
+    check: (h) => ['Kinetic Harvest','Quick Harvest'].every(n => h.includes(n)) &&
+                  (h.includes('Slipstream') || h.includes('Flux State')),
+    boon: { name:'GHOST FLOW', tag:'LEGENDARY', icon:'🌊', desc:'Moving through grey bullets auto-absorbs them.',
+      apply(upg){ upg.ghostFlow=true; } }
+  },
+  {
+    id: 'corona',
+    check: (h) => h.filter(n => n==='Ring Blast').length >= 3,
+    boon: { name:'CORONA', tag:'LEGENDARY', icon:'☀️', desc:'All ring shots become homing. Ring cap +4.',
+      apply(upg){ upg.corona=true; upg.ringShots=Math.min(12,upg.ringShots+4); syncChargeCapacity(upg); } }
+  },
+  {
+    id: 'finalForm',
+    check: (h) => ['Berserker',"Dead Man's Trigger"].every(n => h.includes(n)) &&
+                  (h.includes('Lifeline') || h.includes('Last Stand')),
+    boon: { name:'FINAL FORM', tag:'LEGENDARY', icon:'💀', desc:'Lifeline gains 2 uses. Dead Man activates at ≤2 HP. +50% speed.',
+      apply(upg){ upg.finalForm=true; upg.lifelineUses=(upg.lifelineUses||1)+1; upg.speedMult*=1.5; } }
+  },
+  {
+    id: 'colossus',
+    check: (h) => h.filter(n => n==='Titan Heart').length >= 3,
+    boon: { name:'COLOSSUS', tag:'LEGENDARY', icon:'⬡', desc:'Danger bullets that hit you are nullified. Regen 1 HP/s.',
+      apply(upg){ upg.colossus=true; } }
+  },
+];
+
+function checkLegendarySequences(history, upg) {
+  for(const seq of LEGENDARY_SEQUENCES){
+    if(upg[seq.id]) continue; // already have it
+    if(seq.check(history)) return seq.boon;
+  }
+  return null;
+}
+
 function weightedPickBoon(pool, upg) {
   const totalWeight = pool.reduce((sum, boon) => sum + getBoonWeight(boon, upg), 0);
   let roll = Math.random() * totalWeight;
@@ -305,5 +348,5 @@ function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
   return picks;
 }
 
-export { BOONS, SPS_LADDER, getHyperbolicScale, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity, pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon };
+export { BOONS, SPS_LADDER, getHyperbolicScale, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity, pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon, checkLegendarySequences };
 
