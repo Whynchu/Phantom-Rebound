@@ -1,4 +1,4 @@
-const VERSION = { num: '0.96', label: 'Boss Rooms & Spawn Overhaul' };
+const VERSION = { num: '0.97', label: 'Boss Health Balance' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

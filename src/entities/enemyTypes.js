@@ -39,7 +39,7 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
   const isElite = !isBoss && roomIndex >= 40 && Math.random() < 0.30;
 
   const hpVal = isBoss
-    ? Math.max(1, Math.round(def.hp * hpMult * 15))
+    ? Math.max(1, Math.round(def.hp * hpMult * 5))
     : Math.max(1, Math.round(def.hp * hpMult * (isElite ? 1.3 : 1)));
 
   return {
