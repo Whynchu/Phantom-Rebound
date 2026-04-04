@@ -22,6 +22,8 @@ function syncChargeCapacity(upg) {
   const baseCap = BASE_CHARGE_CAP + Math.max(0, shotCount - 1) + (upg.chargeCapFlatBonus || 0);
   const capMult = upg.chargeCapMult || 1;
   upg.maxCharge = Math.max(baseCap, Math.round(baseCap * capMult));
+  // Dense Core reduces cap
+  if(upg.denseTier > 0) upg.maxCharge = Math.max(3, upg.maxCharge - upg.denseTier * 2);
   return upg.maxCharge;
 }
 
@@ -77,6 +79,8 @@ function getDefaultUpgrades() {
     titanSlowMult:    1,
     healTier:         0,
     forwardShotTier:  0,
+    denseTier: 0,
+    denseDamageMult: 1,
   };
   syncChargeCapacity(upg);
   return upg;
@@ -110,6 +114,7 @@ const BOONS = [
   {name:'Titan Heart',tag:'SURVIVE',icon:'⬢',desc:'+25% size & +max HP per pick. +5% dmg, −5% spd. Excl. MINI.',apply(upg, state){if(upg.miniTaken || upg.titanTier >= TITAN_HP_PCT.length) return; const hpPct = TITAN_HP_PCT[upg.titanTier]; upg.titanTier++; upg.playerSizeMult = 1 + upg.titanTier * 0.25; upg.playerDamageMult = 1 + upg.titanTier * 0.05; upg.titanSlowMult = Math.max(0.7, 1 - upg.titanTier * TITAN_SLOW_PCT); const gain = Math.max(1, Math.round(state.maxHp * hpPct)); state.maxHp += gain; state.hp = Math.min(state.hp, state.maxHp);}},
   {name:'Protective Shield',tag:'SURVIVE',icon:'🛡️',desc:`Blocks one danger bullet then recharges. +1 per pick. Max ${MAX_SHIELD_TIER}.`,apply(upg){upg.shieldTier=Math.min(MAX_SHIELD_TIER,upg.shieldTier+1);}},
   {name:'Orbit Spheres',tag:'UTILITY',icon:'🔮',desc:'+1 orbiting sphere per pick. Max 5.',apply(upg){upg.orbitSphereTier=Math.min(5,upg.orbitSphereTier+1);}},
+  {name:'Dense Core',tag:'OFFENSE',icon:'◈',desc:'−2 charge cap, output bullets hit harder. Max 3.',apply(upg){if(upg.denseTier>=3)return; upg.denseTier++; upg.denseDamageMult=1+upg.denseTier*0.2; syncChargeCapacity(upg);}},
 ];
 
 function boonHasEffect(boon, upg, hp, maxHp) {
@@ -185,6 +190,7 @@ function getActiveBoonEntries(upg) {
   if(upg.titanTier > 0) entries.push({ icon:'⬢', name:'Titan Heart', detail:`Tier ${upg.titanTier} - +${Math.round((upg.playerDamageMult - 1) * 100)}% dmg, -${Math.round((1 - upg.titanSlowMult) * 100)}% speed` });
   if(upg.shieldTier > 0) entries.push({ icon:'🛡️', name:'Protective Shield', detail:`${upg.shieldTier} shield plate${upg.shieldTier === 1 ? '' : 's'}` });
   if(upg.orbitSphereTier > 0) entries.push({ icon:'🔮', name:'Orbit Spheres', detail:`${upg.orbitSphereTier} sphere${upg.orbitSphereTier === 1 ? '' : 's'}` });
+  if(upg.denseTier > 0) entries.push({ icon:'◈', name:'Dense Core', detail:`Tier ${upg.denseTier} — ×${upg.denseDamageMult.toFixed(1)} dmg, −${upg.denseTier*2} cap` });
   return entries;
 }
 

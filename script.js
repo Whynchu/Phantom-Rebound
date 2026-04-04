@@ -374,7 +374,7 @@ function firePlayer(tx,ty) {
   const snipeScale = 1 + UPG.snipePower * 0.18;
   const bspd = 230 * Math.min(2.0, UPG.shotSpd) * snipeScale;
   const baseRadius = 4.5 * Math.min(2.5, UPG.shotSize) * (1 + UPG.snipePower * 0.15);
-  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1);
+  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1);
   const lifeMs = PLAYER_SHOT_LIFE_MS * (UPG.shotLifeMult || 1);
   const now = performance.now();
 
