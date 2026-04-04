@@ -532,6 +532,22 @@ function firePlayer(tx,ty) {
   }
   charge=Math.max(0,charge-availableShots);
   sparks(player.x,player.y,C.green,4 + Math.min(4, availableShots),55);
+  
+  // Shockwave: fire a radial push on full-charge fire
+  if(UPG.shockwave && availableShots === Math.floor(UPG.maxCharge) && UPG.shockwaveCooldown <= 0){
+    UPG.shockwaveCooldown = 3000;
+    for(const e of enemies){
+      const dx = e.x - player.x;
+      const dy = e.y - player.y;
+      const dist = Math.hypot(dx, dy);
+      if(dist > 0){
+        e.vx = (dx / dist) * 300;
+        e.vy = (dy / dist) * 300;
+      }
+    }
+    sparks(player.x, player.y, '#ffaa00', 20, 250);
+  }
+  
   if(UPG.echoFire){
     _echoCounter++;
     if(_echoCounter>=5){
@@ -877,6 +893,7 @@ function update(dt,ts){
   if(_chainMagnetTimer>0) _chainMagnetTimer-=dt*1000;
   if(_slipCooldown>0) _slipCooldown-=dt*1000;
   if(UPG.colossus && _colossusShockwaveCd>0) _colossusShockwaveCd-=dt;
+  if(UPG.shockwave && UPG.shockwaveCooldown > 0) UPG.shockwaveCooldown -= dt*1000;
   // Predator's Instinct: decay kill streak if window expires
   if(UPG.predatorInstinct && UPG.predatorKillStreakTime > 0 && ts > UPG.predatorKillStreakTime){
     UPG.predatorKillStreak = 0;
@@ -888,6 +905,15 @@ function update(dt,ts){
   // Volatile Orb cooldowns — recharge after 8s
   for(let si=0;si<_orbCooldown.length;si++){
     if(_orbCooldown[si]>0) _orbCooldown[si]=Math.max(0,_orbCooldown[si]-dt);
+  }
+  // Pulse Mines — decay life
+  if(UPG.pulseMine && UPG.mines && UPG.mines.length > 0){
+    for(let mi = UPG.mines.length - 1; mi >= 0; mi--){
+      UPG.mines[mi].life -= dt * 1000;
+      if(UPG.mines[mi].life <= 0){
+        UPG.mines.splice(mi, 1);
+      }
+    }
   }
 
   // ── Room state machine
@@ -1045,7 +1071,10 @@ function update(dt,ts){
     } else {
       const dx=player.x-e.x, dy=player.y-e.y, d=Math.hypot(dx,dy);
       const fleeRange = e.fleeRange || 110;
-      const spd = e.spd;
+      let spd = e.spd;
+      
+      // Gravity Well tier 2: apply 20% enemy movement slowdown
+      if(UPG.gravityWell2) spd *= 0.8;
 
       // Advance fire timer
       e.fT += dt*1000;
@@ -1344,6 +1373,18 @@ function update(dt,ts){
       if(orbHit) continue;
     }
 
+    // Pulse Mine: convert danger bullets to grey in mine radius
+    if(b.state==='danger' && UPG.pulseMine && UPG.mines && UPG.mines.length > 0){
+      for(let mi = UPG.mines.length - 1; mi >= 0; mi--){
+        const m = UPG.mines[mi];
+        if(Math.hypot(b.x - m.x, b.y - m.y) < m.radius){
+          b.state = 'grey';
+          b.decayStart = ts;
+          break;
+        }
+      }
+    }
+
     if(b.state==='danger' && player.shields.length>0){
       const total=player.shields.length;
       // Quick proximity guard: bullet must be near the orbital ring
@@ -1396,6 +1437,13 @@ function update(dt,ts){
     }
 
     if(b.state==='danger'&&player.invincible<=0){
+      // Null Zone: active zone blocks damage
+      if(UPG.nullZone && UPG.nullZoneActive && UPG.nullZoneTimer > ts){
+        bullets.splice(i,1);
+        sparks(b.x,b.y,'#00d4ff',8,120);
+        continue;
+      }
+      
       if(Math.hypot(b.x-player.x,b.y-player.y)<player.r+b.r-2){
         // Damage scaling: log-based for early game, reduced scaling post-30 (enemies have more health instead)
         const tierOver = Math.max(0, roomIndex - 29);
@@ -1508,6 +1556,26 @@ function update(dt,ts){
                 for(let i=0;i<3;i++){
                   const ang = (Math.PI*2/3)*i + Math.random()*0.3;
                   bullets.push({x:e.x,y:e.y,vx:Math.cos(ang)*120,vy:Math.sin(ang)*120,state:'grey',r:5,decayStart:ts,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:0,hitIds:new Set()});
+                }
+              }
+              
+              // Pulse Mine: absorb grey bullets on kill, plant mine at 5 absorbs
+              if(UPG.pulseMine){
+                UPG.pulseAbsorbCount = (UPG.pulseAbsorbCount || 0) + 1;
+                if(UPG.pulseAbsorbCount >= 5 && (!UPG.mines || UPG.mines.length < 3)){
+                  UPG.pulseAbsorbCount = 0;
+                  UPG.mines = UPG.mines || [];
+                  UPG.mines.push({x: player.x, y: player.y, radius: 80, life: 10000});
+                }
+              }
+              
+              // Null Zone: absorb grey bullets on kill, activate zone at 5 absorbs
+              if(UPG.nullZone){
+                UPG.nullZoneAbsorbCount = (UPG.nullZoneAbsorbCount || 0) + 1;
+                if(UPG.nullZoneAbsorbCount >= 5){
+                  UPG.nullZoneAbsorbCount = 0;
+                  UPG.nullZoneActive = true;
+                  UPG.nullZoneTimer = ts + 2000;
                 }
               }
             }
@@ -1821,6 +1889,40 @@ function draw(ts){
       ctx.beginPath();ctx.arc(sx,sy,2,0,Math.PI*2);ctx.fill();
       ctx.restore();
     }
+  }
+
+  // Pulse Mines
+  if(UPG.pulseMine && UPG.mines && UPG.mines.length > 0){
+    for(let mi = 0; mi < UPG.mines.length; mi++){
+      const m = UPG.mines[mi];
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = '#e879f9';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = '#e879f9';
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Null Zone active indicator
+  if(UPG.nullZone && UPG.nullZoneActive && UPG.nullZoneTimer > ts){
+    ctx.save();
+    const frac = Math.max(0, (UPG.nullZoneTimer - ts) / 2000);
+    ctx.globalAlpha = 0.4 * frac;
+    ctx.fillStyle = '#00d4ff';
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, 120, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.6 * frac;
+    ctx.strokeStyle = '#00d4ff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
   }
 
   // Joystick anchor — tiny subtle dot where finger landed

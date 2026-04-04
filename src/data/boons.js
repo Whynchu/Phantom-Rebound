@@ -124,6 +124,10 @@ function getDefaultUpgrades() {
     escalation: false, escalationKills: 0,
     spreadShot: false,
     payload: false,
+    shockwave: false, shockwaveCooldown: 0,
+    pulseMine: false, mines: [], pulseAbsorbCount: 0,
+    nullZone: false, nullZoneActive: false, nullZoneTimer: 0, nullZoneAbsorbCount: 0,
+    gravityWell2: false,
   };
   syncChargeCapacity(upg);
   return upg;
@@ -188,6 +192,10 @@ const BOONS = [
   {name:'Escalation',tag:'OFFENSE',icon:'📈',desc:'+3% damage per kill in current room. Resets between rooms. Max +60%.',apply(upg){if(upg.escalation)return; upg.escalation=true;}},
   {name:'Spread Shot',tag:'OFFENSE',icon:'⬄',desc:'Fire 3 bullets in a cone instead of 1. +2 charge cost per fire.',apply(upg){if(upg.spreadShot)return; upg.spreadShot=true;syncChargeCapacity(upg);}},
   {name:'Payload',tag:'OFFENSE',icon:'💣',desc:'Output bullets explode on final impact, damaging in a 40px radius.',requires:upg=>upg.biggerBulletsTier>0,apply(upg){if(upg.payload)return; upg.payload=true;}},
+  {name:'Shockwave',tag:'OFFENSE',icon:'⚡',desc:'Firing at full charge releases a radial enemy push. 3s cooldown.',apply(upg){if(upg.shockwave)return; upg.shockwave=true;}},
+  {name:'Pulse Mine',tag:'UTILITY',icon:'⛏️',desc:'Absorbing 5 grey bullets plants a mine at your position. Max 3. Converts danger→grey nearby.',apply(upg){if(upg.pulseMine)return; upg.pulseMine=true;}},
+  {name:'Null Zone',tag:'UTILITY',icon:'🔵',desc:'Absorbing 5 grey bullets creates a 2s danger-free zone around you.',requires:upg=>upg.absorbRange>0,apply(upg){if(upg.nullZone)return; upg.nullZone=true;}},
+  {name:'Gravity Well',tag:'UTILITY',icon:'⊙',desc:'Picking this a 2nd time adds: enemies move 20% slower within 90px.',evolvesWith:['Gravity Well'],evolvedVersion:{name:'Gravity Well II',icon:'⊙+',desc:'Slows both danger bullets AND enemies 30%.'},apply(upg){if(!upg.gravityWell)return; if(upg.gravityWell2)return; upg.gravityWell2=true;}},
 ];
 
 function boonHasEffect(boon, upg, hp, maxHp) {
@@ -374,6 +382,11 @@ function getActiveBoonEntries(upg) {
   if(upg.escalation) entries.push({icon:'📈',name:'Escalation',detail:`+${Math.min(60,(upg.escalationKills||0)*3)}% dmg`});
   if(upg.spreadShot) entries.push({icon:'⬄',name:'Spread Shot',detail:'3-bullet cone spread'});
   if(upg.payload) entries.push({icon:'💣',name:'Payload',detail:'Bullets explode on impact'});
+  if(upg.shockwave) entries.push({icon:'⚡',name:'Shockwave',detail:'Full charge → push enemies'});
+  if(upg.pulseMine) entries.push({icon:'⛏️',name:'Pulse Mine',detail:`${upg.mines?upg.mines.length:0}/3 active`});
+  if(upg.nullZone) entries.push({icon:'🔵',name:'Null Zone',detail:`Timer: ${Math.max(0,(upg.nullZoneTimer||0)-ts).toFixed(1)}s`});
+  if(upg.gravityWell2) entries.push({icon:'⊙+',name:'Gravity Well II',detail:'Slows bullets & enemies'});
+  else if(upg.gravityWell) entries.push({icon:'⊙',name:'Gravity Well',detail:'Slows nearby danger bullets'});
   if(upg.chargedOrbs) entries.push({icon:'⚡',name:'Charged Orbs',detail:'Orbs fire shot every 1.2s'});
   if(upg.absorbOrbs) entries.push({icon:'🌀',name:'Absorb Orbs',detail:'Orbs absorb nearby grey bullets'});
   return entries;
