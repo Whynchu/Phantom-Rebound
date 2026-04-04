@@ -401,13 +401,13 @@ function getActiveBoonEntries(upg) {
   if(upg.bloodRush) entries.push({icon:'🩸→',name:'Blood Rush',detail:`+${upg.bloodRushStacks||0} stacks (${((upg.bloodRushStacks||0)*8)}% speed)`});
   if(upg.crimsonHarvest) entries.push({icon:'🩸+',name:'Crimson Harvest',detail:'Kills drop extra grey bullet'});
   if(upg.sanguineBurst) entries.push({icon: upg.rampageEvolved?'💀+':'💀', name: upg.rampageEvolved?'Rampage':'Sanguine Burst', detail:`Free ${upg.rampageEvolved?8:6}-way burst`});
-  if(upg.lateBloom) entries.push({icon:'🌱',name:'Late Bloom',detail:`+${(Math.min(90,(roomIndex||0))*0.02*100).toFixed(0)}% dmg`});
+  if(upg.lateBloom) entries.push({icon:'🌱',name:'Late Bloom',detail:`+${(Math.min(90,(upg._roomIndex||0))*0.02*100).toFixed(0)}% dmg`});
   if(upg.escalation) entries.push({icon:'📈',name:'Escalation',detail:`+${Math.min(60,(upg.escalationKills||0)*3)}% dmg`});
   if(upg.spreadShot) entries.push({icon:'⬄',name:'Spread Shot',detail:'3-bullet cone spread'});
   if(upg.payload) entries.push({icon:'💣',name:'Payload',detail:'Bullets explode on impact'});
   if(upg.shockwave) entries.push({icon:'⚡',name:'Shockwave',detail:'Full charge → push enemies'});
   if(upg.pulseMine) entries.push({icon:'⛏️',name:'Pulse Mine',detail:`${upg.mines?upg.mines.length:0}/3 active`});
-  if(upg.nullZone) entries.push({icon:'🔵',name:'Null Zone',detail:`Timer: ${Math.max(0,(upg.nullZoneTimer||0)-ts).toFixed(1)}s`});
+  if(upg.nullZone) entries.push({icon:'🔵',name:'Null Zone',detail:`Timer: ${Math.max(0,(upg.nullZoneTimer||0)/1000).toFixed(1)}s`});
   if(upg.gravityWell2) entries.push({icon:'⊙+',name:'Gravity Well II',detail:'Slows bullets & enemies'});
   else if(upg.gravityWell) entries.push({icon:'⊙',name:'Gravity Well',detail:'Slows nearby danger bullets'});
   if(upg.transmute && !upg.decayFieldEvolved) entries.push({icon:'🔄',name:'Transmute',detail:`Bounce count: ${upg.transmuteBounceCount||0}/4`});

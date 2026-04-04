@@ -620,6 +620,7 @@ function burstBlueDissipate(x, y) {
 
 function showUpgrades() {
   gstate='upgrade'; cancelAnimationFrame(raf);
+  UPG._roomIndex = roomIndex;
   showBoonSelection({
     upg: UPG,
     hp,
