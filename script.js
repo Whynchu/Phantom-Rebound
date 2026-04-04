@@ -581,8 +581,12 @@ function firePlayer(tx,ty) {
   }
 }
 
+const MAX_PARTICLES = 600;
+const MAX_BULLETS = 400;
+
 function sparks(x,y,col,n=6,spd=80) {
-  for(let i=0;i<n;i++){
+  const room = Math.min(n, MAX_PARTICLES - particles.length);
+  for(let i=0;i<room;i++){
     const a=Math.random()*Math.PI*2,s=spd*(.4+Math.random()*.6);
     particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,col,life:1,decay:1.6+Math.random()});
   }
@@ -590,13 +594,15 @@ function sparks(x,y,col,n=6,spd=80) {
 
 function spawnGreyDrops(x,y,ts,count=getEnemyGreyDropCount()) {
   const dropCount = Math.max(1, Math.floor(count));
-  for(let i=0;i<dropCount;i++){
+  const room = Math.min(dropCount, MAX_BULLETS - bullets.length);
+  for(let i=0;i<room;i++){
     const a=Math.random()*Math.PI*2,s=50+Math.random()*55;
     bullets.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,state:'grey',r:4.5,decayStart:ts,bounces:0});
   }
 }
 function burstBlueDissipate(x, y) {
-  for(let i=0;i<12;i++){
+  const room = Math.min(12, MAX_PARTICLES - particles.length);
+  for(let i=0;i<room;i++){
     const a = Math.random() * Math.PI * 2;
     const s = 45 + Math.random() * 70;
     particles.push({
