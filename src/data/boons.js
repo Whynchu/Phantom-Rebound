@@ -122,6 +122,8 @@ function getDefaultUpgrades() {
     bloodMoon: false,
     lateBloom: false,
     escalation: false, escalationKills: 0,
+    spreadShot: false,
+    payload: false,
   };
   syncChargeCapacity(upg);
   return upg;
@@ -184,6 +186,8 @@ const BOONS = [
   {name:'Sanguine Burst',tag:'OFFENSE',icon:'💀',desc:'Every 10th kill fires a free 6-way output burst.',requires:upg=>upg.vampiric,apply(upg){if(upg.sanguineBurst)return; upg.sanguineBurst=true;},evolvesWith:['Predator\'s Instinct'],evolvedVersion:{name:'Rampage',icon:'💀+',desc:'Every 5th kill fires a free 8-way burst instead.',apply(upg){if(upg.sanguineBurst)return; upg.sanguineBurst=true; upg.rampageEvolved=true;}}},
   {name:'Late Bloom',tag:'OFFENSE',icon:'🌱',desc:'+2% damage per room (30-60), +1% (60-90), +0.5% (90+). Soft-capped.',apply(upg){if(upg.lateBloom)return; upg.lateBloom=true;}},
   {name:'Escalation',tag:'OFFENSE',icon:'📈',desc:'+3% damage per kill in current room. Resets between rooms. Max +60%.',apply(upg){if(upg.escalation)return; upg.escalation=true;}},
+  {name:'Spread Shot',tag:'OFFENSE',icon:'⬄',desc:'Fire 3 bullets in a cone instead of 1. +2 charge cost per fire.',apply(upg){if(upg.spreadShot)return; upg.spreadShot=true;syncChargeCapacity(upg);}},
+  {name:'Payload',tag:'OFFENSE',icon:'💣',desc:'Output bullets explode on final impact, damaging in a 40px radius.',requires:upg=>upg.biggerBulletsTier>0,apply(upg){if(upg.payload)return; upg.payload=true;}},
 ];
 
 function boonHasEffect(boon, upg, hp, maxHp) {
@@ -368,6 +372,8 @@ function getActiveBoonEntries(upg) {
   if(upg.sanguineBurst) entries.push({icon: upg.rampageEvolved?'💀+':'💀', name: upg.rampageEvolved?'Rampage':'Sanguine Burst', detail:`Free ${upg.rampageEvolved?8:6}-way burst`});
   if(upg.lateBloom) entries.push({icon:'🌱',name:'Late Bloom',detail:`+${(Math.min(90,(roomIndex||0))*0.02*100).toFixed(0)}% dmg`});
   if(upg.escalation) entries.push({icon:'📈',name:'Escalation',detail:`+${Math.min(60,(upg.escalationKills||0)*3)}% dmg`});
+  if(upg.spreadShot) entries.push({icon:'⬄',name:'Spread Shot',detail:'3-bullet cone spread'});
+  if(upg.payload) entries.push({icon:'💣',name:'Payload',detail:'Bullets explode on impact'});
   if(upg.chargedOrbs) entries.push({icon:'⚡',name:'Charged Orbs',detail:'Orbs fire shot every 1.2s'});
   if(upg.absorbOrbs) entries.push({icon:'🌀',name:'Absorb Orbs',detail:'Orbs absorb nearby grey bullets'});
   return entries;

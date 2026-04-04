@@ -469,6 +469,19 @@ function firePlayer(tx,ty) {
       angs.push({ angle: (Math.PI*2/UPG.ringShots)*i, offset: 0, isRing: true });
     }
   }
+  
+  // Spread Shot: if enabled, modify the primary angle to fire 3 shots in a cone
+  if(UPG.spreadShot){
+    const newAngs = [];
+    for(const ang of angs){
+      if(ang.isRing) { newAngs.push(ang); continue; } // skip ring shots
+      newAngs.push({ angle: ang.angle - 0.35, offset: ang.offset });
+      newAngs.push({ angle: ang.angle, offset: ang.offset });
+      newAngs.push({ angle: ang.angle + 0.35, offset: ang.offset });
+    }
+    angs.length = 0;
+    angs.push(...newAngs);
+  }
 
   const availableShots = Math.min(Math.floor(charge), angs.length);
   if(availableShots <= 0) return;
@@ -514,6 +527,7 @@ function firePlayer(tx,ty) {
       expireAt: now + lifeMs,
       hitIds: new Set(),
       isRing: shot.isRing || false,
+      hasPayload: UPG.payload || false,
     });
   }
   charge=Math.max(0,charge-availableShots);
@@ -1167,7 +1181,20 @@ function update(dt,ts){
   for(let i=bullets.length-1;i>=0;i--){
     const b=bullets[i];
 
-    if(b.state==='output' && b.expireAt && ts>=b.expireAt){bullets.splice(i,1);continue;}
+    if(b.state==='output' && b.expireAt && ts>=b.expireAt){
+      // Payload: explode on expiration, damaging enemies in AoE
+      if(b.hasPayload && enemies.length > 0){
+        const aoeRadius = 40;
+        for(const e of enemies){
+          if(Math.hypot(e.x - b.x, e.y - b.y) < aoeRadius + e.r){
+            e.hp -= b.dmg * 0.5; // AoE damage is 50% of bullet damage
+          }
+        }
+        sparks(b.x, b.y, '#ff6b35', 8, 60);
+      }
+      bullets.splice(i,1);
+      continue;
+    }
 
     // Homing for output bullets
     if(b.state==='output'&&b.homing&&enemies.length>0){
@@ -1234,7 +1261,20 @@ function update(dt,ts){
               bullets.push({x:b.x,y:b.y,vx:Math.cos(sa)*sp,vy:Math.sin(sa)*sp,state:'output',r:b.r*0.8,decayStart:null,bounceLeft:0,pierceLeft:b.pierceLeft,homing:b.homing,crit:b.crit,dmg:b.dmg*0.7,expireAt:splitNow+2000,hitIds:new Set(),hasSplit:true});
             }
           }
-        } else { bullets.splice(i,1); continue; }
+        } else {
+          // Payload: explode when no bounces left, damaging enemies in AoE
+          if(b.hasPayload && enemies.length > 0){
+            const aoeRadius = 40;
+            for(const e of enemies){
+              if(Math.hypot(e.x - b.x, e.y - b.y) < aoeRadius + e.r){
+                e.hp -= b.dmg * 0.5; // AoE damage is 50% of bullet damage
+              }
+            }
+            sparks(b.x, b.y, '#ff6b35', 8, 60);
+          }
+          bullets.splice(i,1);
+          continue;
+        }
       }
     }
 
