@@ -1,5 +1,5 @@
 import { C, ROOM_SCRIPTS, DECAY_BASE, M, VERSION } from './src/data/gameData.js';
-import { getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity } from './src/data/boons.js';
+import { getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity, getEvolvedBoon } from './src/data/boons.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';
 import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoystickControls, tickJoystick } from './src/input/joystick.js';
 import { fetchRemoteLeaderboard, submitRemoteScore } from './src/platform/leaderboardService.js';
@@ -463,7 +463,8 @@ function showUpgrades() {
     onReroll: () => { boonRerolls--; },
     onSelect: (boon) => {
       const state = { hp, maxHp };
-      boon.apply(UPG, state);
+      const evolvedBoon = getEvolvedBoon(boon, UPG);
+      evolvedBoon.apply(UPG, state);
       syncRunChargeCapacity();
       hp = state.hp;
       maxHp = state.maxHp;
@@ -836,11 +837,12 @@ function update(dt,ts){
         hp-=18; player.invincible=1.0; player.distort=.4;
         sparks(player.x,player.y,'#f472b6',10,90);
         if(hp<=0){
-          if(UPG.lifeline && !UPG.lifelineUsed){ UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,'#f0abfc',16,100); }
+          if(UPG.lifeline && !UPG.lifelineUsed){
+            UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,'#f0abfc',16,100);
+            if(UPG.lastStand){ const lsNow=performance.now(); for(let la=0;la<Math.floor(UPG.maxCharge);la++){ const lang=(Math.PI*2/Math.max(1,Math.floor(UPG.maxCharge)))*la; bullets.push({x:player.x,y:player.y,vx:Math.cos(lang)*220,vy:Math.sin(lang)*220,state:'output',r:4.5,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:lsNow+2000,hitIds:new Set()}); } }
+          }
           else { gameOver(); return; }
         }
-      }
-    } else {
       const dx=player.x-e.x, dy=player.y-e.y, d=Math.hypot(dx,dy);
       const fleeRange = e.fleeRange || 110;
       const spd = e.spd;
@@ -1058,7 +1060,10 @@ function update(dt,ts){
         sparks(player.x,player.y,C.danger,10,85);
         bullets.splice(i,1);
         if(hp<=0){
-          if(UPG.lifeline && !UPG.lifelineUsed){ UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,'#f0abfc',16,100); }
+          if(UPG.lifeline && !UPG.lifelineUsed){
+            UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,'#f0abfc',16,100);
+            if(UPG.lastStand){ const lsNow=performance.now(); for(let la=0;la<Math.floor(UPG.maxCharge);la++){ const lang=(Math.PI*2/Math.max(1,Math.floor(UPG.maxCharge)))*la; bullets.push({x:player.x,y:player.y,vx:Math.cos(lang)*220,vy:Math.sin(lang)*220,state:'output',r:4.5,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:lsNow+2000,hitIds:new Set()}); } }
+          }
           else { gameOver(); return; }
         }
         continue;
@@ -1096,7 +1101,7 @@ function update(dt,ts){
           if(deadManPierce || b.pierceLeft>0){
             if(!deadManPierce){
               b.pierceLeft--;
-              if(b.pierceLeft===0 && UPG.volatileRounds){
+              if((b.pierceLeft===0 || UPG.volatileAllTargets) && UPG.volatileRounds){
                 const vNow=performance.now();
                 for(let va=0;va<4;va++){
                   const vang=va*Math.PI/2;

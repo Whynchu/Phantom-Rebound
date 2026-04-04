@@ -1,4 +1,4 @@
-import { pickBoonChoices, createHealBoon, getActiveBoonEntries } from '../data/boons.js';
+import { pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon } from '../data/boons.js';
 
 const BOON_FADE_MS = 180;
 
@@ -57,14 +57,17 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
   function buildMainCards() {
     mainRow.innerHTML = '';
     for(const boon of pool) {
+      const evolved = getEvolvedBoon(boon, upg);
+      const isEvolved = evolved !== boon;
+      const displayBoon = isEvolved ? evolved : boon;
       const card = document.createElement('div');
-      const tagColor = boon.tag === 'OFFENSE' ? '#f87171' : boon.tag === 'UTILITY' ? '#38bdf8' : '#4ade80';
-      card.className = 'up-card';
+      const tagColor = displayBoon.tag === 'OFFENSE' ? '#f87171' : displayBoon.tag === 'UTILITY' ? '#38bdf8' : '#4ade80';
+      card.className = isEvolved ? 'up-card evolved' : 'up-card';
       card.innerHTML = `
-        <div class="up-icon">${boon.icon}</div>
-        <div class="up-name">${boon.name}</div>
-        <div class="up-desc">${boon.desc}</div>
-        <div class="up-tag" style="color:${tagColor}">${boon.tag}</div>`;
+        <div class="up-icon">${displayBoon.icon}</div>
+        <div class="up-name">${displayBoon.name}</div>
+        <div class="up-desc">${displayBoon.desc}</div>
+        <div class="up-tag" style="color:${tagColor}">${displayBoon.tag}</div>`;
       card.onclick = () => {
         if(panel.classList.contains('screen-leaving')) return;
         panel.classList.add('screen-leaving');

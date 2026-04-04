@@ -539,3 +539,7 @@ body.app-ready #wrap { opacity: 1; }
   .eyebrow { letter-spacing: .2em; }
   .btn-menu-sub { padding: 8px 18px; font-size: 9px; }
 }
+
+/* ── Phase 4: Evolved boon cards ──────────────────────────────────────────── */
+.up-card.evolved { border-color: rgba(250,204,21,0.5); }
+.up-card.evolved .up-name::after { content: ' ✦'; color: #fbbf24; font-size: 9px; }
