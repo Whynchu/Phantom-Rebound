@@ -951,7 +951,7 @@ function update(dt,ts){
             score+=e.pts;kills++;
             sparks(e.x,e.y,e.col,14,95);
             spawnGreyDrops(e.x,e.y,ts);
-            if(UPG.finalForm && hp <= 3){ charge=Math.min(UPG.maxCharge,charge+0.5); }
+            if(UPG.finalForm && hp <= maxHp * 0.15){ charge=Math.min(UPG.maxCharge,charge+0.5); }
             enemies.splice(ei,1);
             break;
           }
@@ -1214,8 +1214,8 @@ function update(dt,ts){
         if(b.hitIds.has(e.eid)) continue;
         if(Math.hypot(b.x-e.x,b.y-e.y)<b.r+e.r){
           b.hitIds.add(e.eid);
-          const deadManThreshold = UPG.finalForm ? 3 : 1;
-          const deadManMult = (UPG.deadManTrigger && hp <= deadManThreshold) ? (UPG.finalForm ? 2 : 3) : 1;
+          const deadManThreshold = maxHp * 0.15;
+          const deadManMult = (UPG.deadManTrigger && hp <= deadManThreshold) ? (UPG.finalForm ? 2.5 : 2) : 1;
           const deadManPierce = UPG.deadManTrigger && hp <= deadManThreshold;
           const dmg = (b.crit ? 2 : 1) * b.dmg * deadManMult;
           e.hp-=dmg;
@@ -1229,7 +1229,7 @@ function update(dt,ts){
             // Corona: ring kills refund 1 charge
             if(b.isRing && UPG.corona){ charge=Math.min(UPG.maxCharge,charge+1); }
             // Final Form: low-HP kills grant charge
-            if(UPG.finalForm && hp <= 3){ charge=Math.min(UPG.maxCharge,charge+0.5); }
+            if(UPG.finalForm && hp <= maxHp * 0.15){ charge=Math.min(UPG.maxCharge,charge+0.5); }
             enemies.splice(j,1);
           }
           if(deadManPierce || b.pierceLeft>0){

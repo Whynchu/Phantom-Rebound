@@ -163,7 +163,7 @@ const BOONS = [
   {name:'Vampiric Return',tag:'SURVIVE',icon:'🩸',desc:'Killing blows restore 2 HP. Up to 3×/room.',apply(upg){if(upg.vampiric)return; upg.vampiric=true;}},
   {name:'Lifeline',tag:'SURVIVE',icon:'♾',desc:'Once per run: a killing blow leaves you at 1 HP.',apply(upg){if(upg.lifeline)return; upg.lifeline=true;},evolvesWith:['Berserker'],evolvedVersion:{name:'Last Stand',icon:'♾+',desc:'Lifeline triggers AND fires a full charge burst.',apply(upg){if(upg.lifeline)return; upg.lifeline=true; upg.lastStand=true;}}},
   {name:'Berserker',tag:'SURVIVE',icon:'🔴',desc:'Max HP→10, +3 SPS tiers, +30% speed. Exclusive.',isActive:upg=>upg.berserker,apply(upg,state){if(upg.berserker||upg.titanTier>0||upg.extraLifeTier>0||upg.regenTick>0)return; upg.berserker=true; state.maxHp=10; state.hp=Math.min(state.hp,10); upg.spsTier=Math.min(SPS_LADDER.length-1,upg.spsTier+3); upg.sps=SPS_LADDER[upg.spsTier]; upg.speedMult*=1.3;}},
-  {name:"Dead Man's Trigger",tag:'SURVIVE',icon:'☠',desc:'At 1 HP: ×3 damage and free pierce.',apply(upg){if(upg.deadManTrigger)return; upg.deadManTrigger=true;}},
+  {name:"Dead Man's Trigger",tag:'SURVIVE',icon:'☠',desc:'At ≤15% HP: ×2 damage and free pierce. Risk for reward.',apply(upg){if(upg.deadManTrigger)return; upg.deadManTrigger=true;}},
 ];
 
 function boonHasEffect(boon, upg, hp, maxHp) {
@@ -231,7 +231,7 @@ const LEGENDARY_SEQUENCES = [
     id: 'finalForm',
     check: (h) => ['Berserker',"Dead Man's Trigger"].every(n => h.includes(n)) &&
                   (h.includes('Lifeline') || h.includes('Last Stand')),
-    boon: { name:'FINAL FORM', tag:'LEGENDARY', icon:'💀', desc:"Dead Man activates at ≤3 HP but deals ×2 (not ×3). Kills at low HP grant +0.5 charge.",
+    boon: { name:'FINAL FORM', tag:'LEGENDARY', icon:'💀', desc:"Dead Man activates at ≤15% HP with ×2.5 damage. Kills grant +0.5 charge.",
       apply(upg){ upg.finalForm=true; } }
   },
   {
@@ -324,14 +324,14 @@ function getActiveBoonEntries(upg) {
   if(upg.vampiric) entries.push({icon:'🩸',name:'Vampiric Return',detail:'+2 HP per kill, max 3/room'});
   if(upg.lifeline) entries.push({icon: upg.lastStand?'♾+':'♾', name: upg.lastStand?'Last Stand':'Lifeline', detail:upg.lifelineUsed?'SPENT':'1× death save'});
   if(upg.berserker) entries.push({icon:'🔴',name:'Berserker',detail:'HP:10, +3 SPS, +30% spd'});
-  if(upg.deadManTrigger) entries.push({icon:'☠',name:"Dead Man's Trigger",detail:'At 1 HP: ×3 dmg + free pierce'});
+  if(upg.deadManTrigger) entries.push({icon:'☠',name:"Dead Man's Trigger",detail:'At ≤15% HP: ×2 dmg + free pierce'});
   if(upg.echoFire) entries.push({icon:'↺',name:'Echo Fire',detail:'Every 5th shot fires free echo'});
   if(upg.splitShot) entries.push({icon: upg.splitShotEvolved?'⋔+':'⋔', name: upg.splitShotEvolved?'Fracture':'Split Shot', detail:'Bullets split on wall bounce'});
   if(upg.volatileRounds) entries.push({icon: upg.volatileAllTargets?'💢+':'💢', name: upg.volatileAllTargets?'Chain Reaction':'Volatile Rounds', detail:'Pierce shots burst on final hit'});
   if(upg.aegisTitan) entries.push({icon:'🏛️',name:'AEGIS TITAN',detail:'8-way burst, ×2 reflect, shared cd'});
   if(upg.ghostFlow) entries.push({icon:'🌊',name:'GHOST FLOW',detail:'Speed-scaled absorb, ×2 near-miss'});
   if(upg.corona) entries.push({icon:'☀️',name:'CORONA',detail:'Ring pierce +1, kills refund charge'});
-  if(upg.finalForm) entries.push({icon:'💀',name:'FINAL FORM',detail:'Dead Man ≤3 HP ×2, kill→charge'});
+  if(upg.finalForm) entries.push({icon:'💀',name:'FINAL FORM',detail:'Dead Man ≤15% HP ×2.5, kill→charge'});
   if(upg.colossus) entries.push({icon:'⬡',name:'COLOSSUS',detail:'Hit→shockwave, halved titan slow'});
   if(upg.volatileOrbs) entries.push({icon:'💥',name:'Volatile Orbs',detail:'Orbs explode danger bullets'});
   if(upg.chargedOrbs) entries.push({icon:'⚡',name:'Charged Orbs',detail:'Orbs fire shot every 1.2s'});
