@@ -126,16 +126,32 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
     healRow.appendChild(rerollCard);
   }
 
-  if(pendingLegendary && onLegendaryAccept){
-    const legCard = document.createElement('div');
-    legCard.className = 'up-card legendary';
-    legCard.innerHTML = `<div class="up-name">${pendingLegendary.name}</div><div class="up-desc">${pendingLegendary.desc}</div><div class="up-tag" style="color:#fbbf24">LEGENDARY</div>`;
-    legCard.addEventListener('click', () => { panel.classList.add('off'); cardsContainer.innerHTML=''; onLegendaryAccept(pendingLegendary); });
-    healRow.appendChild(legCard);
-  }
-
   cardsContainer.appendChild(mainRow);
   cardsContainer.appendChild(healRow);
+
+  if(pendingLegendary && onLegendaryAccept){
+    const legRow = document.createElement('div');
+    legRow.className = 'up-legendary-row';
+    const legCard = document.createElement('div');
+    legCard.className = 'up-card legendary';
+    legCard.innerHTML = `
+      <div class="up-legendary-eyebrow">✦ LEGENDARY UNLOCKED ✦</div>
+      <div class="up-name">${pendingLegendary.name}</div>
+      <div class="up-desc">${pendingLegendary.desc}</div>
+      <div class="up-tag" style="color:#fbbf24">LEGENDARY</div>`;
+    legCard.addEventListener('click', () => {
+      if(panel.classList.contains('screen-leaving')) return;
+      panel.classList.add('screen-leaving');
+      window.setTimeout(() => {
+        panel.classList.add('off');
+        panel.classList.remove('screen-entering','screen-leaving');
+        cardsContainer.innerHTML='';
+        onLegendaryAccept(pendingLegendary);
+      }, BOON_FADE_MS);
+    });
+    legRow.appendChild(legCard);
+    cardsContainer.appendChild(legRow);
+  }
 
   panel.classList.remove('off', 'screen-leaving');
   panel.classList.add('screen-entering');

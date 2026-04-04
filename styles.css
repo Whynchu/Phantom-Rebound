@@ -547,3 +547,9 @@ body.app-ready #wrap { opacity: 1; }
 /* ── Phase 5: Legendary boon cards ───────────────────────────────────────── */
 .up-card.legendary { border-color: rgba(250,204,21,0.8); background: rgba(30,25,5,0.96); }
 .up-card.legendary .up-name { color: #fbbf24; }
+.up-legendary-row { display:flex; width:100%; }
+.up-legendary-row .up-card { flex:1; flex-direction:row; align-items:center; gap:12px; padding:12px 16px; text-align:left; }
+.up-legendary-row .up-name { font-size:13px; }
+.up-legendary-row .up-desc { font-size:9px; flex:1; }
+.up-legendary-row .up-tag { white-space:nowrap; }
+.up-legendary-eyebrow { font-size:7px; letter-spacing:.12em; color:#fbbf24; opacity:.7; text-align:center; width:100%; }
