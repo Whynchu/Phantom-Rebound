@@ -472,6 +472,9 @@ function showUpgrades() {
       const lState={hp,maxHp}; leg.apply(UPG,lState); hp=lState.hp; maxHp=lState.maxHp;
       legendaryOffered=true; pendingLegendary=null;
       syncRunChargeCapacity(); boonHistory.push(leg.name);
+      document.getElementById('s-up').classList.add('off');
+      startRoom(roomIndex+1);
+      gstate='playing'; lastT=performance.now(); raf=requestAnimationFrame(loop);
     },
     onSelect: (boon) => {
       const state = { hp, maxHp };
