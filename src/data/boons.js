@@ -142,8 +142,8 @@ const BOONS = [
   {name:'Protective Shield',tag:'SURVIVE',icon:'🛡️',desc:`Blocks one danger bullet then recharges. +1 per pick. Max ${MAX_SHIELD_TIER}.`,apply(upg){upg.shieldTier=Math.min(MAX_SHIELD_TIER,upg.shieldTier+1);}},
   {name:'Tempered Shield',tag:'SURVIVE',icon:'🛡️+',desc:'Shields become 2-stage: purple absorbs first hit.',apply(upg){if(upg.shieldTempered||upg.shieldTier===0)return; upg.shieldTempered=true;}},
   {name:'Mirror Shield',tag:'SURVIVE',icon:'🪞',desc:'Shields reflect absorbed bullets as output.',isActive:upg=>upg.shieldMirror,apply(upg){if(upg.shieldMirror||upg.shieldTier===0)return; upg.shieldMirror=true;}},
-  {name:'Shield Burst',tag:'SURVIVE',icon:'💠',desc:'When a shield breaks, fire a 4-way output burst.',apply(upg){if(upg.shieldBurst)return; upg.shieldBurst=true;},evolvesWith:['Mirror Shield'],evolvedVersion:{name:'Aegis Nova',icon:'💠+',desc:'Reflected bullets also trigger the 4-way burst.',apply(upg){if(upg.shieldBurst)return; upg.shieldBurst=true; upg.aegisNova=true;}}},
-  {name:'Barrier Pulse',tag:'SURVIVE',icon:'⬡',desc:'Shield break grants 1.5 charge + magnet pulse.',apply(upg){if(upg.barrierPulse)return; upg.barrierPulse=true;}},
+  {name:'Shield Burst',tag:'SURVIVE',icon:'💠',desc:'When a shield breaks, fire a 4-way output burst.',requires:upg=>upg.shieldTier>0,apply(upg){if(upg.shieldBurst)return; upg.shieldBurst=true;},evolvesWith:['Mirror Shield'],evolvedVersion:{name:'Aegis Nova',icon:'💠+',desc:'Reflected bullets also trigger the 4-way burst.',apply(upg){if(upg.shieldBurst)return; upg.shieldBurst=true; upg.aegisNova=true;}}},
+  {name:'Barrier Pulse',tag:'SURVIVE',icon:'⬡',desc:'Shield break grants 1.5 charge + magnet pulse.',requires:upg=>upg.shieldTier>0,apply(upg){if(upg.barrierPulse)return; upg.barrierPulse=true;}},
   {name:'Orbit Spheres',tag:'UTILITY',icon:'🔮',desc:'+1 orbiting sphere per pick. Max 5.',apply(upg){upg.orbitSphereTier=Math.min(5,upg.orbitSphereTier+1);}},
   {name:'Volatile Orbs',tag:'OFFENSE',icon:'💥',desc:'Orbit spheres explode on contact with a danger bullet, destroying it.',requires:upg=>upg.orbitSphereTier>0,apply(upg){if(upg.volatileOrbs)return; upg.volatileOrbs=true;}},
   {name:'Charged Orbs',tag:'OFFENSE',icon:'⚡',desc:'Each orbit sphere fires a small shot at the nearest enemy every 1.2s.',requires:upg=>upg.orbitSphereTier>0,apply(upg){if(upg.chargedOrbs)return; upg.chargedOrbs=true;}},
@@ -176,6 +176,15 @@ function boonHasEffect(boon, upg, hp, maxHp) {
 
 function getBoonWeight(boon, upg) {
   if(boon.name === 'Twin Lance') return 1 / (1 + upg.forwardShotTier * 1.35);
+  // Build-bias: boost modifier boons when the player already owns the base
+  const SHIELD_MODS = new Set(['Tempered Shield','Mirror Shield','Shield Burst','Aegis Nova','Barrier Pulse']);
+  const ORB_MODS    = new Set(['Volatile Orbs','Charged Orbs','Absorb Orbs']);
+  const BOUNCE_MODS = new Set(['Split Shot','Fracture']);
+  const PIERCE_MODS = new Set(['Volatile Rounds','Chain Reaction']);
+  if(SHIELD_MODS.has(boon.name) && upg.shieldTier > 0) return 3;
+  if(ORB_MODS.has(boon.name)    && upg.orbitSphereTier > 0) return 3;
+  if(BOUNCE_MODS.has(boon.name) && upg.bounceTier > 0) return 3;
+  if(PIERCE_MODS.has(boon.name) && upg.pierceTier > 0) return 3;
   return 1;
 }
 
