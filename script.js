@@ -51,13 +51,6 @@ function resize() {
 }
 bindResponsiveViewport(resize);
 
-// ── PHASE DASH INPUT ───────────────────────────────────────────────────────────
-document.addEventListener('keydown', (e) => {
-  if((e.code === 'Space' || e.code === 'KeyD') && roomPhase === 'fighting'){
-    // Phase Dash trigger (will be checked in game loop)
-    _phaseDashTrigger = true;
-  }
-});
 
 // ── PLAYER UPGRADES ───────────────────────────────────────────────────────────
 let UPG = getDefaultUpgrades();
@@ -141,7 +134,6 @@ let _orbCooldown = [];
 let boonHistory = [];
 let pendingLegendary = null;
 let legendaryOffered = false;
-let _phaseDashTrigger = false;
 
 // Room system
 let roomIndex = 0;
@@ -837,7 +829,6 @@ function init() {
   _chainMagnetTimer=0; _echoCounter=0; _vampiricRestoresThisRoom=0; _colossusShockwaveCd=0;
   _orbFireTimers=[]; _orbCooldown=[];
   boonHistory=[]; pendingLegendary=null; legendaryOffered=false;
-  _phaseDashTrigger = false;
   bullets=[];enemies=[];particles=[];
   resetJoystickState(joy);
   resetUpgrades();
@@ -890,29 +881,6 @@ function update(dt,ts){
 
   // Drift anchor when thumb wanders far past max radius
   if(roomPhase === 'fighting' || roomPhase === 'spawning') tickJoystick(joy, dt);
-
-  // Phase Dash: triggered by key input (Space or D)
-  if(UPG.phaseDash && _phaseDashTrigger && UPG.phaseDashCooldown <= 0 && (roomPhase === 'fighting' || roomPhase === 'spawning')){
-    _phaseDashTrigger = false;
-    UPG.isDashing = true;
-    player.invincible = 0.3;
-    UPG.phaseDashCooldown = 4000;
-    // Dash in current joystick direction (or forward if not moving)
-    const dashDir = joy.active && joy.mag > JOY_DEADZONE ? {dx: joy.dx, dy: joy.dy} : {dx: 1, dy: 0};
-    const dashSpd = 500;
-    player.x += dashDir.dx * dashSpd * 0.15;
-    player.y += dashDir.dy * dashSpd * 0.15;
-    player.x = Math.max(M + player.r, Math.min(W - M - player.r, player.x));
-    player.y = Math.max(M + player.r, Math.min(H - M - player.r, player.y));
-    sparks(player.x, player.y, '#a78bfa', 16, 200);
-    
-    // VOID WALKER: dash creates a void zone (part of legendary combo)
-    if(UPG.voidWalker){
-      UPG.voidZoneActive = true;
-      UPG.voidZoneTimer = ts + 2000;
-    }
-  }
-  _phaseDashTrigger = false;
 
   // ── Player movement — virtual joystick
   if(roomPhase !== 'intro' && joy.active && joy.mag > JOY_DEADZONE){
@@ -1555,6 +1523,25 @@ function update(dt,ts){
       }
       
       if(Math.hypot(b.x-player.x,b.y-player.y)<player.r+b.r-2){
+        // Phase Dash: auto-dodge when about to take a hit
+        if(UPG.phaseDash && UPG.phaseDashCooldown <= 0){
+          UPG.isDashing = true;
+          player.invincible = 0.3;
+          UPG.phaseDashCooldown = 4000;
+          // Dash away from the bullet
+          const awayAng = Math.atan2(player.y - b.y, player.x - b.x);
+          player.x += Math.cos(awayAng) * 75;
+          player.y += Math.sin(awayAng) * 75;
+          player.x = Math.max(M + player.r, Math.min(W - M - player.r, player.x));
+          player.y = Math.max(M + player.r, Math.min(H - M - player.r, player.y));
+          sparks(player.x, player.y, '#a78bfa', 16, 200);
+          if(UPG.voidWalker){
+            UPG.voidZoneActive = true;
+            UPG.voidZoneTimer = ts + 2000;
+          }
+          bullets.splice(i, 1);
+          continue;
+        }
         // Mirror Tide: reflect danger hit as output bullet
         if(UPG.mirrorTide && UPG.mirrorTideCooldown <= 0){
           UPG.mirrorTideCooldown = 2000;

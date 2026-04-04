@@ -210,7 +210,7 @@ const BOONS = [
   {name:'Mirror Tide',tag:'OFFENSE',icon:'🪞',desc:'Next danger hit reflects as an output bullet. 2s cooldown.',requires:upg=>upg.armorTier>0,apply(upg){if(upg.mirrorTide)return; upg.mirrorTide=true;}},
   
   // Phase 6: Active Abilities
-  {name:'Phase Dash',tag:'SURVIVE',icon:'💨',desc:'Press dedicated button to dash in any direction. 0.3s invincibility, 4s cooldown. Disable charge during dash.',apply(upg){if(upg.phaseDash)return; upg.phaseDash=true;}},
+  {name:'Phase Dash',tag:'SURVIVE',icon:'💨',desc:'Auto-dodge when hit: dash away from danger. 0.3s invincibility, 4s cooldown.',apply(upg){if(upg.phaseDash)return; upg.phaseDash=true;}},
   {name:'Overload',tag:'OFFENSE',icon:'⚡',desc:'Full charge auto-triggers: next shot ×2 damage, empties charge, 3s cooldown.',apply(upg){if(upg.overload)return; upg.overload=true;}},
   {name:'EMP Burst',tag:'SURVIVE',icon:'💥',desc:'At ≤30% HP + take damage: destroy all danger bullets. Once per room.',requires:upg=>upg.capacitorTier>0,apply(upg){if(upg.empBurst)return; upg.empBurst=true;}},
 ];
