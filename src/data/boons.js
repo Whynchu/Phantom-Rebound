@@ -85,6 +85,19 @@ function getDefaultUpgrades() {
     shieldMirror: false,
     shieldBurst: false,
     barrierPulse: false,
+    slipTier: 0, slipChargeGain: 0,
+    resonantAbsorb: false,
+    chainMagnetTier: 0,
+    overchargeVent: false,
+    gravityWell: false,
+    sliver: false,
+    vampiric: false,
+    lifeline: false, lifelineUsed: false,
+    berserker: false,
+    deadManTrigger: false,
+    echoFire: false,
+    splitShot: false,
+    volatileRounds: false,
   };
   syncChargeCapacity(upg);
   return upg;
@@ -123,6 +136,19 @@ const BOONS = [
   {name:'Barrier Pulse',tag:'SURVIVE',icon:'⬡',desc:'Shield break grants 1.5 charge + magnet pulse.',apply(upg){if(upg.barrierPulse)return; upg.barrierPulse=true;}},
   {name:'Orbit Spheres',tag:'UTILITY',icon:'🔮',desc:'+1 orbiting sphere per pick. Max 5.',apply(upg){upg.orbitSphereTier=Math.min(5,upg.orbitSphereTier+1);}},
   {name:'Dense Core',tag:'OFFENSE',icon:'◈',desc:'−2 charge cap, output bullets hit harder. Max 3.',apply(upg){if(upg.denseTier>=3)return; upg.denseTier++; upg.denseDamageMult=1+upg.denseTier*0.2; syncChargeCapacity(upg);}},
+  {name:'Echo Fire',tag:'OFFENSE',icon:'↺',desc:'Every 5th shot fires a free echo burst.',apply(upg){if(upg.echoFire)return; upg.echoFire=true;}},
+  {name:'Split Shot',tag:'OFFENSE',icon:'⋔',desc:'Output bullets split in two on first wall bounce.',apply(upg){if(upg.splitShot||upg.bounceTier===0)return; upg.splitShot=true;}},
+  {name:'Volatile Rounds',tag:'OFFENSE',icon:'💢',desc:'Piercing shots burst on their final target.',apply(upg){if(upg.volatileRounds||upg.pierceTier===0)return; upg.volatileRounds=true;}},
+  {name:'Slipstream',tag:'UTILITY',icon:'〜',desc:'Near-miss a danger bullet to gain charge. Max 3.',apply(upg){if(upg.slipTier>=3)return; upg.slipTier++; upg.slipChargeGain=getHyperbolicScale(upg.slipTier)*0.3;}},
+  {name:'Resonant Absorb',tag:'UTILITY',icon:'≋',desc:'Absorb 3 bullets in 1.5s — last gives 1.5× charge.',apply(upg){if(upg.resonantAbsorb)return; upg.resonantAbsorb=true;}},
+  {name:'Chain Magnet',tag:'UTILITY',icon:'⤥',desc:'Absorbing a bullet doubles pull range for 0.5s.',apply(upg){if(upg.chainMagnetTier>=2)return; upg.chainMagnetTier++;}},
+  {name:'Overcharge Vent',tag:'UTILITY',icon:'⬆',desc:'Firing at full charge gives +40% bullet damage.',apply(upg){if(upg.overchargeVent)return; upg.overchargeVent=true;}},
+  {name:'Gravity Well',tag:'UTILITY',icon:'⊙',desc:'Danger bullets within 80px move 30% slower.',apply(upg){if(upg.gravityWell)return; upg.gravityWell=true;}},
+  {name:'Sliver',tag:'SURVIVE',icon:'◌',desc:'At ≤25% HP: +30% speed, −25% size.',apply(upg){if(upg.sliver)return; upg.sliver=true;}},
+  {name:'Vampiric Return',tag:'SURVIVE',icon:'🩸',desc:'Killing blows restore 2 HP. Up to 3×/room.',apply(upg){if(upg.vampiric)return; upg.vampiric=true;}},
+  {name:'Lifeline',tag:'SURVIVE',icon:'♾',desc:'Once per run: a killing blow leaves you at 1 HP.',apply(upg){if(upg.lifeline)return; upg.lifeline=true;}},
+  {name:'Berserker',tag:'SURVIVE',icon:'🔴',desc:'Max HP→10, +3 SPS tiers, +30% speed. Exclusive.',apply(upg,state){if(upg.berserker||upg.titanTier>0||upg.extraLifeTier>0||upg.regenTick>0)return; upg.berserker=true; state.maxHp=10; state.hp=Math.min(state.hp,10); upg.spsTier=Math.min(SPS_LADDER.length-1,upg.spsTier+3); upg.sps=SPS_LADDER[upg.spsTier]; upg.speedMult*=1.3;}},
+  {name:"Dead Man's Trigger",tag:'SURVIVE',icon:'☠',desc:'At 1 HP: ×3 damage and free pierce.',apply(upg){if(upg.deadManTrigger)return; upg.deadManTrigger=true;}},
 ];
 
 function boonHasEffect(boon, upg, hp, maxHp) {
@@ -203,6 +229,19 @@ function getActiveBoonEntries(upg) {
   if(upg.barrierPulse) entries.push({ icon:'⬡', name:'Barrier Pulse', detail:'+1.5 charge + magnet on break' });
   if(upg.orbitSphereTier > 0) entries.push({ icon:'🔮', name:'Orbit Spheres', detail:`${upg.orbitSphereTier} sphere${upg.orbitSphereTier === 1 ? '' : 's'}` });
   if(upg.denseTier > 0) entries.push({ icon:'◈', name:'Dense Core', detail:`Tier ${upg.denseTier} — ×${upg.denseDamageMult.toFixed(1)} dmg, −${upg.denseTier*2} cap` });
+  if(upg.slipTier>0) entries.push({icon:'〜',name:'Slipstream',detail:`+${upg.slipChargeGain.toFixed(2)} charge/near-miss`});
+  if(upg.resonantAbsorb) entries.push({icon:'≋',name:'Resonant Absorb',detail:'Combo absorbs give 1.5× charge'});
+  if(upg.chainMagnetTier>0) entries.push({icon:'⤥',name:'Chain Magnet',detail:`${(500+250*(upg.chainMagnetTier-1))}ms double pull`});
+  if(upg.overchargeVent) entries.push({icon:'⬆',name:'Overcharge Vent',detail:'+40% dmg at full charge'});
+  if(upg.gravityWell) entries.push({icon:'⊙',name:'Gravity Well',detail:'Slows nearby danger bullets 30%'});
+  if(upg.sliver) entries.push({icon:'◌',name:'Sliver',detail:'Low HP speed+size boost'});
+  if(upg.vampiric) entries.push({icon:'🩸',name:'Vampiric Return',detail:'+2 HP per kill, max 3/room'});
+  if(upg.lifeline) entries.push({icon:'♾',name:'Lifeline',detail:upg.lifelineUsed?'SPENT':'1× death save'});
+  if(upg.berserker) entries.push({icon:'🔴',name:'Berserker',detail:'HP:10, +3 SPS, +30% spd'});
+  if(upg.deadManTrigger) entries.push({icon:'☠',name:"Dead Man's Trigger",detail:'At 1 HP: ×3 dmg + free pierce'});
+  if(upg.echoFire) entries.push({icon:'↺',name:'Echo Fire',detail:'Every 5th shot fires free echo'});
+  if(upg.splitShot) entries.push({icon:'⋔',name:'Split Shot',detail:'Bullets split on wall bounce'});
+  if(upg.volatileRounds) entries.push({icon:'💢',name:'Volatile Rounds',detail:'Pierce shots burst on final hit'});
   return entries;
 }
 

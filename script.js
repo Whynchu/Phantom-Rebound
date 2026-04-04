@@ -122,6 +122,11 @@ let damagelessRooms = 0;
 let tookDamageThisRoom = false;
 let lastStallSpawnAt = -99999;
 let _barrierPulseTimer = 0;
+let _slipCooldown = 0;
+let _absorbComboCount = 0, _absorbComboTimer = 0;
+let _chainMagnetTimer = 0;
+let _echoCounter = 0;
+let _vampiricRestoresThisRoom = 0;
 
 // Room system
 let roomIndex = 0;
@@ -217,6 +222,7 @@ function buildSpawnQueue(roomDef) {
 
 function startRoom(idx) {
   tookDamageThisRoom = false;
+  _vampiricRestoresThisRoom = 0;
   roomIndex = idx;
   roomPurpleShooterAssigned = false;
   const def = getRoomDef(idx);
@@ -378,6 +384,7 @@ function firePlayer(tx,ty) {
   const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1);
   const lifeMs = PLAYER_SHOT_LIFE_MS * (UPG.shotLifeMult || 1);
   const now = performance.now();
+  const overchargeBonus = (UPG.overchargeVent && charge >= UPG.maxCharge) ? 1.4 : 1;
 
   for(const shot of angs.slice(0, availableShots)) {
     const a = shot.angle;
@@ -393,13 +400,26 @@ function firePlayer(tx,ty) {
       pierceLeft: UPG.pierceTier,
       homing: UPG.homingTier>0,
       crit,
-      dmg: baseDmg,
+      dmg: baseDmg * overchargeBonus,
       expireAt: now + lifeMs,
       hitIds: new Set(),
     });
   }
   charge=Math.max(0,charge-availableShots);
   sparks(player.x,player.y,C.green,4 + Math.min(4, availableShots),55);
+  if(UPG.echoFire){
+    _echoCounter++;
+    if(_echoCounter>=5){
+      _echoCounter=0;
+      const eNow=performance.now();
+      for(const shot of angs.slice(0,availableShots)){
+        const a=shot.angle;
+        const sideX=Math.cos(a+Math.PI/2)*shot.offset;
+        const sideY=Math.sin(a+Math.PI/2)*shot.offset;
+        bullets.push({x:player.x+sideX,y:player.y+sideY,vx:Math.cos(a)*bspd,vy:Math.sin(a)*bspd,state:'output',r:baseRadius,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:UPG.homingTier>0,crit:false,dmg:baseDmg,expireAt:eNow+lifeMs,hitIds:new Set()});
+      }
+    }
+  }
 }
 
 function sparks(x,y,col,n=6,spd=80) {
@@ -632,6 +652,8 @@ function init() {
   player={x:cv.width/2,y:cv.height/2,r:9,vx:0,vy:0,invincible:0,distort:0,deadAt:0,popAt:0,deadPop:false,deadPulse:0};
   player.shields=[];
   _barrierPulseTimer=0;
+  _slipCooldown=0; _absorbComboCount=0; _absorbComboTimer=0;
+  _chainMagnetTimer=0; _echoCounter=0; _vampiricRestoresThisRoom=0;
   bullets=[];enemies=[];particles=[];
   resetJoystickState(joy);
   resetUpgrades();
@@ -707,6 +729,9 @@ function update(dt,ts){
     }
   }
   if(_barrierPulseTimer>0) _barrierPulseTimer-=dt*1000;
+  if(_absorbComboTimer>0){ _absorbComboTimer-=dt*1000; if(_absorbComboTimer<=0){_absorbComboCount=0;} }
+  if(_chainMagnetTimer>0) _chainMagnetTimer-=dt*1000;
+  if(_slipCooldown>0) _slipCooldown-=dt*1000;
 
   // ── Room state machine
   roomTimer += dt*1000;
@@ -810,7 +835,10 @@ function update(dt,ts){
       if(d<player.r+e.r+2 && player.invincible<=0){
         hp-=18; player.invincible=1.0; player.distort=.4;
         sparks(player.x,player.y,'#f472b6',10,90);
-        if(hp<=0){gameOver();return;}
+        if(hp<=0){
+          if(UPG.lifeline && !UPG.lifelineUsed){ UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,'#f0abfc',16,100); }
+          else { gameOver(); return; }
+        }
       }
     } else {
       const dx=player.x-e.x, dy=player.y-e.y, d=Math.hypot(dx,dy);
@@ -883,7 +911,7 @@ function update(dt,ts){
   }
 
   // ── Bullets
-  const absorbR = player.r + 5 + UPG.absorbRange + (_barrierPulseTimer > 0 ? UPG.absorbRange + 40 : 0);
+  const absorbR = player.r + 5 + UPG.absorbRange + (_barrierPulseTimer > 0 ? UPG.absorbRange + 40 : 0) + (_chainMagnetTimer > 0 ? UPG.absorbRange + 30 : 0);
   const decayMS = DECAY_BASE + UPG.decayBonus;
 
   for(let i=bullets.length-1;i>=0;i--){
@@ -901,6 +929,11 @@ function update(dt,ts){
         const maxSp=230*Math.min(2.0,UPG.shotSpd)*1.2;
         if(sp>maxSp){b.vx=b.vx/sp*maxSp;b.vy=b.vy/sp*maxSp;}
       }
+    }
+
+    if(UPG.gravityWell && b.state==='danger'){
+      const gdist=Math.hypot(b.x-player.x,b.y-player.y);
+      if(gdist<80){ b.vx*=Math.pow(0.70,dt*60); b.vy*=Math.pow(0.70,dt*60); }
     }
 
     b.x+=b.vx*dt; b.y+=b.vy*dt;
@@ -927,8 +960,18 @@ function update(dt,ts){
           sparks(b.x,b.y,C.grey,4,35);
         }
       } else if(b.state==='output'){
-        if(b.bounceLeft>0){ b.bounceLeft--; }
-        else { bullets.splice(i,1); continue; }
+        if(b.bounceLeft>0){
+          b.bounceLeft--;
+          if(UPG.splitShot && !b.hasSplit){
+            b.hasSplit=true;
+            const splitNow=performance.now();
+            for(const delta of [-0.35,0.35]){
+              const sa=Math.atan2(b.vy,b.vx)+delta;
+              const sp=Math.hypot(b.vx,b.vy);
+              bullets.push({x:b.x,y:b.y,vx:Math.cos(sa)*sp,vy:Math.sin(sa)*sp,state:'output',r:b.r*0.8,decayStart:null,bounceLeft:0,pierceLeft:b.pierceLeft,homing:b.homing,crit:b.crit,dmg:b.dmg*0.7,expireAt:splitNow+2000,hitIds:new Set(),hasSplit:true});
+            }
+          }
+        } else { bullets.splice(i,1); continue; }
       }
     }
 
@@ -937,6 +980,19 @@ function update(dt,ts){
       b.vx*=Math.pow(.97,dt*60); b.vy*=Math.pow(.97,dt*60);
       if(Math.hypot(b.x-player.x,b.y-player.y)<absorbR+b.r){
         charge=Math.min(UPG.maxCharge,charge+UPG.absorbValue);
+        // Resonant Absorb
+        if(UPG.resonantAbsorb){
+          _absorbComboTimer=1500;
+          _absorbComboCount++;
+          if(_absorbComboCount>=3){
+            charge=Math.min(UPG.maxCharge, charge + UPG.absorbValue * 0.5);
+            _absorbComboCount=0;
+          }
+        }
+        // Chain Magnet
+        if(UPG.chainMagnetTier>0){
+          _chainMagnetTimer=500+(UPG.chainMagnetTier-1)*250;
+        }
         sparks(b.x,b.y,C.ghost,5,45);
         bullets.splice(i,1);continue;
       }
@@ -1001,8 +1057,19 @@ function update(dt,ts){
         }
         sparks(player.x,player.y,C.danger,10,85);
         bullets.splice(i,1);
-        if(hp<=0){gameOver();return;}
+        if(hp<=0){
+          if(UPG.lifeline && !UPG.lifelineUsed){ UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,'#f0abfc',16,100); }
+          else { gameOver(); return; }
+        }
         continue;
+      }
+      // Slipstream: near-miss detection
+      if(UPG.slipTier>0 && _slipCooldown<=0){
+        const dist=Math.hypot(b.x-player.x,b.y-player.y);
+        if(dist < player.r+b.r+10 && dist >= player.r+b.r-2){
+          charge=Math.min(UPG.maxCharge,charge+UPG.slipChargeGain);
+          _slipCooldown=150;
+        }
       }
     }
 
@@ -1013,7 +1080,9 @@ function update(dt,ts){
         if(b.hitIds.has(e.eid)) continue;
         if(Math.hypot(b.x-e.x,b.y-e.y)<b.r+e.r){
           b.hitIds.add(e.eid);
-          const dmg = (b.crit ? 2 : 1) * b.dmg;
+          const deadManMult = (UPG.deadManTrigger && hp === 1) ? 3 : 1;
+          const deadManPierce = UPG.deadManTrigger && hp === 1;
+          const dmg = (b.crit ? 2 : 1) * b.dmg * deadManMult;
           e.hp-=dmg;
           sparks(b.x,b.y,b.crit?'#7dff9b':C.green,b.crit?8:5,b.crit?70:55);
           if(e.hp<=0){
@@ -1021,14 +1090,22 @@ function update(dt,ts){
             sparks(e.x,e.y,e.col,14,95);
             // Death bullets scatter as grey
             spawnGreyDrops(e.x,e.y,ts);
+            if(UPG.vampiric && _vampiricRestoresThisRoom < 3){ hp=Math.min(maxHp,hp+2); _vampiricRestoresThisRoom++; }
             enemies.splice(j,1);
           }
-          if(b.pierceLeft>0){
-            b.pierceLeft--;
-          } else {
-            removeBullet=true;
-            break;
-          }
+          if(deadManPierce || b.pierceLeft>0){
+            if(!deadManPierce){
+              b.pierceLeft--;
+              if(b.pierceLeft===0 && UPG.volatileRounds){
+                const vNow=performance.now();
+                for(let va=0;va<4;va++){
+                  const vang=va*Math.PI/2;
+                  bullets.push({x:b.x,y:b.y,vx:Math.cos(vang)*180,vy:Math.sin(vang)*180,state:'output',r:b.r*0.7,decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:b.dmg*0.5,expireAt:vNow+1500,hitIds:new Set()});
+                }
+                sparks(b.x,b.y,C.green,6,60);
+              }
+            }
+          } else { removeBullet=true; break; }
         }
       }
       if(removeBullet){bullets.splice(i,1);continue;}
