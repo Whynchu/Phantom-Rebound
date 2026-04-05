@@ -3,11 +3,16 @@
  */
 
 import { VERSION } from './version.js';
+import { getPlayerColorScheme } from './colorScheme.js';
 
 const C = {
   bg:'#161616', grid:'rgba(255,255,255,0.025)', border:'rgba(255,255,255,0.1)',
-  danger:'#60a5fa', dangerCore:'rgba(200,230,255,0.9)',
-  grey:'#888', green:'#4ade80', ghost:'#b8ffcc', siphon:'#a78bfa',
+  grey:'#888', siphon:'#a78bfa',
+  get danger() { return getPlayerColorScheme().dangerHex; },
+  get dangerCore() { return `rgba(${this.danger === '#60a5fa' ? '200,230,255' : this.danger === '#f87171' ? '248,113,113' : '255,200,200'},0.9)`; },
+  get green() { return getPlayerColorScheme().hex; },
+  get ghost() { return getPlayerColorScheme().light; },
+  get dark() { return getPlayerColorScheme().dark; },
 };
 
 const ROOM_SCRIPTS = [
