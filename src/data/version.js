@@ -1,4 +1,4 @@
-const VERSION = { num: '1.15.0', label: 'Phase 7: Player Color Customization' };
+const VERSION = { num: '1.15.1', label: 'Color Overhaul' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;
