@@ -78,19 +78,32 @@ function setPlayerColor(colorKey) {
   activePlayerColor = colorKey;
   
   // Update CSS variables for DOM elements (HUD, buttons, etc.)
-  const root = document.documentElement;
-  const scheme = PLAYER_COLORS[activePlayerColor];
-  root.style.setProperty('--player-accent', scheme.hex);
-  root.style.setProperty('--player-accent-light', scheme.light);
-  root.style.setProperty('--player-accent-dark', scheme.dark);
-  root.style.setProperty('--player-danger', scheme.dangerHex);
+  // Defer DOM access until document is ready
+  if (document.documentElement) {
+    const scheme = PLAYER_COLORS[activePlayerColor];
+    document.documentElement.style.setProperty('--player-accent', scheme.hex);
+    document.documentElement.style.setProperty('--player-accent-light', scheme.light);
+    document.documentElement.style.setProperty('--player-accent-dark', scheme.dark);
+    document.documentElement.style.setProperty('--player-danger', scheme.dangerHex);
+  }
   
   // Persist to localStorage
-  localStorage.setItem('phantom-player-color', colorKey);
+  try {
+    localStorage.setItem('phantom-player-color', colorKey);
+  } catch (e) {
+    // localStorage might not be available in some contexts
+    console.warn('Could not save color to localStorage:', e);
+  }
 }
 
 function getPlayerColorScheme() {
-  return PLAYER_COLORS[activePlayerColor];
+  const scheme = PLAYER_COLORS[activePlayerColor];
+  // Fallback to green if somehow activePlayerColor is invalid
+  if (!scheme) {
+    console.warn(`Color scheme not found for '${activePlayerColor}', falling back to green`);
+    return PLAYER_COLORS['green'];
+  }
+  return scheme;
 }
 
 function getPlayerColor() {

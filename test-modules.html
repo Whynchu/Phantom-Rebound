@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script>
+window.onerror = function(msg, url, lineNo, columnNo, error) {
+  console.error('ERROR: ' + msg + ' at ' + url + ':' + lineNo);
+  console.error(error);
+  return false;
+};
+</script>
+</head>
+<body>
+<script type="module">
+try {
+  console.log('Loading colorScheme...');
+  import('./src/data/colorScheme.js').then(m => {
+    console.log('✓ colorScheme loaded');
+    console.log('Exports:', Object.keys(m));
+  }).catch(e => {
+    console.error('✗ colorScheme failed:', e);
+  });
+  
+  console.log('Loading gameData...');
+  import('./src/data/gameData.js').then(m => {
+    console.log('✓ gameData loaded');
+    console.log('Exports:', Object.keys(m));
+  }).catch(e => {
+    console.error('✗ gameData failed:', e);
+  });
+} catch(e) {
+  console.error('Module load error:', e);
+}
+</script>
+</body>
+</html>
