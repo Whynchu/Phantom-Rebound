@@ -6,7 +6,7 @@ import { fetchRemoteLeaderboard, submitRemoteScore } from './src/platform/leader
 import { bindResponsiveViewport } from './src/platform/viewport.js';
 import { showBoonSelection } from './src/ui/boonSelection.js';
 import { renderVersionTag } from './src/ui/versionTag.js';
-import { loadPlayerColorFromStorage } from './src/data/colorScheme.js';
+import { loadPlayerColorFromStorage, getPlayerColor } from './src/data/colorScheme.js';
 import { renderColorSelector } from './src/ui/colorSelector.js';
 
 renderVersionTag(VERSION);
@@ -646,6 +646,8 @@ function showUpgrades() {
       maxHp = state.maxHp;
       syncPlayerScale();
       boonHistory.push(evolvedBoon.name);
+      // Track boon selection for leaderboard
+      UPG.boonSelectionOrder.push(evolvedBoon.name);
       if(!legendaryOffered){
         const leg = checkLegendarySequences(boonHistory, UPG);
         if(leg) pendingLegendary=leg;
@@ -737,7 +739,22 @@ function renderLeaderboard() {
   for(let i=0;i<rows.length;i++){
     const row = rows[i];
     const li = document.createElement('li');
-    const hasBoons = Array.isArray(row.boons) && row.boons.length > 0;
+    
+    // Handle backwards compatibility: extract boon data
+    const boonData = Array.isArray(row.boons) 
+      ? { picks: row.boons, color: 'green', order: '' }
+      : (row.boons || { picks: [], color: 'green', order: '' });
+    const hasBoons = boonData.picks && boonData.picks.length > 0;
+    const playerColor = boonData.color || 'green';
+    
+    // Color-coded border based on player color
+    const colorMap = {
+      green: '#4ade80', blue: '#60a5fa', purple: '#c084fc', pink: '#f472b6',
+      gold: '#fbbf24', red: '#f87171', cyan: '#67e8f9', orange: '#fb923c'
+    };
+    const borderColor = colorMap[playerColor] || '#4ade80';
+    
+    li.style.borderLeft = `3px solid ${borderColor}`;
     li.innerHTML = `
       <span class="lb-rank">#${i + 1}</span>
       <span class="lb-name">${row.name} · R${row.room}</span>
@@ -745,7 +762,7 @@ function renderLeaderboard() {
       ${hasBoons ? '<button class="lb-boons-btn" type="button" title="View run loadout">📋</button>' : '<span></span>'}
     `;
     if(hasBoons) {
-      li.querySelector('.lb-boons-btn').addEventListener('click', () => showLbBoonsPopup(row.name, row.boons));
+      li.querySelector('.lb-boons-btn').addEventListener('click', () => showLbBoonsPopup(row.name, boonData.picks));
     }
     lbList.appendChild(li);
   }
@@ -781,13 +798,15 @@ async function refreshLeaderboardView() {
 
 function pushLeaderboardEntry() {
   const boons = getActiveBoonEntries(UPG);
+  const playerColor = getPlayerColor();
+  const boonOrder = (UPG.boonSelectionOrder || []).join(',');
   const entry = {
     name: playerName,
     score,
     room: roomIndex + 1,
     ts: Date.now(),
     version: VERSION.num,
-    boons,
+    boons: { picks: boons, color: playerColor, order: boonOrder },
   };
   leaderboard.push(entry);
   leaderboard.sort((a,b)=>b.score-a.score || b.ts-a.ts);
@@ -798,7 +817,7 @@ function pushLeaderboardEntry() {
     score: entry.score,
     room: entry.room,
     gameVersion: VERSION.num,
-    boons,
+    boons: entry.boons,
   }).then(() => {
     if(lbScope !== 'personal' || playerName === entry.name) {
       refreshLeaderboardView();

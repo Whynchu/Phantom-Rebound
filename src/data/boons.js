@@ -135,6 +135,7 @@ function getDefaultUpgrades() {
     overload: false, overloadActive: false, overloadCooldown: 0,
     empBurst: false, empBurstUsed: false,
     voidWalker: false, voidZoneActive: false, voidZoneTimer: 0,
+    boonSelectionOrder: [],
   };
   syncChargeCapacity(upg);
   return upg;
