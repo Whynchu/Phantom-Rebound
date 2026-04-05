@@ -2292,9 +2292,11 @@ function setPlayerName(v, { syncInputs = false } = {}){
 nameInputStart.addEventListener('input', (e)=>setPlayerName(e.target.value));
 nameInputGo.addEventListener('input', (e)=>setPlayerName(e.target.value));
 
+// Initialize color picker on start screen
+renderColorSelector('color-picker');
+
 // Start game from name entry screen
-document.getElementById('btn-go').onclick=()=>{
-  renderColorSelector('color-picker');
+document.getElementById('btn-start').onclick=()=>{
   setPlayerName(nameInputStart.value, { syncInputs: true });
   document.getElementById('s-start').classList.add('off');
   init();gstate='playing';lastT=performance.now();raf=requestAnimationFrame(loop);
