@@ -81,76 +81,53 @@ body.app-loading #wrap { opacity: 0; }
 body.app-ready #wrap { opacity: 1; }
 #btn-patch-notes {
   position: static;
-  padding: 6px 14px;
+  padding: 6px 12px;
   font-size: 8px;
   letter-spacing: .18em;
   opacity: .94;
 }
 #patch-notes-panel {
-  position: fixed;
-  inset: 0;
-  z-index: 125;
-  background: rgba(0,0,0,0.58);
-  backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: calc(env(safe-area-inset-top) + 18px) 16px calc(env(safe-area-inset-bottom) + 18px);
-}
-#patch-notes-panel.off { display: none; }
-#patch-notes-card {
-  width: min(388px, calc(100vw - 32px));
-  max-height: min(760px, calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 44px));
-  background: rgba(22,22,22,0.98);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  box-shadow: 0 0 40px rgba(0,0,0,0.45);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  padding: 26px 24px 20px;
-  overflow: hidden;
-}
-#patch-notes-toolbar {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-shrink: 0;
+  z-index: 13;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 18px 18px 16px;
 }
 .patch-notes-title {
   font-size: 34px;
 }
 .patch-notes-current {
   max-width: 100%;
+  font-size: 11px;
+  line-height: 1.65;
 }
-#patch-notes-list {
+#patch-notes-list-shell {
   width: 100%;
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
   overflow: auto;
   touch-action: pan-y;
-  padding-right: 4px;
-  text-align: left;
+  padding-right: 2px;
 }
-#patch-notes-list::-webkit-scrollbar {
+#patch-notes-list-shell::-webkit-scrollbar {
   width: 6px;
 }
-#patch-notes-list::-webkit-scrollbar-thumb {
+#patch-notes-list-shell::-webkit-scrollbar-thumb {
   background: rgba(255,255,255,0.08);
   border-radius: 999px;
+}
+#patch-notes-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
 }
 .patch-note-entry {
   width: 100%;
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px 14px 12px;
+  border-radius: 6px;
+  padding: 12px 12px 11px;
 }
 .patch-note-meta {
   display: flex;
@@ -161,12 +138,12 @@ body.app-ready #wrap { opacity: 1; }
 }
 .patch-note-version {
   font-family: 'Syne', sans-serif;
-  font-size: 18px;
+  font-size: 17px;
   color: #fff;
 }
 .patch-note-label {
   font-size: 8px;
-  letter-spacing: .18em;
+  letter-spacing: .14em;
   text-transform: uppercase;
   color: var(--accent);
   text-align: right;
@@ -174,34 +151,32 @@ body.app-ready #wrap { opacity: 1; }
 .patch-note-copy {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 .patch-note-paragraph {
-  font-size: 10px;
-  line-height: 1.65;
+  font-size: 9px;
+  line-height: 1.55;
   color: var(--muted);
 }
 .patch-note-highlights {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 .patch-note-highlight {
   font-size: 9px;
-  line-height: 1.55;
+  line-height: 1.45;
   color: var(--text);
 }
 #patch-notes-archive-note {
   width: 100%;
-  flex-shrink: 0;
   font-size: 9px;
-  line-height: 1.5;
+  line-height: 1.45;
   color: var(--dim);
   text-align: center;
 }
 #btn-patch-notes-close {
-  flex-shrink: 0;
-  align-self: auto;
+  align-self: center;
 }
 /* TOP HUD */
 #top-hud {
@@ -704,57 +679,40 @@ body.app-ready #wrap { opacity: 1; }
   .eyebrow { letter-spacing: .2em; }
   .btn-menu-sub { padding: 8px 18px; font-size: 9px; }
   #btn-patch-notes {
-    padding: 5px 12px;
+    padding: 5px 10px;
     font-size: 7px;
   }
   #patch-notes-panel {
-    padding: calc(env(safe-area-inset-top) + 12px) 12px calc(env(safe-area-inset-bottom) + 12px);
-  }
-  #patch-notes-card {
-    width: min(340px, calc(100vw - 24px));
-    max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);
-    gap: 10px;
     padding: 16px 14px 14px;
-  }
-  #patch-notes-toolbar {
-    gap: 6px;
+    gap: 8px;
   }
   .patch-notes-title {
-    font-size: 24px;
+    font-size: 28px;
   }
   .patch-notes-current {
     font-size: 10px;
     line-height: 1.55;
   }
-  #patch-notes-list {
-    gap: 8px;
-  }
   .patch-note-entry {
-    padding: 10px 10px 9px;
+    padding: 11px 11px 10px;
   }
   .patch-note-version {
-    font-size: 15px;
+    font-size: 16px;
   }
   .patch-note-label {
-    font-size: 7px;
+    font-size: 8px;
     letter-spacing: .14em;
   }
-  .patch-note-copy {
-    gap: 8px;
-  }
   .patch-note-paragraph {
-    font-size: 8.5px;
+    font-size: 9px;
     line-height: 1.5;
   }
-  .patch-note-highlights {
-    gap: 5px;
-  }
   .patch-note-highlight {
-    font-size: 8px;
+    font-size: 9px;
     line-height: 1.45;
   }
   #patch-notes-archive-note {
-    font-size: 8px;
+    font-size: 9px;
     line-height: 1.4;
   }
 }

@@ -6,7 +6,7 @@
 <title>Phantom Rebound</title>
 <link rel="icon" href="data:,">
 <script>
-window.__APP_BUILD__ = '1.16.9';
+window.__APP_BUILD__ = '1.16.10';
 (function () {
   const currentBuild = window.__APP_BUILD__;
   const reloadKey = 'phantom-rebound-build-reload';
@@ -26,22 +26,9 @@ window.__APP_BUILD__ = '1.16.9';
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=1.16.9">
+<link rel="stylesheet" href="styles.css?v=1.16.10">
 </head>
 <body class="app-loading">
-<div id="patch-notes-panel" class="off" aria-hidden="true">
-  <div id="patch-notes-card" role="dialog" aria-modal="true" aria-labelledby="patch-notes-title">
-    <div id="patch-notes-toolbar">
-      <div class="eyebrow">// Release Archive</div>
-      <button class="btn btn-secondary btn-up-sub" id="btn-patch-notes-close" type="button">Back</button>
-    </div>
-    <div class="big-title patch-notes-title" id="patch-notes-title">Patch Notes</div>
-    <div class="screen-body patch-notes-current" id="patch-notes-current"></div>
-    <div class="rule-line"></div>
-    <div id="patch-notes-list"></div>
-    <div id="patch-notes-archive-note"></div>
-  </div>
-</div>
 <div id="wrap">
   <div id="top-hud">
     <div id="health-dots"></div>
@@ -55,8 +42,21 @@ window.__APP_BUILD__ = '1.16.9';
     <div id="room-clear"><div id="room-clear-txt">ROOM CLEAR</div></div>
     <div id="room-intro"><div id="room-intro-txt">READY?</div></div>
 
+    <div class="screen off" id="patch-notes-panel" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="patch-notes-title">
+      <div class="eyebrow">// Release Archive</div>
+      <div class="big-title patch-notes-title" id="patch-notes-title">Patch Notes</div>
+      <div class="screen-body patch-notes-current" id="patch-notes-current"></div>
+      <div class="rule-line"></div>
+      <div id="patch-notes-list-shell">
+        <div id="patch-notes-list"></div>
+      </div>
+      <div id="patch-notes-archive-note"></div>
+      <div class="rule-line"></div>
+      <button class="btn btn-secondary btn-up-sub" id="btn-patch-notes-close" type="button">Back</button>
+    </div>
+
     <div class="screen" id="s-start">
-      <div class="eyebrow" id="version-tag">// prototype v1.16.9 - PATCH NOTES SIZE FIX</div>
+      <div class="eyebrow" id="version-tag">// prototype v1.16.10 - PATCH NOTES SCREEN FIT</div>
       <div class="big-title">Phantom<span>Rebound</span></div>
       <div class="rule-line"></div>
       <div class="name-row">
@@ -159,6 +159,6 @@ window.__APP_BUILD__ = '1.16.9';
   </div>
 </div>
 
-<script type="module" src="script.js?v=1.16.9"></script>
+<script type="module" src="script.js?v=1.16.10"></script>
 </body>
 </html>
