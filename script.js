@@ -7,6 +7,7 @@ import { bindResponsiveViewport } from './src/platform/viewport.js';
 import { showBoonSelection } from './src/ui/boonSelection.js';
 import { renderVersionTag } from './src/ui/versionTag.js';
 import { loadPlayerColorFromStorage } from './src/data/colorScheme.js';
+import { renderColorSelector } from './src/ui/colorSelector.js';
 
 renderVersionTag(VERSION);
 
@@ -2274,7 +2275,8 @@ function setPlayerName(v, { syncInputs = false } = {}){
 nameInputStart.addEventListener('input', (e)=>setPlayerName(e.target.value));
 nameInputGo.addEventListener('input', (e)=>setPlayerName(e.target.value));
 
-document.getElementById('btn-start').onclick=()=>{
+// Initialize color picker on start screen
+renderColorSelector('color-picker');
   setPlayerName(nameInputStart.value, { syncInputs: true });
   document.getElementById('s-start').classList.add('off');
   init();gstate='playing';lastT=performance.now();raf=requestAnimationFrame(loop);
