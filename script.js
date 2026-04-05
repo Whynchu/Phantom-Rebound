@@ -1,5 +1,5 @@
 import { C, ROOM_SCRIPTS, BOSS_ROOMS, DECAY_BASE, M, VERSION } from './src/data/gameData.js';
-import { getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences } from './src/data/boons.js';
+import { getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';
 import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoystickControls, tickJoystick } from './src/input/joystick.js';
 import { fetchRemoteLeaderboard, submitRemoteScore } from './src/platform/leaderboardService.js';
@@ -372,6 +372,20 @@ function bulletSpeedScale() {
   return 0.68 + Math.min(roomIndex, 10) * 0.032;
 }
 
+function getLateBloomMods(room = roomIndex || 0) {
+  const growth = getLateBloomGrowth(room);
+  switch(UPG.lateBloomVariant) {
+    case 'power':
+      return { damage: growth, speed: LATE_BLOOM_SPEED_PENALTY, damageTaken: 1 };
+    case 'speed':
+      return { damage: 1, speed: growth, damageTaken: LATE_BLOOM_DAMAGE_TAKEN_PENALTY };
+    case 'defense':
+      return { damage: LATE_BLOOM_DAMAGE_PENALTY, speed: 1, damageTaken: 1 / growth };
+    default:
+      return { damage: 1, speed: 1, damageTaken: 1 };
+  }
+}
+
 function getEliteBulletStagePalette() {
   const threat = getThreatPalette();
   return [
@@ -544,18 +558,10 @@ function firePlayer(tx,ty) {
   const predatorBonus = UPG.predatorInstinct && UPG.predatorKillStreak >= 2 ? 1 + Math.min(UPG.predatorKillStreak * 0.2, 1.0) : 1;
   // Dense Core desperation bonus: very high damage at critical charge (1 cap)
   const denseDesperationBonus = (UPG.denseTier > 0 && UPG.maxCharge === 1) ? 2.5 : 1;
-  // Late Bloom: soft-capped scaling by room
-  let lateBloomBonus = 1;
-  if(UPG.lateBloom){
-    const room = roomIndex || 0;
-    if(room <= 30) lateBloomBonus = 1;
-    else if(room <= 60) lateBloomBonus = 1 + (room - 30) * 0.02;
-    else if(room <= 90) lateBloomBonus = 1.6 + (room - 60) * 0.01;
-    else lateBloomBonus = 1.9 + (room - 90) * 0.005;
-  }
+  const lateBloomMods = getLateBloomMods(roomIndex || 0);
   // Escalation: per-kill damage in current room (max +60%)
   const escalationBonus = UPG.escalation ? 1 + Math.min((UPG.escalationKills || 0) * 0.03, 0.6) : 1;
-  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomBonus * escalationBonus;
+  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus;
   const lifeMs = PLAYER_SHOT_LIFE_MS * (UPG.shotLifeMult || 1);
   const now = performance.now();
   const overchargeBonus = (UPG.overchargeVent && charge >= UPG.maxCharge) ? 1.4 : 1;
@@ -946,7 +952,8 @@ function update(dt,ts){
   const W=cv.width,H=cv.height;
   const titanSlow = UPG.colossus ? 1 - (1 - (UPG.titanSlowMult || 1)) * 0.5 : (UPG.titanSlowMult || 1);
   const bloodRushMult = UPG.bloodRush && UPG.bloodRushTimer > ts ? 1 + ((UPG.bloodRushStacks || 0) * 0.08) : 1;
-  const BASE_SPD=165*Math.min(2.5,(UPG.speedMult || 1) * titanSlow * bloodRushMult);
+  const lateBloomMoveMods = getLateBloomMods(roomIndex || 0);
+  const BASE_SPD=165*Math.min(2.5,(UPG.speedMult || 1) * titanSlow * bloodRushMult * lateBloomMoveMods.speed);
   const joyMax = joy.max || JOY_MAX;
 
   // Drift anchor when thumb wanders far past max radius
@@ -1582,7 +1589,8 @@ function update(dt,ts){
         const tierOver = Math.max(0, roomIndex - 29);
         const dmgScale = (1 + Math.log(roomIndex + 1) * 0.24) * (tierOver > 0 ? 1 + tierOver * 0.04 : 1);
         const rawDamage = Math.ceil(18 * dmgScale);
-        const finalDamage = Math.max(1, Math.ceil(rawDamage * (UPG.damageTakenMult || 1)));
+        const lateBloomDefenseMods = getLateBloomMods(roomIndex || 0);
+        const finalDamage = Math.max(1, Math.ceil(rawDamage * (UPG.damageTakenMult || 1) * lateBloomDefenseMods.damageTaken));
         hp-=finalDamage; player.invincible=1.2; player.distort=.45;
         tookDamageThisRoom = true;
         if(UPG.hitChargeGain > 0){

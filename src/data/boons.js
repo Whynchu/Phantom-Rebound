@@ -5,6 +5,25 @@ const TITAN_SLOW_PCT = 0.05;
 const HEAL_PCT = [1.00, 0.50, 0.50];
 const BASE_CHARGE_CAP = 5;
 const CHARGE_CAP_PCT = 0.25;
+const LATE_BLOOM_SPEED_PENALTY = 0.94;
+const LATE_BLOOM_DAMAGE_TAKEN_PENALTY = 1.06;
+const LATE_BLOOM_DAMAGE_PENALTY = 0.94;
+
+function getLateBloomGrowth(roomIndex = 0) {
+  const room = roomIndex || 0;
+  if(room <= 30) return 1;
+  if(room <= 60) return 1 + (room - 30) * 0.02;
+  if(room <= 90) return 1.6 + (room - 60) * 0.01;
+  return 1.9 + (room - 90) * 0.005;
+}
+
+function getLateBloomBonusPct(roomIndex = 0) {
+  return Math.max(0, (getLateBloomGrowth(roomIndex) - 1) * 100);
+}
+
+function hasLateBloomVariant(upg) {
+  return Boolean(upg.lateBloomVariant);
+}
 
 function getHyperbolicScale(tier) {
   return 1 + (tier * 0.45) / (tier + 1.5);
@@ -120,7 +139,7 @@ function getDefaultUpgrades() {
     crimsonHarvest: false,
     sanguineBurst: false, sanguineKillCount: 0, rampageEvolved: false,
     bloodMoon: false,
-    lateBloom: false,
+    lateBloomVariant: '',
     escalation: false, escalationKills: 0,
     spreadShot: false,
     payload: false,
@@ -194,7 +213,9 @@ const BOONS = [
   {name:'Blood Rush',tag:'SURVIVE',icon:'🩸→',desc:'Kills grant +8% movement speed for 3s. Stacks to +40%.',requires:upg=>upg.vampiric,apply(upg){if(upg.bloodRush)return; upg.bloodRush=true;}},
   {name:'Crimson Harvest',tag:'SURVIVE',icon:'🩸+',desc:'Kills drop an extra grey bullet at the enemy position.',requires:upg=>upg.vampiric,apply(upg){if(upg.crimsonHarvest)return; upg.crimsonHarvest=true;}},
   {name:'Sanguine Burst',tag:'OFFENSE',icon:'💀',desc:'Every 10th kill fires a free 6-way output burst.',requires:upg=>upg.vampiric,apply(upg){if(upg.sanguineBurst)return; upg.sanguineBurst=true;},evolvesWith:['Predator\'s Instinct'],evolvedVersion:{name:'Rampage',icon:'💀+',desc:'Every 5th kill fires a free 8-way burst instead.',apply(upg){if(upg.sanguineBurst)return; upg.sanguineBurst=true; upg.rampageEvolved=true;}}},
-  {name:'Late Bloom',tag:'OFFENSE',icon:'🌱',desc:'+2% damage per room (30-60), +1% (60-90), +0.5% (90+). Soft-capped.',apply(upg){if(upg.lateBloom)return; upg.lateBloom=true;}},
+  {name:'Late Bloom',tag:'OFFENSE',icon:'🌱',desc:'+2% damage per room (30-60), +1% (60-90), +0.5% (90+). Soft-capped. Exclusive. -6% move speed.',apply(upg){if(hasLateBloomVariant(upg))return; upg.lateBloomVariant='power';}},
+  {name:'Swift Bloom',tag:'UTILITY',icon:'🍃',desc:'+2% move speed per room (30-60), +1% (60-90), +0.5% (90+). Soft-capped. Exclusive. +6% damage taken.',apply(upg){if(hasLateBloomVariant(upg))return; upg.lateBloomVariant='speed';}},
+  {name:'Guard Bloom',tag:'SURVIVE',icon:'🛡️',desc:'Reduces damage taken on the Late Bloom curve. Soft-capped. Exclusive. -6% damage.',apply(upg){if(hasLateBloomVariant(upg))return; upg.lateBloomVariant='defense';}},
   {name:'Escalation',tag:'OFFENSE',icon:'📈',desc:'+3% damage per kill in current room. Resets between rooms. Max +60%.',apply(upg){if(upg.escalation)return; upg.escalation=true;}},
   {name:'Spread Shot',tag:'OFFENSE',icon:'⬄',desc:'Fire 3 bullets in a cone instead of 1. +2 charge cost per fire.',apply(upg){if(upg.spreadShot)return; upg.spreadShot=true;syncChargeCapacity(upg);}},
   {name:'Payload',tag:'OFFENSE',icon:'💣',desc:'Output bullets explode on final impact, damaging in a 40px radius.',requires:upg=>upg.biggerBulletsTier>0,apply(upg){if(upg.payload)return; upg.payload=true;}},
@@ -398,7 +419,10 @@ function getActiveBoonEntries(upg) {
   if(upg.bloodRush) entries.push({icon:'🩸→',name:'Blood Rush',detail:`+${upg.bloodRushStacks||0} stacks (${((upg.bloodRushStacks||0)*8)}% speed)`});
   if(upg.crimsonHarvest) entries.push({icon:'🩸+',name:'Crimson Harvest',detail:'Kills drop extra grey bullet'});
   if(upg.sanguineBurst) entries.push({icon: upg.rampageEvolved?'💀+':'💀', name: upg.rampageEvolved?'Rampage':'Sanguine Burst', detail:`Free ${upg.rampageEvolved?8:6}-way burst`});
-  if(upg.lateBloom) entries.push({icon:'🌱',name:'Late Bloom',detail:`+${(Math.min(90,(upg._roomIndex||0))*0.02*100).toFixed(0)}% dmg`});
+  const lateBloomPct = Math.round(getLateBloomBonusPct(upg._roomIndex || 0));
+  if(upg.lateBloomVariant === 'power') entries.push({icon:'🌱',name:'Late Bloom',detail:`+${lateBloomPct}% dmg, -6% speed`});
+  if(upg.lateBloomVariant === 'speed') entries.push({icon:'🍃',name:'Swift Bloom',detail:`+${lateBloomPct}% speed, +6% dmg taken`});
+  if(upg.lateBloomVariant === 'defense') entries.push({icon:'🛡️',name:'Guard Bloom',detail:`-${lateBloomPct}% dmg taken, -6% dmg`});
   if(upg.escalation) entries.push({icon:'📈',name:'Escalation',detail:`+${Math.min(60,(upg.escalationKills||0)*3)}% dmg`});
   if(upg.spreadShot) entries.push({icon:'⬄',name:'Spread Shot',detail:'3-bullet cone spread'});
   if(upg.payload) entries.push({icon:'💣',name:'Payload',detail:'Bullets explode on impact'});
@@ -442,5 +466,5 @@ function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
   return picks;
 }
 
-export { BOONS, SPS_LADDER, getHyperbolicScale, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity, pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon, checkLegendarySequences };
+export { BOONS, SPS_LADDER, getHyperbolicScale, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity, pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, getLateBloomBonusPct, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY };
 
