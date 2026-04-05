@@ -201,7 +201,7 @@ const BOONS = [
   {name:'Payload',tag:'OFFENSE',icon:'💣',desc:'Output bullets explode on final impact, damaging in a 40px radius.',requires:upg=>upg.biggerBulletsTier>0,apply(upg){if(upg.payload)return; upg.payload=true;}},
   {name:'Shockwave',tag:'OFFENSE',icon:'⚡',desc:'Firing at full charge releases a radial enemy push. 3s cooldown.',apply(upg){if(upg.shockwave)return; upg.shockwave=true;}},
   {name:'Pulse Mine',tag:'UTILITY',icon:'⛏️',desc:'Absorbing 5 grey bullets plants a mine at your position. Max 3. Converts danger→grey nearby.',apply(upg){if(upg.pulseMine)return; upg.pulseMine=true;}},
-  {name:'Null Zone',tag:'UTILITY',icon:'🔵',desc:'Absorbing 5 grey bullets creates a 2s danger-free zone around you.',requires:upg=>upg.absorbRange>0,apply(upg){if(upg.nullZone)return; upg.nullZone=true;}},
+  {name:'Null Zone',tag:'UTILITY',icon:'🔵',desc:'Absorbing 5 grey bullets creates a 2s zone that converts danger→grey within 120px.',requires:upg=>upg.absorbRange>0,apply(upg){if(upg.nullZone)return; upg.nullZone=true;}},
   {name:'Gravity Well',tag:'UTILITY',icon:'⊙',desc:'Picking this a 2nd time adds: enemies move 20% slower within 90px.',evolvesWith:['Gravity Well'],evolvedVersion:{name:'Gravity Well II',icon:'⊙+',desc:'Slows both danger bullets AND enemies 30%.'},apply(upg){if(!upg.gravityWell)return; if(upg.gravityWell2)return; upg.gravityWell2=true;}},
   
   // Phase 5: Bullet Alchemy

@@ -1415,8 +1415,8 @@ function update(dt,ts){
             sparks(player.x, player.y, '#fbbf24', 12, 100);
           }
         }
-        // Null Zone: count absorbed grey bullets, activate zone at 5
-        if(UPG.nullZone){
+        // Null Zone: count absorbed grey bullets, activate zone at 5 (paused while zone active)
+        if(UPG.nullZone && !(UPG.nullZoneActive && UPG.nullZoneTimer > ts)){
           UPG.nullZoneAbsorbCount = (UPG.nullZoneAbsorbCount || 0) + 1;
           if(UPG.nullZoneAbsorbCount >= 5){
             UPG.nullZoneAbsorbCount = 0;
@@ -1528,11 +1528,14 @@ function update(dt,ts){
     }
 
     if(b.state==='danger'&&player.invincible<=0){
-      // Null Zone: active zone blocks damage
+      // Null Zone: converts danger→grey within 120px radius
       if(UPG.nullZone && UPG.nullZoneActive && UPG.nullZoneTimer > ts){
-        bullets.splice(i,1);
-        sparks(b.x,b.y,'#00d4ff',8,120);
-        continue;
+        if(Math.hypot(b.x-player.x,b.y-player.y) < 120){
+          b.state = 'grey';
+          b.decayStart = ts;
+          sparks(b.x,b.y,'#00d4ff',4,60);
+          continue;
+        }
       }
       
       // VOID WALKER: void zone blocks danger bullets (part of legendary combo)
