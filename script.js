@@ -2241,8 +2241,8 @@ function drawGhost(ts){
   // Track
   ctx.fillStyle='rgba(0,0,0,0.55)';
   ctx.beginPath();ctx.roundRect(barX-1,barY-1,barW+2,barH+2,2);ctx.fill();
-  // Fill — green → yellow → red
-  const hpCol = hpFrac>0.5?'#4ade80':hpFrac>0.25?'#fbbf24':'#f87171';
+  // Fill uses the selected player accent while still warning at mid/low HP.
+  const hpCol = hpFrac > 0.5 ? C.green : hpFrac > 0.25 ? '#fbbf24' : '#f87171';
   ctx.shadowBlur=6; ctx.shadowColor=hpCol;
   ctx.fillStyle=hpCol;
   ctx.beginPath();ctx.roundRect(barX,barY,barW*hpFrac,barH,2);ctx.fill();
