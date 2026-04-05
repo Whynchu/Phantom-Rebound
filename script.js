@@ -6,7 +6,7 @@ import { fetchRemoteLeaderboard, submitRemoteScore } from './src/platform/leader
 import { bindResponsiveViewport } from './src/platform/viewport.js';
 import { showBoonSelection } from './src/ui/boonSelection.js';
 import { renderVersionTag } from './src/ui/versionTag.js';
-import { getPlayerColor } from './src/data/colorScheme.js';
+import { PLAYER_COLORS, getPlayerColor, getPlayerColorScheme } from './src/data/colorScheme.js';
 import { renderColorSelector } from './src/ui/colorSelector.js';
 
 renderVersionTag(VERSION);
@@ -19,6 +19,7 @@ const _isEaster = (_now.getMonth() === 3 && _now.getDate() >= 4 && _now.getDate(
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 // Block dblclick — iOS can route double-tap zoom through this even when CSS manipulation is set
 document.addEventListener('dblclick', (e) => e.preventDefault());
+let startDangerCopy;
 
 function revealAppShell() {
   requestAnimationFrame(() => {
@@ -26,6 +27,14 @@ function revealAppShell() {
     document.body.classList.add('app-ready');
   });
 }
+
+function syncColorDrivenCopy(scheme = getPlayerColorScheme()) {
+  if(startDangerCopy) startDangerCopy.textContent = `${scheme.dangerLabel || 'blue'} rounds`;
+}
+
+window.addEventListener('phantom:player-color-change', (event) => {
+  syncColorDrivenCopy(event.detail?.scheme || getPlayerColorScheme());
+});
 
 const cv  = document.getElementById('cv');
 const ctx = cv.getContext('2d');
@@ -38,6 +47,7 @@ const lbScreen = document.getElementById('s-lb');
 const lbOpenBtn = document.getElementById('btn-lb-open');
 const lbOpenBtnGo = document.getElementById('btn-lb-open-go');
 const lbCloseBtn = document.getElementById('btn-lb-close');
+startDangerCopy = document.getElementById('start-danger-copy');
 const lbCurrent = document.getElementById('lb-current');
 const lbStatus = document.getElementById('lb-status');
 const lbList = document.getElementById('leaderboard-list');
@@ -391,7 +401,7 @@ function spawnTriangleBurst(ex, ey, origVx, origVy) {
     const angle = baseAngle + (i - 1) * (Math.PI * 2 / 3);
     bullets.push({x:ex,y:ey,vx:Math.cos(angle)*burstSpd,vy:Math.sin(angle)*burstSpd,state:'danger',r:5,decayStart:null,bounces:0});
   }
-  sparks(ex, ey, '#60a5fa', 6, 50);
+  sparks(ex, ey, C.danger, 6, 50);
 }
 
 // Elite enemy bullets: orange (stage 0) that cycle through purple (stage 1) then blue (stage 2)
@@ -739,17 +749,14 @@ function renderLeaderboard() {
     
     // Handle backwards compatibility: extract boon data
     const boonData = Array.isArray(row.boons) 
-      ? { picks: row.boons, color: 'green', order: '' }
-      : (row.boons || { picks: [], color: 'green', order: '' });
+      ? { picks: row.boons, color: row.color || 'green', order: row.boonOrder || '' }
+      : (row.boons || { picks: [], color: row.color || 'green', order: row.boonOrder || '' });
     const hasBoons = boonData.picks && boonData.picks.length > 0;
-    const playerColor = boonData.color || 'green';
+    const playerColor = boonData.color || row.color || 'green';
+    const boonOrder = boonData.order || row.boonOrder || '';
     
     // Color-coded border based on player color
-    const colorMap = {
-      green: '#4ade80', blue: '#60a5fa', purple: '#c084fc', pink: '#f472b6',
-      gold: '#fbbf24', red: '#f87171', cyan: '#67e8f9', orange: '#fb923c'
-    };
-    const borderColor = colorMap[playerColor] || '#4ade80';
+    const borderColor = PLAYER_COLORS[playerColor]?.hex || PLAYER_COLORS.green.hex;
     
     li.style.borderLeft = `3px solid ${borderColor}`;
     li.innerHTML = `
@@ -759,7 +766,7 @@ function renderLeaderboard() {
       ${hasBoons ? '<button class="lb-boons-btn" type="button" title="View run loadout">📋</button>' : '<span></span>'}
     `;
     if(hasBoons) {
-      li.querySelector('.lb-boons-btn').addEventListener('click', () => showLbBoonsPopup(row.name, boonData.picks));
+      li.querySelector('.lb-boons-btn').addEventListener('click', () => showLbBoonsPopup(row.name, boonData.picks, boonOrder));
     }
     lbList.appendChild(li);
   }
@@ -803,6 +810,8 @@ function pushLeaderboardEntry() {
     room: roomIndex + 1,
     ts: Date.now(),
     version: VERSION.num,
+    color: playerColor,
+    boonOrder,
     boons: { picks: boons, color: playerColor, order: boonOrder },
   };
   leaderboard.push(entry);
@@ -1869,8 +1878,8 @@ function draw(ts){
         b.x,
         b.y,
         b.r,
-        b.crit ? 'rgba(125,255,155,0.74)' : 'rgba(74,222,128,0.72)',
-        b.crit ? 'rgba(232,255,238,0.9)' : 'rgba(200,255,220,0.82)',
+        b.crit ? C.getRgba(C.ghost, 0.82) : C.getRgba(C.green, 0.72),
+        b.crit ? 'rgba(255,255,255,0.94)' : C.getRgba(C.ghost, 0.84),
         ts * 0.013 + b.x * 0.09 + b.y * 0.07,
         0.92
       );
@@ -2017,7 +2026,7 @@ function draw(ts){
       ctx.globalAlpha=0.85;
       ctx.beginPath();ctx.arc(sx,sy,5,0,Math.PI*2);ctx.fill();
       ctx.shadowBlur=0;
-      ctx.fillStyle='rgba(200,255,220,0.92)';
+      ctx.fillStyle=C.getRgba(C.ghost, 0.92);
       ctx.beginPath();ctx.arc(sx,sy,2,0,Math.PI*2);ctx.fill();
       ctx.restore();
     }
@@ -2110,18 +2119,22 @@ function drawGhost(ts){
   ctx.shadowColor=gstate === 'dying' ? '#f8b4c7' : overload?C.ghost:C.ghost;
 
   const inv=player.invincible>0?Math.min(1,player.invincible/.4):0;
-  const baseRgb = C.greenRgb;
+  const baseRgb = C.ghostBodyRgb;
+  const accentRgb = C.greenRgb;
   let bodyR,bodyG,bodyB;
   if(gstate === 'dying'){
     bodyR = 208;
     bodyG = 244 - Math.round(deathFrac * 36);
     bodyB = 224 + Math.round(deathFrac * 12);
   } else if(overload){
-    bodyR=Math.round(baseRgb.r + overloadPulse * 40);
-    bodyG=Math.round(Math.min(255, baseRgb.g + overloadPulse * 10));
-    bodyB=Math.round(baseRgb.b + overloadPulse * 32);
+    const tintMix = Math.min(0.55, 0.34 + overloadPulse * 0.18);
+    bodyR=Math.round(baseRgb.r + (accentRgb.r - baseRgb.r) * tintMix);
+    bodyG=Math.round(baseRgb.g + (accentRgb.g - baseRgb.g) * tintMix);
+    bodyB=Math.round(baseRgb.b + (accentRgb.b - baseRgb.b) * tintMix);
   } else {
-    bodyR=Math.round(baseRgb.r+inv*71);bodyG=Math.round(Math.min(255,baseRgb.g+inv*10));bodyB=Math.round(baseRgb.b+inv*35);
+    bodyR=Math.round(Math.min(255,baseRgb.r+inv*26));
+    bodyG=Math.round(Math.min(255,baseRgb.g+inv*12));
+    bodyB=Math.round(Math.min(255,baseRgb.b+inv*22));
   }
   ctx.fillStyle=`rgba(${bodyR},${bodyG},${bodyB},0.93)`;
 
@@ -2193,7 +2206,7 @@ function drawGhost(ts){
     ctx.beginPath();ctx.arc(5.5,-size*.25,1.5,0,Math.PI*2);ctx.stroke();
     ctx.beginPath();ctx.arc(0,size*.08,4.6,Math.PI+.25,Math.PI*2-.25);ctx.stroke();
   } else {
-    ctx.fillStyle='rgba(74,222,128,0.9)';
+    ctx.fillStyle=C.getRgba(C.green, 0.9);
     ctx.beginPath();ctx.arc(-4.5,-size*.3,1.3,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(4.5, -size*.3,1.3,0,Math.PI*2);ctx.fill();
   }
@@ -2296,6 +2309,7 @@ nameInputGo.addEventListener('input', (e)=>setPlayerName(e.target.value));
 
 // Initialize color picker on start screen
 renderColorSelector('color-picker');
+syncColorDrivenCopy();
 
 // Start game from name entry screen
 document.getElementById('btn-start').onclick=()=>{
@@ -2319,14 +2333,27 @@ const lbBoonsPopupTitle = document.getElementById('lb-boons-popup-title');
 const lbBoonsPopupList = document.getElementById('lb-boons-popup-list');
 document.getElementById('btn-lb-boons-close')?.addEventListener('click', () => lbBoonsPopup?.classList.add('off'));
 
-function showLbBoonsPopup(runnerName, boons) {
+function orderBoonsForDisplay(boons, boonOrder = '') {
+  if(!Array.isArray(boons) || boons.length < 2 || !boonOrder) return boons;
+  const orderedNames = boonOrder.split(',').map((name) => name.trim()).filter(Boolean);
+  if(orderedNames.length === 0) return boons;
+  const orderMap = new Map(orderedNames.map((name, index) => [name, index]));
+  return [...boons].sort((a, b) => {
+    const aIndex = orderMap.has(a.name) ? orderMap.get(a.name) : Number.MAX_SAFE_INTEGER;
+    const bIndex = orderMap.has(b.name) ? orderMap.get(b.name) : Number.MAX_SAFE_INTEGER;
+    return aIndex - bIndex || a.name.localeCompare(b.name);
+  });
+}
+
+function showLbBoonsPopup(runnerName, boons, boonOrder = '') {
   if(!lbBoonsPopup) return;
   lbBoonsPopupTitle.textContent = `${runnerName} · Run Loadout`;
   lbBoonsPopupList.innerHTML = '';
-  if(!boons || boons.length === 0) {
+  const orderedBoons = orderBoonsForDisplay(boons, boonOrder);
+  if(!orderedBoons || orderedBoons.length === 0) {
     lbBoonsPopupList.innerHTML = '<div class="up-active-empty">No boon data recorded.</div>';
   } else {
-    for(const b of boons) {
+    for(const b of orderedBoons) {
       const row = document.createElement('div');
       row.className = 'up-active-item';
       row.innerHTML = `<div class="up-active-icon">${b.icon}</div><div class="up-active-copy"><div class="up-active-name">${b.name}</div><div class="up-active-detail">${b.detail}</div></div>`;

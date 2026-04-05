@@ -3,13 +3,20 @@
  */
 
 import { VERSION } from './version.js';
-import { getPlayerColorScheme, loadPlayerColorFromStorage, hexToRgb } from './colorScheme.js';
+import { getPlayerColorScheme, loadPlayerColorFromStorage } from './colorScheme.js';
 
 // Initialize player color on module load
 loadPlayerColorFromStorage();
 
 function _rgb(hex) {
   return { r: parseInt(hex.slice(1,3), 16), g: parseInt(hex.slice(3,5), 16), b: parseInt(hex.slice(5,7), 16) };
+}
+
+function _mixHex(baseHex, tintHex, amount) {
+  const base = _rgb(baseHex);
+  const tint = _rgb(tintHex);
+  const mix = (from, to) => Math.round(from + (to - from) * amount).toString(16).padStart(2, '0');
+  return `#${mix(base.r, tint.r)}${mix(base.g, tint.g)}${mix(base.b, tint.b)}`;
 }
 
 const C = {
@@ -20,6 +27,7 @@ const C = {
   get green() { return getPlayerColorScheme().hex; },
   get ghost() { return getPlayerColorScheme().light; },
   get dark() { return getPlayerColorScheme().dark; },
+  get ghostBody() { return _mixHex('#f7fbff', this.green, 0.18); },
   get shieldActive() { return getPlayerColorScheme().light; },
   get shieldEnhanced() { return getPlayerColorScheme().dark; },
   get lifelineEffect() { return getPlayerColorScheme().light; },
@@ -27,6 +35,7 @@ const C = {
   get greenRgb() { return _rgb(this.green); },
   get ghostRgb() { return _rgb(this.ghost); },
   get darkRgb() { return _rgb(this.dark); },
+  get ghostBodyRgb() { return _rgb(this.ghostBody); },
   get dangerRgb() { return _rgb(this.danger); },
   getRgba(hex, alpha) { const {r,g,b} = _rgb(hex); return `rgba(${r},${g},${b},${alpha})`; },
   getShieldActiveRgba(alpha = 0.18) { const {r,g,b} = _rgb(this.shieldActive); return `rgba(${r},${g},${b},${alpha})`; },

@@ -8,6 +8,7 @@ const PLAYER_COLORS = {
     light: '#b8ffcc',
     dark: '#22c55e',
     dangerHex: '#60a5fa',
+    dangerLabel: 'blue',
     icon: '🟢'
   },
   blue: {
@@ -16,6 +17,7 @@ const PLAYER_COLORS = {
     light: '#93c5fd',
     dark: '#2563eb',
     dangerHex: '#f87171',
+    dangerLabel: 'red',
     icon: '🔵'
   },
   purple: {
@@ -24,6 +26,7 @@ const PLAYER_COLORS = {
     light: '#e9d5ff',
     dark: '#9333ea',
     dangerHex: '#fbbf24',
+    dangerLabel: 'gold',
     icon: '🟣'
   },
   pink: {
@@ -32,6 +35,7 @@ const PLAYER_COLORS = {
     light: '#fbcfe8',
     dark: '#ec4899',
     dangerHex: '#22d3ee',
+    dangerLabel: 'cyan',
     icon: '💗'
   },
   gold: {
@@ -40,6 +44,7 @@ const PLAYER_COLORS = {
     light: '#fef3c7',
     dark: '#d97706',
     dangerHex: '#4ade80',
+    dangerLabel: 'green',
     icon: '⭐'
   },
   red: {
@@ -48,6 +53,7 @@ const PLAYER_COLORS = {
     light: '#fecaca',
     dark: '#dc2626',
     dangerHex: '#93c5fd',
+    dangerLabel: 'blue',
     icon: '🔴'
   },
   cyan: {
@@ -56,6 +62,7 @@ const PLAYER_COLORS = {
     light: '#a5f3fc',
     dark: '#06b6d4',
     dangerHex: '#f87171',
+    dangerLabel: 'red',
     icon: '🧊'
   },
   orange: {
@@ -64,6 +71,7 @@ const PLAYER_COLORS = {
     light: '#fed7aa',
     dark: '#ea580c',
     dangerHex: '#4ade80',
+    dangerLabel: 'green',
     icon: '🔥'
   }
 };
@@ -110,6 +118,15 @@ function setPlayerColor(colorKey) {
     localStorage.setItem('phantom-player-color', colorKey);
   } catch (e) {
     console.warn('Could not save color to localStorage:', e);
+  }
+
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+    window.dispatchEvent(new CustomEvent('phantom:player-color-change', {
+      detail: {
+        key: activePlayerColor,
+        scheme: PLAYER_COLORS[activePlayerColor]
+      }
+    }));
   }
 }
 

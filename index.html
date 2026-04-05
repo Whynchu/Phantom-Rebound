@@ -6,7 +6,7 @@
 <title>Phantom Rebound</title>
 <link rel="icon" href="data:,">
 <script>
-window.__APP_BUILD__ = '1.15.1';
+window.__APP_BUILD__ = '1.16.0';
 (function () {
   const currentBuild = window.__APP_BUILD__;
   const reloadKey = 'phantom-rebound-build-reload';
@@ -26,7 +26,7 @@ window.__APP_BUILD__ = '1.15.1';
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=1.15.1">
+<link rel="stylesheet" href="styles.css?v=1.16.0">
 </head>
 <body class="app-loading">
 <div id="wrap">
@@ -42,7 +42,7 @@ window.__APP_BUILD__ = '1.15.1';
     <div id="room-intro"><div id="room-intro-txt">READY?</div></div>
 
     <div class="screen" id="s-start">
-      <div class="eyebrow" id="version-tag">// prototype v0.91 - Balance &amp; Gating</div>
+      <div class="eyebrow" id="version-tag">// prototype v1.16.0 - Color Sync</div>
       <div class="big-title">Phantom<span>Rebound</span></div>
       <div class="rule-line"></div>
       <div class="name-row">
@@ -54,7 +54,7 @@ window.__APP_BUILD__ = '1.15.1';
       </div>
       <div class="rule-line"></div>
       <div class="screen-body">
-        Hunters fire <span class="hi">blue rounds</span>.<br>
+        Hunters fire <span class="hi" id="start-danger-copy">blue rounds</span>.<br>
         Rounds bounce off walls and turn <span class="gr">grey</span>.<br>
         Navigate your ghost to absorb them.<br>
         Stored charge <span class="gn">auto-fires back</span>.
@@ -112,7 +112,7 @@ window.__APP_BUILD__ = '1.15.1';
   <div id="room-badge">ROOM 1 — ARRIVAL</div>
 
   <div id="legend">
-    <div class="leg"><div class="leg-dot" style="background:#60a5fa"></div>Danger</div>
+    <div class="leg"><div class="leg-dot" style="background:var(--player-danger)"></div>Danger</div>
     <div class="leg"><div class="leg-dot" style="background:#8aaa90"></div>Harvest</div>
     <div class="leg"><div class="leg-dot" style="background:var(--player-accent)"></div>Output</div>
     <div class="leg"><div class="leg-dot" style="background:var(--player-accent-light)"></div>You</div>
@@ -145,6 +145,6 @@ window.__APP_BUILD__ = '1.15.1';
   </div>
 </div>
 
-<script type="module" src="script.js?v=1.15.1"></script>
+<script type="module" src="script.js?v=1.16.0"></script>
 </body>
 </html>

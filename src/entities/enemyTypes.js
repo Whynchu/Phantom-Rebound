@@ -1,3 +1,5 @@
+import { getPlayerColorScheme } from '../data/colorScheme.js';
+
 const ENEMY_TYPES = {
   chaser:         {col:'#3b82f6', glowCol:'rgba(59,130,246,0.7)',  r:12,hp:3, spd:55, fRate:1800,burst:1,spread:.22,pts:50,  flee:true,  fleeRange:110, strafeSpd:0.6, doubleBounce:false, spawnValue:2, unlockRoom:0, ammoPressure:1},
   sniper:         {col:'#93c5fd', glowCol:'rgba(147,197,253,0.7)', r:9, hp:2, spd:30, fRate:2800,burst:1,spread:0,  pts:100, flee:true,  fleeRange:150, strafeSpd:0.8, doubleBounce:false, spawnValue:3, unlockRoom:3, ammoPressure:1},
@@ -13,9 +15,29 @@ const ENEMY_TYPES = {
 };
 
 const PURPLE_BULLET_ROOM_THRESHOLD = 9;
+const DYNAMIC_DANGER_ENEMY_TYPES = new Set(['chaser', 'sniper', 'rusher', 'disruptor', 'zoner', 'triangle']);
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function getEnemyDefinition(type) {
+  const def = ENEMY_TYPES[type];
+  if(!def) return def;
+  if(!DYNAMIC_DANGER_ENEMY_TYPES.has(type)) return def;
+  const dangerHex = getPlayerColorScheme().dangerHex;
+  return {
+    ...def,
+    col: dangerHex,
+    glowCol: hexToRgba(dangerHex, type === 'triangle' ? 0.8 : 0.74),
+  };
+}
 
 function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBoss = false }) {
-  const def = ENEMY_TYPES[type];
+  const def = getEnemyDefinition(type);
   const effectiveR = isBoss ? def.r * 3 : def.r;
   const edge = Math.floor(Math.random() * 4);
   let x;

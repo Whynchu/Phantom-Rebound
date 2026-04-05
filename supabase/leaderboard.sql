@@ -65,6 +65,7 @@ revoke all on public.leaderboard_scores from anon, authenticated;
 
 drop function if exists public.submit_score(text, integer, integer, text);
 drop function if exists public.submit_score(text, integer, integer, text, jsonb);
+drop function if exists public.submit_score(text, integer, integer, text, jsonb, text);
 create or replace function public.submit_score(
   p_player_name text,
   p_score integer,
@@ -186,6 +187,5 @@ as $$
   limit greatest(1, least(coalesce(p_limit, 10), 25));
 $$;
 
-grant execute on function public.submit_score(text, integer, integer, text, jsonb) to anon, authenticated;
 grant execute on function public.submit_score(text, integer, integer, text, jsonb, text) to anon, authenticated;
 grant execute on function public.get_leaderboard(text, text, text, text, integer) to anon, authenticated;
