@@ -2160,18 +2160,18 @@ function drawGhost(ts){
   }
 
   ctx.fillStyle='#080f0a';
-  ctx.beginPath();ctx.arc(-5,-size*.25,3,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(5, -size*.25,3,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(-8,-size*.25,3,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(8, -size*.25,3,0,Math.PI*2);ctx.fill();
   if(gstate === 'dying'){
     ctx.strokeStyle='rgba(12,20,16,0.85)';
     ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.arc(-5,-size*.25,1.5,0,Math.PI*2);ctx.stroke();
-    ctx.beginPath();ctx.arc(5,-size*.25,1.5,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.arc(-8,-size*.25,1.5,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.arc(8,-size*.25,1.5,0,Math.PI*2);ctx.stroke();
     ctx.beginPath();ctx.arc(0,size*.08,4.6,Math.PI+.25,Math.PI*2-.25);ctx.stroke();
   } else {
     ctx.fillStyle='rgba(74,222,128,0.9)';
-    ctx.beginPath();ctx.arc(-4,-size*.3,1.3,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(6, -size*.3,1.3,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(-7,-size*.3,1.3,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(7, -size*.3,1.3,0,Math.PI*2);ctx.fill();
   }
 
   if(chargeFrac>0.3 && gstate !== 'dying'){
@@ -2198,7 +2198,7 @@ function drawGhost(ts){
 
   // ── HP bar above ghost (drawn in local space, above dome)
   const barW=size*2.8, barH=4;
-  const barY = -size * (1.55 + (_isEaster ? 0.8 : 0));
+  const barY = -size * (1.55 + (_isEaster ? 1.3 : 0));
   const barX=-barW/2;
   const hpFrac=Math.max(0,hp/maxHp);
   // Track
