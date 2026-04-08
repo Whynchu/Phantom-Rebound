@@ -1,5 +1,16 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.14',
+    label: 'MENU FIT FOLLOW-UP',
+    summary: [
+      'This follow-up tightens two archive-style overlays on shorter phones. The patch notes panel now sits at the full shell level instead of stopping at the canvas boundary, and the leaderboard title scales down more aggressively on smaller screens so the heading no longer overpowers the viewport.'
+    ],
+    highlights: [
+      'Patch Notes now extends through the full available shell height instead of leaving the lower HUD visible beneath it.',
+      'The Leaderboards heading now scales responsively and steps down further in compact and tight viewport modes.'
+    ]
+  },
+  {
     version: '1.16.13',
     label: 'DARK BACKDROP RESTORE',
     summary: [

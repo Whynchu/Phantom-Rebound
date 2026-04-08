@@ -537,7 +537,11 @@ body.compact-viewport #wrap {
 
 /* LEADERBOARD SCREEN */
 #s-lb { z-index: 12; }
-.lb-big-title { font-size: 34px; }
+.lb-big-title {
+  max-width: 100%;
+  font-size: clamp(26px, 7.4vw, 34px);
+  letter-spacing: -.04em;
+}
 .lb-current {
   max-width: 100%;
   font-size: 10px;
@@ -773,6 +777,9 @@ body.compact-viewport .eyebrow {
 body.compact-viewport .big-title {
   font-size: 44px;
 }
+body.compact-viewport .lb-big-title {
+  font-size: clamp(24px, 7vw, 30px);
+}
 body.compact-viewport .screen-body {
   font-size: 11px;
   line-height: 1.7;
@@ -804,6 +811,9 @@ body.tight-viewport .screen {
 }
 body.tight-viewport .big-title {
   font-size: 40px;
+}
+body.tight-viewport .lb-big-title {
+  font-size: clamp(22px, 6.6vw, 26px);
 }
 body.tight-viewport .screen-body {
   font-size: 10px;
