@@ -29,7 +29,7 @@ function renderActiveBoons(upg) {
 }
 
 function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSelect, pendingLegendary = null, onLegendaryAccept = null, cardsContainer = document.getElementById('up-cards'), panel = document.getElementById('s-up') }) {
-  let pool = pickBoonChoices(upg, hp, maxHp);
+  let pool = pickBoonChoices(upg, hp, maxHp, pendingLegendary && onLegendaryAccept ? 2 : 3);
   let remainingRerolls = rerolls;
   const healBoon = createHealBoon(upg);
   const toggleBtn = document.getElementById('btn-up-active');
@@ -53,14 +53,49 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
   mainRow.className = 'up-cards-main';
   const healRow = document.createElement('div');
   healRow.className = 'up-heal-row';
+  const hpRow = document.createElement('div');
+  hpRow.className = 'up-room-hp';
+  hpRow.innerHTML = `
+    <span class="up-room-hp-label">HP</span>
+    <span class="up-room-hp-value">${Math.ceil(hp)} / ${Math.ceil(maxHp)}</span>`;
+
+  function getMainCardEntries() {
+    if(!(pendingLegendary && onLegendaryAccept)) return pool.map((boon) => ({ type: 'boon', boon }));
+    const entries = pool.map((boon) => ({ type: 'boon', boon }));
+    entries.splice(Math.min(1, entries.length), 0, { type: 'legendary', boon: pendingLegendary });
+    return entries;
+  }
 
   function buildMainCards() {
     mainRow.innerHTML = '';
-    for(const boon of pool) {
+    for(const entry of getMainCardEntries()) {
+      const boon = entry.boon;
+      const card = document.createElement('div');
+      if(entry.type === 'legendary') {
+        card.className = 'up-card legendary';
+        card.innerHTML = `
+          <div class="up-legendary-eyebrow">✦ LEGENDARY ✦</div>
+          <div class="up-icon">${boon.icon}</div>
+          <div class="up-name">${boon.name}</div>
+          <div class="up-desc">${boon.desc}</div>
+          <div class="up-tag" style="color:#fbbf24">LEGENDARY</div>`;
+        card.onclick = () => {
+          if(panel.classList.contains('screen-leaving')) return;
+          panel.classList.add('screen-leaving');
+          window.setTimeout(() => {
+            panel.classList.add('off');
+            panel.classList.remove('screen-entering', 'screen-leaving');
+            cardsContainer.innerHTML = '';
+            onLegendaryAccept(boon);
+          }, BOON_FADE_MS);
+        };
+        mainRow.appendChild(card);
+        continue;
+      }
+
       const evolved = getEvolvedBoon(boon, upg);
       const isEvolved = evolved !== boon;
       const displayBoon = isEvolved ? evolved : boon;
-      const card = document.createElement('div');
       const tagColor = displayBoon.tag === 'OFFENSE' ? '#f87171' : displayBoon.tag === 'UTILITY' ? '#38bdf8' : '#4ade80';
       card.className = isEvolved ? 'up-card evolved' : 'up-card';
       card.innerHTML = `
@@ -119,39 +154,16 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
       if(remainingRerolls <= 0 || panel.classList.contains('screen-leaving')) return;
       remainingRerolls--;
       onReroll();
-      pool = pickBoonChoices(upg, hp, maxHp);
+      pool = pickBoonChoices(upg, hp, maxHp, pendingLegendary && onLegendaryAccept ? 2 : 3);
       buildMainCards();
       updateRerollCard();
     };
     healRow.appendChild(rerollCard);
   }
 
+  cardsContainer.appendChild(hpRow);
   cardsContainer.appendChild(mainRow);
   cardsContainer.appendChild(healRow);
-
-  if(pendingLegendary && onLegendaryAccept){
-    const legRow = document.createElement('div');
-    legRow.className = 'up-legendary-row';
-    const legCard = document.createElement('div');
-    legCard.className = 'up-card legendary';
-    legCard.innerHTML = `
-      <div class="up-legendary-eyebrow">✦ LEGENDARY UNLOCKED ✦</div>
-      <div class="up-name">${pendingLegendary.name}</div>
-      <div class="up-desc">${pendingLegendary.desc}</div>
-      <div class="up-tag" style="color:#fbbf24">LEGENDARY</div>`;
-    legCard.addEventListener('click', () => {
-      if(panel.classList.contains('screen-leaving')) return;
-      panel.classList.add('screen-leaving');
-      window.setTimeout(() => {
-        panel.classList.add('off');
-        panel.classList.remove('screen-entering','screen-leaving');
-        cardsContainer.innerHTML='';
-        onLegendaryAccept(pendingLegendary);
-      }, BOON_FADE_MS);
-    });
-    legRow.appendChild(legCard);
-    cardsContainer.appendChild(legRow);
-  }
 
   panel.classList.remove('off', 'screen-leaving');
   panel.classList.add('screen-entering');

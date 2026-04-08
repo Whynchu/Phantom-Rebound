@@ -378,6 +378,28 @@ body.app-ready #wrap { opacity: 1; }
   justify-content:flex-start;
   padding-top:18px;
 }
+.up-room-hp {
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:8px 12px;
+  background:rgba(var(--accent-rgb),0.06);
+  border:1px solid rgba(var(--accent-rgb),0.16);
+  border-radius:6px;
+}
+.up-room-hp-label {
+  font-size:9px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.up-room-hp-value {
+  font-family:'Syne',sans-serif;
+  font-size:14px;
+  color:var(--accent);
+}
 
 #up-active-panel {
   position:absolute;
