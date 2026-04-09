@@ -218,6 +218,7 @@ const MIRROR_SHIELD_DAMAGE_FACTOR = 0.60;
 const AEGIS_NOVA_DAMAGE_FACTOR = 0.55;
 const VOLATILE_ORB_COOLDOWN = 8;
 const VOLATILE_ORB_SHARED_COOLDOWN = 1.0;
+const GLOBAL_SPEED_LIFT = 1.07;
 let enemyIdSeq = 1;
 let playerName = 'RUNNER';
 let leaderboard = [];
@@ -760,7 +761,7 @@ function getShieldCooldown() {
 
 // Bullet speed scales with room — moderate at room 1, ramps up to full by room 10
 function bulletSpeedScale() {
-  return 0.68 + Math.min(roomIndex, 10) * 0.032;
+  return (0.68 + Math.min(roomIndex, 10) * 0.032) * GLOBAL_SPEED_LIFT;
 }
 
 function getLateBloomMods(room = roomIndex || 0) {
@@ -949,7 +950,7 @@ function firePlayer(tx,ty) {
   if(availableShots <= 0) return;
 
   const snipeScale = 1 + UPG.snipePower * 0.18;
-  const bspd = 230 * Math.min(2.0, UPG.shotSpd) * snipeScale;
+  const bspd = 230 * GLOBAL_SPEED_LIFT * Math.min(2.0, UPG.shotSpd) * snipeScale;
   const baseRadius = 4.5 * Math.min(2.5, UPG.shotSize) * (1 + UPG.snipePower * 0.15);
   // Predator's Instinct: apply kill streak damage multiplier (25% per kill, max +125%)
   const predatorBonus = UPG.predatorInstinct && UPG.predatorKillStreak >= 2 ? 1 + Math.min(UPG.predatorKillStreak * 0.25, 1.25) : 1;
@@ -1356,7 +1357,7 @@ function update(dt,ts){
   const titanSlow = UPG.colossus ? 1 - (1 - (UPG.titanSlowMult || 1)) * 0.5 : (UPG.titanSlowMult || 1);
   const bloodRushMult = UPG.bloodRush && UPG.bloodRushTimer > ts ? 1 + ((UPG.bloodRushStacks || 0) * 0.10) : 1;
   const lateBloomMoveMods = getLateBloomMods(roomIndex || 0);
-  const BASE_SPD=165*Math.min(2.5,(UPG.speedMult || 1) * titanSlow * bloodRushMult * lateBloomMoveMods.speed);
+  const BASE_SPD=165*GLOBAL_SPEED_LIFT*Math.min(2.5,(UPG.speedMult || 1) * titanSlow * bloodRushMult * lateBloomMoveMods.speed);
   const joyMax = joy.max || JOY_MAX;
 
   // Drift anchor when thumb wanders far past max radius
@@ -1569,7 +1570,7 @@ function update(dt,ts){
         if(hp<=0){
           if(UPG.lifeline && UPG.lifelineTriggerCount < (UPG.lifelineUses||1)){
             UPG.lifelineTriggerCount++; UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,C.lifelineEffect,16,100);
-            if(UPG.lastStand){ const lsNow=performance.now(); for(let la=0;la<Math.floor(UPG.maxCharge);la++){ const lang=(Math.PI*2/Math.max(1,Math.floor(UPG.maxCharge)))*la; bullets.push({x:player.x,y:player.y,vx:Math.cos(lang)*220,vy:Math.sin(lang)*220,state:'output',r:4.5,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:lsNow+2000,hitIds:new Set()}); } }
+            if(UPG.lastStand){ const lsNow=performance.now(); for(let la=0;la<Math.floor(UPG.maxCharge);la++){ const lang=(Math.PI*2/Math.max(1,Math.floor(UPG.maxCharge)))*la; bullets.push({x:player.x,y:player.y,vx:Math.cos(lang)*220*GLOBAL_SPEED_LIFT,vy:Math.sin(lang)*220*GLOBAL_SPEED_LIFT,state:'output',r:4.5,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:lsNow+2000,hitIds:new Set()}); } }
           }
           else { gameOver(); return; }
         }
@@ -1703,7 +1704,7 @@ function update(dt,ts){
         if(tgt){
           const ang=Math.atan2(tgt.e.y-oy,tgt.e.x-ox);
           const oNow=performance.now();
-          bullets.push({x:ox,y:oy,vx:Math.cos(ang)*220,vy:Math.sin(ang)*220,state:'output',r:3.8,decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:1.4,expireAt:oNow+1300,hitIds:new Set()});
+          bullets.push({x:ox,y:oy,vx:Math.cos(ang)*220*GLOBAL_SPEED_LIFT,vy:Math.sin(ang)*220*GLOBAL_SPEED_LIFT,state:'output',r:3.8,decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:1.4,expireAt:oNow+1300,hitIds:new Set()});
         }
       }
     }
@@ -1843,7 +1844,7 @@ function update(dt,ts){
           if(UPG.refractionCount <= 4){
             const angle = Math.atan2(player.y - b.y, player.x - b.x);
             const rNow = performance.now();
-            bullets.push({x: b.x, y: b.y, vx: Math.cos(angle) * 140, vy: Math.sin(angle) * 140, state: 'output', r: 3.2, decayStart: null, bounceLeft: 0, pierceLeft: 0, homing: true, crit: false, dmg: 0.75, expireAt: rNow + 1600, hitIds: new Set()});
+            bullets.push({x: b.x, y: b.y, vx: Math.cos(angle) * 140 * GLOBAL_SPEED_LIFT, vy: Math.sin(angle) * 140 * GLOBAL_SPEED_LIFT, state: 'output', r: 3.2, decayStart: null, bounceLeft: 0, pierceLeft: 0, homing: true, crit: false, dmg: 0.75, expireAt: rNow + 1600, hitIds: new Set()});
             if(UPG.refractionCount >= 4){
               UPG.refractionCooldown = 900;
               UPG.refractionCount = 0;
@@ -1927,7 +1928,7 @@ function update(dt,ts){
               const burstCount = UPG.aegisTitan ? 8 : 4;
               for(let ba=0;ba<burstCount;ba++){
                 const bang=ba*Math.PI*2/burstCount;
-                bullets.push({x:player.x,y:player.y,vx:Math.cos(bang)*230,vy:Math.sin(bang)*230,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*AEGIS_NOVA_DAMAGE_FACTOR,expireAt:bNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
+                bullets.push({x:player.x,y:player.y,vx:Math.cos(bang)*230*GLOBAL_SPEED_LIFT,vy:Math.sin(bang)*230*GLOBAL_SPEED_LIFT,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*AEGIS_NOVA_DAMAGE_FACTOR,expireAt:bNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
               }
             }
             // Barrier Pulse: +2 charge + magnet pulse
@@ -1993,7 +1994,7 @@ function update(dt,ts){
           UPG.mirrorTideCooldown = 1500;
           const reflectAngle = Math.atan2(b.vy, b.vx) + Math.PI;
           const mNow = performance.now();
-          bullets.push({x: player.x, y: player.y, vx: Math.cos(reflectAngle) * 200, vy: Math.sin(reflectAngle) * 200, state: 'output', r: b.r, decayStart: null, bounceLeft: 0, pierceLeft: 0, homing: false, crit: false, dmg: (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1), expireAt: mNow + 2000, hitIds: new Set()});
+          bullets.push({x: player.x, y: player.y, vx: Math.cos(reflectAngle) * 200 * GLOBAL_SPEED_LIFT, vy: Math.sin(reflectAngle) * 200 * GLOBAL_SPEED_LIFT, state: 'output', r: b.r, decayStart: null, bounceLeft: 0, pierceLeft: 0, homing: false, crit: false, dmg: (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1), expireAt: mNow + 2000, hitIds: new Set()});
           sparks(player.x, player.y, getThreatPalette().elite.hex, 12, 150);
           bullets.splice(i, 1);
           continue;
@@ -2034,7 +2035,7 @@ function update(dt,ts){
         if(hp<=0){
           if(UPG.lifeline && UPG.lifelineTriggerCount < (UPG.lifelineUses||1)){
             UPG.lifelineTriggerCount++; UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,C.lifelineEffect,16,100);
-            if(UPG.lastStand){ const lsNow=performance.now(); for(let la=0;la<Math.floor(UPG.maxCharge);la++){ const lang=(Math.PI*2/Math.max(1,Math.floor(UPG.maxCharge)))*la; bullets.push({x:player.x,y:player.y,vx:Math.cos(lang)*220,vy:Math.sin(lang)*220,state:'output',r:4.5,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:lsNow+2000,hitIds:new Set()}); } }
+            if(UPG.lastStand){ const lsNow=performance.now(); for(let la=0;la<Math.floor(UPG.maxCharge);la++){ const lang=(Math.PI*2/Math.max(1,Math.floor(UPG.maxCharge)))*la; bullets.push({x:player.x,y:player.y,vx:Math.cos(lang)*220*GLOBAL_SPEED_LIFT,vy:Math.sin(lang)*220*GLOBAL_SPEED_LIFT,state:'output',r:4.5,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:lsNow+2000,hitIds:new Set()}); } }
           }
           else { gameOver(); return; }
         }
@@ -2112,8 +2113,8 @@ function update(dt,ts){
                   const angleStep = Math.PI * 2 / numShots;
                   for(let a=0;a<numShots;a++){
                     const ang = a * angleStep;
-                    const vx = Math.cos(ang) * 220;
-                    const vy = Math.sin(ang) * 220;
+                    const vx = Math.cos(ang) * 220 * GLOBAL_SPEED_LIFT;
+                    const vy = Math.sin(ang) * 220 * GLOBAL_SPEED_LIFT;
                     bullets.push({x:player.x,y:player.y,vx,vy,state:'output',r:5.5,decayStart:null,bounceLeft:UPG.bounceTier,pierceLeft:UPG.pierceTier,homing:UPG.homingTier>0,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:ts+2200,hitIds:new Set()});
                   }
                 }
@@ -2141,7 +2142,7 @@ function update(dt,ts){
                 const vNow=performance.now();
                 for(let va=0;va<4;va++){
                   const vang=va*Math.PI/2;
-                  bullets.push({x:b.x,y:b.y,vx:Math.cos(vang)*180,vy:Math.sin(vang)*180,state:'output',r:b.r*0.75,decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:b.dmg*0.65,expireAt:vNow+1600,hitIds:new Set()});
+                  bullets.push({x:b.x,y:b.y,vx:Math.cos(vang)*180*GLOBAL_SPEED_LIFT,vy:Math.sin(vang)*180*GLOBAL_SPEED_LIFT,state:'output',r:b.r*0.75,decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:b.dmg*0.65,expireAt:vNow+1600,hitIds:new Set()});
                 }
                 sparks(b.x,b.y,C.green,6,60);
               }

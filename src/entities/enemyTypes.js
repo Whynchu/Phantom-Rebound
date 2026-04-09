@@ -1,5 +1,7 @@
 import { getThreatPalette } from '../data/colorScheme.js';
 
+const GLOBAL_SPEED_LIFT = 1.07;
+
 const ENEMY_TYPES = {
   chaser:         {colorRole:'danger',       r:12,hp:3, spd:55, fRate:1800,burst:1,spread:.22,pts:50,  flee:true,  fleeRange:110, strafeSpd:0.6, doubleBounce:false, spawnValue:2, unlockRoom:0, ammoPressure:1},
   sniper:         {colorRole:'dangerLight',  r:9, hp:2, spd:30, fRate:2800,burst:1,spread:0,  pts:100, flee:true,  fleeRange:150, strafeSpd:0.8, doubleBounce:false, spawnValue:3, unlockRoom:3, ammoPressure:1},
@@ -97,7 +99,7 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
     type,
     hp: hpVal,
     maxHp: hpVal,
-    spd: def.spd * spdMult * (isBoss ? 0.6 : (isElite ? 1.15 : 1)),
+    spd: def.spd * GLOBAL_SPEED_LIFT * spdMult * (isBoss ? 0.6 : (isElite ? 1.15 : 1)),
     pts: isBoss ? def.pts * 5 : def.pts,
     fRate: effectiveFireRate,
     fT: Math.random() * effectiveFireRate,

@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.22',
+    label: 'GLOBAL SPEED LIFT',
+    summary: [
+      'This balance-feel pass keeps the new arena size and enemy density intact, but raises the overall game tempo slightly. Player movement, enemy movement, hostile bullets, and player output projectiles all move about 7% faster, making rooms feel more active without adding more bodies to the arena.'
+    ],
+    highlights: [
+      'Applied a 7% global speed lift across movement and projectile travel.',
+      'Enemy density and reinforcement counts were intentionally left unchanged.',
+      'No direct boon power reductions were applied in this patch.'
+    ]
+  },
+  {
     version: '1.16.21',
     label: 'OFFENSE TELEMETRY',
     summary: [
