@@ -266,6 +266,232 @@ let escortRespawnTimer = 0;
 let reinforceTimer = 0;
 let currentRoomIsBoss = false;
 let currentRoomMaxOnScreen = 99;
+let runTelemetry = null;
+let currentRoomTelemetry = null;
+
+function roundTelemetryValue(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function getViewportModeLabel() {
+  if(document.body.classList.contains('tight-viewport')) return 'tight';
+  if(document.body.classList.contains('compact-viewport')) return 'compact';
+  return 'default';
+}
+
+function createRunTelemetry() {
+  return {
+    meta: {
+      build: VERSION.num,
+      playerColor: getPlayerColor(),
+      viewportMode: getViewportModeLabel(),
+      canvasWidth: cv.width,
+      canvasHeight: cv.height,
+    },
+    rooms: [],
+    snapshots: [],
+  };
+}
+
+function createRoomTelemetry(roomNumber, roomDef) {
+  return {
+    room: roomNumber,
+    name: roomDef.name,
+    boss: Boolean(roomDef.isBossRoom),
+    viewportMode: getViewportModeLabel(),
+    canvasWidth: cv.width,
+    canvasHeight: cv.height,
+    hpStart: roundTelemetryValue(hp),
+    hpEnd: roundTelemetryValue(hp),
+    hpLost: 0,
+    hitsTaken: 0,
+    kills: 0,
+    clearMs: 0,
+    damageless: true,
+    end: 'active',
+    heal: {
+      vampiric: 0,
+      bloodPact: 0,
+      roomRegen: 0,
+      bossReward: 0,
+    },
+    charge: {
+      greyAbsorb: 0,
+      orbAbsorb: 0,
+      resonantAbsorb: 0,
+      kinetic: 0,
+      vampiric: 0,
+      barrierPulse: 0,
+      hitReward: 0,
+      slipstream: 0,
+      corona: 0,
+      finalForm: 0,
+    },
+    damage: {
+      projectile: 0,
+      contact: 0,
+    },
+    pressure: {
+      dangerBulletsSpawned: 0,
+      peakDangerBullets: 0,
+      peakEnemies: 0,
+    },
+    safety: {
+      shieldBlocks: 0,
+      phaseDashProcs: 0,
+      mirrorTideProcs: 0,
+    },
+  };
+}
+
+function recordRoomPeakState() {
+  if(!currentRoomTelemetry) return;
+  currentRoomTelemetry.pressure.peakEnemies = Math.max(currentRoomTelemetry.pressure.peakEnemies, enemies.length);
+  const liveDangerBullets = bullets.reduce((count, bullet) => count + (bullet.state === 'danger' ? 1 : 0), 0);
+  currentRoomTelemetry.pressure.peakDangerBullets = Math.max(currentRoomTelemetry.pressure.peakDangerBullets, liveDangerBullets);
+}
+
+function recordDangerBulletSpawn(count = 1) {
+  if(!currentRoomTelemetry || count <= 0) return;
+  currentRoomTelemetry.pressure.dangerBulletsSpawned += count;
+}
+
+function recordChargeGain(source, amount) {
+  if(!currentRoomTelemetry || amount <= 0) return 0;
+  const delta = roundTelemetryValue(amount);
+  currentRoomTelemetry.charge[source] = roundTelemetryValue((currentRoomTelemetry.charge[source] || 0) + delta);
+  return delta;
+}
+
+function gainCharge(amount, source) {
+  if(amount <= 0) return 0;
+  const before = charge;
+  charge = Math.min(UPG.maxCharge, charge + amount);
+  return recordChargeGain(source, charge - before);
+}
+
+function recordHeal(source, amount) {
+  if(!currentRoomTelemetry || amount <= 0) return 0;
+  const delta = roundTelemetryValue(amount);
+  currentRoomTelemetry.heal[source] = roundTelemetryValue((currentRoomTelemetry.heal[source] || 0) + delta);
+  currentRoomTelemetry.hpEnd = roundTelemetryValue(hp);
+  return delta;
+}
+
+function healPlayer(amount, source) {
+  if(amount <= 0) return 0;
+  const before = hp;
+  hp = Math.min(maxHp, hp + amount);
+  return recordHeal(source, hp - before);
+}
+
+function recordPlayerDamage(amount, source) {
+  if(!currentRoomTelemetry || amount <= 0) return 0;
+  const delta = roundTelemetryValue(amount);
+  currentRoomTelemetry.hpLost = roundTelemetryValue(currentRoomTelemetry.hpLost + delta);
+  currentRoomTelemetry.hitsTaken += 1;
+  currentRoomTelemetry.damageless = false;
+  currentRoomTelemetry.damage[source] = roundTelemetryValue((currentRoomTelemetry.damage[source] || 0) + delta);
+  currentRoomTelemetry.hpEnd = roundTelemetryValue(hp);
+  return delta;
+}
+
+function recordKill() {
+  if(!currentRoomTelemetry) return;
+  currentRoomTelemetry.kills += 1;
+}
+
+function captureTelemetrySnapshot(roomNumber) {
+  if(!runTelemetry) return;
+  runTelemetry.snapshots.push({
+    room: roomNumber,
+    hp: roundTelemetryValue(hp),
+    maxHp: roundTelemetryValue(maxHp),
+    sps: roundTelemetryValue(UPG.sps || 0),
+    maxCharge: roundTelemetryValue(UPG.maxCharge || 0),
+    requiredShotCount: getRequiredShotCount(),
+    damageMult: roundTelemetryValue((UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1)),
+    damageReductionPct: roundTelemetryValue((1 - (UPG.damageTakenMult || 1)) * 100),
+    critChancePct: roundTelemetryValue((UPG.critChance || 0) * 100),
+    moveChargeRate: roundTelemetryValue(UPG.moveChargeRate || 0),
+    shieldCount: UPG.shieldTier || 0,
+    orbitCount: UPG.orbitSphereTier || 0,
+    playerSizeMult: roundTelemetryValue(UPG.playerSizeMult || 1),
+    viewportMode: getViewportModeLabel(),
+    canvasWidth: cv.width,
+    canvasHeight: cv.height,
+  });
+}
+
+function startRoomTelemetry(roomNumber, roomDef) {
+  if(!runTelemetry) runTelemetry = createRunTelemetry();
+  runTelemetry.meta = {
+    ...runTelemetry.meta,
+    build: VERSION.num,
+    playerColor: getPlayerColor(),
+    viewportMode: getViewportModeLabel(),
+    canvasWidth: cv.width,
+    canvasHeight: cv.height,
+  };
+  currentRoomTelemetry = createRoomTelemetry(roomNumber, roomDef);
+  if(roomNumber === 1 || roomNumber % 10 === 0) {
+    captureTelemetrySnapshot(roomNumber);
+  }
+}
+
+function finalizeCurrentRoomTelemetry(endState, clearMs = roomTimer * 1000) {
+  if(!currentRoomTelemetry || !runTelemetry) return;
+  currentRoomTelemetry.end = endState;
+  currentRoomTelemetry.clearMs = Math.round(clearMs);
+  currentRoomTelemetry.hpEnd = roundTelemetryValue(hp);
+  currentRoomTelemetry.damageless = currentRoomTelemetry.damageless && !tookDamageThisRoom;
+  runTelemetry.rooms.push(currentRoomTelemetry);
+  currentRoomTelemetry = null;
+}
+
+function buildRunTelemetryPayload() {
+  if(!runTelemetry) return null;
+  const rooms = runTelemetry.rooms;
+  const summary = rooms.reduce((acc, room) => {
+    acc.roomsTracked += 1;
+    if(room.end === 'clear') acc.roomsCleared += 1;
+    acc.totalHpLost = roundTelemetryValue(acc.totalHpLost + (room.hpLost || 0));
+    acc.totalKills += room.kills || 0;
+    acc.totalDangerBulletsSpawned += room.pressure?.dangerBulletsSpawned || 0;
+    acc.totalShieldBlocks += room.safety?.shieldBlocks || 0;
+    acc.totalPhaseDashProcs += room.safety?.phaseDashProcs || 0;
+    acc.totalMirrorTideProcs += room.safety?.mirrorTideProcs || 0;
+    for(const [key, value] of Object.entries(room.heal || {})) {
+      acc.heal[key] = roundTelemetryValue((acc.heal[key] || 0) + (value || 0));
+    }
+    for(const [key, value] of Object.entries(room.charge || {})) {
+      acc.charge[key] = roundTelemetryValue((acc.charge[key] || 0) + (value || 0));
+    }
+    return acc;
+  }, {
+    roomsTracked: 0,
+    roomsCleared: 0,
+    totalHpLost: 0,
+    totalKills: 0,
+    totalDangerBulletsSpawned: 0,
+    totalShieldBlocks: 0,
+    totalPhaseDashProcs: 0,
+    totalMirrorTideProcs: 0,
+    heal: {},
+    charge: {},
+  });
+
+  return {
+    meta: {
+      ...runTelemetry.meta,
+      finalRoom: roomIndex + 1,
+      finalScore: score,
+    },
+    summary,
+    snapshots: runTelemetry.snapshots,
+    rooms,
+  };
+}
 
 function getRoomDef(idx) {
   // Boss room every 10th room (0-indexed: 9, 19, 29, 39, 49...)
@@ -406,6 +632,7 @@ function startRoom(idx) {
   player.y = cv.height / 2;
   player.vx = 0;
   player.vy = 0;
+  startRoomTelemetry(idx + 1, def);
   showRoomIntro(currentRoomIsBoss ? 'BOSS!' : 'READY?', false);
 }
 
@@ -522,12 +749,14 @@ function spawnEB(ex,ey) {
   const a=Math.atan2(player.y-ey,player.x-ex)+(Math.random()-.5)*.22;
   const spd=(145+Math.random()*40) * bulletSpeedScale();
   bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:4.5,decayStart:null,bounces:0});
+  recordDangerBulletSpawn();
 }
 
 function spawnZB(ex,ey,idx,total) {
   const a=(Math.PI*2/total)*idx;
   const spd=125 * bulletSpeedScale();
   bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:4.5,decayStart:null,bounces:0});
+  recordDangerBulletSpawn();
 }
 
 function spawnEliteZB(ex, ey, idx, total, stageOverride) {
@@ -541,12 +770,14 @@ function spawnDBB(ex,ey) {
   const a=Math.atan2(player.y-ey,player.x-ex)+(Math.random()-.5)*.22;
   const spd=(145+Math.random()*40) * bulletSpeedScale();
   bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:4.5,decayStart:null,bounces:0,doubleBounce:true,bounceCount:0});
+  recordDangerBulletSpawn();
 }
 
 function spawnTB(ex,ey) {
   const a=Math.atan2(player.y-ey,player.x-ex)+(Math.random()-.5)*.18;
   const spd=(145+Math.random()*40) * bulletSpeedScale();
   bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:7,decayStart:null,bounces:0,isTriangle:true,wallBounces:0});
+  recordDangerBulletSpawn();
 }
 
 function spawnTriangleBurst(ex, ey, origVx, origVy) {
@@ -556,6 +787,7 @@ function spawnTriangleBurst(ex, ey, origVx, origVy) {
     const angle = baseAngle + (i - 1) * (Math.PI * 2 / 3);
     bullets.push({x:ex,y:ey,vx:Math.cos(angle)*burstSpd,vy:Math.sin(angle)*burstSpd,state:'danger',r:5,decayStart:null,bounces:0,dangerBounceBudget:1});
   }
+  recordDangerBulletSpawn(3);
   sparks(ex, ey, C.danger, 6, 50);
 }
 
@@ -574,6 +806,7 @@ function spawnEliteBullet(ex, ey, angle, speed, stageOverride, extras = {}) {
   };
   applyEliteBulletStage(bullet, stage);
   bullets.push(bullet);
+  recordDangerBulletSpawn();
 }
 
 // Elite triangle shots use the same staged palette, just scaled up.
@@ -951,6 +1184,7 @@ function pushLeaderboardEntry() {
   const boons = getActiveBoonEntries(UPG);
   const playerColor = getPlayerColor();
   const boonOrder = (UPG.boonSelectionOrder || []).join(',');
+  const telemetry = buildRunTelemetryPayload();
   const entry = {
     name: playerName,
     score,
@@ -959,7 +1193,7 @@ function pushLeaderboardEntry() {
     version: VERSION.num,
     color: playerColor,
     boonOrder,
-    boons: { picks: boons, color: playerColor, order: boonOrder },
+    boons: { picks: boons, color: playerColor, order: boonOrder, telemetry },
   };
   leaderboard.push(entry);
   leaderboard.sort((a,b)=>b.score-a.score || b.ts-a.ts);
@@ -987,6 +1221,7 @@ function pushLeaderboardEntry() {
 function gameOver(){
   if(gameOverShown) return;
   gameOverShown = true;
+  finalizeCurrentRoomTelemetry('death');
   gstate='dying';
   player.deadAt = performance.now();
   player.popAt = player.deadAt + GAME_OVER_ANIM_MS * 0.72;
@@ -1011,6 +1246,8 @@ function init() {
   _chainMagnetTimer=0; _echoCounter=0; _vampiricRestoresThisRoom=0; _colossusShockwaveCd=0;
   _orbFireTimers=[]; _orbCooldown=[];
   boonHistory=[]; pendingLegendary=null; legendaryOffered=false;
+  runTelemetry = createRunTelemetry();
+  currentRoomTelemetry = null;
   bullets=[];enemies=[];particles=[];
   resetJoystickState(joy);
   resetUpgrades();
@@ -1056,6 +1293,7 @@ function update(dt,ts){
   }
 
   const W=cv.width,H=cv.height;
+  recordRoomPeakState();
   const titanSlow = UPG.colossus ? 1 - (1 - (UPG.titanSlowMult || 1)) * 0.5 : (UPG.titanSlowMult || 1);
   const bloodRushMult = UPG.bloodRush && UPG.bloodRushTimer > ts ? 1 + ((UPG.bloodRushStacks || 0) * 0.10) : 1;
   const lateBloomMoveMods = getLateBloomMods(roomIndex || 0);
@@ -1137,11 +1375,12 @@ function update(dt,ts){
       roomPhase='clear';
       roomClearTimer=0;
       bullets=[]; particles=[];
-      if(UPG.regenTick>0) hp=Math.min(maxHp, hp+UPG.regenTick);
+      if(UPG.regenTick>0) healPlayer(UPG.regenTick, 'roomRegen');
       // Escalation: reset kill count for next room
       if(UPG.escalation) UPG.escalationKills = 0;
       // EMP Burst: reset for next room
       if(UPG.empBurst) UPG.empBurstUsed = false;
+      finalizeCurrentRoomTelemetry('clear');
       showRoomClear();
     }
   }
@@ -1153,11 +1392,12 @@ function update(dt,ts){
       // Clear all projectiles immediately
       bullets=[]; particles=[];
       // Room clear regen
-      if(UPG.regenTick>0) hp=Math.min(maxHp, hp+UPG.regenTick);
+      if(UPG.regenTick>0) healPlayer(UPG.regenTick, 'roomRegen');
       // Escalation: reset kill count for next room
       if(UPG.escalation) UPG.escalationKills = 0;
       // EMP Burst: reset for next room
       if(UPG.empBurst) UPG.empBurstUsed = false;
+      finalizeCurrentRoomTelemetry('clear');
       // Damageless streak → earn reroll (cap 3)
       if(!tookDamageThisRoom){
         damagelessRooms++;
@@ -1217,7 +1457,7 @@ function update(dt,ts){
     stillTimer = 0;
     if(UPG.moveChargeRate > 0 && (roomPhase === 'spawning' || roomPhase === 'fighting')){
       const moveChargeRate = UPG.moveChargeRate * (UPG.fluxState ? 2 : 1);
-      charge = Math.min(UPG.maxCharge, charge + moveChargeRate * dt);
+      gainCharge(moveChargeRate * dt, 'kinetic');
     }
   } else {
     stillTimer += dt;
@@ -1259,7 +1499,7 @@ function update(dt,ts){
       e.x=Math.max(M+e.r,Math.min(W-M-e.r,e.x));
       e.y=Math.max(M+e.r,Math.min(H-M-e.r,e.y));
       if(d<player.r+e.r+2 && player.invincible<=0){
-        hp-=18; player.invincible=1.0; player.distort=.4;
+        hp-=18; recordPlayerDamage(18, 'contact'); player.invincible=1.0; player.distort=.4;
         sparks(player.x,player.y,C.danger,10,90);
         if(UPG.colossus && _colossusShockwaveCd <= 0){
           _colossusShockwaveCd = 4.0;
@@ -1376,10 +1616,10 @@ function update(dt,ts){
           e.hp -= 2;
           sparks(sx,sy,C.green,4,45);
           if(e.hp<=0){
-            score+=e.pts;kills++;
+            score+=e.pts;kills++; recordKill();
             sparks(e.x,e.y,e.col,14,95);
             spawnGreyDrops(e.x,e.y,ts);
-            if(UPG.finalForm && hp <= maxHp * 0.15){ charge=Math.min(UPG.maxCharge,charge+0.5); }
+            if(UPG.finalForm && hp <= maxHp * 0.15){ gainCharge(0.5, 'finalForm'); }
             enemies.splice(ei,1);
             break;
           }
@@ -1527,13 +1767,13 @@ function update(dt,ts){
           const frac = Math.min(1, spd / Math.max(1, maxSpd));
           absorbGain *= 0.5 + frac * 1.1;
         }
-        charge=Math.min(UPG.maxCharge,charge+absorbGain);
+        gainCharge(absorbGain, 'greyAbsorb');
         // Resonant Absorb
         if(UPG.resonantAbsorb){
           _absorbComboTimer=1500;
           _absorbComboCount++;
           if(_absorbComboCount>=3){
-            charge=Math.min(UPG.maxCharge, charge + UPG.absorbValue * (UPG.surgeHarvest ? 1.0 : 0.5));
+            gainCharge(UPG.absorbValue * (UPG.surgeHarvest ? 1.0 : 0.5), 'resonantAbsorb');
             _absorbComboCount=0;
           }
         }
@@ -1567,7 +1807,7 @@ function update(dt,ts){
           const sx=player.x+Math.cos(sAngle)*ORBIT_SPHERE_R;
           const sy=player.y+Math.sin(sAngle)*ORBIT_SPHERE_R;
           if(Math.hypot(b.x-sx,b.y-sy)<b.r+12){
-            charge=Math.min(UPG.maxCharge,charge+UPG.absorbValue);
+            gainCharge(UPG.absorbValue, 'orbAbsorb');
             sparks(sx,sy,C.ghost,4,40);
             bullets.splice(i,1); absorbed=true; break;
           }
@@ -1608,6 +1848,7 @@ function update(dt,ts){
           const sy=player.y+Math.sin(sAngle)*SHIELD_ORBIT_R;
           const shieldFacing = sAngle + Math.PI * 0.5;
           if(circleIntersectsShieldPlate(b.x, b.y, b.r, sx, sy, shieldFacing)){
+            if(currentRoomTelemetry) currentRoomTelemetry.safety.shieldBlocks += 1;
             // Mirror Shield: reflect bullet back as output
             if(UPG.shieldMirror && (ts - (s.mirrorCooldown||0)) > 300){
               s.mirrorCooldown = ts;
@@ -1631,7 +1872,7 @@ function update(dt,ts){
             }
             // Barrier Pulse: +2 charge + magnet pulse
             if(UPG.barrierPulse){
-              charge=Math.min(UPG.maxCharge,charge+2);
+              gainCharge(2, 'barrierPulse');
               _barrierPulseTimer=800;
             }
             const cd = getShieldCooldown();
@@ -1662,6 +1903,7 @@ function update(dt,ts){
           UPG.phaseDashCooldown <= 0 &&
           (UPG.phaseDashRoomUses || 0) < (UPG.phaseDashRoomLimit || 0)
         ){
+          if(currentRoomTelemetry) currentRoomTelemetry.safety.phaseDashProcs += 1;
           UPG.phaseDashRoomUses = (UPG.phaseDashRoomUses || 0) + 1;
           UPG.isDashing = true;
           player.invincible = 0.45;
@@ -1686,6 +1928,7 @@ function update(dt,ts){
           UPG.mirrorTideCooldown <= 0 &&
           (UPG.mirrorTideRoomUses || 0) < (UPG.mirrorTideRoomLimit || 0)
         ){
+          if(currentRoomTelemetry) currentRoomTelemetry.safety.mirrorTideProcs += 1;
           UPG.mirrorTideRoomUses = (UPG.mirrorTideRoomUses || 0) + 1;
           UPG.mirrorTideCooldown = 1500;
           const reflectAngle = Math.atan2(b.vy, b.vx) + Math.PI;
@@ -1702,10 +1945,10 @@ function update(dt,ts){
         const rawDamage = Math.ceil(18 * dmgScale);
         const lateBloomDefenseMods = getLateBloomMods(roomIndex || 0);
         const finalDamage = Math.max(1, Math.ceil(rawDamage * (UPG.damageTakenMult || 1) * lateBloomDefenseMods.damageTaken));
-        hp-=finalDamage; player.invincible=1.2; player.distort=.45;
+        hp-=finalDamage; recordPlayerDamage(finalDamage, 'projectile'); player.invincible=1.2; player.distort=.45;
         tookDamageThisRoom = true;
         if(UPG.hitChargeGain > 0){
-          charge = Math.min(UPG.maxCharge, charge + UPG.hitChargeGain);
+          gainCharge(UPG.hitChargeGain, 'hitReward');
         }
         
         // EMP Burst: at ≤30% HP + take damage, destroy all danger bullets (once per room)
@@ -1742,7 +1985,7 @@ function update(dt,ts){
         const dist=Math.hypot(b.x-player.x,b.y-player.y);
         if(dist < player.r+b.r+10 && dist >= player.r+b.r-2){
           const slipGain = UPG.slipChargeGain * (UPG.ghostFlow ? 2 : 1);
-          charge=Math.min(UPG.maxCharge,charge+slipGain);
+          gainCharge(slipGain, 'slipstream');
           _slipCooldown=150;
         }
       }
@@ -1763,10 +2006,10 @@ function update(dt,ts){
           sparks(b.x,b.y,b.crit?C.ghost:C.green,b.crit?8:5,b.crit?70:55);
           // Blood Pact: piercing shots restore 1 HP per enemy hit
           if(UPG.bloodPact && b.pierceLeft > 0){
-            hp=Math.min(maxHp,hp+1);
+            healPlayer(1, 'bloodPact');
           }
           if(e.hp<=0){
-            score+=e.pts*(b.crit?2:1);kills++;
+            score+=e.pts*(b.crit?2:1);kills++; recordKill();
             sparks(e.x,e.y,e.col, e.isBoss ? 30 : 14, e.isBoss ? 160 : 95);
             // Death bullets scatter as grey
             spawnGreyDrops(e.x,e.y,ts);
@@ -1775,13 +2018,13 @@ function update(dt,ts){
             // Boss death: big HP restore + stop escort respawns
             if(e.isBoss) {
               bossAlive = false;
-              hp = Math.min(maxHp, hp + Math.floor(maxHp * 0.5));
+              healPlayer(Math.floor(maxHp * 0.5), 'bossReward');
               showBossDefeated();
             }
             // Vampiric Return: +5 HP and +0.5 charge per kill
             if(UPG.vampiric){ 
-              hp=Math.min(maxHp,hp+5); 
-              charge=Math.min(UPG.maxCharge,charge+0.5);
+              healPlayer(5, 'vampiric'); 
+              gainCharge(0.5, 'vampiric');
             }
               // Predator's Instinct: track kill streak (5s window)
               UPG.predatorKillStreak++;
@@ -1818,7 +2061,7 @@ function update(dt,ts){
               
               // BLOOD MOON: enhanced kill rewards
               if(UPG.bloodMoon){
-                hp = Math.min(maxHp, hp + 8);
+                healPlayer(8, 'bossReward');
                 for(let i=0;i<3;i++){
                   const ang = (Math.PI*2/3)*i + Math.random()*0.3;
                   bullets.push({x:e.x,y:e.y,vx:Math.cos(ang)*120,vy:Math.sin(ang)*120,state:'grey',r:5,decayStart:ts,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:0,hitIds:new Set()});
@@ -1826,9 +2069,9 @@ function update(dt,ts){
               }
               
             // Corona: ring kills refund 1 charge
-            if(b.isRing && UPG.corona){ charge=Math.min(UPG.maxCharge,charge+1); }
+            if(b.isRing && UPG.corona){ gainCharge(1, 'corona'); }
             // Final Form: low-HP kills grant charge
-            if(UPG.finalForm && hp <= maxHp * 0.15){ charge=Math.min(UPG.maxCharge,charge+0.5); }
+            if(UPG.finalForm && hp <= maxHp * 0.15){ gainCharge(0.5, 'finalForm'); }
             enemies.splice(j,1);
           }
           if(deadManPierce || b.pierceLeft>0){

@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.18',
+    label: 'ROOM TELEMETRY',
+    summary: [
+      'This build starts the new balance-analysis pass by upgrading the leaderboard payload itself. End-of-run submissions now carry compact room-by-room telemetry so exported score files can explain why a run stabilized, snowballed, or collapsed instead of only listing its final room and boon loadout.'
+    ],
+    highlights: [
+      'Each run now records per-room pressure, damage taken, healing by source, charge gain by source, safety proc counts, and room clear time.',
+      'Periodic deep-run snapshots now capture build state like SPS, max charge, required shot count, shields, orbit count, and viewport/canvas size.',
+      'This is instrumentation only: no direct balance reductions were applied in this patch.'
+    ]
+  },
+  {
     version: '1.16.17',
     label: 'VERTICAL ARENA EXPANSION',
     summary: [
