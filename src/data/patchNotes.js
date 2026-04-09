@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.24',
+    label: 'CRASH DIAGNOSTICS',
+    summary: [
+      'This follow-up removes the unfinished-run recovery loophole from the prior stability pass. Refreshing, backgrounding, or closing the browser no longer banks a live run, and crash data now uses a separate diagnostics path instead of the leaderboard score path.'
+    ],
+    highlights: [
+      'Removed active-run autosave and startup autosubmit so refresh cannot preserve or bank an unfinished run.',
+      'Game-loop crashes now capture a local diagnostic report and attempt to upload it to a separate Supabase diagnostics table.',
+      'Only actual deaths submit leaderboard scores.'
+    ]
+  },
+  {
     version: '1.16.23',
     label: 'RUN RECOVERY',
     summary: [

@@ -18,6 +18,10 @@
 --     - summary: total healing/charge by source, total HP lost, safety proc totals
 --     - snapshots: periodic build-state checkpoints
 --     - rooms: per-room pressure, sustain, damage taken, and clear-time records
+--
+-- Diagnostic payloads (v1.16.24+):
+--   Crash/freeze diagnostics are stored in run_diagnostics instead of leaderboard_scores
+--   so unfinished runs cannot be banked as leaderboard entries.
 
 create extension if not exists pgcrypto;
 
@@ -63,9 +67,40 @@ create index if not exists leaderboard_scores_name_idx
 create index if not exists leaderboard_scores_color_idx
   on public.leaderboard_scores (game_version, player_color, score desc);
 
+create table if not exists public.run_diagnostics (
+  id uuid primary key default gen_random_uuid(),
+  player_name text not null,
+  score integer not null,
+  room integer not null,
+  game_version text not null,
+  player_color text default 'green' check (player_color in ('green', 'blue', 'purple', 'pink', 'gold', 'red', 'cyan', 'orange')),
+  report jsonb not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint run_diagnostics_name_check check (
+    player_name ~ '^[A-Z0-9 _-]{1,14}$'
+  ),
+  constraint run_diagnostics_score_check check (
+    score >= 0 and score <= 100000000
+  ),
+  constraint run_diagnostics_room_check check (
+    room >= 1 and room <= 9999
+  ),
+  constraint run_diagnostics_version_check check (
+    char_length(game_version) between 1 and 24
+  )
+);
+
+create index if not exists run_diagnostics_created_idx
+  on public.run_diagnostics (game_version, created_at desc);
+
+create index if not exists run_diagnostics_room_idx
+  on public.run_diagnostics (game_version, room desc, created_at desc);
+
 alter table public.leaderboard_scores enable row level security;
+alter table public.run_diagnostics enable row level security;
 
 revoke all on public.leaderboard_scores from anon, authenticated;
+revoke all on public.run_diagnostics from anon, authenticated;
 
 drop function if exists public.submit_score(text, integer, integer, text);
 drop function if exists public.submit_score(text, integer, integer, text, jsonb);
@@ -138,6 +173,60 @@ begin
 end;
 $$;
 
+drop function if exists public.submit_run_diagnostic(text, integer, integer, text, jsonb, text);
+create or replace function public.submit_run_diagnostic(
+  p_player_name text,
+  p_score integer,
+  p_room integer,
+  p_game_version text,
+  p_report jsonb,
+  p_player_color text default 'green'
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text;
+  v_version text;
+  v_color text;
+begin
+  v_name := upper(trim(coalesce(p_player_name, '')));
+  v_version := trim(coalesce(p_game_version, ''));
+  v_color := coalesce(p_player_color, 'green');
+
+  if v_name !~ '^[A-Z0-9 _-]{1,14}$' then
+    raise exception 'invalid player_name';
+  end if;
+
+  if p_score is null or p_score < 0 or p_score > 100000000 then
+    raise exception 'invalid score';
+  end if;
+
+  if p_room is null or p_room < 1 or p_room > 9999 then
+    raise exception 'invalid room';
+  end if;
+
+  if char_length(v_version) < 1 or char_length(v_version) > 24 then
+    raise exception 'invalid game_version';
+  end if;
+
+  if v_color not in ('green', 'blue', 'purple', 'pink', 'gold', 'red', 'cyan', 'orange') then
+    v_color := 'green';
+  end if;
+
+  if p_report is null or jsonb_typeof(p_report) <> 'object' then
+    raise exception 'invalid report';
+  end if;
+
+  insert into public.run_diagnostics (player_name, score, room, game_version, player_color, report)
+  values (v_name, p_score, p_room, v_version, v_color, p_report);
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
 drop function if exists public.get_leaderboard(text, text, text, integer);
 drop function if exists public.get_leaderboard(text, text, text, text, integer);
 create or replace function public.get_leaderboard(
@@ -192,4 +281,5 @@ as $$
 $$;
 
 grant execute on function public.submit_score(text, integer, integer, text, jsonb, text) to anon, authenticated;
+grant execute on function public.submit_run_diagnostic(text, integer, integer, text, jsonb, text) to anon, authenticated;
 grant execute on function public.get_leaderboard(text, text, text, text, integer) to anon, authenticated;

@@ -63,4 +63,15 @@ async function submitRemoteScore({ playerName, score, room, gameVersion, boons, 
   });
 }
 
-export { fetchRemoteLeaderboard, submitRemoteScore };
+async function submitRunDiagnostic({ playerName, score, room, gameVersion, report, playerColor = 'green' }) {
+  return callLeaderboardRpc('submit_run_diagnostic', {
+    p_player_name: playerName,
+    p_score: score,
+    p_room: room,
+    p_game_version: gameVersion,
+    p_report: report || null,
+    p_player_color: playerColor,
+  });
+}
+
+export { fetchRemoteLeaderboard, submitRemoteScore, submitRunDiagnostic };

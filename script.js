@@ -2,7 +2,7 @@ import { C, ROOM_SCRIPTS, BOSS_ROOMS, DECAY_BASE, M, VERSION } from './src/data/
 import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';
 import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoystickControls, tickJoystick } from './src/input/joystick.js';
-import { fetchRemoteLeaderboard, submitRemoteScore } from './src/platform/leaderboardService.js';
+import { fetchRemoteLeaderboard, submitRemoteScore, submitRunDiagnostic } from './src/platform/leaderboardService.js';
 import { bindResponsiveViewport } from './src/platform/viewport.js';
 import { showBoonSelection } from './src/ui/boonSelection.js';
 import { renderVersionTag } from './src/ui/versionTag.js';
@@ -41,7 +41,8 @@ const cv  = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 const LB_KEY = 'phantom-rebound-leaderboard-v1';
 const NAME_KEY = 'phantom-rebound-runner-name';
-const RUN_RECOVERY_KEY = 'phantom-rebound-run-recovery-v1';
+const LEGACY_RUN_RECOVERY_KEY = 'phantom-rebound-run-recovery-v1';
+const RUN_CRASH_REPORT_KEY = 'phantom-rebound-crash-report-v1';
 
 const nameInputStart = document.getElementById('name-input-start');
 const nameInputGo = document.getElementById('name-input-go');
@@ -232,7 +233,6 @@ let lbStatusText = 'LOCAL ONLY';
 let lbRequestSeq = 0;
 let raf=0, lastT=0;
 let gameOverShown = false;
-let lastRecoverySaveAt = 0;
 let boonRerolls = 1;
 let damagelessRooms = 0;
 let tookDamageThisRoom = false;
@@ -703,7 +703,6 @@ function startRoom(idx) {
   player.vx = 0;
   player.vy = 0;
   startRoomTelemetry(idx + 1, def);
-  saveRunRecovery(true);
   showRoomIntro(currentRoomIsBoss ? 'BOSS!' : 'READY?', false);
 }
 
@@ -1151,7 +1150,7 @@ function saveLeaderboard() {
   localStorage.setItem(LB_KEY, JSON.stringify(leaderboard.slice(0, 500)));
 }
 
-function buildScoreEntry({ recovery = false } = {}) {
+function buildScoreEntry() {
   const boons = getActiveBoonEntries(UPG);
   const playerColor = getPlayerColor();
   const boonOrder = (UPG.boonSelectionOrder || []).join(',');
@@ -1163,7 +1162,6 @@ function buildScoreEntry({ recovery = false } = {}) {
     version: VERSION.num,
     color: playerColor,
     boonOrder,
-    recovery,
     boons: {
       picks: boons,
       color: playerColor,
@@ -1173,30 +1171,16 @@ function buildScoreEntry({ recovery = false } = {}) {
   };
 }
 
-function saveRunRecovery(force = false) {
-  if(gstate !== 'playing' && gstate !== 'upgrade' && gstate !== 'dying') return;
-  const now = performance.now();
-  if(!force && now - lastRecoverySaveAt < 5000) return;
-  lastRecoverySaveAt = now;
+function clearLegacyRunRecovery() {
   try {
-    localStorage.setItem(RUN_RECOVERY_KEY, JSON.stringify(buildScoreEntry({ recovery: true })));
+    localStorage.removeItem(LEGACY_RUN_RECOVERY_KEY);
   } catch {}
 }
 
-function clearRunRecovery() {
+function saveCrashReport(report) {
   try {
-    localStorage.removeItem(RUN_RECOVERY_KEY);
+    localStorage.setItem(RUN_CRASH_REPORT_KEY, JSON.stringify(report));
   } catch {}
-}
-
-function loadRunRecovery() {
-  try {
-    const raw = localStorage.getItem(RUN_RECOVERY_KEY);
-    if(!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
 }
 
 function isSameLocalDay(ts, nowTs = Date.now()) {
@@ -1322,50 +1306,44 @@ function pushLeaderboardEntry() {
     setLeaderboardStatus('local', 'LOCAL FALLBACK');
     renderLeaderboard();
   });
-  clearRunRecovery();
+  clearLegacyRunRecovery();
   renderLeaderboard();
-}
-
-function submitRecoveredRun(entry) {
-  if(!entry || !entry.boons) return;
-  leaderboard.push(entry);
-  leaderboard.sort((a,b)=>b.score-a.score || b.ts-a.ts);
-  leaderboard = leaderboard.slice(0, 500);
-  saveLeaderboard();
-  submitRemoteScore({
-    playerName: entry.name,
-    score: entry.score,
-    room: entry.room,
-    gameVersion: entry.version || VERSION.num,
-    boons: entry.boons,
-    playerColor: entry.color || entry.boons.color || 'green',
-  }).catch(() => {});
-  clearRunRecovery();
-}
-
-function submitSavedRecoveryIfPresent() {
-  const entry = loadRunRecovery();
-  if(!entry || entry.version !== VERSION.num || !entry.room || entry.room < 2) return;
-  submitRecoveredRun(entry);
 }
 
 function handleGameLoopCrash(error) {
   console.error('Phantom Rebound game loop crashed', error);
   try {
-    const entry = buildScoreEntry({ recovery: true });
-    entry.crash = {
+    const entry = buildScoreEntry();
+    const crash = {
       message: String(error?.message || error || 'unknown'),
       stack: String(error?.stack || '').slice(0, 1200),
       at: Date.now(),
     };
-    localStorage.setItem(RUN_RECOVERY_KEY, JSON.stringify(entry));
-    submitRecoveredRun(entry);
+    const report = {
+      type: 'game-loop-crash',
+      crash,
+      entry,
+      counts: {
+        bullets: bullets.length,
+        enemies: enemies.length,
+        particles: particles.length,
+      },
+    };
+    saveCrashReport(report);
+    submitRunDiagnostic({
+      playerName: entry.name,
+      score: entry.score,
+      room: entry.room,
+      gameVersion: entry.version || VERSION.num,
+      report,
+      playerColor: entry.color || entry.boons.color || 'green',
+    }).catch(() => {});
   } catch {}
   gstate = 'gameover';
   cancelAnimationFrame(raf);
   if(goBoonsPanel) goBoonsPanel.classList.add('off');
   document.getElementById('go-score').textContent=score;
-  document.getElementById('go-note').textContent=`Recovered frozen run at Room ${roomIndex+1} · ${kills} enemies eliminated`;
+  document.getElementById('go-note').textContent=`Crash captured at Room ${roomIndex+1} · diagnostic saved, score not submitted`;
   renderGameOverBoons();
   gameOverScreen.classList.remove('off');
 }
@@ -1383,7 +1361,7 @@ function gameOver(){
 }
 
 function init() {
-  clearRunRecovery();
+  clearLegacyRunRecovery();
   score=0; kills=0;
   charge=0; fireT=0; stillTimer=0; prevStill=false; hp=120; maxHp=120;
   gameOverShown = false;
@@ -1415,7 +1393,7 @@ function loop(ts){
   if(gstate!=='playing' && gstate!=='dying') return;
   try {
     const dt=Math.min((ts-lastT)/1000,.05); lastT=ts;
-    update(dt,ts); draw(ts); hudUpdate(); saveRunRecovery();
+    update(dt,ts); draw(ts); hudUpdate();
     raf=requestAnimationFrame(loop);
   } catch(error) {
     handleGameLoopCrash(error);
@@ -2765,11 +2743,6 @@ document.addEventListener('keydown', (event) => {
     setPatchNotesOpen(false);
   }
 });
-window.addEventListener('pagehide', () => saveRunRecovery(true));
-document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'hidden') saveRunRecovery(true);
-});
-
 function openLeaderboardScreen() {
   lbScreen.classList.remove('off');
   refreshLeaderboardView();
@@ -2881,7 +2854,7 @@ function showLbBoonsPopup(runnerName, boons, boonOrder = '') {
 
 
 loadLeaderboard();
-submitSavedRecoveryIfPresent();
+clearLegacyRunRecovery();
 setLeaderboardStatus('local', 'LOCAL FALLBACK');
 setPlayerName(loadSavedPlayerName(), { syncInputs: true });
 renderLeaderboard();
