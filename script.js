@@ -439,7 +439,7 @@ function startRoomTelemetry(roomNumber, roomDef) {
   }
 }
 
-function finalizeCurrentRoomTelemetry(endState, clearMs = roomTimer * 1000) {
+function finalizeCurrentRoomTelemetry(endState, clearMs = roomTimer) {
   if(!currentRoomTelemetry || !runTelemetry) return;
   currentRoomTelemetry.end = endState;
   currentRoomTelemetry.clearMs = Math.round(clearMs);

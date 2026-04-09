@@ -1,5 +1,16 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.20',
+    label: 'TELEMETRY TIMER FIX',
+    summary: [
+      'This hotfix corrects the room telemetry timer units. Room timers were already tracked in milliseconds, but the telemetry finalizer multiplied them again, making exported clear times read 1000x too large.'
+    ],
+    highlights: [
+      'Room telemetry clearMs now stores actual milliseconds.',
+      'No gameplay balance values changed in this hotfix.'
+    ]
+  },
+  {
     version: '1.16.19',
     label: 'TELEMETRY HOTFIX',
     summary: [

@@ -4,7 +4,7 @@
 -- This schema now supports:
 -- - 8 player color themes (green, blue, purple, pink, gold, red, cyan, orange)
 -- - Boon selection order tracking (stored as CSV in boon_order column)
--- - Enhanced boons structure: {picks: [], color: 'color_name', order: 'csv'}
+-- - Enhanced boons structure: {picks: [], color: 'color_name', order: 'csv', telemetry: {...}}
 -- - Backwards compatibility with legacy boon arrays
 --
 -- New columns:
@@ -13,7 +13,11 @@
 -- 
 -- Updated boons structure (v1.14.0+):
 --   Legacy (still supported): boons = [boon1, boon2, boon3]
---   New format: boons = {picks: [boon1, boon2, ...], color: 'blue', order: 'Rapid Fire,Shield Burst,...'}
+--   New format: boons = {picks: [boon1, boon2, ...], color: 'blue', order: 'Rapid Fire,Shield Burst,...', telemetry: {...}}
+--   Telemetry payload (v1.16.18+): compact run analytics nested under boons.telemetry
+--     - summary: total healing/charge by source, total HP lost, safety proc totals
+--     - snapshots: periodic build-state checkpoints
+--     - rooms: per-room pressure, sustain, damage taken, and clear-time records
 
 create extension if not exists pgcrypto;
 
@@ -116,7 +120,7 @@ begin
       -- Legacy format: just array of boons, ignore for validation
       null;
     elsif jsonb_typeof(p_boons) = 'object' then
-      -- New format: {picks: [...], color: '...', order: '...'}
+      -- New format: {picks: [...], color: '...', order: '...', telemetry: {...}}
       if (p_boons->>'picks') is null then
         raise exception 'invalid boons: missing picks field';
       end if;
