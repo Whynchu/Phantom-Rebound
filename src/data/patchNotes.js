@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.25',
+    label: 'MOBILE LOAD HOTFIX',
+    summary: [
+      'This hotfix addresses a mobile black-screen load caused by a newly added diagnostic export living in a child module that some mobile browsers could keep cached across deploys.'
+    ],
+    highlights: [
+      'Crash diagnostics no longer require a new named import from the leaderboard service module.',
+      'The top-level cache-busted game script now owns the diagnostic upload path, avoiding stale child-module import failures.',
+      'No gameplay balance values changed in this hotfix.'
+    ]
+  },
+  {
     version: '1.16.24',
     label: 'CRASH DIAGNOSTICS',
     summary: [

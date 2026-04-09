@@ -2,7 +2,7 @@ import { C, ROOM_SCRIPTS, BOSS_ROOMS, DECAY_BASE, M, VERSION } from './src/data/
 import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';
 import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoystickControls, tickJoystick } from './src/input/joystick.js';
-import { fetchRemoteLeaderboard, submitRemoteScore, submitRunDiagnostic } from './src/platform/leaderboardService.js';
+import { fetchRemoteLeaderboard, submitRemoteScore } from './src/platform/leaderboardService.js';
 import { bindResponsiveViewport } from './src/platform/viewport.js';
 import { showBoonSelection } from './src/ui/boonSelection.js';
 import { renderVersionTag } from './src/ui/versionTag.js';
@@ -43,6 +43,10 @@ const LB_KEY = 'phantom-rebound-leaderboard-v1';
 const NAME_KEY = 'phantom-rebound-runner-name';
 const LEGACY_RUN_RECOVERY_KEY = 'phantom-rebound-run-recovery-v1';
 const RUN_CRASH_REPORT_KEY = 'phantom-rebound-crash-report-v1';
+const DIAGNOSTIC_REMOTE_CONFIG = {
+  url: 'https://rxeaizrnfbawrlnfveer.supabase.co',
+  publishableKey: 'sb_publishable_FHqBPGMvSa859vZASkzOzg_Zpp2GRcm',
+};
 
 const nameInputStart = document.getElementById('name-input-start');
 const nameInputGo = document.getElementById('name-input-go');
@@ -1181,6 +1185,35 @@ function saveCrashReport(report) {
   try {
     localStorage.setItem(RUN_CRASH_REPORT_KEY, JSON.stringify(report));
   } catch {}
+}
+
+async function submitRunDiagnostic({ playerName, score, room, gameVersion, report, playerColor = 'green' }) {
+  const { url, publishableKey } = DIAGNOSTIC_REMOTE_CONFIG;
+  if(!url || !publishableKey) throw new Error('Remote diagnostics not configured');
+
+  const response = await fetch(`${url}/rest/v1/rpc/submit_run_diagnostic`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: publishableKey,
+      Authorization: `Bearer ${publishableKey}`,
+    },
+    body: JSON.stringify({
+      p_player_name: playerName,
+      p_score: score,
+      p_room: room,
+      p_game_version: gameVersion,
+      p_report: report || null,
+      p_player_color: playerColor,
+    }),
+  });
+
+  if(!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || `submit_run_diagnostic failed (${response.status})`);
+  }
+
+  return response.json();
 }
 
 function isSameLocalDay(ts, nowTs = Date.now()) {
