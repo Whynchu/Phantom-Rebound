@@ -1,4 +1,4 @@
-const VERSION = { num: '1.16.18', label: 'ROOM TELEMETRY' };
+const VERSION = { num: '1.16.19', label: 'TELEMETRY HOTFIX' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

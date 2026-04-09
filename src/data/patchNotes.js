@@ -1,5 +1,16 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.19',
+    label: 'TELEMETRY HOTFIX',
+    summary: [
+      'This is a small stability fix for the new room-telemetry build. A snapshot hook was reading required shot count without the active upgrade state attached, which could break run start on Initiate Run.'
+    ],
+    highlights: [
+      'Fixed the room-telemetry snapshot call so new runs start correctly again.',
+      'No balance values changed in this hotfix.'
+    ]
+  },
+  {
     version: '1.16.18',
     label: 'ROOM TELEMETRY',
     summary: [

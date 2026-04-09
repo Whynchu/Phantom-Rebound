@@ -409,7 +409,7 @@ function captureTelemetrySnapshot(roomNumber) {
     maxHp: roundTelemetryValue(maxHp),
     sps: roundTelemetryValue(UPG.sps || 0),
     maxCharge: roundTelemetryValue(UPG.maxCharge || 0),
-    requiredShotCount: getRequiredShotCount(),
+    requiredShotCount: getRequiredShotCount(UPG),
     damageMult: roundTelemetryValue((UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1)),
     damageReductionPct: roundTelemetryValue((1 - (UPG.damageTakenMult || 1)) * 100),
     critChancePct: roundTelemetryValue((UPG.critChance || 0) * 100),
