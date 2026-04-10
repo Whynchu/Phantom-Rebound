@@ -13,6 +13,9 @@ const ESCALATION_MAX_BONUS = 0.60;
 const LATE_BLOOM_SPEED_PENALTY = 0.94;
 const LATE_BLOOM_DAMAGE_TAKEN_PENALTY = 1.06;
 const LATE_BLOOM_DAMAGE_PENALTY = 0.94;
+const KINETIC_LOW_CAP_FULL_BOOST_VOLLEYS = 1;
+const KINETIC_LOW_CAP_NO_BOOST_VOLLEYS = 4;
+const KINETIC_LOW_CAP_MAX_MULT = 1.75;
 
 function getLateBloomGrowth(roomIndex = 0) {
   const room = roomIndex || 0;
@@ -38,6 +41,19 @@ function getRequiredShotCount(upg) {
   let count = 1 + (upg.forwardShotTier || 0) + (upg.ringShots || 0) + (upg.dualShot > 0 ? 1 : 0);
   if(upg.spreadShot) count += 2;
   return Math.max(1, count);
+}
+
+function getKineticChargeMultiplier(upg) {
+  if(!upg || (upg.moveChargeRate || 0) <= 0) return 1;
+  const requiredShots = getRequiredShotCount(upg);
+  const volleysHeld = (upg.maxCharge || requiredShots) / requiredShots;
+  const span = KINETIC_LOW_CAP_NO_BOOST_VOLLEYS - KINETIC_LOW_CAP_FULL_BOOST_VOLLEYS;
+  const scarcity = Math.max(0, Math.min(1, (KINETIC_LOW_CAP_NO_BOOST_VOLLEYS - volleysHeld) / span));
+  return 1 + scarcity * (KINETIC_LOW_CAP_MAX_MULT - 1);
+}
+
+function getKineticChargeRate(upg) {
+  return (upg.moveChargeRate || 0) * getKineticChargeMultiplier(upg);
 }
 
 function syncChargeCapacity(upg) {
@@ -383,7 +399,15 @@ function getActiveBoonEntries(upg) {
   if(upg.chargeCapTier > 0) entries.push({ icon:'◆', name:'Charge Cap Up', detail:`+${Math.round((upg.chargeCapMult - 1) * 100)}% capacity` });
   if(upg.chargeCapFlatTier > 0) entries.push({ icon:'▣', name:'Deep Reserve', detail:`+${upg.chargeCapFlatBonus} flat charge` });
   if(upg.absorbRange > 0) entries.push({ icon:'🧲', name:'Wider Absorb', detail:`+${upg.absorbRange} absorb range` });
-  if(upg.kineticTier > 0) entries.push({ icon:'🌀', name:'Kinetic Harvest', detail:`${upg.moveChargeRate.toFixed(2)} charge/sec while moving` });
+  if(upg.kineticTier > 0) {
+    const kineticMult = getKineticChargeMultiplier(upg);
+    const kineticDetail = `${getKineticChargeRate(upg).toFixed(2)} charge/sec while moving`;
+    entries.push({
+      icon:'🌀',
+      name:'Kinetic Harvest',
+      detail: kineticMult > 1.01 ? `${kineticDetail} (low cap x${kineticMult.toFixed(2)})` : kineticDetail,
+    });
+  }
   if(upg.shotLifeTier > 0) entries.push({ icon:'➶', name:'Long Reach', detail:`+${Math.round((upg.shotLifeMult - 1) * 100)}% shot lifespan` });
   if(upg.extraLifeTier > 0) entries.push({ icon:'◉', name:'Extra Life', detail:`Tier ${upg.extraLifeTier}` });
   if(upg.speedTier > 0) entries.push({ icon:'👻', name:'Ghost Velocity', detail:`+${Math.round((upg.speedMult - 1) * 100)}% move speed` });
@@ -472,5 +496,5 @@ function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
   return picks;
 }
 
-export { BOONS, SPS_LADDER, CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getHyperbolicScale, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity, pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, getLateBloomBonusPct, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY };
+export { BOONS, SPS_LADDER, CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getHyperbolicScale, getDefaultUpgrades, getRequiredShotCount, getKineticChargeMultiplier, getKineticChargeRate, syncChargeCapacity, pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, getLateBloomBonusPct, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY };
 

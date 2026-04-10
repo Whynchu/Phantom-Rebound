@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.29',
+    label: 'LOW CAP KINETIC',
+    summary: [
+      'Kinetic Harvest now helps low-cap builds more directly. Its movement charge gain scales up when the current max charge only holds a small number of volleys, then fades back to the base rate for large reserve builds.'
+    ],
+    highlights: [
+      'Kinetic Harvest can reach up to 1.75x movement charge gain when the charge cap is tight.',
+      'The bonus scales from the current max charge relative to required shots, so wide or Dense Core-style low-cap builds benefit most.',
+      'Telemetry snapshots now record the effective Kinetic Harvest rate, including the low-cap bonus and Flux State multiplier.'
+    ]
+  },
+  {
     version: '1.16.28',
     label: 'PHASE DASH GRAZE',
     summary: [

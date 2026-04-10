@@ -1,5 +1,5 @@
 import { C, ROOM_SCRIPTS, BOSS_ROOMS, DECAY_BASE, M, VERSION } from './src/data/gameData.js';
-import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
+import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';
 import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoystickControls, tickJoystick } from './src/input/joystick.js';
 import { fetchRemoteLeaderboard, submitRemoteScore } from './src/platform/leaderboardService.js';
@@ -466,7 +466,7 @@ function captureTelemetrySnapshot(roomNumber) {
     damageMult: roundTelemetryValue((UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1)),
     damageReductionPct: roundTelemetryValue((1 - (UPG.damageTakenMult || 1)) * 100),
     critChancePct: roundTelemetryValue((UPG.critChance || 0) * 100),
-    moveChargeRate: roundTelemetryValue(UPG.moveChargeRate || 0),
+    moveChargeRate: roundTelemetryValue(getKineticChargeRate(UPG) * (UPG.fluxState ? 2 : 1)),
     shieldCount: UPG.shieldTier || 0,
     orbitCount: UPG.orbitSphereTier || 0,
     playerSizeMult: roundTelemetryValue(UPG.playerSizeMult || 1),
@@ -1639,7 +1639,7 @@ function update(dt,ts){
   if(!isStill){
     stillTimer = 0;
     if(UPG.moveChargeRate > 0 && (roomPhase === 'spawning' || roomPhase === 'fighting')){
-      const moveChargeRate = UPG.moveChargeRate * (UPG.fluxState ? 2 : 1);
+      const moveChargeRate = getKineticChargeRate(UPG) * (UPG.fluxState ? 2 : 1);
       gainCharge(moveChargeRate * dt, 'kinetic');
     }
   } else {
