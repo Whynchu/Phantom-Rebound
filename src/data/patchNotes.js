@@ -1,5 +1,29 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.28',
+    label: 'PHASE DASH GRAZE',
+    summary: [
+      'Phase Dash now behaves like an emergency graze instead of a full damage delete. It still moves the player out of danger, but the triggering hit now deals a small amount of damage so repeated dashes cannot erase pressure entirely.'
+    ],
+    highlights: [
+      'Phase Dash now takes 5% of the normal projectile hit damage when it triggers.',
+      'The dash still moves the player away, consumes a room use, and grants its brief invincibility window.',
+      'Titan Heart HP growth was restored to the previous curve; the size tradeoff remains the balancing cost.'
+    ]
+  },
+  {
+    version: '1.16.27',
+    label: 'SWEEP ECONOMY TUNE',
+    summary: [
+      'This balance pass responds to room-108 telemetry from v1.16.26 where a wide-shot sustain build could keep clearing while wasting thousands of charge. The main fix limits enemy death drops so one kill cannot refund an entire late-game volley.'
+    ],
+    highlights: [
+      'Enemy death grey drops now scale more gently with shot count and cap at 5.',
+      'Charge reserve growth, Quick Harvest, Kinetic Harvest, and Vampiric Return were tightened.',
+      'Rooms 80+ and 100+ add slightly more reinforcement pressure and late enemy scaling.'
+    ]
+  },
+  {
     version: '1.16.26',
     label: 'SCORE SUBMIT HOTFIX',
     summary: [

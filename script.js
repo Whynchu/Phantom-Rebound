@@ -142,7 +142,8 @@ function syncRunChargeCapacity() {
 }
 
 function getEnemyGreyDropCount() {
-  return getRequiredShotCount(UPG);
+  const requiredShots = getRequiredShotCount(UPG);
+  return Math.max(1, Math.min(5, Math.round(1 + (requiredShots - 1) * 0.55)));
 }
 
 function renderGameOverBoons() {
@@ -224,7 +225,10 @@ const MIRROR_SHIELD_DAMAGE_FACTOR = 0.60;
 const AEGIS_NOVA_DAMAGE_FACTOR = 0.55;
 const VOLATILE_ORB_COOLDOWN = 8;
 const VOLATILE_ORB_SHARED_COOLDOWN = 1.0;
+const PHASE_DASH_DAMAGE_MULT = 0.05;
 const GLOBAL_SPEED_LIFT = 1.07;
+const VAMPIRIC_HEAL_PER_KILL = 4;
+const VAMPIRIC_CHARGE_PER_KILL = 0.25;
 let enemyIdSeq = 1;
 let playerName = 'RUNNER';
 let leaderboard = [];
@@ -712,15 +716,17 @@ function startRoom(idx) {
 
 function getRoomMaxOnScreen(idx, isBossRoom) {
   if(isBossRoom) return 99;
-  if(idx >= 120) return 16;
-  if(idx >= 80) return 14;
+  if(idx >= 120) return 18;
+  if(idx >= 100) return 16;
+  if(idx >= 80) return 15;
   if(idx >= 40) return 12;
   return 99;
 }
 
 function getReinforcementIntervalMs(idx) {
-  if(idx >= 120) return 500;
-  if(idx >= 80) return 650;
+  if(idx >= 120) return 430;
+  if(idx >= 100) return 540;
+  if(idx >= 80) return 600;
   return 800;
 }
 
@@ -791,6 +797,14 @@ function getLateBloomMods(room = roomIndex || 0) {
     default:
       return { damage: 1, speed: 1, damageTaken: 1 };
   }
+}
+
+function getProjectileHitDamage(multiplier = 1) {
+  const tierOver = Math.max(0, roomIndex - 29);
+  const dmgScale = (1 + Math.log(roomIndex + 1) * 0.24) * (tierOver > 0 ? 1 + tierOver * 0.04 : 1);
+  const rawDamage = Math.ceil(18 * dmgScale);
+  const lateBloomDefenseMods = getLateBloomMods(roomIndex || 0);
+  return Math.max(1, Math.ceil(rawDamage * (UPG.damageTakenMult || 1) * lateBloomDefenseMods.damageTaken * multiplier));
 }
 
 function getEliteBulletStagePalette() {
@@ -2066,7 +2080,7 @@ function update(dt,ts){
       }
       
       if(Math.hypot(b.x-player.x,b.y-player.y)<player.r+b.r-2){
-        // Phase Dash: auto-dodge when about to take a hit
+        // Phase Dash: graze the hit for sharply reduced damage, then dash away.
         if(
           UPG.phaseDash &&
           UPG.phaseDashCooldown <= 0 &&
@@ -2084,11 +2098,23 @@ function update(dt,ts){
           player.x = Math.max(M + player.r, Math.min(W - M - player.r, player.x));
           player.y = Math.max(M + player.r, Math.min(H - M - player.r, player.y));
           sparks(player.x, player.y, getThreatPalette().advanced.hex, 16, 200);
+          const phaseDamage = getProjectileHitDamage(PHASE_DASH_DAMAGE_MULT);
+          hp -= phaseDamage; recordPlayerDamage(phaseDamage, 'projectile'); player.distort = 0.18;
+          tookDamageThisRoom = true;
+          if(UPG.hitChargeGain > 0){
+            gainCharge(UPG.hitChargeGain, 'hitReward');
+          }
           if(UPG.voidWalker){
             UPG.voidZoneActive = true;
             UPG.voidZoneTimer = ts + 2000;
           }
           bullets.splice(i, 1);
+          if(hp<=0){
+            if(UPG.lifeline && UPG.lifelineTriggerCount < (UPG.lifelineUses||1)){
+              UPG.lifelineTriggerCount++; UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,C.lifelineEffect,16,100);
+            }
+            else { gameOver(); return; }
+          }
           continue;
         }
         // Mirror Tide: reflect danger hit as output bullet
@@ -2108,12 +2134,7 @@ function update(dt,ts){
           continue;
         }
         
-        // Damage scaling: log-based for early game, reduced scaling post-30 (enemies have more health instead)
-        const tierOver = Math.max(0, roomIndex - 29);
-        const dmgScale = (1 + Math.log(roomIndex + 1) * 0.24) * (tierOver > 0 ? 1 + tierOver * 0.04 : 1);
-        const rawDamage = Math.ceil(18 * dmgScale);
-        const lateBloomDefenseMods = getLateBloomMods(roomIndex || 0);
-        const finalDamage = Math.max(1, Math.ceil(rawDamage * (UPG.damageTakenMult || 1) * lateBloomDefenseMods.damageTaken));
+        const finalDamage = getProjectileHitDamage();
         hp-=finalDamage; recordPlayerDamage(finalDamage, 'projectile'); player.invincible=1.2; player.distort=.45;
         tookDamageThisRoom = true;
         if(UPG.hitChargeGain > 0){
@@ -2190,10 +2211,10 @@ function update(dt,ts){
               healPlayer(Math.floor(maxHp * 0.5), 'bossReward');
               showBossDefeated();
             }
-            // Vampiric Return: +5 HP and +0.5 charge per kill
+            // Vampiric Return: modest sustain per kill without fully funding the next volley.
             if(UPG.vampiric){ 
-              healPlayer(5, 'vampiric'); 
-              gainCharge(0.5, 'vampiric');
+              healPlayer(VAMPIRIC_HEAL_PER_KILL, 'vampiric');
+              gainCharge(VAMPIRIC_CHARGE_PER_KILL, 'vampiric');
             }
               // Predator's Instinct: track kill streak (5s window)
               UPG.predatorKillStreak++;
