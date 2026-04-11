@@ -272,9 +272,15 @@ let roomClearTimer = 0;
 let roomPurpleShooterAssigned = false;
 let roomIntroTimer = 0;
 const ROOM_NAMES = ROOM_SCRIPTS.map((room) => room.name);
+const BASE_CONTACT_INVULN_S = 1.0;
+const BASE_PROJECTILE_INVULN_S = 1.2;
+const BOSS_CLEAR_INVULN_REDUCTION_S = 0.08;
+const MIN_CONTACT_INVULN_S = 0.45;
+const MIN_PROJECTILE_INVULN_S = 0.6;
 
 // Boss room state
 let bossAlive = false;
+let bossClears = 0;
 let escortType = '';
 let escortMaxCount = 2;
 let escortRespawnTimer = 0;
@@ -286,6 +292,14 @@ let currentRoomTelemetry = null;
 
 function roundTelemetryValue(value) {
   return Math.round(value * 100) / 100;
+}
+
+function getPostHitInvulnSeconds(kind = 'projectile') {
+  const reduction = bossClears * BOSS_CLEAR_INVULN_REDUCTION_S;
+  if(kind === 'contact') {
+    return Math.max(MIN_CONTACT_INVULN_S, BASE_CONTACT_INVULN_S - reduction);
+  }
+  return Math.max(MIN_PROJECTILE_INVULN_S, BASE_PROJECTILE_INVULN_S - reduction);
 }
 
 function getViewportModeLabel() {
@@ -767,6 +781,7 @@ function startRoom(idx) {
     UPG.isDashing = false;
   }
   roomIndex = idx;
+  bossClears = 0;
   roomPurpleShooterAssigned = false;
   const def = getRoomDef(idx);
   spawnQueue = buildSpawnQueue(def);
@@ -1900,7 +1915,7 @@ function update(dt,ts){
       e.x=Math.max(M+e.r,Math.min(W-M-e.r,e.x));
       e.y=Math.max(M+e.r,Math.min(H-M-e.r,e.y));
       if(d<player.r+e.r+2 && player.invincible<=0){
-        hp-=18; recordPlayerDamage(18, 'contact'); player.invincible=1.0; player.distort=.4;
+        hp-=18; recordPlayerDamage(18, 'contact'); player.invincible=getPostHitInvulnSeconds('contact'); player.distort=.4;
         sparks(player.x,player.y,C.danger,10,90);
         if(UPG.colossus && _colossusShockwaveCd <= 0){
           _colossusShockwaveCd = 4.0;
@@ -2417,7 +2432,7 @@ function update(dt,ts){
         }
         
         const finalDamage = getProjectileHitDamage();
-        hp-=finalDamage; recordPlayerDamage(finalDamage, 'projectile'); player.invincible=1.2; player.distort=.45;
+        hp-=finalDamage; recordPlayerDamage(finalDamage, 'projectile'); player.invincible=getPostHitInvulnSeconds('projectile'); player.distort=.45;
         tookDamageThisRoom = true;
         if(UPG.hitChargeGain > 0){
           gainCharge(UPG.hitChargeGain, 'hitReward');
@@ -2491,6 +2506,7 @@ function update(dt,ts){
             // Boss death: big HP restore + stop escort respawns
             if(e.isBoss) {
               bossAlive = false;
+              bossClears += 1;
               healPlayer(Math.floor(maxHp * 0.5), 'bossReward');
               showBossDefeated();
             }

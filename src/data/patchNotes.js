@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.43',
+    label: 'BOSS SCAR TUNING',
+    summary: [
+      'Boss clears now permanently tighten the ghost’s post-hit invulnerability for the rest of the run. The intent is to let early survivability stay forgiving while making deep runs feel sharper and less reset-heavy after repeated boss wins.'
+    ],
+    highlights: [
+      'Each boss clear reduces post-hit invulnerability for the rest of the run.',
+      'Contact-hit invulnerability shrinks from 1.0s toward a 0.45s floor.',
+      'Projectile-hit invulnerability shrinks from 1.2s toward a 0.6s floor.'
+    ]
+  },
+  {
     version: '1.16.42',
     label: 'BERSERKER FLOOR',
     summary: [
