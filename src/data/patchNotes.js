@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.46',
+    label: 'RUN CLOCK FIX',
+    summary: [
+      'This hotfix corrects the new run clock so it actually advances during play. The HUD and leaderboard time display were wired correctly, but the live elapsed-time counter was not ticking in the main update loop.'
+    ],
+    highlights: [
+      'Live run timer now increments during gameplay as intended.',
+      'Top HUD room/time display now updates in real time.',
+      'Leaderboard runtime entries continue to use the same stored timer field.'
+    ]
+  },
+  {
     version: '1.16.45',
     label: 'RUN CLOCK',
     summary: [

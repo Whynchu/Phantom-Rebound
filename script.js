@@ -1793,6 +1793,7 @@ function update(dt,ts){
   }
   // ── Room state machine
   roomTimer += dt*1000;
+  if(gstate === 'playing') runElapsedMs += dt * 1000;
 
   if(roomPhase==='intro'){
     roomIntroTimer += dt * 1000;
