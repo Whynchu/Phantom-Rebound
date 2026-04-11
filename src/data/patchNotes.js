@@ -1,5 +1,65 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.42',
+    label: 'BERSERKER FLOOR',
+    summary: [
+      'This cleanup pass retunes the remaining survival outliers after the HP-floor and wave-staging changes. Berserker stays an extreme glass-cannon path, but it is no longer pinned to the old 10-HP world, and Recover now returns enough HP to matter on the larger health pools.'
+    ],
+    highlights: [
+      'Berserker now sets max HP to 50 instead of 10.',
+      'Recover now heals 100%, then 66%, then 66% of max HP.',
+      'These are cleanup changes on top of the recent survivability floor and projectile-curve work.'
+    ]
+  },
+  {
+    version: '1.16.40',
+    label: 'SURVIVABILITY STAGING',
+    summary: [
+      'This follow-up pass keeps the higher player HP floor in place while smoothing the early-mid projectile damage curve and turning extra-wave rooms into real wave transitions. Follow-up packets now reset the player to center and replay the intro treatment instead of quietly spilling in on top of solved positioning.'
+    ],
+    highlights: [
+      'Projectile damage is softened through the early-mid rooms, then returns to full scaling by room 30.',
+      'Later waves now recenter the player and clear stray bullets before the next packet starts.',
+      'Queued spawns no longer leak the next wave into the current one before the wave transition happens.'
+    ]
+  },
+  {
+    version: '1.16.39',
+    label: 'SURVIVABILITY FLOOR',
+    summary: [
+      'This pass raises the player survivability floor instead of only chasing faster clears. Base HP is now much higher, Extra Life is front-loaded so early defense picks actually change a run, and Room Regen scales high enough to matter on the new baseline.'
+    ],
+    highlights: [
+      'Base HP increased from 120 to 200.',
+      'Extra Life now grants +40, +34, +28, +22, +18, then +14 max HP.',
+      'Room Regen now grants +18 HP per pick and caps at 54 HP per room.'
+    ]
+  },
+  {
+    version: '1.16.38',
+    label: 'DANGER OVERLAY',
+    summary: [
+      'Enemy bullets now render on a top pass above the ghost and orbit visuals. This is a readability change only, but it should make live threats much easier to track during dense rooms and boss patterns.'
+    ],
+    highlights: [
+      'Danger bullets now draw above the player sprite.',
+      'Orbit spheres and shields no longer visually bury live hostile projectiles.',
+      'No gameplay balance values changed in this patch.'
+    ]
+  },
+  {
+    version: '1.16.37',
+    label: 'MIDCURVE EASE',
+    summary: [
+      'Rooms 10-20 were still asking for too much damage unless a run spiked early. This pass eases enemy HP in that middle band while keeping the post-20 pressure curve intact, and fixes triangle burst shots so their split danger balls only need one wall hit before turning grey.'
+    ],
+    highlights: [
+      'Enemy HP is softened specifically through rooms 10-20.',
+      'Room 21+ keeps the stronger late-pressure scaling from the previous pass.',
+      'Triangle boss split shots now grey out on the first wall bounce consistently.'
+    ]
+  },
+  {
     version: '1.16.36',
     label: 'PLAYER FIRE PRIORITY',
     summary: [

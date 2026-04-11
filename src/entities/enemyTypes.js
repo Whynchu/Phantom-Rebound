@@ -67,9 +67,10 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
 
   const roomRamp = Math.min(1, roomIndex / 10);
   const hpScale = (0.28 + roomRamp * 0.72) * (1 + Math.log(roomIndex + 1) * 0.17);
+  const earlyMidHpEase = roomIndex >= 9 && roomIndex < 20 ? 0.88 : 1;
   const tierOver20 = Math.max(0, roomIndex - 19);
   const tierOver40 = Math.max(0, roomIndex - 39);
-  const room20Mult = roomIndex >= 20 ? 1.45 : (roomIndex >= 10 ? 1.12 : 1);
+  const room20Mult = roomIndex >= 20 ? 1.45 : (roomIndex >= 10 ? 1.04 : 1);
   const midTierHpMult = tierOver20 > 0 ? 1 + Math.min(1.8, tierOver20 * 0.085) : 1;
   const lateTierHpMult = tierOver40 > 0 ? 1 + Math.min(2.8, tierOver40 * 0.06) : 1;
   const lateRoomHpMult =
@@ -80,7 +81,7 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
     roomIndex >= 60 ? 1.4 :
     roomIndex >= 40 ? 1.2 :
     1;
-  const hpMult = hpScale * room20Mult * midTierHpMult * lateTierHpMult * lateRoomHpMult;
+  const hpMult = hpScale * earlyMidHpEase * room20Mult * midTierHpMult * lateTierHpMult * lateRoomHpMult;
   // Speed and fire pressure step up again in deep late game.
   const lateRoomSpdMult =
     roomIndex >= 160 ? 1.32 :

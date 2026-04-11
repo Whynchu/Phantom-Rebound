@@ -2,7 +2,11 @@ const SPS_LADDER = [0.5,1.2,2.2,3.8,6.0,8.8];
 const MAX_SHIELD_TIER = 4;
 const TITAN_HP_PCT = [1.00, 0.50, 0.25, 0.10, 0.05];
 const TITAN_SLOW_PCT = 0.05;
-const HEAL_PCT = [1.00, 0.50, 0.50];
+const HEAL_PCT = [1.00, 0.66, 0.66];
+const BERSERKER_HP = 50;
+const EXTRA_LIFE_GAINS = [40, 34, 28, 22, 18, 14];
+const ROOM_REGEN_PER_PICK = 18;
+const ROOM_REGEN_MAX = 54;
 const BASE_CHARGE_CAP = 5;
 const CHARGE_CAP_PCT = 0.12;
 const MAX_CHARGE_CAP_MULT = 2.0;
@@ -211,9 +215,9 @@ const BOONS = [
   {name:'Wider Absorb',tag:'UTILITY',icon:'🧲',desc:'Extends grey bullet pull range. Max +60.',apply(upg){upg.absorbRange=Math.min(60,upg.absorbRange+15);}},
   {name:'Long Reach',tag:'UTILITY',icon:'➶',desc:'Output shots travel farther and last longer.',apply(upg){upg.shotLifeTier++;upg.shotLifeMult=getHyperbolicScale(upg.shotLifeTier);}},
   {name:'Kinetic Harvest',tag:'UTILITY',icon:'🌀',desc:'Gain charge while moving. The front of the bar refills faster; bigger pools get a smaller fast-fill window.',apply(upg){upg.kineticTier++;upg.moveChargeRate=getHyperbolicScale(upg.kineticTier)*0.45;}},
-  {name:'Extra Life',tag:'SURVIVE',icon:'◉',desc:'+max HP, restored on pickup. Diminishes per pick.',apply(upg, state){upg.extraLifeTier++;const heal=Math.max(4,18-(upg.extraLifeTier-1)*2);state.maxHp+=heal;state.hp=Math.min(state.hp+heal,state.maxHp);}},
+  {name:'Extra Life',tag:'SURVIVE',icon:'◉',desc:'+max HP, restored on pickup. Front-loaded so early picks matter.',apply(upg, state){upg.extraLifeTier++;const idx=Math.min(EXTRA_LIFE_GAINS.length-1, upg.extraLifeTier-1);const heal=EXTRA_LIFE_GAINS[idx];state.maxHp+=heal;state.hp=Math.min(state.hp+heal,state.maxHp);}},
   {name:'Ghost Velocity',tag:'SURVIVE',icon:'👻',desc:'Move faster through the arena. Diminishes per pick.',apply(upg){upg.speedTier++;upg.speedMult=getHyperbolicScale(upg.speedTier);}},
-  {name:'Room Regen',tag:'SURVIVE',icon:'💚',desc:'+12 HP on room clear per pick. Max 36/room.',apply(upg){upg.regenTick=Math.min(36,upg.regenTick+12);}},
+  {name:'Room Regen',tag:'SURVIVE',icon:'💚',desc:'+18 HP on room clear per pick. Max 54/room.',apply(upg){upg.regenTick=Math.min(ROOM_REGEN_MAX,upg.regenTick+ROOM_REGEN_PER_PICK);}},
   {name:'Armor Weave',tag:'SURVIVE',icon:'🧱',desc:'Reduces damage taken: 18% / 36% / 50% per tier.',apply(upg){const multipliers=[1,0.82,0.64,0.5];upg.armorTier=Math.min(3,upg.armorTier+1);upg.damageTakenMult=multipliers[upg.armorTier];},evolvesWith:['Titan Heart'],evolvedVersion:{name:'Living Fortress',icon:'🧱+',desc:'Armor scales with HP% — full HP = double reduction.',apply(upg){const multipliers=[1,0.82,0.64,0.5];upg.armorTier=Math.min(3,upg.armorTier+1);upg.damageTakenMult=multipliers[upg.armorTier];upg.livingFortress=true;}}},
   {name:'Emergency Capacitor',tag:'SURVIVE',icon:'⚕️',desc:'Taking damage grants instant charge. Max 3 picks.',apply(upg){upg.capacitorTier=Math.min(3,upg.capacitorTier+1);upg.hitChargeGain=Math.min(6,upg.hitChargeGain+2);}},
   {name:'MINI',tag:'SURVIVE',icon:'·',desc:'−50% size, −25% max HP. Exclusive with Titan Heart.',apply(upg, state){if(upg.miniTaken || upg.titanTier > 0) return; upg.miniTaken = true; upg.playerSizeMult *= 0.5; state.maxHp = Math.max(10, Math.round(state.maxHp * 0.75)); state.hp = Math.min(state.maxHp, Math.max(1, Math.round(state.hp * 0.75)));}},
@@ -247,7 +251,7 @@ const BOONS = [
   {name:'Predator\'s Instinct',tag:'OFFENSE',icon:'🐺',desc:'2+ kills within 5s grants +25% damage per kill (max +125%).',requires:upg=>upg.vampiric,apply(upg){if(upg.predatorInstinct)return; upg.predatorInstinct=true;}},
   {name:'Blood Pact',tag:'SURVIVE',icon:'🩸+',desc:'Piercing shots restore 1 HP, but only once per bullet. Blood Moon adds +1 more.',requires:upg=>upg.vampiric&&upg.pierceTier>0,apply(upg){if(upg.bloodPact)return; upg.bloodPact=true;}},
   {name:'Lifeline',tag:'SURVIVE',icon:'♾',desc:'Once per run: a killing blow leaves you at 1 HP.',apply(upg){if(upg.lifeline)return; upg.lifeline=true;},evolvesWith:['Berserker'],evolvedVersion:{name:'Last Stand',icon:'♾+',desc:'Lifeline triggers AND fires a full charge burst.',apply(upg){if(upg.lifeline)return; upg.lifeline=true; upg.lastStand=true;}}},
-  {name:'Berserker',tag:'SURVIVE',icon:'🔴',desc:'Max HP→10, +3 SPS tiers, +30% speed. Exclusive.',isActive:upg=>upg.berserker,apply(upg,state){if(upg.berserker||upg.titanTier>0||upg.extraLifeTier>0||upg.regenTick>0)return; upg.berserker=true; state.maxHp=10; state.hp=Math.min(state.hp,10); upg.spsTier=Math.min(SPS_LADDER.length-1,upg.spsTier+3); upg.sps=SPS_LADDER[upg.spsTier]; upg.speedMult*=1.3;}},
+  {name:'Berserker',tag:'SURVIVE',icon:'🔴',desc:`Max HP→${BERSERKER_HP}, +3 SPS tiers, +30% speed. Exclusive.`,isActive:upg=>upg.berserker,apply(upg,state){if(upg.berserker||upg.titanTier>0||upg.extraLifeTier>0||upg.regenTick>0)return; upg.berserker=true; state.maxHp=BERSERKER_HP; state.hp=Math.min(state.hp,BERSERKER_HP); upg.spsTier=Math.min(SPS_LADDER.length-1,upg.spsTier+3); upg.sps=SPS_LADDER[upg.spsTier]; upg.speedMult*=1.3;}},
   {name:"Dead Man's Trigger",tag:'SURVIVE',icon:'☠',desc:'At ≤15% HP: ×2 damage and free pierce. Risk for reward.',apply(upg){if(upg.deadManTrigger)return; upg.deadManTrigger=true;}},
   {name:'Blood Rush',tag:'SURVIVE',icon:'🩸→',desc:'Kills grant +10% movement speed for 3s. Stacks to +50%.',requires:upg=>upg.vampiric,apply(upg){if(upg.bloodRush)return; upg.bloodRush=true;}},
   {name:'Crimson Harvest',tag:'SURVIVE',icon:'🩸+',desc:'Kills drop an extra grey bullet at the enemy position.',requires:upg=>upg.vampiric,apply(upg){if(upg.crimsonHarvest)return; upg.crimsonHarvest=true;}},
@@ -456,7 +460,7 @@ function getActiveBoonEntries(upg) {
   if(upg.predatorInstinct) entries.push({icon:'🐺',name:'Predator\'s Instinct',detail:`Kill streak: +${Math.round((upg.predatorKillStreak||0)*25)}% damage (max +125%)`});
   if(upg.bloodPact) entries.push({icon:'🩸+',name:'Blood Pact',detail:`+1 HP per piercing bullet hit cap${upg.bloodMoon ? ' (+1 from Blood Moon)' : ''}`});
   if(upg.lifeline) entries.push({icon: upg.lastStand?'♾+':'♾', name: upg.lastStand?'Last Stand':'Lifeline', detail:upg.lifelineUsed?'SPENT':'1× death save'});
-  if(upg.berserker) entries.push({icon:'🔴',name:'Berserker',detail:'HP:10, +3 SPS, +30% spd'});
+  if(upg.berserker) entries.push({icon:'🔴',name:'Berserker',detail:`HP:${BERSERKER_HP}, +3 SPS, +30% spd`});
   if(upg.deadManTrigger) entries.push({icon:'☠',name:"Dead Man's Trigger",detail:'At ≤15% HP: ×2 dmg + free pierce'});
   if(upg.echoFire) entries.push({icon:'↺',name:'Echo Fire',detail:'Every 5th shot fires free echo'});
   if(upg.splitShot) entries.push({icon: upg.splitShotEvolved?'⋔+':'⋔', name: upg.splitShotEvolved?'Fracture':'Split Shot', detail:'Bullets split on wall bounce'});

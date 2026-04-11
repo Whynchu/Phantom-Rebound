@@ -202,12 +202,13 @@ function setPatchNotesOpen(isOpen) {
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
+const BASE_PLAYER_HP = 200;
 let gstate = 'start';
 let player = {};
 let bullets = [], enemies = [], particles = [];
 let score=0, kills=0;
 let charge=0, fireT=0, stillTimer=0, prevStill=false;
-let hp=100, maxHp=100;
+let hp=BASE_PLAYER_HP, maxHp=BASE_PLAYER_HP;
 const joy = createJoystickState();
 const GAME_OVER_ANIM_MS = 850;
 const SHIELD_HALF_W = 9;
@@ -266,6 +267,7 @@ let roomIndex = 0;
 let roomPhase = 'intro';
 let roomTimer = 0;
 let spawnQueue = [];
+let activeWaveIndex = 0;
 let roomClearTimer = 0;
 let roomPurpleShooterAssigned = false;
 let roomIntroTimer = 0;
@@ -720,20 +722,33 @@ function generateWeightedWave(roomIdx) {
 function buildSpawnQueue(roomDef) {
   const queue = [];
   let waveStartAt = 0;
-  for(const wave of roomDef.waves) {
+  roomDef.waves.forEach((wave, waveIndex) => {
     let waveMaxDelay = 0;
     for(const entry of wave) {
       for(let i=0; i<entry.n; i++) {
         const spawnDelay = (entry.d || 0) * i;
         const spawnAt = waveStartAt + spawnDelay;
         waveMaxDelay = Math.max(waveMaxDelay, spawnDelay);
-        queue.push({ t: entry.t, spawnAt, isBoss: Boolean(entry.isBoss) });
+        queue.push({ t: entry.t, spawnAt, isBoss: Boolean(entry.isBoss), waveIndex });
       }
     }
     waveStartAt += waveMaxDelay + 1800;
-  }
+  });
   queue.sort((a, b) => a.spawnAt - b.spawnAt);
   return queue;
+}
+
+function beginWaveIntro(nextWaveIndex) {
+  activeWaveIndex = nextWaveIndex;
+  roomPhase = 'intro';
+  roomIntroTimer = 0;
+  bullets = [];
+  particles = [];
+  player.x = cv.width / 2;
+  player.y = cv.height / 2;
+  player.vx = 0;
+  player.vy = 0;
+  showRoomIntro(`WAVE ${nextWaveIndex + 1}`, false);
 }
 
 function startRoom(idx) {
@@ -755,6 +770,7 @@ function startRoom(idx) {
   roomPurpleShooterAssigned = false;
   const def = getRoomDef(idx);
   spawnQueue = buildSpawnQueue(def);
+  activeWaveIndex = 0;
   roomTimer = 0;
   roomIntroTimer = 0;
   roomPhase = 'intro';
@@ -875,10 +891,18 @@ function getLateBloomMods(room = roomIndex || 0) {
   }
 }
 
+function getProjectileDamageCurve(room = roomIndex || 0) {
+  if(room <= 5) return 0.9;
+  if(room <= 10) return 0.9 + (room - 5) * 0.01;
+  if(room <= 20) return 0.95;
+  if(room <= 30) return 0.95 + (room - 20) * 0.005;
+  return 1;
+}
+
 function getProjectileHitDamage(multiplier = 1) {
   const tierOver = Math.max(0, roomIndex - 29);
   const dmgScale = (1 + Math.log(roomIndex + 1) * 0.24) * (tierOver > 0 ? 1 + tierOver * 0.04 : 1);
-  const rawDamage = Math.ceil(18 * dmgScale);
+  const rawDamage = Math.ceil(18 * dmgScale * getProjectileDamageCurve(roomIndex || 0));
   const lateBloomDefenseMods = getLateBloomMods(roomIndex || 0);
   return Math.max(1, Math.ceil(rawDamage * (UPG.damageTakenMult || 1) * lateBloomDefenseMods.damageTaken * multiplier));
 }
@@ -1014,6 +1038,70 @@ function drawGooBall(x, y, radius, fillColor, coreColor, wobbleSeed, alpha = 1) 
   ctx.arc(x + Math.sin(wobbleSeed) * radius * 0.08, y + Math.cos(wobbleSeed * 1.2) * radius * 0.08, radius * 0.42, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
+}
+
+function drawBulletSprite(b, ts) {
+  if(b.state==='danger'){
+    const pulse=.75+.25*Math.sin(ts*.014);
+    const doubleBouncePalette = getDoubleBounceBulletPalette();
+    let bCol, bCore;
+    if(b.eliteColor){
+      bCol = b.eliteColor;
+      bCore = b.eliteCore || C.dangerCore;
+    } else if(b.isTriangle){
+      bCol=C.danger;
+      bCore=C.dangerCore;
+    } else {
+      bCol=b.doubleBounce&&b.bounceCount===0 ? doubleBouncePalette.fill : C.danger;
+      bCore=b.doubleBounce&&b.bounceCount===0 ? doubleBouncePalette.core : C.dangerCore;
+    }
+    ctx.globalAlpha = 0.88;
+    ctx.shadowColor=bCol;ctx.shadowBlur=16*pulse;
+    ctx.fillStyle=bCol;
+    if(b.isTriangle){
+      const angle = Math.atan2(b.vy, b.vx);
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(b.r, 0);
+      ctx.lineTo(-b.r*.6, b.r*.6);
+      ctx.lineTo(-b.r*.6, -b.r*.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else {
+      ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();
+    }
+    ctx.shadowBlur=0;ctx.fillStyle=bCore;
+    if(!b.isTriangle){
+      ctx.beginPath();ctx.arc(b.x,b.y,b.r*.42,0,Math.PI*2);ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+  } else if(b.state==='grey'){
+    const age=(ts-b.decayStart)/(DECAY_BASE+UPG.decayBonus);
+    ctx.globalAlpha=Math.max(.10,0.82-age*.72);
+    ctx.shadowColor=C.grey;ctx.shadowBlur=5;
+    ctx.fillStyle=C.grey;
+    ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;ctx.shadowBlur=0;
+
+  } else if(b.state==='output'){
+    const col = b.crit?C.ghost:C.green;
+    ctx.shadowColor=col;ctx.shadowBlur=b.crit?28:18;
+    drawGooBall(
+      b.x,
+      b.y,
+      b.r,
+      b.crit ? C.getRgba(C.ghost, 0.82) : C.getRgba(C.green, 0.72),
+      b.crit ? 'rgba(255,255,255,0.94)' : C.getRgba(C.ghost, 0.84),
+      ts * 0.013 + b.x * 0.09 + b.y * 0.07,
+      0.92
+    );
+    ctx.shadowBlur=0;
+  }
+  ctx.shadowBlur=0;
 }
 
 const VOLLEY_TOTAL_DAMAGE_MULTS = [1.00, 1.75, 2.40, 2.95, 3.40, 3.75, 4.00];
@@ -1524,7 +1612,7 @@ function gameOver(){
 function init() {
   clearLegacyRunRecovery();
   score=0; kills=0;
-  charge=0; fireT=0; stillTimer=0; prevStill=false; hp=120; maxHp=120;
+  charge=0; fireT=0; stillTimer=0; prevStill=false; hp=BASE_PLAYER_HP; maxHp=BASE_PLAYER_HP;
   gameOverShown = false;
   boonRerolls = 1;
   damagelessRooms = 0;
@@ -1659,9 +1747,20 @@ function update(dt,ts){
     }
   }
 
+  if((roomPhase === 'spawning' || roomPhase === 'fighting')
+    && enemies.length === 0
+    && spawnQueue.length > 0
+    && spawnQueue[0].waveIndex > activeWaveIndex) {
+    beginWaveIntro(spawnQueue[0].waveIndex);
+  }
+
   if(roomPhase==='spawning'){
     // Drain spawn queue (respect on-screen cap for reinforcement rooms)
-    while(spawnQueue.length && spawnQueue[0].spawnAt <= roomTimer){
+    while(
+      spawnQueue.length
+      && spawnQueue[0].waveIndex === activeWaveIndex
+      && spawnQueue[0].spawnAt <= roomTimer
+    ){
       if(enemies.length >= currentRoomMaxOnScreen) break;
       const entry = spawnQueue.shift();
       spawnEnemy(entry.t, entry.isBoss);
@@ -1726,7 +1825,12 @@ function update(dt,ts){
     }
 
     // Reinforcement spawning for rooms 40+ (non-boss)
-    if(!currentRoomIsBoss && spawnQueue.length > 0 && enemies.length < currentRoomMaxOnScreen) {
+    if(
+      !currentRoomIsBoss
+      && spawnQueue.length > 0
+      && spawnQueue[0].waveIndex === activeWaveIndex
+      && enemies.length < currentRoomMaxOnScreen
+    ) {
       reinforceTimer += dt * 1000;
       if(reinforceTimer >= getReinforcementIntervalMs(roomIndex)) {
         reinforceTimer = 0;
@@ -2076,7 +2180,8 @@ function update(dt,ts){
           }
         } else if((b.dangerBounceBudget || 0) > 0){
           b.dangerBounceBudget--;
-          sparks(b.x, b.y, C.danger, 4, 40);
+          b.state='grey'; b.decayStart=ts;
+          sparks(b.x, b.y, C.grey, 4, 35);
         } else if(b.doubleBounce){
           b.bounceCount++;
           if(b.bounceCount>=2){b.state='grey';b.decayStart=ts;sparks(b.x,b.y,C.grey,4,35);}
@@ -2538,69 +2643,10 @@ function draw(ts){
   }
   ctx.globalAlpha=1;ctx.restore();
 
-  // Bullets
+  // Output and neutral bullets sit below entities.
   for(const b of bullets){
-    if(b.state==='danger'){
-      const pulse=.75+.25*Math.sin(ts*.014);
-      const doubleBouncePalette = getDoubleBounceBulletPalette();
-      let bCol, bCore;
-      if(b.eliteColor){
-        bCol = b.eliteColor;
-        bCore = b.eliteCore || C.dangerCore;
-      } else if(b.isTriangle){
-        bCol=C.danger;
-        bCore=C.dangerCore;
-      } else {
-        bCol=b.doubleBounce&&b.bounceCount===0 ? doubleBouncePalette.fill : C.danger;
-        bCore=b.doubleBounce&&b.bounceCount===0 ? doubleBouncePalette.core : C.dangerCore;
-      }
-      ctx.globalAlpha = 0.88;
-      ctx.shadowColor=bCol;ctx.shadowBlur=16*pulse;
-      ctx.fillStyle=bCol;
-      if(b.isTriangle){
-        const angle = Math.atan2(b.vy, b.vx);
-        ctx.save();
-        ctx.translate(b.x, b.y);
-        ctx.rotate(angle);
-        ctx.beginPath();
-        ctx.moveTo(b.r, 0);
-        ctx.lineTo(-b.r*.6, b.r*.6);
-        ctx.lineTo(-b.r*.6, -b.r*.6);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      } else {
-        ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();
-      }
-      ctx.shadowBlur=0;ctx.fillStyle=bCore;
-      if(!b.isTriangle){
-        ctx.beginPath();ctx.arc(b.x,b.y,b.r*.42,0,Math.PI*2);ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-
-    } else if(b.state==='grey'){
-      const age=(ts-b.decayStart)/(DECAY_BASE+UPG.decayBonus);
-      ctx.globalAlpha=Math.max(.10,0.82-age*.72);
-      ctx.shadowColor=C.grey;ctx.shadowBlur=5;
-      ctx.fillStyle=C.grey;
-      ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();
-      ctx.globalAlpha=1;ctx.shadowBlur=0;
-
-    } else if(b.state==='output'){
-      const col = b.crit?C.ghost:C.green;
-      ctx.shadowColor=col;ctx.shadowBlur=b.crit?28:18;
-      drawGooBall(
-        b.x,
-        b.y,
-        b.r,
-        b.crit ? C.getRgba(C.ghost, 0.82) : C.getRgba(C.green, 0.72),
-        b.crit ? 'rgba(255,255,255,0.94)' : C.getRgba(C.ghost, 0.84),
-        ts * 0.013 + b.x * 0.09 + b.y * 0.07,
-        0.92
-      );
-      ctx.shadowBlur=0;
-    }
-    ctx.shadowBlur=0;
+    if(b.state==='danger') continue;
+    drawBulletSprite(b, ts);
   }
 
   // Enemies
@@ -2746,6 +2792,12 @@ function draw(ts){
       ctx.beginPath();ctx.arc(sx,sy,2,0,Math.PI*2);ctx.fill();
       ctx.restore();
     }
+  }
+
+  // Enemy projectiles stay visually above the ghost and orbit visuals.
+  for(const b of bullets){
+    if(b.state!=='danger') continue;
+    drawBulletSprite(b, ts);
   }
 
   // VOID WALKER void zone indicator
