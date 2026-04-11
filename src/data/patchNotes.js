@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.31',
+    label: 'BUILD DIVERSITY PASS',
+    summary: [
+      'This systems pass attacks the run-shape problems exposed by recent telemetry. Multi-shot bullet builds now have a capped total-damage curve, Kinetic Harvest refills the front of the bar quickly instead of collapsing under reserve, early first-boss pressure is smoother, and orbit/shield archetypes gained their first real offensive payoffs.'
+    ],
+    highlights: [
+      'Shot-count damage is now normalized by emitted volley size, and Spread Shot no longer overproduces bullets with Twin Lance.',
+      'Charge Cap Up and Deep Reserve were rebuilt so reserve adds after scaling, while Kinetic Harvest now uses a front-loaded fast-fill window that shrinks on larger pools.',
+      'Room 10-15 pressure was softened, Orbital Focus boosts orbit damage from charge state, and Aegis Battery turns ready shields into stronger retaliation plus periodic offensive bolts.'
+    ]
+  },
+  {
     version: '1.16.30',
     label: 'BLOOM START 15',
     summary: [

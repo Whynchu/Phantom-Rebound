@@ -4,18 +4,20 @@ const TITAN_HP_PCT = [1.00, 0.50, 0.25, 0.10, 0.05];
 const TITAN_SLOW_PCT = 0.05;
 const HEAL_PCT = [1.00, 0.50, 0.50];
 const BASE_CHARGE_CAP = 5;
-const CHARGE_CAP_PCT = 0.14;
-const MAX_CHARGE_CAP_MULT = 2.2;
-const MAX_DEEP_RESERVE_BONUS = 150;
+const CHARGE_CAP_PCT = 0.12;
+const MAX_CHARGE_CAP_MULT = 2.0;
+const MAX_DEEP_RESERVE_BONUS = 120;
 const CHARGED_ORB_FIRE_INTERVAL_MS = 1400;
 const ESCALATION_KILL_PCT = 0.03;
 const ESCALATION_MAX_BONUS = 0.60;
 const LATE_BLOOM_SPEED_PENALTY = 0.94;
 const LATE_BLOOM_DAMAGE_TAKEN_PENALTY = 1.06;
 const LATE_BLOOM_DAMAGE_PENALTY = 0.94;
-const KINETIC_LOW_CAP_FULL_BOOST_VOLLEYS = 1;
-const KINETIC_LOW_CAP_NO_BOOST_VOLLEYS = 4;
-const KINETIC_LOW_CAP_MAX_MULT = 1.75;
+const KINETIC_FAST_FILL_MAX_PCT = 0.50;
+const KINETIC_FAST_FILL_MIN_PCT = 0.05;
+const KINETIC_FAST_FILL_LOW_CAP = 12;
+const KINETIC_FAST_FILL_HIGH_CAP = 120;
+const KINETIC_FAST_FILL_MULT = 1.75;
 
 function getLateBloomGrowth(roomIndex = 0) {
   const room = roomIndex || 0;
@@ -43,26 +45,32 @@ function getRequiredShotCount(upg) {
   return Math.max(1, count);
 }
 
-function getKineticChargeMultiplier(upg) {
-  if(!upg || (upg.moveChargeRate || 0) <= 0) return 1;
-  const requiredShots = getRequiredShotCount(upg);
-  const volleysHeld = (upg.maxCharge || requiredShots) / requiredShots;
-  const span = KINETIC_LOW_CAP_NO_BOOST_VOLLEYS - KINETIC_LOW_CAP_FULL_BOOST_VOLLEYS;
-  const scarcity = Math.max(0, Math.min(1, (KINETIC_LOW_CAP_NO_BOOST_VOLLEYS - volleysHeld) / span));
-  return 1 + scarcity * (KINETIC_LOW_CAP_MAX_MULT - 1);
+function getKineticFastFillPct(upg) {
+  const maxCharge = Math.max(1, upg?.maxCharge || BASE_CHARGE_CAP);
+  const span = KINETIC_FAST_FILL_HIGH_CAP - KINETIC_FAST_FILL_LOW_CAP;
+  const capProgress = Math.max(0, Math.min(1, (maxCharge - KINETIC_FAST_FILL_LOW_CAP) / span));
+  return KINETIC_FAST_FILL_MAX_PCT + (KINETIC_FAST_FILL_MIN_PCT - KINETIC_FAST_FILL_MAX_PCT) * capProgress;
 }
 
-function getKineticChargeRate(upg) {
-  return (upg.moveChargeRate || 0) * getKineticChargeMultiplier(upg);
+function getKineticChargeMultiplier(upg, currentCharge = 0) {
+  if(!upg || (upg.moveChargeRate || 0) <= 0) return 1;
+  const maxCharge = Math.max(1, upg.maxCharge || BASE_CHARGE_CAP);
+  const chargeRatio = Math.max(0, Math.min(1, currentCharge / maxCharge));
+  return chargeRatio < getKineticFastFillPct(upg) ? KINETIC_FAST_FILL_MULT : 1;
+}
+
+function getKineticChargeRate(upg, currentCharge = 0) {
+  return (upg.moveChargeRate || 0) * getKineticChargeMultiplier(upg, currentCharge);
 }
 
 function syncChargeCapacity(upg) {
   const shotCount = getRequiredShotCount(upg);
   upg.chargeCapFlatBonus = Math.min(MAX_DEEP_RESERVE_BONUS, upg.chargeCapFlatBonus || 0);
   upg.chargeCapMult = Math.min(MAX_CHARGE_CAP_MULT, upg.chargeCapMult || 1);
-  const baseCap = BASE_CHARGE_CAP + Math.max(0, shotCount - 1) + upg.chargeCapFlatBonus;
+  const baseCap = BASE_CHARGE_CAP + Math.max(0, shotCount - 1);
   const capMult = upg.chargeCapMult;
-  upg.maxCharge = Math.max(baseCap, Math.round(baseCap * capMult));
+  const scaledBaseCap = Math.max(baseCap, Math.round(baseCap * capMult));
+  upg.maxCharge = scaledBaseCap + upg.chargeCapFlatBonus;
   // Dense Core reduces cap by percentage: −25% / −50% / −75%, down to minimum 1
   if(upg.denseTier > 0) {
     const reductionFactors = [0.75, 0.5, 0.25];
@@ -74,7 +82,8 @@ function syncChargeCapacity(upg) {
 }
 
 function getFlatChargeGain(tier) {
-  return Math.max(5, Math.round(18 / getHyperbolicScale(Math.max(0, tier - 1))));
+  const scaledTier = Math.max(0, tier - 1);
+  return Math.max(4, Math.round(16 / (1 + scaledTier * 0.28)));
 }
 
 function getDefaultUpgrades() {
@@ -157,6 +166,8 @@ function getDefaultUpgrades() {
     aegisTitan: false, ghostFlow: false, corona: false, finalForm: false,
     colossus: false, lifelineUses: 1, lifelineTriggerCount: 0,
     volatileOrbs: false, chargedOrbs: false, absorbOrbs: false,
+    orbitalFocus: false,
+    aegisBattery: false, aegisBatteryTimer: 0,
     bloodRush: false, bloodRushStacks: 0, bloodRushTimer: 0,
     crimsonHarvest: false,
     sanguineBurst: false, sanguineKillCount: 0, rampageEvolved: false,
@@ -194,11 +205,11 @@ const BOONS = [
   {name:'Pierce',tag:'UTILITY',icon:'→',desc:'Bullets pierce one extra enemy per tier. Max 3.',apply(upg){upg.pierceTier=Math.min(3,upg.pierceTier+1);}},
   {name:'Quick Harvest',tag:'UTILITY',icon:'⬇',desc:'Grey bullet absorbs grant more charge. Diminishes.',apply(upg){upg.absorbTier++;upg.absorbValue=1+0.40*getHyperbolicScale(upg.absorbTier);}},
   {name:'Decay Extension',tag:'UTILITY',icon:'⏳',desc:'Grey bullets linger +1s longer. Max +3s.',apply(upg){upg.decayBonus=Math.min(3000,upg.decayBonus+1000);}},
-  {name:'Charge Cap Up',tag:'UTILITY',icon:'◆',desc:'+14% max charge capacity per pick. Caps at +120%.',apply(upg){if((upg.chargeCapMult||1) >= MAX_CHARGE_CAP_MULT)return; upg.chargeCapTier++;upg.chargeCapMult = Math.min(MAX_CHARGE_CAP_MULT, 1 + upg.chargeCapTier * CHARGE_CAP_PCT);syncChargeCapacity(upg);}},
-  {name:'Deep Reserve',tag:'UTILITY',icon:'▣',desc:'+flat charge pool. Starts at +18, diminishes. Caps at +150.',apply(upg){if((upg.chargeCapFlatBonus||0) >= MAX_DEEP_RESERVE_BONUS)return; upg.chargeCapFlatTier++;upg.chargeCapFlatBonus = Math.min(MAX_DEEP_RESERVE_BONUS, (upg.chargeCapFlatBonus||0) + getFlatChargeGain(upg.chargeCapFlatTier));syncChargeCapacity(upg);}},
+  {name:'Charge Cap Up',tag:'UTILITY',icon:'◆',desc:'+12% base charge capacity per pick. Caps at +100%. Reserve adds after scaling.',apply(upg){if((upg.chargeCapMult||1) >= MAX_CHARGE_CAP_MULT)return; upg.chargeCapTier++;upg.chargeCapMult = Math.min(MAX_CHARGE_CAP_MULT, 1 + upg.chargeCapTier * CHARGE_CAP_PCT);syncChargeCapacity(upg);}},
+  {name:'Deep Reserve',tag:'UTILITY',icon:'▣',desc:'+flat charge pool. Starts at +16, diminishes harder. Caps at +120. Added after scaling.',apply(upg){if((upg.chargeCapFlatBonus||0) >= MAX_DEEP_RESERVE_BONUS)return; upg.chargeCapFlatTier++;upg.chargeCapFlatBonus = Math.min(MAX_DEEP_RESERVE_BONUS, (upg.chargeCapFlatBonus||0) + getFlatChargeGain(upg.chargeCapFlatTier));syncChargeCapacity(upg);}},
   {name:'Wider Absorb',tag:'UTILITY',icon:'🧲',desc:'Extends grey bullet pull range. Max +60.',apply(upg){upg.absorbRange=Math.min(60,upg.absorbRange+15);}},
   {name:'Long Reach',tag:'UTILITY',icon:'➶',desc:'Output shots travel farther and last longer.',apply(upg){upg.shotLifeTier++;upg.shotLifeMult=getHyperbolicScale(upg.shotLifeTier);}},
-  {name:'Kinetic Harvest',tag:'UTILITY',icon:'🌀',desc:'Gain flat charge while moving. Diminishes per pick.',apply(upg){upg.kineticTier++;upg.moveChargeRate=getHyperbolicScale(upg.kineticTier)*0.45;}},
+  {name:'Kinetic Harvest',tag:'UTILITY',icon:'🌀',desc:'Gain charge while moving. The front of the bar refills faster; bigger pools get a smaller fast-fill window.',apply(upg){upg.kineticTier++;upg.moveChargeRate=getHyperbolicScale(upg.kineticTier)*0.45;}},
   {name:'Extra Life',tag:'SURVIVE',icon:'◉',desc:'+max HP, restored on pickup. Diminishes per pick.',apply(upg, state){upg.extraLifeTier++;const heal=Math.max(4,18-(upg.extraLifeTier-1)*2);state.maxHp+=heal;state.hp=Math.min(state.hp+heal,state.maxHp);}},
   {name:'Ghost Velocity',tag:'SURVIVE',icon:'👻',desc:'Move faster through the arena. Diminishes per pick.',apply(upg){upg.speedTier++;upg.speedMult=getHyperbolicScale(upg.speedTier);}},
   {name:'Room Regen',tag:'SURVIVE',icon:'💚',desc:'+12 HP on room clear per pick. Max 36/room.',apply(upg){upg.regenTick=Math.min(36,upg.regenTick+12);}},
@@ -216,6 +227,8 @@ const BOONS = [
   {name:'Volatile Orbs',tag:'OFFENSE',icon:'💥',desc:'Orbit spheres explode on contact with a danger bullet, but only once per brief shared cooldown.',requires:upg=>upg.orbitSphereTier>0,apply(upg){if(upg.volatileOrbs)return; upg.volatileOrbs=true;}},
   {name:'Charged Orbs',tag:'OFFENSE',icon:'⚡',desc:'Each orbit sphere fires a small shot at the nearest enemy every 1.4s.',requires:upg=>upg.orbitSphereTier>0,apply(upg){if(upg.chargedOrbs)return; upg.chargedOrbs=true;}},
   {name:'Absorb Orbs',tag:'UTILITY',icon:'🌀',desc:'Grey bullets near an orbit sphere are absorbed automatically.',requires:upg=>upg.orbitSphereTier>0,apply(upg){if(upg.absorbOrbs)return; upg.absorbOrbs=true;}},
+  {name:'Orbital Focus',tag:'OFFENSE',icon:'🌐',desc:'Orbits hit harder. Charged Orbs fire 35% faster and scale damage from current charge.',requires:upg=>upg.orbitSphereTier>0,apply(upg){if(upg.orbitalFocus)return; upg.orbitalFocus=true;}},
+  {name:'Aegis Battery',tag:'OFFENSE',icon:'🔋',desc:'Ready shields empower reflects and bursts. At full shields, fire a bolt at the nearest enemy every 1.8s.',requires:upg=>upg.shieldTier>0,apply(upg){if(upg.aegisBattery)return; upg.aegisBattery=true; upg.aegisBatteryTimer=0;}},
   {name:'Dense Core',tag:'OFFENSE',icon:'◈',desc:'Reduce charge cap −25%/−50%/−75% per tier. +35% damage per tier. Extreme at 1 cap. Max 3.',apply(upg){if(upg.denseTier>=3)return; upg.denseTier++; upg.denseDamageMult=1+upg.denseTier*0.35; syncChargeCapacity(upg);}},
   {name:'Echo Fire',tag:'OFFENSE',icon:'↺',desc:'Every 5th shot fires a free echo burst.',apply(upg){if(upg.echoFire)return; upg.echoFire=true;}},
   {name:'Split Shot',tag:'OFFENSE',icon:'⋔',desc:'Output bullets split on first wall bounce.',apply(upg){if(upg.splitShot||upg.bounceTier===0)return; upg.splitShot=true;},evolvesWith:['Ricochet'],evolvedVersion:{name:'Fracture',icon:'⋔+',desc:'Bullets split into 3 on bounce, +20% damage.',apply(upg){if(upg.splitShot||upg.bounceTier===0)return; upg.splitShot=true; upg.splitShotEvolved=true; upg.denseDamageMult=(upg.denseDamageMult||1)*1.2;}}},
@@ -268,8 +281,8 @@ function boonHasEffect(boon, upg, hp, maxHp) {
 function getBoonWeight(boon, upg) {
   if(boon.name === 'Twin Lance') return 1 / (1 + upg.forwardShotTier * 1.35);
   // Build-bias: boost modifier boons when the player already owns the base
-  const SHIELD_MODS = new Set(['Tempered Shield','Mirror Shield','Shield Burst','Aegis Nova','Barrier Pulse','Swift Ward']);
-  const ORB_MODS    = new Set(['Volatile Orbs','Charged Orbs','Absorb Orbs']);
+  const SHIELD_MODS = new Set(['Tempered Shield','Mirror Shield','Shield Burst','Aegis Nova','Barrier Pulse','Swift Ward','Aegis Battery']);
+  const ORB_MODS    = new Set(['Volatile Orbs','Charged Orbs','Absorb Orbs','Orbital Focus']);
   const BOUNCE_MODS = new Set(['Split Shot','Fracture']);
   const PIERCE_MODS = new Set(['Volatile Rounds','Chain Reaction']);
   if(SHIELD_MODS.has(boon.name) && upg.shieldTier > 0) return 3;
@@ -400,12 +413,16 @@ function getActiveBoonEntries(upg) {
   if(upg.chargeCapFlatTier > 0) entries.push({ icon:'▣', name:'Deep Reserve', detail:`+${upg.chargeCapFlatBonus} flat charge` });
   if(upg.absorbRange > 0) entries.push({ icon:'🧲', name:'Wider Absorb', detail:`+${upg.absorbRange} absorb range` });
   if(upg.kineticTier > 0) {
-    const kineticMult = getKineticChargeMultiplier(upg);
-    const kineticDetail = `${getKineticChargeRate(upg).toFixed(2)} charge/sec while moving`;
+    const kineticMult = getKineticChargeMultiplier(upg, 0);
+    const kineticFastFillPct = Math.round(getKineticFastFillPct(upg) * 100);
+    const baseRate = (upg.moveChargeRate || 0);
+    const kineticDetail = kineticMult > 1.01
+      ? `${baseRate.toFixed(2)}-${getKineticChargeRate(upg, 0).toFixed(2)} charge/sec, fast-fill ${kineticFastFillPct}%`
+      : `${baseRate.toFixed(2)} charge/sec while moving`;
     entries.push({
       icon:'🌀',
       name:'Kinetic Harvest',
-      detail: kineticMult > 1.01 ? `${kineticDetail} (low cap x${kineticMult.toFixed(2)})` : kineticDetail,
+      detail: kineticDetail,
     });
   }
   if(upg.shotLifeTier > 0) entries.push({ icon:'➶', name:'Long Reach', detail:`+${Math.round((upg.shotLifeMult - 1) * 100)}% shot lifespan` });
@@ -422,6 +439,7 @@ function getActiveBoonEntries(upg) {
   if(upg.shieldBurst) entries.push({ icon: upg.aegisNova?'💠+':'💠', name: upg.aegisNova?'Aegis Nova':'Shield Burst', detail:'Break fires 4-way 55% burst' });
   if(upg.barrierPulse) entries.push({ icon:'⬡', name:'Barrier Pulse', detail:'+2 charge + magnet on break' });
   if(upg.shieldRegenTier>0) entries.push({ icon:'⚡🛡️', name:'Swift Ward', detail:`Shields recharge in ${Math.max(1.5, 4.5-upg.shieldRegenTier*2).toFixed(1)}s` });
+  if(upg.aegisBattery) entries.push({ icon:'🔋', name:'Aegis Battery', detail:'Ready shields boost retaliation and full set fires bolts' });
   if(upg.orbitSphereTier > 0) entries.push({ icon:'🔮', name:'Orbit Spheres', detail:`${upg.orbitSphereTier} sphere${upg.orbitSphereTier === 1 ? '' : 's'}` });
   if(upg.denseTier > 0) entries.push({ icon:'◈', name:'Dense Core', detail:`Tier ${upg.denseTier} — ×${upg.denseDamageMult.toFixed(2)} dmg, cap: ${upg.maxCharge}` });
   if(upg.slipTier>0) entries.push({icon: upg.fluxState?'〜+':'〜', name: upg.fluxState?'Flux State':'Slipstream', detail:`+${upg.slipChargeGain.toFixed(2)} charge/near-miss`});
@@ -469,6 +487,7 @@ function getActiveBoonEntries(upg) {
   if(upg.bloodMoon) entries.push({icon:'🩸',name:'BLOOD MOON',detail:'Kills: +8 HP, +3 grey bullets'});
   if(upg.chargedOrbs) entries.push({icon:'⚡',name:'Charged Orbs',detail:`Orbs fire shot every ${(CHARGED_ORB_FIRE_INTERVAL_MS / 1000).toFixed(1)}s`});
   if(upg.absorbOrbs) entries.push({icon:'🌀',name:'Absorb Orbs',detail:'Orbs absorb nearby grey bullets'});
+  if(upg.orbitalFocus) entries.push({icon:'🌐',name:'Orbital Focus',detail:'Orbs scale from charge, faster orb fire'});
   return entries;
 }
 
@@ -496,5 +515,5 @@ function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
   return picks;
 }
 
-export { BOONS, SPS_LADDER, CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getHyperbolicScale, getDefaultUpgrades, getRequiredShotCount, getKineticChargeMultiplier, getKineticChargeRate, syncChargeCapacity, pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, getLateBloomBonusPct, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY };
+export { BOONS, SPS_LADDER, CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getHyperbolicScale, getDefaultUpgrades, getRequiredShotCount, getKineticFastFillPct, getKineticChargeMultiplier, getKineticChargeRate, syncChargeCapacity, pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, getLateBloomBonusPct, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY };
 

@@ -594,7 +594,8 @@ function getRoomDef(idx) {
   const name = idx < ROOM_NAMES.length
     ? ROOM_NAMES[idx]
     : ['FRENZY','OVERRUN','DELUGE','STORM','NIGHTMARE','ABYSS','INFERNO','CHAOS'][(idx - ROOM_NAMES.length) % 8];
-  const chaos = Math.min(0.65, idx * 0.035);
+  const earlyGeneratedChaos = idx >= 12 && idx <= 14 ? 0.06 : 0;
+  const chaos = Math.max(0, Math.min(0.65, idx * 0.035 - earlyGeneratedChaos));
   return { name, chaos, waves:[generateWeightedWave(idx)] };
 }
 
@@ -617,10 +618,11 @@ function weightedPick(candidates) {
 function generateWeightedWave(roomIdx) {
   const unlocked = getUnlockedEnemyTypes(roomIdx);
   const entries = new Map();
-  const budgetBase = 5.0 + roomIdx * 1.35;
+  const earlyRoomBudgetPenalty = roomIdx >= 12 && roomIdx <= 14 ? 2.25 : 0;
+  const budgetBase = 5.0 + roomIdx * 1.35 - earlyRoomBudgetPenalty;
   let budget = budgetBase;
   let shooterCount = 0;
-  const MAX_TYPES = roomIdx >= 12 ? 3 : 99;
+  const MAX_TYPES = roomIdx >= 15 ? 3 : 2;
 
   if(roomIdx === 9) {
     entries.set('purple_chaser', 1);
@@ -631,10 +633,14 @@ function generateWeightedWave(roomIdx) {
   while(budget >= 2) {
     const candidates = unlocked
       .filter((type) => roomIdx > 9 || (type !== 'purple_chaser' && type !== 'purple_disruptor'))
-      .filter((type) => type !== 'purple_disruptor' || roomIdx >= 11)
+      .filter((type) => type !== 'purple_chaser' || roomIdx >= 14)
+      .filter((type) => type !== 'purple_disruptor' || roomIdx >= 15)
       .filter((type) => ENEMY_TYPES[type].spawnValue <= budget + 0.5)
       .filter((type) => entries.size < MAX_TYPES || entries.has(type))
       .filter((type) => {
+        if(roomIdx >= 12 && roomIdx <= 14 && ['zoner','disruptor','purple_chaser','purple_disruptor'].includes(type) && shooterCount >= 1) {
+          return false;
+        }
         // Rooms 20-29: once a triangle is in the wave, reduce bullet pressure from other heavy shooters
         if(roomIdx >= 20 && roomIdx < 30 && entries.has('triangle')) {
           return !['zoner','purple_disruptor','purple_chaser','disruptor'].includes(type);
@@ -940,6 +946,36 @@ function drawGooBall(x, y, radius, fillColor, coreColor, wobbleSeed, alpha = 1) 
   ctx.restore();
 }
 
+const VOLLEY_TOTAL_DAMAGE_MULTS = [1.00, 1.75, 2.40, 2.95, 3.40, 3.75, 4.00];
+const ORBITAL_FOCUS_CONTACT_BONUS = 1.5;
+const ORBITAL_FOCUS_CHARGED_ORB_DAMAGE_MULT = 1.6;
+const ORBITAL_FOCUS_CHARGED_ORB_INTERVAL_MULT = 0.65;
+const AEGIS_BATTERY_READY_PLATE_BONUS = 0.25;
+const AEGIS_BATTERY_BOLT_INTERVAL_MS = 1800;
+
+function getVolleyTotalDamageMultiplier(shotCount) {
+  const count = Math.max(1, Math.floor(shotCount || 1));
+  return VOLLEY_TOTAL_DAMAGE_MULTS[Math.min(VOLLEY_TOTAL_DAMAGE_MULTS.length - 1, count - 1)];
+}
+
+function getChargeRatio() {
+  return Math.max(0, Math.min(1, charge / Math.max(1, UPG.maxCharge || 1)));
+}
+
+function getReadyShieldCount() {
+  if(!player.shields || player.shields.length === 0) return 0;
+  let ready = 0;
+  for(const shield of player.shields) {
+    if((shield.cooldown || 0) <= 0) ready++;
+  }
+  return ready;
+}
+
+function getAegisBatteryDamageMult() {
+  if(!UPG.aegisBattery) return 1;
+  return 1 + getReadyShieldCount() * AEGIS_BATTERY_READY_PLATE_BONUS;
+}
+
 function firePlayer(tx,ty) {
   if(charge < 1) return;
   const base=Math.atan2(ty-player.y,tx-player.x);
@@ -962,17 +998,10 @@ function firePlayer(tx,ty) {
     }
   }
   
-  // Spread Shot: if enabled, modify the primary angle to fire 3 shots in a cone
+  // Spread Shot adds a fixed cone around the primary aim instead of tripling every lane.
   if(UPG.spreadShot){
-    const newAngs = [];
-    for(const ang of angs){
-      if(ang.isRing) { newAngs.push(ang); continue; } // skip ring shots
-      newAngs.push({ angle: ang.angle, offset: ang.offset });
-      newAngs.push({ angle: ang.angle - 0.35, offset: ang.offset });
-      newAngs.push({ angle: ang.angle + 0.35, offset: ang.offset });
-    }
-    angs.length = 0;
-    angs.push(...newAngs);
+    angs.push({ angle: base - 0.35, offset: 0, isSpreadExtra: true });
+    angs.push({ angle: base + 0.35, offset: 0, isSpreadExtra: true });
   }
 
   const availableShots = Math.min(Math.floor(charge), angs.length);
@@ -992,6 +1021,8 @@ function firePlayer(tx,ty) {
   const lifeMs = PLAYER_SHOT_LIFE_MS * (UPG.shotLifeMult || 1);
   const now = performance.now();
   const overchargeBonus = (UPG.overchargeVent && charge >= UPG.maxCharge) ? 1.6 : 1;
+  const volleyTotalDamageMult = getVolleyTotalDamageMultiplier(availableShots);
+  const volleyPerBulletDamageMult = volleyTotalDamageMult / availableShots;
   
   // Overload: if active and at full charge, apply 2.5x damage multiplier and consume charge
   let overloadBonus = 1;
@@ -1016,7 +1047,7 @@ function firePlayer(tx,ty) {
       pierceLeft: UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),
       homing: UPG.homingTier>0,
       crit,
-      dmg: baseDmg * overchargeBonus * overloadBonus,
+      dmg: baseDmg * volleyPerBulletDamageMult * overchargeBonus * overloadBonus,
       expireAt: now + lifeMs,
       hitIds: new Set(),
       isRing: shot.isRing || false,
@@ -1051,7 +1082,7 @@ function firePlayer(tx,ty) {
         const a=shot.angle;
         const sideX=Math.cos(a+Math.PI/2)*shot.offset;
         const sideY=Math.sin(a+Math.PI/2)*shot.offset;
-        bullets.push({x:player.x+sideX,y:player.y+sideY,vx:Math.cos(a)*bspd,vy:Math.sin(a)*bspd,state:'output',r:baseRadius,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:UPG.homingTier>0,crit:false,dmg:baseDmg,expireAt:eNow+lifeMs,hitIds:new Set()});
+        bullets.push({x:player.x+sideX,y:player.y+sideY,vx:Math.cos(a)*bspd,vy:Math.sin(a)*bspd,state:'output',r:baseRadius,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),homing:UPG.homingTier>0,crit:false,dmg:baseDmg * volleyPerBulletDamageMult,expireAt:eNow+lifeMs,hitIds:new Set(),isRing: shot.isRing || false,hasPayload: UPG.payload || false});
       }
     }
   }
@@ -1639,7 +1670,7 @@ function update(dt,ts){
   if(!isStill){
     stillTimer = 0;
     if(UPG.moveChargeRate > 0 && (roomPhase === 'spawning' || roomPhase === 'fighting')){
-      const moveChargeRate = getKineticChargeRate(UPG) * (UPG.fluxState ? 2 : 1);
+      const moveChargeRate = getKineticChargeRate(UPG, charge) * (UPG.fluxState ? 2 : 1);
       gainCharge(moveChargeRate * dt, 'kinetic');
     }
   } else {
@@ -1782,7 +1813,7 @@ function update(dt,ts){
       }
     }
 
-    if(UPG.orbitSphereTier > 0){
+  if(UPG.orbitSphereTier > 0){
       // Sync arrays
       while(_orbFireTimers.length < UPG.orbitSphereTier) _orbFireTimers.push(0);
       while(_orbCooldown.length < UPG.orbitSphereTier) _orbCooldown.push(0);
@@ -1796,7 +1827,8 @@ function update(dt,ts){
         if(ts - lastHitAt < 220) continue;
         if(Math.hypot(e.x-sx,e.y-sy) < e.r + 6){
           e.orbitHitAt[si] = ts;
-          e.hp -= 2;
+          const orbitContactDamage = 2 + (UPG.orbitalFocus ? ORBITAL_FOCUS_CONTACT_BONUS + getChargeRatio() * 1.5 : 0);
+          e.hp -= orbitContactDamage;
           sparks(sx,sy,C.green,4,45);
           if(e.hp<=0){
             score+=e.pts;kills++; recordKill('orbit');
@@ -1817,7 +1849,8 @@ function update(dt,ts){
     for(let si=0;si<UPG.orbitSphereTier;si++){
       if(_orbCooldown[si]>0) continue;
       _orbFireTimers[si]=((_orbFireTimers[si]||0)+dt*1000);
-      if(_orbFireTimers[si] >= CHARGED_ORB_FIRE_INTERVAL_MS){
+      const orbFireInterval = CHARGED_ORB_FIRE_INTERVAL_MS * (UPG.orbitalFocus ? ORBITAL_FOCUS_CHARGED_ORB_INTERVAL_MULT : 1);
+      if(_orbFireTimers[si] >= orbFireInterval){
         _orbFireTimers[si]=0;
         const sAngle=Math.PI*2/UPG.orbitSphereTier*si+ts*ORBIT_ROTATION_SPD;
         const ox=player.x+Math.cos(sAngle)*ORBIT_SPHERE_R;
@@ -1826,10 +1859,36 @@ function update(dt,ts){
         if(tgt){
           const ang=Math.atan2(tgt.e.y-oy,tgt.e.x-ox);
           const oNow=performance.now();
-          bullets.push({x:ox,y:oy,vx:Math.cos(ang)*220*GLOBAL_SPEED_LIFT,vy:Math.sin(ang)*220*GLOBAL_SPEED_LIFT,state:'output',r:3.8,decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:1.4,expireAt:oNow+1300,hitIds:new Set()});
+          const orbDamage = 1.4 * (UPG.orbitalFocus ? ORBITAL_FOCUS_CHARGED_ORB_DAMAGE_MULT * (1 + getChargeRatio() * 0.8) : 1);
+          bullets.push({x:ox,y:oy,vx:Math.cos(ang)*220*GLOBAL_SPEED_LIFT,vy:Math.sin(ang)*220*GLOBAL_SPEED_LIFT,state:'output',r:3.8,decayStart:null,bounceLeft:0,pierceLeft:0,homing:UPG.orbitalFocus,crit:false,dmg:orbDamage,expireAt:oNow+1300,hitIds:new Set()});
         }
       }
     }
+  }
+
+  if(UPG.aegisBattery && UPG.shieldTier > 0 && enemies.length > 0){
+    const readyShieldCount = getReadyShieldCount();
+    if(readyShieldCount >= UPG.shieldTier){
+      UPG.aegisBatteryTimer = (UPG.aegisBatteryTimer || 0) + dt * 1000;
+      if(UPG.aegisBatteryTimer >= AEGIS_BATTERY_BOLT_INTERVAL_MS){
+        UPG.aegisBatteryTimer = 0;
+        const target = enemies.reduce((best, enemy) => {
+          const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+          return (!best || dist < best.dist) ? { enemy, dist } : best;
+        }, null);
+        if(target){
+          const ang = Math.atan2(target.enemy.y - player.y, target.enemy.x - player.x);
+          const boltNow = performance.now();
+          const batteryDamage = (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (1.1 + readyShieldCount * 0.2);
+          bullets.push({x:player.x,y:player.y,vx:Math.cos(ang)*210*GLOBAL_SPEED_LIFT,vy:Math.sin(ang)*210*GLOBAL_SPEED_LIFT,state:'output',r:4.2,decayStart:null,bounceLeft:0,pierceLeft:0,homing:true,crit:false,dmg:batteryDamage,expireAt:boltNow+1700,hitIds:new Set()});
+          sparks(player.x, player.y, C.shieldActive, 6, 70);
+        }
+      }
+    } else {
+      UPG.aegisBatteryTimer = 0;
+    }
+  } else if(UPG.aegisBattery) {
+    UPG.aegisBatteryTimer = 0;
   }
 
   // ── Bullets
@@ -2036,7 +2095,7 @@ function update(dt,ts){
             if(UPG.shieldMirror && (ts - (s.mirrorCooldown||0)) > 300){
               s.mirrorCooldown = ts;
               const mNow = performance.now();
-              bullets.push({x:sx,y:sy,vx:b.vx,vy:b.vy,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*(UPG.aegisTitan ? MIRROR_SHIELD_DAMAGE_FACTOR * 2 : MIRROR_SHIELD_DAMAGE_FACTOR),expireAt:mNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
+              bullets.push({x:sx,y:sy,vx:b.vx,vy:b.vy,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*(UPG.aegisTitan ? MIRROR_SHIELD_DAMAGE_FACTOR * 2 : MIRROR_SHIELD_DAMAGE_FACTOR)*getAegisBatteryDamageMult(),expireAt:mNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
             }
             // Tempered Shield: two-stage (purple -> blue -> pop)
             if(UPG.shieldTempered && s.hardened){
@@ -2050,7 +2109,7 @@ function update(dt,ts){
               const burstCount = UPG.aegisTitan ? 8 : 4;
               for(let ba=0;ba<burstCount;ba++){
                 const bang=ba*Math.PI*2/burstCount;
-                bullets.push({x:player.x,y:player.y,vx:Math.cos(bang)*230*GLOBAL_SPEED_LIFT,vy:Math.sin(bang)*230*GLOBAL_SPEED_LIFT,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*AEGIS_NOVA_DAMAGE_FACTOR,expireAt:bNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
+                bullets.push({x:player.x,y:player.y,vx:Math.cos(bang)*230*GLOBAL_SPEED_LIFT,vy:Math.sin(bang)*230*GLOBAL_SPEED_LIFT,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*AEGIS_NOVA_DAMAGE_FACTOR*getAegisBatteryDamageMult(),expireAt:bNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
               }
             }
             // Barrier Pulse: +2 charge + magnet pulse
