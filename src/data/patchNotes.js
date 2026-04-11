@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.36',
+    label: 'PLAYER FIRE PRIORITY',
+    summary: [
+      'Charged Orbs now reserve charge for the ghost before spending any overflow. This keeps the main weapon responsive on still-fire builds instead of letting orbit timers steal the last usable shot.'
+    ],
+    highlights: [
+      'Still-fire now reserves the player weapon charge budget before Charged Orbs can spend reserve.',
+      'Orb shots only consume overflow charge after the ghost has enough banked to fire.',
+      'This mainly affects orbit builds with low charge caps or wide player shot patterns.'
+    ]
+  },
+  {
     version: '1.16.35',
     label: 'BOSS CADENCE PASS',
     summary: [

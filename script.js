@@ -1052,6 +1052,11 @@ function getBloodPactHealCap() {
   return BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET + (UPG.bloodMoon ? BLOOD_PACT_BLOOD_MOON_BONUS_CAP : 0);
 }
 
+function getPlayerShotChargeReserve(isStill, enemyCount = enemies.length) {
+  if(!isStill || enemyCount <= 0) return 0;
+  return Math.max(1, getRequiredShotCount(UPG));
+}
+
 function firePlayer(tx,ty) {
   if(charge < 1) return;
   const base=Math.atan2(ty-player.y,tx-player.x);
@@ -1939,7 +1944,9 @@ function update(dt,ts){
           const oNow=performance.now();
           const chargeRatio = getChargeRatio();
           const orbShotAngles = UPG.orbTwin ? [ang - 0.14, ang + 0.14] : [ang];
-          const orbShotsAvailable = Math.min(Math.floor(charge), orbShotAngles.length);
+          const reservedForPlayer = getPlayerShotChargeReserve(isStill, enemies.length);
+          const orbChargeAvailable = Math.max(0, Math.floor(charge) - reservedForPlayer);
+          const orbShotsAvailable = Math.min(orbChargeAvailable, orbShotAngles.length);
           if(orbShotsAvailable <= 0) continue;
           let orbTotalDamage = 1.4;
           if(UPG.orbitalFocus) orbTotalDamage *= ORBITAL_FOCUS_CHARGED_ORB_DAMAGE_MULT * (1 + chargeRatio * 0.8);
