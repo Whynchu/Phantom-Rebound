@@ -18,6 +18,7 @@ Recent stabilization stages landed after `1.16.51`:
 - `cd8191a` Extracted game-over panel rendering helper into [src/ui/gameOver.js](C:/Development/Phantom-Rebound/src/ui/gameOver.js:1).
 - `e34a295` Extracted leaderboard refresh/submit async orchestration into [src/platform/leaderboardRuntime.js](C:/Development/Phantom-Rebound/src/platform/leaderboardRuntime.js:1).
 - `df482c5` Extracted app-shell/menu-chrome helper behavior into [src/ui/shell.js](C:/Development/Phantom-Rebound/src/ui/shell.js:1).
+- `238356f` Hardened release gate by adding browser-module syntax validation to [scripts/verify-all.ps1](C:/Development/Phantom-Rebound/scripts/verify-all.ps1:1), which catches scope leaks that CommonJS checks can miss.
 
 Validation status:
 
