@@ -21,6 +21,12 @@ import {
   forceLocalLeaderboardFallback,
 } from '../src/platform/leaderboardController.js';
 import {
+  sanitizePlayerName,
+  parseLocalLeaderboardRows,
+  upsertLocalLeaderboardEntry,
+  buildLocalScoreEntry,
+} from '../src/platform/leaderboardLocal.js';
+import {
   getRoomDef,
   getRoomMaxOnScreen,
   getReinforcementIntervalMs,
@@ -217,6 +223,50 @@ test('leaderboard failure transition ignores stale request ids', () => {
   assert.equal(appliedFailure, true);
   assert.equal(state.statusMode, 'local');
   assert.equal(state.statusText, 'LOCAL FALLBACK');
+});
+
+test('leaderboard local helpers sanitize, parse, and upsert rows', () => {
+  assert.equal(sanitizePlayerName('a!b@c# d$%^&*()'), 'ABC D');
+
+  const parsed = parseLocalLeaderboardRows([
+    { name: 'A', score: 100, ts: 10, version: '1.0.0' },
+    { name: 'B', score: 300, ts: 30, version: '1.0.0' },
+    { name: 'C', score: 200, ts: 20, version: '1.0.1' },
+    { name: 'D', score: Number.NaN, ts: 40, version: '1.0.0' },
+  ], { gameVersion: '1.0.0', limit: 10 });
+  assert.equal(parsed.length, 2);
+  assert.equal(parsed[0].name, 'B');
+  assert.equal(parsed[1].name, 'A');
+
+  const next = upsertLocalLeaderboardEntry(parsed, { name: 'E', score: 250, ts: 50, version: '1.0.0' }, 2);
+  assert.equal(next.length, 2);
+  assert.equal(next[0].name, 'B');
+  assert.equal(next[1].name, 'E');
+});
+
+test('buildLocalScoreEntry keeps leaderboard payload contract', () => {
+  const entry = buildLocalScoreEntry({
+    playerName: 'RUNNER',
+    score: 4200,
+    room: 25,
+    runTimeMs: 123456,
+    gameVersion: '1.0.0',
+    color: 'green',
+    boonOrder: 'Rapid Fire,Shield',
+    boons: [{ name: 'Rapid Fire' }],
+    telemetry: { summary: { totalKills: 99 } },
+    ts: 999,
+  });
+  assert.equal(entry.name, 'RUNNER');
+  assert.equal(entry.version, '1.0.0');
+  assert.equal(entry.room, 25);
+  assert.equal(entry.runTimeMs, 123456);
+  assert.equal(entry.color, 'green');
+  assert.equal(entry.boonOrder, 'Rapid Fire,Shield');
+  assert.equal(entry.boons.order, 'Rapid Fire,Shield');
+  assert.equal(entry.boons.picks.length, 1);
+  assert.equal(entry.boons.telemetry.summary.totalKills, 99);
+  assert.equal(entry.ts, 999);
 });
 
 test('room flow helpers keep threshold values', () => {

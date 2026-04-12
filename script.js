@@ -6,6 +6,12 @@ import { fetchRemoteLeaderboard, submitRemoteScore, submitRunDiagnostic } from '
 import { bindResponsiveViewport } from './src/platform/viewport.js';
 import { readText, writeText, readJson, writeJson, removeKey } from './src/platform/storage.js';
 import {
+  sanitizePlayerName,
+  parseLocalLeaderboardRows,
+  upsertLocalLeaderboardEntry,
+  buildLocalScoreEntry,
+} from './src/platform/leaderboardLocal.js';
+import {
   createLeaderboardSyncState,
   beginLeaderboardSync,
   applyLeaderboardSyncSuccess,
@@ -1158,25 +1164,15 @@ function showUpgrades() {
   });
 }
 
-function sanitizeName(v) {
-  const cleaned = (v || '').toUpperCase().replace(/[^A-Z0-9 _-]/g, '').trim();
-  return cleaned.slice(0, 14);
-}
-
 function loadLeaderboard() {
-  const parsed = readJson(LB_KEY, []);
-  if(Array.isArray(parsed)) {
-    leaderboard = parsed
-      .filter((x)=>x && typeof x.name==='string' && Number.isFinite(x.score) && Number.isFinite(x.ts) && x.version === VERSION.num)
-      .slice(0, 500);
-    leaderboard.sort((a,b)=>b.score-a.score || b.ts-a.ts);
-  } else {
-    leaderboard = [];
-  }
+  leaderboard = parseLocalLeaderboardRows(readJson(LB_KEY, []), {
+    gameVersion: VERSION.num,
+    limit: 500,
+  });
 }
 
 function loadSavedPlayerName() {
-  return sanitizeName(readText(NAME_KEY, ''));
+  return sanitizePlayerName(readText(NAME_KEY, ''));
 }
 
 function saveLeaderboard() {
@@ -1187,22 +1183,17 @@ function buildScoreEntry() {
   const boons = getActiveBoonEntries(UPG);
   const playerColor = getPlayerColor();
   const boonOrder = (UPG.boonSelectionOrder || []).join(',');
-  return {
-    name: playerName,
+  return buildLocalScoreEntry({
+    playerName,
     score,
     room: roomIndex + 1,
     runTimeMs: Math.round(runElapsedMs),
-    ts: Date.now(),
-    version: VERSION.num,
+    gameVersion: VERSION.num,
     color: playerColor,
     boonOrder,
-    boons: {
-      picks: boons,
-      color: playerColor,
-      order: boonOrder,
-      telemetry: buildRunTelemetryPayload(),
-    },
-  };
+    boons,
+    telemetry: buildRunTelemetryPayload(),
+  });
 }
 
 function clearLegacyRunRecovery() {
@@ -1266,9 +1257,7 @@ async function refreshLeaderboardView() {
 
 function pushLeaderboardEntry() {
   const entry = buildScoreEntry();
-  leaderboard.push(entry);
-  leaderboard.sort((a,b)=>b.score-a.score || b.ts-a.ts);
-  leaderboard = leaderboard.slice(0, 500);
+  leaderboard = upsertLocalLeaderboardEntry(leaderboard, entry, 500);
   saveLeaderboard();
   submitRemoteScore({
     playerName: entry.name,
@@ -2828,7 +2817,7 @@ lbScopeBtns.forEach((btn) => {
 });
 
 function setPlayerName(v, { syncInputs = false } = {}){
-  const sanitized = sanitizeName(v);
+  const sanitized = sanitizePlayerName(v);
   playerName = sanitized || 'RUNNER';
   writeText(NAME_KEY, sanitized);
   if(syncInputs){
