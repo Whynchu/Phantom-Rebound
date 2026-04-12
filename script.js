@@ -24,6 +24,7 @@ import {
   applyKillSustainHeal as applyKillSustainHealValue,
 } from './src/systems/sustain.js';
 import { computeKillScore, computeFiveRoomCheckpointBonus } from './src/systems/scoring.js';
+import { applyDamagelessRoomProgression as applyDamagelessRoomProgressionValue } from './src/systems/progression.js';
 import { computeProjectileHitDamage } from './src/systems/damage.js';
 import {
   generateWeightedWave as generateWeightedWaveValue,
@@ -373,6 +374,18 @@ function applyKillSustainHeal(amount, source) {
 function awardFiveRoomScoreBonus() {
   if(!runTelemetry) return;
   score += computeFiveRoomCheckpointBonus(runTelemetry.rooms);
+}
+
+function applyRoomClearProgression() {
+  const progression = applyDamagelessRoomProgressionValue({
+    tookDamageThisRoom,
+    damagelessRooms,
+    boonRerolls,
+    streakThreshold: 3,
+    rerollCap: 3,
+  });
+  damagelessRooms = progression.damagelessRooms;
+  boonRerolls = progression.boonRerolls;
 }
 
 function getViewportModeLabel() {
@@ -1519,6 +1532,7 @@ function update(dt,ts){
       // EMP Burst: reset for next room
       if(UPG.empBurst) UPG.empBurstUsed = false;
       finalizeCurrentRoomTelemetry('clear');
+      applyRoomClearProgression();
       showRoomClear();
     }
   }
@@ -1539,16 +1553,7 @@ function update(dt,ts){
       // EMP Burst: reset for next room
       if(UPG.empBurst) UPG.empBurstUsed = false;
       finalizeCurrentRoomTelemetry('clear');
-      // Damageless streak → earn reroll (cap 3)
-      if(!tookDamageThisRoom){
-        damagelessRooms++;
-        if(damagelessRooms >= 3){
-          boonRerolls = Math.min(3, boonRerolls + 1);
-          damagelessRooms = 0;
-        }
-      } else {
-        damagelessRooms = 0;
-      }
+      applyRoomClearProgression();
       showRoomClear();
     }
   }

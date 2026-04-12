@@ -41,6 +41,7 @@ import {
   createRoomTelemetry,
   buildRunTelemetryPayload,
 } from '../src/systems/telemetry.js';
+import { applyDamagelessRoomProgression } from '../src/systems/progression.js';
 
 function test(name, fn) {
   try {
@@ -451,6 +452,44 @@ test('buildRunTelemetryPayload returns null without run state', () => {
     roundTelemetryValue: (value) => value,
   });
   assert.equal(payload, null);
+});
+
+test('applyDamagelessRoomProgression handles streak and reset behavior', () => {
+  const tookHit = applyDamagelessRoomProgression({
+    tookDamageThisRoom: true,
+    damagelessRooms: 2,
+    boonRerolls: 1,
+  });
+  assert.equal(tookHit.damagelessRooms, 0);
+  assert.equal(tookHit.boonRerolls, 1);
+  assert.equal(tookHit.awardedReroll, false);
+
+  const streaking = applyDamagelessRoomProgression({
+    tookDamageThisRoom: false,
+    damagelessRooms: 1,
+    boonRerolls: 1,
+  });
+  assert.equal(streaking.damagelessRooms, 2);
+  assert.equal(streaking.boonRerolls, 1);
+  assert.equal(streaking.awardedReroll, false);
+
+  const completed = applyDamagelessRoomProgression({
+    tookDamageThisRoom: false,
+    damagelessRooms: 2,
+    boonRerolls: 1,
+  });
+  assert.equal(completed.damagelessRooms, 0);
+  assert.equal(completed.boonRerolls, 2);
+  assert.equal(completed.awardedReroll, true);
+
+  const capped = applyDamagelessRoomProgression({
+    tookDamageThisRoom: false,
+    damagelessRooms: 2,
+    boonRerolls: 3,
+  });
+  assert.equal(capped.damagelessRooms, 0);
+  assert.equal(capped.boonRerolls, 3);
+  assert.equal(capped.awardedReroll, true);
 });
 
 if (process.exitCode && process.exitCode !== 0) {
