@@ -1,0 +1,26 @@
+name: Verify All
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Run Verification Gate
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\verify-all.ps1
