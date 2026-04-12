@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.50',
+    label: 'SUSTAIN BRAKE',
+    summary: [
+      'This pass hits lifesteal much harder and raises the overall arena tempo again. The shared room sustain budget is substantially tighter now, Blood Pact is brought under that same cap instead of bypassing it, and the global gameplay lift is pushed up to 145%.'
+    ],
+    highlights: [
+      'Global gameplay speed increased from 120% to 145%.',
+      'Vampiric/Blood Moon room sustain cap is cut much lower than before.',
+      'Blood Pact healing now also consumes the same room sustain budget.'
+    ]
+  },
+  {
     version: '1.16.49',
     label: 'LATE HP LIFT',
     summary: [

@@ -1,6 +1,6 @@
 import { getThreatPalette } from '../data/colorScheme.js';
 
-const GLOBAL_SPEED_LIFT = 1.20;
+const GLOBAL_SPEED_LIFT = 1.45;
 
 const ENEMY_TYPES = {
   chaser:         {colorRole:'danger',       r:12,hp:3, spd:55, fRate:1800,burst:1,spread:.22,pts:50,  flee:true,  fleeRange:110, strafeSpd:0.6, doubleBounce:false, spawnValue:2, unlockRoom:0, ammoPressure:1},

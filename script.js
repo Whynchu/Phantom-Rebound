@@ -227,12 +227,12 @@ const AEGIS_NOVA_DAMAGE_FACTOR = 0.55;
 const VOLATILE_ORB_COOLDOWN = 8;
 const VOLATILE_ORB_SHARED_COOLDOWN = 1.0;
 const PHASE_DASH_DAMAGE_MULT = 0.05;
-const GLOBAL_SPEED_LIFT = 1.20;
+const GLOBAL_SPEED_LIFT = 1.45;
 const VAMPIRIC_HEAL_PER_KILL = 4;
 const VAMPIRIC_CHARGE_PER_KILL = 0.25;
-const VAMPIRIC_HEAL_CAP_BASE = 28;
-const VAMPIRIC_HEAL_CAP_PER_ROOM = 0.45;
-const VAMPIRIC_HEAL_CAP_MAX = 72;
+const VAMPIRIC_HEAL_CAP_BASE = 14;
+const VAMPIRIC_HEAL_CAP_PER_ROOM = 0.22;
+const VAMPIRIC_HEAL_CAP_MAX = 34;
 const BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET = 1;
 const BLOOD_PACT_BLOOD_MOON_BONUS_CAP = 1;
 let enemyIdSeq = 1;
@@ -2562,7 +2562,7 @@ function update(dt,ts){
           sparks(b.x,b.y,b.crit?C.ghost:C.green,b.crit?8:5,b.crit?70:55);
           // Blood Pact: piercing shots restore 1 HP per enemy hit
           if(UPG.bloodPact && b.pierceLeft > 0 && (b.bloodPactHeals || 0) < (b.bloodPactHealCap || BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET)){
-            healPlayer(1, 'bloodPact');
+            applyKillSustainHeal(1, 'bloodPact');
             b.bloodPactHeals = (b.bloodPactHeals || 0) + 1;
           }
           if(e.hp<=0){
