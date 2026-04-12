@@ -2,6 +2,23 @@
 
 Status: active repo audit after `1.16.50`
 
+## Execution Progress
+
+Recent stabilization stages landed after `1.16.51`:
+
+- `789d746` Added CI workflow [`.github/workflows/verify-all.yml`](C:/Development/Phantom-Rebound/.github/workflows/verify-all.yml:1) to enforce release gate checks on push/PR.
+- `abe6c4c` Extracted room definition and pacing helpers into [src/core/roomFlow.js](C:/Development/Phantom-Rebound/src/core/roomFlow.js:1) with Node test coverage.
+- `1914094` Extracted room phase transition helpers into [src/core/roomRuntime.js](C:/Development/Phantom-Rebound/src/core/roomRuntime.js:1) with deterministic tests.
+- `87ae708` Extracted run/room telemetry builders into [src/systems/telemetry.js](C:/Development/Phantom-Rebound/src/systems/telemetry.js:1), added payload regression tests.
+- `15b9a6c` Extracted damageless room progression into [src/systems/progression.js](C:/Development/Phantom-Rebound/src/systems/progression.js:1) and unified both room-clear paths to one rule.
+- `a3680e2` Extracted local leaderboard sanitize/parse/upsert/entry logic into [src/platform/leaderboardLocal.js](C:/Development/Phantom-Rebound/src/platform/leaderboardLocal.js:1).
+- `a60c0a2` Extracted crash diagnostics report construction/persistence into [src/platform/diagnostics.js](C:/Development/Phantom-Rebound/src/platform/diagnostics.js:1).
+
+Validation status:
+
+- `verify-all.ps1` passes with current extraction stack.
+- [scripts/test-systems.mjs](C:/Development/Phantom-Rebound/scripts/test-systems.mjs:1) now covers room flow/runtime, telemetry, progression, leaderboard local helpers, and diagnostics payload building.
+
 ## Purpose
 
 This document turns the current codebase state into a practical gameplan for making *Phantom Rebound* sustainable, expandable, and safe to evolve with AI agents.
