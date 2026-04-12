@@ -16,6 +16,8 @@ Recent stabilization stages landed after `1.16.51`:
 - `ba9ec96` Extracted patch-notes rendering/visibility helpers into [src/ui/patchNotes.js](C:/Development/Phantom-Rebound/src/ui/patchNotes.js:1).
 - `9f09a50` Extracted leaderboard badge/toggle UI helpers into [src/ui/leaderboard.js](C:/Development/Phantom-Rebound/src/ui/leaderboard.js:1) and removed duplicate script-side UI state wiring.
 - `cd8191a` Extracted game-over panel rendering helper into [src/ui/gameOver.js](C:/Development/Phantom-Rebound/src/ui/gameOver.js:1).
+- `e34a295` Extracted leaderboard refresh/submit async orchestration into [src/platform/leaderboardRuntime.js](C:/Development/Phantom-Rebound/src/platform/leaderboardRuntime.js:1).
+- `df482c5` Extracted app-shell/menu-chrome helper behavior into [src/ui/shell.js](C:/Development/Phantom-Rebound/src/ui/shell.js:1).
 
 Validation status:
 
