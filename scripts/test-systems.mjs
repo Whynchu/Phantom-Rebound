@@ -51,6 +51,7 @@ import {
 import { applyDamagelessRoomProgression } from '../src/systems/progression.js';
 import { orderBoonsForDisplay } from '../src/ui/boonsPanel.js';
 import { buildPatchNoteCardHtml } from '../src/ui/patchNotes.js';
+import { syncLeaderboardStatusBadge, syncLeaderboardToggleStates } from '../src/ui/leaderboard.js';
 
 function test(name, fn) {
   try {
@@ -316,6 +317,31 @@ test('buildPatchNoteCardHtml includes versioned summary and highlights markup', 
   assert.ok(html.includes('BALANCE PASS'));
   assert.ok(html.includes('patch-note-paragraph'));
   assert.ok(html.includes('patch-note-highlight'));
+});
+
+test('leaderboard ui helpers sync badge class and toggle state', () => {
+  const classes = new Set();
+  const statusEl = {
+    textContent: '',
+    classList: {
+      remove: (...names) => names.forEach((name) => classes.delete(name)),
+      add: (name) => classes.add(name),
+    },
+  };
+  syncLeaderboardStatusBadge(statusEl, 'synced', 'SUPABASE LIVE');
+  assert.equal(statusEl.textContent, 'SUPABASE LIVE');
+  assert.ok(classes.has('synced'));
+  assert.equal(classes.has('local'), false);
+
+  const periodBtnA = { dataset: { lbPeriod: 'daily' }, classList: { toggle: (_, on) => { periodBtnA.active = !!on; } }, active: false };
+  const periodBtnB = { dataset: { lbPeriod: 'all' }, classList: { toggle: (_, on) => { periodBtnB.active = !!on; } }, active: false };
+  const scopeBtnA = { dataset: { lbScope: 'everyone' }, classList: { toggle: (_, on) => { scopeBtnA.active = !!on; } }, active: false };
+  const scopeBtnB = { dataset: { lbScope: 'personal' }, classList: { toggle: (_, on) => { scopeBtnB.active = !!on; } }, active: false };
+  syncLeaderboardToggleStates([periodBtnA, periodBtnB], [scopeBtnA, scopeBtnB], 'all', 'personal');
+  assert.equal(periodBtnA.active, false);
+  assert.equal(periodBtnB.active, true);
+  assert.equal(scopeBtnA.active, false);
+  assert.equal(scopeBtnB.active, true);
 });
 
 test('room flow helpers keep threshold values', () => {

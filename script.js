@@ -25,7 +25,10 @@ import { PLAYER_COLORS, getPlayerColor, getPlayerColorScheme, getThreatPalette, 
 import { PATCH_NOTES, PATCH_NOTES_ARCHIVE_MESSAGE } from './src/data/patchNotes.js';
 import { renderColorSelector } from './src/ui/colorSelector.js';
 import { formatRunTime, renderHud } from './src/ui/hud.js';
-import { renderLeaderboard as renderLeaderboardView } from './src/ui/leaderboard.js';
+import {
+  renderLeaderboard as renderLeaderboardView,
+  syncLeaderboardStatusBadge as syncLeaderboardStatusBadgeView,
+} from './src/ui/leaderboard.js';
 import { renderGameOverBoonsList, showLeaderboardBoonsPopup } from './src/ui/boonsPanel.js';
 import { renderPatchNotesPanel, setPatchNotesVisibility } from './src/ui/patchNotes.js';
 import {
@@ -1173,17 +1176,6 @@ function clearLegacyRunRecovery() {
   removeKey(LEGACY_RUN_RECOVERY_KEY);
 }
 
-function syncLeaderboardStatusBadge() {
-  lbStatus.textContent = lbSync.statusText;
-  lbStatus.classList.remove('syncing', 'synced', 'local', 'error');
-  lbStatus.classList.add(lbSync.statusMode);
-}
-
-function updateLeaderboardToggleStates() {
-  lbPeriodBtns.forEach((btn)=>btn.classList.toggle('active', btn.dataset.lbPeriod === lbPeriod));
-  lbScopeBtns.forEach((btn)=>btn.classList.toggle('active', btn.dataset.lbScope === lbScope));
-}
-
 function renderLeaderboard() {
   renderLeaderboardView({
     lbCurrent,
@@ -1200,13 +1192,14 @@ function renderLeaderboard() {
     playerColors: PLAYER_COLORS,
     formatRunTime,
     onOpenBoons: showLbBoonsPopup,
-    updateToggleStates: updateLeaderboardToggleStates,
+    lbPeriodBtns,
+    lbScopeBtns,
   });
 }
 
 async function refreshLeaderboardView() {
   const requestId = beginLeaderboardSync(lbSync);
-  syncLeaderboardStatusBadge();
+  syncLeaderboardStatusBadgeView(lbStatus, lbSync.statusMode, lbSync.statusText);
   renderLeaderboard();
   try {
     const rows = await fetchRemoteLeaderboard({
@@ -1220,7 +1213,7 @@ async function refreshLeaderboardView() {
   } catch (error) {
     if(!applyLeaderboardSyncFailure(lbSync, requestId)) return;
   }
-  syncLeaderboardStatusBadge();
+  syncLeaderboardStatusBadgeView(lbStatus, lbSync.statusMode, lbSync.statusText);
   renderLeaderboard();
 }
 
@@ -1241,7 +1234,7 @@ function pushLeaderboardEntry() {
     }
   }).catch(() => {
     forceLocalLeaderboardFallback(lbSync, 'LOCAL FALLBACK');
-    syncLeaderboardStatusBadge();
+    syncLeaderboardStatusBadgeView(lbStatus, lbSync.statusMode, lbSync.statusText);
     renderLeaderboard();
   });
   clearLegacyRunRecovery();
@@ -2844,7 +2837,7 @@ function showLbBoonsPopup(runnerName, boons, boonOrder = '') {
 loadLeaderboard();
 clearLegacyRunRecovery();
 forceLocalLeaderboardFallback(lbSync, 'LOCAL FALLBACK');
-syncLeaderboardStatusBadge();
+syncLeaderboardStatusBadgeView(lbStatus, lbSync.statusMode, lbSync.statusText);
 setPlayerName(loadSavedPlayerName(), { syncInputs: true });
 renderLeaderboard();
 revealAppShell();

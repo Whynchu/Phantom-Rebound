@@ -25,6 +25,18 @@ function getLeaderboardRowRunTimeMs(row) {
   return null;
 }
 
+function syncLeaderboardStatusBadge(lbStatus, statusMode, statusText) {
+  if(!lbStatus) return;
+  lbStatus.textContent = statusText;
+  lbStatus.classList.remove('syncing', 'synced', 'local', 'error');
+  lbStatus.classList.add(statusMode);
+}
+
+function syncLeaderboardToggleStates(lbPeriodBtns, lbScopeBtns, lbPeriod, lbScope) {
+  lbPeriodBtns?.forEach((btn) => btn.classList.toggle('active', btn.dataset.lbPeriod === lbPeriod));
+  lbScopeBtns?.forEach((btn) => btn.classList.toggle('active', btn.dataset.lbScope === lbScope));
+}
+
 function renderLeaderboard({
   lbCurrent,
   lbStatus,
@@ -40,7 +52,8 @@ function renderLeaderboard({
   playerColors,
   formatRunTime,
   onOpenBoons,
-  updateToggleStates,
+  lbPeriodBtns,
+  lbScopeBtns,
 }) {
   const periodLabel = lbPeriod === 'daily' ? 'DAILY' : 'ALL TIME';
   const scopeLabel = lbScope === 'personal' ? 'PERSONAL' : 'EVERYONE';
@@ -58,7 +71,7 @@ function renderLeaderboard({
     li.className = 'lb-empty';
     li.textContent = lbStatusMode === 'syncing' ? 'Syncing records...' : 'No runs match this view yet.';
     lbList.appendChild(li);
-    updateToggleStates?.();
+    syncLeaderboardToggleStates(lbPeriodBtns, lbScopeBtns, lbPeriod, lbScope);
     return;
   }
 
@@ -89,7 +102,7 @@ function renderLeaderboard({
     lbList.appendChild(li);
   }
 
-  updateToggleStates?.();
+  syncLeaderboardToggleStates(lbPeriodBtns, lbScopeBtns, lbPeriod, lbScope);
 }
 
-export { renderLeaderboard };
+export { renderLeaderboard, syncLeaderboardStatusBadge, syncLeaderboardToggleStates };
