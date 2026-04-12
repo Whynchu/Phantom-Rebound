@@ -26,6 +26,7 @@ import {
   upsertLocalLeaderboardEntry,
   buildLocalScoreEntry,
 } from '../src/platform/leaderboardLocal.js';
+import { buildGameLoopCrashReport, saveRunCrashReport } from '../src/platform/diagnostics.js';
 import {
   getRoomDef,
   getRoomMaxOnScreen,
@@ -267,6 +268,28 @@ test('buildLocalScoreEntry keeps leaderboard payload contract', () => {
   assert.equal(entry.boons.picks.length, 1);
   assert.equal(entry.boons.telemetry.summary.totalKills, 99);
   assert.equal(entry.ts, 999);
+});
+
+test('diagnostics builder produces crash report envelope', () => {
+  const report = buildGameLoopCrashReport({
+    error: new Error('boom'),
+    entry: { name: 'RUNNER', score: 1000 },
+    bulletsCount: 12,
+    enemiesCount: 3,
+    particlesCount: 44,
+    at: 123,
+  });
+  assert.equal(report.type, 'game-loop-crash');
+  assert.equal(report.crash.message, 'boom');
+  assert.equal(report.crash.at, 123);
+  assert.equal(report.entry.name, 'RUNNER');
+  assert.equal(report.counts.bullets, 12);
+  assert.equal(report.counts.enemies, 3);
+  assert.equal(report.counts.particles, 44);
+});
+
+test('diagnostics save returns false without browser storage', () => {
+  assert.equal(saveRunCrashReport({ type: 'x' }), false);
 });
 
 test('room flow helpers keep threshold values', () => {

@@ -5,6 +5,7 @@ import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoy
 import { fetchRemoteLeaderboard, submitRemoteScore, submitRunDiagnostic } from './src/platform/leaderboardService.js';
 import { bindResponsiveViewport } from './src/platform/viewport.js';
 import { readText, writeText, readJson, writeJson, removeKey } from './src/platform/storage.js';
+import { buildGameLoopCrashReport, saveRunCrashReport } from './src/platform/diagnostics.js';
 import {
   sanitizePlayerName,
   parseLocalLeaderboardRows,
@@ -92,7 +93,6 @@ const ctx = cv.getContext('2d');
 const LB_KEY = 'phantom-rebound-leaderboard-v1';
 const NAME_KEY = 'phantom-rebound-runner-name';
 const LEGACY_RUN_RECOVERY_KEY = 'phantom-rebound-run-recovery-v1';
-const RUN_CRASH_REPORT_KEY = 'phantom-rebound-crash-report-v1';
 
 const nameInputStart = document.getElementById('name-input-start');
 const nameInputGo = document.getElementById('name-input-go');
@@ -1200,10 +1200,6 @@ function clearLegacyRunRecovery() {
   removeKey(LEGACY_RUN_RECOVERY_KEY);
 }
 
-function saveCrashReport(report) {
-  writeJson(RUN_CRASH_REPORT_KEY, report);
-}
-
 function syncLeaderboardStatusBadge() {
   lbStatus.textContent = lbSync.statusText;
   lbStatus.classList.remove('syncing', 'synced', 'local', 'error');
@@ -1283,22 +1279,14 @@ function handleGameLoopCrash(error) {
   console.error('Phantom Rebound game loop crashed', error);
   try {
     const entry = buildScoreEntry();
-    const crash = {
-      message: String(error?.message || error || 'unknown'),
-      stack: String(error?.stack || '').slice(0, 1200),
-      at: Date.now(),
-    };
-    const report = {
-      type: 'game-loop-crash',
-      crash,
+    const report = buildGameLoopCrashReport({
+      error,
       entry,
-      counts: {
-        bullets: bullets.length,
-        enemies: enemies.length,
-        particles: particles.length,
-      },
-    };
-    saveCrashReport(report);
+      bulletsCount: bullets.length,
+      enemiesCount: enemies.length,
+      particlesCount: particles.length,
+    });
+    saveRunCrashReport(report);
     submitRunDiagnostic({
       playerName: entry.name,
       score: entry.score,
