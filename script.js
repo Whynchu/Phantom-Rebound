@@ -3,6 +3,11 @@ import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';
 import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoystickControls, tickJoystick } from './src/input/joystick.js';
 import { fetchRemoteLeaderboard, submitRemoteScore, submitRunDiagnostic } from './src/platform/leaderboardService.js';
+import {
+  refreshLeaderboardSync,
+  shouldRefreshLeaderboardAfterSubmit,
+  submitLeaderboardEntryRemote,
+} from './src/platform/leaderboardRuntime.js';
 import { bindResponsiveViewport } from './src/platform/viewport.js';
 import { readText, writeText, readJson, writeJson, removeKey } from './src/platform/storage.js';
 import { buildGameLoopCrashReport, saveRunCrashReport } from './src/platform/diagnostics.js';
@@ -1201,21 +1206,23 @@ function renderLeaderboard() {
 }
 
 async function refreshLeaderboardView() {
-  const requestId = beginLeaderboardSync(lbSync);
-  syncLeaderboardStatusBadgeView(lbStatus, lbSync.statusMode, lbSync.statusText);
-  renderLeaderboard();
-  try {
-    const rows = await fetchRemoteLeaderboard({
-      period: lbPeriod,
-      scope: lbScope,
-      playerName,
-      gameVersion: VERSION.num,
-      limit: 10,
-    });
-    if(!applyLeaderboardSyncSuccess(lbSync, requestId, rows)) return;
-  } catch (error) {
-    if(!applyLeaderboardSyncFailure(lbSync, requestId)) return;
-  }
+  const result = await refreshLeaderboardSync({
+    lbSync,
+    period: lbPeriod,
+    scope: lbScope,
+    playerName,
+    gameVersion: VERSION.num,
+    limit: 10,
+    fetchRemoteLeaderboard,
+    beginLeaderboardSync,
+    applyLeaderboardSyncSuccess,
+    applyLeaderboardSyncFailure,
+    onSyncStart: () => {
+      syncLeaderboardStatusBadgeView(lbStatus, lbSync.statusMode, lbSync.statusText);
+      renderLeaderboard();
+    },
+  });
+  if(!result.applied) return;
   syncLeaderboardStatusBadgeView(lbStatus, lbSync.statusMode, lbSync.statusText);
   renderLeaderboard();
 }
@@ -1224,21 +1231,25 @@ function pushLeaderboardEntry() {
   const entry = buildScoreEntry();
   leaderboard = upsertLocalLeaderboardEntry(leaderboard, entry, 500);
   saveLeaderboard();
-  submitRemoteScore({
-    playerName: entry.name,
-    score: entry.score,
-    room: entry.room,
+  submitLeaderboardEntryRemote({
+    entry,
     gameVersion: VERSION.num,
-    boons: entry.boons,
-    playerColor: entry.color,
-  }).then(() => {
-    if(lbScope !== 'personal' || playerName === entry.name) {
+    submitRemoteScore,
+    forceLocalLeaderboardFallback,
+    lbSync,
+  }).then((result) => {
+    if(result.ok && shouldRefreshLeaderboardAfterSubmit({
+      lbScope,
+      playerName,
+      entryName: entry.name,
+    })) {
       refreshLeaderboardView();
+      return;
     }
-  }).catch(() => {
-    forceLocalLeaderboardFallback(lbSync, 'LOCAL FALLBACK');
-    syncLeaderboardStatusBadgeView(lbStatus, lbSync.statusMode, lbSync.statusText);
-    renderLeaderboard();
+    if(!result.ok) {
+      syncLeaderboardStatusBadgeView(lbStatus, lbSync.statusMode, lbSync.statusText);
+      renderLeaderboard();
+    }
   });
   clearLegacyRunRecovery();
   renderLeaderboard();

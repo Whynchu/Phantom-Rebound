@@ -28,6 +28,11 @@ import {
 } from '../src/platform/leaderboardLocal.js';
 import { buildGameLoopCrashReport, saveRunCrashReport } from '../src/platform/diagnostics.js';
 import {
+  refreshLeaderboardSync,
+  shouldRefreshLeaderboardAfterSubmit,
+  submitLeaderboardEntryRemote,
+} from '../src/platform/leaderboardRuntime.js';
+import {
   getRoomDef,
   getRoomMaxOnScreen,
   getReinforcementIntervalMs,
@@ -54,9 +59,23 @@ import { buildPatchNoteCardHtml } from '../src/ui/patchNotes.js';
 import { syncLeaderboardStatusBadge, syncLeaderboardToggleStates } from '../src/ui/leaderboard.js';
 import { showGameOverScreen } from '../src/ui/gameOver.js';
 
+const pendingTests = [];
+
 function test(name, fn) {
   try {
-    fn();
+    const result = fn();
+    if(result && typeof result.then === 'function') {
+      pendingTests.push(
+        result.then(() => {
+          console.log(`PASS ${name}`);
+        }).catch((error) => {
+          console.error(`FAIL ${name}`);
+          console.error(error);
+          process.exitCode = 1;
+        }),
+      );
+      return;
+    }
     console.log(`PASS ${name}`);
   } catch (error) {
     console.error(`FAIL ${name}`);
@@ -228,6 +247,79 @@ test('leaderboard failure transition ignores stale request ids', () => {
   assert.equal(appliedFailure, true);
   assert.equal(state.statusMode, 'local');
   assert.equal(state.statusText, 'LOCAL FALLBACK');
+});
+
+test('leaderboard runtime helpers refresh and submit deterministically', async () => {
+  const state = createLeaderboardSyncState();
+  let started = false;
+  const okRefresh = await refreshLeaderboardSync({
+    lbSync: state,
+    period: 'daily',
+    scope: 'everyone',
+    playerName: 'RUNNER',
+    gameVersion: '1.0.0',
+    fetchRemoteLeaderboard: async () => [{ name: 'A' }],
+    beginLeaderboardSync,
+    applyLeaderboardSyncSuccess,
+    applyLeaderboardSyncFailure,
+    onSyncStart: () => { started = true; },
+  });
+  assert.equal(started, true);
+  assert.equal(okRefresh.ok, true);
+  assert.equal(state.statusMode, 'synced');
+  assert.equal(state.remoteRows.length, 1);
+
+  const failRefresh = await refreshLeaderboardSync({
+    lbSync: state,
+    period: 'daily',
+    scope: 'everyone',
+    playerName: 'RUNNER',
+    gameVersion: '1.0.0',
+    fetchRemoteLeaderboard: async () => { throw new Error('offline'); },
+    beginLeaderboardSync,
+    applyLeaderboardSyncSuccess,
+    applyLeaderboardSyncFailure,
+  });
+  assert.equal(failRefresh.ok, false);
+  assert.equal(state.statusMode, 'local');
+
+  assert.equal(shouldRefreshLeaderboardAfterSubmit({
+    lbScope: 'everyone',
+    playerName: 'A',
+    entryName: 'B',
+  }), true);
+  assert.equal(shouldRefreshLeaderboardAfterSubmit({
+    lbScope: 'personal',
+    playerName: 'A',
+    entryName: 'B',
+  }), false);
+  assert.equal(shouldRefreshLeaderboardAfterSubmit({
+    lbScope: 'personal',
+    playerName: 'A',
+    entryName: 'A',
+  }), true);
+});
+
+test('submitLeaderboardEntryRemote applies fallback on failure', async () => {
+  const state = createLeaderboardSyncState();
+  const success = await submitLeaderboardEntryRemote({
+    entry: { name: 'A', score: 1, room: 1, boons: {}, color: 'green' },
+    gameVersion: '1.0.0',
+    submitRemoteScore: async () => {},
+    forceLocalLeaderboardFallback,
+    lbSync: state,
+  });
+  assert.equal(success.ok, true);
+
+  const failure = await submitLeaderboardEntryRemote({
+    entry: { name: 'A', score: 1, room: 1, boons: {}, color: 'green' },
+    gameVersion: '1.0.0',
+    submitRemoteScore: async () => { throw new Error('offline'); },
+    forceLocalLeaderboardFallback,
+    lbSync: state,
+  });
+  assert.equal(failure.ok, false);
+  assert.equal(state.statusMode, 'local');
 });
 
 test('leaderboard local helpers sanitize, parse, and upsert rows', () => {
@@ -649,6 +741,8 @@ test('applyDamagelessRoomProgression handles streak and reset behavior', () => {
   assert.equal(capped.boonRerolls, 3);
   assert.equal(capped.awardedReroll, true);
 });
+
+await Promise.all(pendingTests);
 
 if (process.exitCode && process.exitCode !== 0) {
   process.exit(process.exitCode);
