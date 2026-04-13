@@ -39,6 +39,28 @@ import {
   getBossEscortRespawnMs,
 } from '../src/core/roomFlow.js';
 import {
+  applyEliteBulletStage,
+  getDoubleBounceBulletPalette,
+  spawnAimedEnemyBullet,
+  spawnRadialEnemyBullet,
+  spawnTriangleBurst,
+  spawnEliteBullet,
+  spawnEliteTriangleBurst,
+} from '../src/entities/projectiles.js';
+import {
+  createOutputBullet,
+  pushOutputBullet,
+  pushGreyBullet,
+  spawnGreyDrops,
+  spawnSplitOutputBullets,
+  spawnRadialOutputBurst,
+} from '../src/entities/playerProjectiles.js';
+import {
+  createLaneOffsets,
+  buildPlayerShotPlan,
+  buildPlayerVolleySpecs,
+} from '../src/entities/playerFire.js';
+import {
   advanceRoomIntroPhase,
   getPendingWaveIntroIndex,
   pullWaveSpawnEntries,
@@ -63,6 +85,24 @@ import {
   syncColorDrivenCopy,
   setMenuChromeVisible,
 } from '../src/ui/shell.js';
+import {
+  showRoomClearOverlay,
+  showBossDefeatedOverlay,
+  showRoomIntroOverlay,
+  hideRoomIntroOverlay,
+} from '../src/ui/roomOverlays.js';
+import {
+  bindPatchNotesControls,
+  bindLeaderboardControls,
+  bindBoonsPanelControls,
+  bindPopupClose,
+} from '../src/ui/appChrome.js';
+import {
+  setPlayerNameState,
+  bindNameInputs,
+  bindSessionFlow,
+} from '../src/ui/sessionFlow.js';
+import { bindGestureGuards } from '../src/platform/gestureGuards.js';
 
 const pendingTests = [];
 
@@ -500,6 +540,563 @@ test('shell ui helpers update class state and copy text', () => {
   setMenuChromeVisible({ doc, isVisible: true, onResize: () => { resized = true; } });
   assert.equal(classes.has('menu-chrome-visible'), true);
   assert.equal(resized, true);
+});
+
+test('room overlay helpers update text, classes, and reset timers', () => {
+  const classes = new Set();
+  const panelEl = {
+    classList: {
+      add: (...names) => names.forEach((name) => classes.add(name)),
+      remove: (...names) => names.forEach((name) => classes.delete(name)),
+      toggle: (name, enabled) => {
+        if(enabled) classes.add(name);
+        else classes.delete(name);
+      },
+    },
+  };
+  const textEl = { textContent: '' };
+  const timers = [];
+  const cleared = [];
+  const setTimer = (fn, delayMs) => {
+    const id = { fn, delayMs };
+    timers.push(id);
+    return id;
+  };
+  const clearTimer = (id) => cleared.push(id);
+
+  showRoomIntroOverlay({ panelEl, textEl, text: 'READY?', isGo: false });
+  assert.equal(textEl.textContent, 'READY?');
+  assert.equal(classes.has('show'), true);
+  assert.equal(classes.has('go'), false);
+
+  showRoomIntroOverlay({ panelEl, textEl, text: 'GO!', isGo: true });
+  assert.equal(textEl.textContent, 'GO!');
+  assert.equal(classes.has('go'), true);
+
+  hideRoomIntroOverlay({ panelEl });
+  assert.equal(classes.has('show'), false);
+  assert.equal(classes.has('go'), false);
+
+  showRoomClearOverlay({ panelEl, textEl, setTimer, clearTimer });
+  assert.equal(textEl.textContent, 'ROOM CLEAR');
+  assert.equal(classes.has('show'), true);
+  assert.equal(timers.at(-1).delayMs, 1400);
+
+  showBossDefeatedOverlay({ panelEl, textEl, setTimer, clearTimer });
+  assert.equal(textEl.textContent, 'BOSS DEFEATED');
+  assert.equal(classes.has('boss-clear'), true);
+  assert.equal(cleared.length, 1);
+  timers.at(-1).fn();
+  assert.equal(textEl.textContent, 'ROOM CLEAR');
+  assert.equal(classes.has('show'), false);
+  assert.equal(classes.has('boss-clear'), false);
+});
+
+test('gesture guard blocks dblclick and fast double-tap while allowing inputs', () => {
+  const listeners = new Map();
+  const doc = {
+    addEventListener: (name, handler) => { listeners.set(name, handler); },
+    removeEventListener: (name) => { listeners.delete(name); },
+  };
+  let now = 1000;
+  const dispose = bindGestureGuards({
+    doc,
+    now: () => now,
+    doubleTapWindowMs: 320,
+  });
+
+  let prevented = false;
+  listeners.get('dblclick')({ preventDefault: () => { prevented = true; } });
+  assert.equal(prevented, true);
+
+  prevented = false;
+  const touchHandler = listeners.get('touchend');
+  touchHandler({
+    target: { closest: () => null },
+    preventDefault: () => { prevented = true; },
+  });
+  assert.equal(prevented, false);
+
+  now += 200;
+  touchHandler({
+    target: { closest: () => null },
+    preventDefault: () => { prevented = true; },
+  });
+  assert.equal(prevented, true);
+
+  prevented = false;
+  now += 200;
+  touchHandler({
+    target: { closest: (selector) => selector === 'input, textarea, select' ? {} : null },
+    preventDefault: () => { prevented = true; },
+  });
+  assert.equal(prevented, false);
+
+  dispose();
+  assert.equal(listeners.size, 0);
+});
+
+test('app chrome bindings wire patch notes, leaderboard, and boon panels', () => {
+  const listeners = new Map();
+  const makeButton = (dataset = {}) => ({
+    dataset,
+    handlers: new Map(),
+    addEventListener(name, handler) {
+      this.handlers.set(name, handler);
+    },
+  });
+  const doc = {
+    addEventListener(name, handler) {
+      listeners.set(name, handler);
+    },
+  };
+
+  const patchButton = makeButton();
+  const patchClose = makeButton();
+  const patchPanel = makeButton();
+  const patchStates = [];
+  bindPatchNotesControls({
+    button: patchButton,
+    closeButton: patchClose,
+    panelEl: patchPanel,
+    onOpenChange: (isOpen) => patchStates.push(isOpen),
+    doc,
+  });
+  patchButton.handlers.get('click')();
+  patchClose.handlers.get('click')();
+  patchPanel.handlers.get('click')({ target: patchPanel });
+  listeners.get('keydown')({ key: 'Escape' });
+  assert.deepEqual(patchStates, [true, false, false, false]);
+
+  let opened = 0;
+  let closed = 0;
+  const periodCalls = [];
+  const scopeCalls = [];
+  const lbOpenA = makeButton();
+  const lbOpenB = makeButton();
+  const lbClose = makeButton();
+  const periodBtn = makeButton({ lbPeriod: 'daily' });
+  const scopeBtn = makeButton({ lbScope: 'personal' });
+  bindLeaderboardControls({
+    openButtons: [lbOpenA, lbOpenB],
+    closeButton: lbClose,
+    periodButtons: [periodBtn],
+    scopeButtons: [scopeBtn],
+    onOpen: () => { opened += 1; },
+    onClose: () => { closed += 1; },
+    onPeriodChange: (period) => periodCalls.push(period),
+    onScopeChange: (scope) => scopeCalls.push(scope),
+  });
+  lbOpenA.handlers.get('click')();
+  lbOpenB.handlers.get('click')();
+  lbClose.handlers.get('click')();
+  periodBtn.handlers.get('click')();
+  scopeBtn.handlers.get('click')();
+  assert.equal(opened, 2);
+  assert.equal(closed, 1);
+  assert.deepEqual(periodCalls, ['daily']);
+  assert.deepEqual(scopeCalls, ['personal']);
+
+  const panelClasses = new Set(['off']);
+  const panelEl = {
+    classList: {
+      add: (name) => panelClasses.add(name),
+      toggle: (name) => {
+        if(panelClasses.has(name)) panelClasses.delete(name);
+        else panelClasses.add(name);
+      },
+    },
+  };
+  const toggleButton = makeButton();
+  const closeButton = makeButton();
+  bindBoonsPanelControls({
+    toggleButton,
+    panelEl,
+    closeButton,
+  });
+  toggleButton.handlers.get('click')();
+  assert.equal(panelClasses.has('off'), false);
+  closeButton.handlers.get('click')();
+  assert.equal(panelClasses.has('off'), true);
+
+  const popupClasses = new Set();
+  const popupEl = {
+    classList: {
+      add: (name) => popupClasses.add(name),
+    },
+  };
+  const popupClose = makeButton();
+  bindPopupClose({
+    closeButton: popupClose,
+    panelEl: popupEl,
+  });
+  popupClose.handlers.get('click')();
+  assert.equal(popupClasses.has('off'), true);
+});
+
+test('session flow helpers sanitize names and wire start/menu transitions', () => {
+  const makeButton = () => ({
+    handlers: new Map(),
+    addEventListener(name, handler) {
+      this.handlers.set(name, handler);
+    },
+  });
+  const makeInput = () => ({
+    value: '',
+    handlers: new Map(),
+    addEventListener(name, handler) {
+      this.handlers.set(name, handler);
+    },
+  });
+  const makePanel = (initial = []) => {
+    const classes = new Set(initial);
+    return {
+      classes,
+      classList: {
+        add: (name) => classes.add(name),
+        remove: (name) => classes.delete(name),
+      },
+    };
+  };
+
+  const inputs = [makeInput(), makeInput()];
+  const persisted = [];
+  const observedNames = [];
+  const playerName = setPlayerNameState({
+    value: 'ab!! c',
+    sanitizePlayerName: (value) => value.replace(/[^a-z ]/gi, '').toUpperCase().trim(),
+    persistName: (value) => persisted.push(value),
+    inputs,
+    syncInputs: true,
+    onNameChange: (name) => observedNames.push(name),
+  });
+  assert.equal(playerName, 'AB C');
+  assert.deepEqual(persisted, ['AB C']);
+  assert.equal(inputs[0].value, 'AB C');
+  assert.equal(inputs[1].value, 'AB C');
+  assert.deepEqual(observedNames, ['AB C']);
+
+  const typed = [];
+  bindNameInputs({
+    inputs,
+    setPlayerName: (value) => typed.push(value),
+  });
+  inputs[0].handlers.get('input')({ target: { value: 'ONE' } });
+  inputs[1].handlers.get('input')({ target: { value: 'TWO' } });
+  assert.deepEqual(typed, ['ONE', 'TWO']);
+
+  const startButton = makeButton();
+  const restartButton = makeButton();
+  const mainMenuButton = makeButton();
+  const startScreen = makePanel();
+  const gameOverScreen = makePanel();
+  const boonsPanelEl = makePanel();
+  const leaderboardScreen = makePanel();
+  const startInput = makeInput();
+  const gameOverInput = makeInput();
+  startInput.value = 'START';
+  gameOverInput.value = 'RESTART';
+  const nameCalls = [];
+  const menuCalls = [];
+  let initCount = 0;
+  let beginLoopCount = 0;
+  const states = [];
+
+  bindSessionFlow({
+    startButton,
+    restartButton,
+    mainMenuButton,
+    startInput,
+    gameOverInput,
+    setPlayerName: (value, options) => nameCalls.push({ value, options }),
+    setMenuChromeVisible: (visible) => menuCalls.push(visible),
+    startScreen,
+    gameOverScreen,
+    boonsPanelEl,
+    leaderboardScreen,
+    initRun: () => { initCount += 1; },
+    beginLoop: () => { beginLoopCount += 1; },
+    setGameState: (state) => states.push(state),
+  });
+
+  startButton.onclick();
+  assert.deepEqual(nameCalls[0], { value: 'START', options: { syncInputs: true } });
+  assert.deepEqual(menuCalls[0], false);
+  assert.equal(startScreen.classes.has('off'), true);
+  assert.equal(initCount, 1);
+  assert.equal(beginLoopCount, 1);
+  assert.deepEqual(states, ['playing']);
+
+  restartButton.onclick();
+  assert.deepEqual(nameCalls[1], { value: 'RESTART', options: { syncInputs: true } });
+  assert.deepEqual(menuCalls[1], false);
+  assert.equal(gameOverScreen.classes.has('off'), true);
+  assert.equal(boonsPanelEl.classes.has('off'), true);
+  assert.equal(initCount, 2);
+  assert.equal(beginLoopCount, 2);
+  assert.deepEqual(states, ['playing', 'playing']);
+
+  mainMenuButton.handlers.get('click')();
+  assert.deepEqual(nameCalls[2], { value: 'RESTART', options: { syncInputs: true } });
+  assert.deepEqual(menuCalls[2], true);
+  assert.equal(leaderboardScreen.classes.has('off'), true);
+  assert.equal(startScreen.classes.has('off'), false);
+  assert.deepEqual(states, ['playing', 'playing', 'start']);
+});
+
+test('projectile helpers build danger bullets and elite stages deterministically', () => {
+  const getThreatPalette = () => ({
+    elite: { hex: '#111111', light: '#222222' },
+    advanced: { hex: '#333333', light: '#444444' },
+    danger: { hex: '#555555', light: '#666666' },
+  });
+  const getRgba = (hex, alpha) => `${hex}:${alpha}`;
+  const bullet = {};
+  applyEliteBulletStage({ bullet, stage: 5, getThreatPalette, getRgba });
+  assert.equal(bullet.eliteStage, 2);
+  assert.equal(bullet.eliteColor, '#555555');
+  assert.equal(bullet.eliteCore, '#666666:0.9');
+  assert.equal(bullet.bounceStages, 0);
+
+  const doubleBouncePalette = getDoubleBounceBulletPalette({ getThreatPalette, getRgba });
+  assert.deepEqual(doubleBouncePalette, { fill: '#333333', core: '#444444:0.9' });
+
+  const bullets = [];
+  const spawns = [];
+  const player = { x: 10, y: 20 };
+  spawnAimedEnemyBullet({
+    bullets,
+    player,
+    x: 0,
+    y: 0,
+    bulletSpeedScale: () => 1,
+    onSpawn: (count) => spawns.push(count),
+    random: () => 0.5,
+  });
+  assert.equal(bullets.length, 1);
+  assert.equal(bullets[0].state, 'danger');
+  assert.equal(bullets[0].r, 4.5);
+  assert.deepEqual(spawns, [1]);
+
+  spawnRadialEnemyBullet({
+    bullets,
+    x: 0,
+    y: 0,
+    idx: 1,
+    total: 4,
+    bulletSpeedScale: () => 1,
+    onSpawn: (count) => spawns.push(count),
+  });
+  assert.equal(bullets.length, 2);
+  assert.deepEqual(spawns, [1, 1]);
+
+  let sparkCalls = 0;
+  spawnTriangleBurst({
+    bullets,
+    x: 0,
+    y: 0,
+    origVx: 1,
+    origVy: 0,
+    bulletSpeedScale: () => 1,
+    onSpawn: (count) => spawns.push(count),
+    sparks: () => { sparkCalls += 1; },
+    sparkColor: '#fff',
+  });
+  assert.equal(bullets.length, 5);
+  assert.equal(sparkCalls, 1);
+
+  spawnEliteBullet({
+    bullets,
+    x: 0,
+    y: 0,
+    angle: 0,
+    speed: 10,
+    stage: 1,
+    getThreatPalette,
+    getRgba,
+  });
+  assert.equal(bullets.at(-1).eliteStage, 1);
+  assert.equal(bullets.at(-1).eliteColor, '#333333');
+
+  spawnEliteTriangleBurst({
+    bullets,
+    x: 0,
+    y: 0,
+    origVx: 1,
+    origVy: 0,
+    bulletSpeedScale: () => 1,
+    sparks: () => { sparkCalls += 1; },
+    sparkColor: '#0ff',
+    getThreatPalette,
+    getRgba,
+  });
+  assert.equal(bullets.at(-1).eliteStage, 2);
+  assert.equal(sparkCalls, 2);
+});
+
+test('player projectile helpers build output and grey bullets deterministically', () => {
+  const bullets = [];
+  const output = createOutputBullet({
+    x: 1,
+    y: 2,
+    vx: 3,
+    vy: 4,
+    radius: 5,
+    bounceLeft: 2,
+    pierceLeft: 1,
+    homing: true,
+    crit: true,
+    dmg: 9,
+    expireAt: 100,
+    extras: { custom: 'ok' },
+  });
+  assert.equal(output.state, 'output');
+  assert.equal(output.r, 5);
+  assert.equal(output.custom, 'ok');
+  assert.ok(output.hitIds instanceof Set);
+
+  pushOutputBullet({
+    bullets,
+    x: 0,
+    y: 0,
+    vx: 10,
+    vy: 20,
+    radius: 4,
+    expireAt: 50,
+  });
+  assert.equal(bullets.length, 1);
+  assert.equal(bullets[0].state, 'output');
+
+  pushGreyBullet({
+    bullets,
+    x: 1,
+    y: 1,
+    vx: 2,
+    vy: 3,
+    decayStart: 123,
+  });
+  assert.equal(bullets.length, 2);
+  assert.equal(bullets[1].state, 'grey');
+
+  spawnGreyDrops({
+    bullets,
+    x: 5,
+    y: 6,
+    ts: 200,
+    count: 2,
+    maxBullets: 10,
+    random: () => 0.5,
+  });
+  assert.equal(bullets.length, 4);
+  assert.equal(bullets[2].state, 'grey');
+  assert.equal(bullets[3].state, 'grey');
+
+  const sourceBullet = {
+    x: 0,
+    y: 0,
+    vx: 10,
+    vy: 0,
+    r: 5,
+    pierceLeft: 2,
+    homing: true,
+    crit: false,
+    dmg: 12,
+    bloodPactHeals: 1,
+    bloodPactHealCap: 3,
+  };
+  spawnSplitOutputBullets({
+    bullets,
+    sourceBullet,
+    splitDeltas: [-0.5, 0.5],
+    damageFactor: 0.8,
+    expireAt: 400,
+    fallbackBloodPactHealCap: 99,
+  });
+  assert.equal(bullets.length, 6);
+  assert.equal(bullets[4].state, 'output');
+  assert.equal(bullets[5].dmg, 9.600000000000001);
+  assert.equal(bullets[5].bloodPactHealCap, 3);
+
+  spawnRadialOutputBurst({
+    bullets,
+    x: 0,
+    y: 0,
+    count: 4,
+    speed: 30,
+    radius: 3,
+    dmg: 7,
+    expireAt: 500,
+  });
+  assert.equal(bullets.length, 10);
+  assert.equal(bullets[9].state, 'output');
+});
+
+test('player fire helpers build lane offsets, shot plan, and volley specs deterministically', () => {
+  assert.deepEqual(createLaneOffsets(3, 7), [-7, 0, 7]);
+  assert.deepEqual(createLaneOffsets(4, 6), [-9, -3, 3, 9]);
+
+  const shots = buildPlayerShotPlan({
+    tx: 20,
+    ty: 10,
+    player: { x: 10, y: 10 },
+    upg: {
+      forwardShotTier: 1,
+      shotSize: 1,
+      spreadTier: 1,
+      dualShot: 1,
+      ringShots: 4,
+      spreadShot: true,
+    },
+  });
+  assert.equal(shots.length, 11);
+  assert.equal(shots[0].offset, -3.5);
+  assert.equal(shots[1].offset, 3.5);
+  assert.equal(shots[4].angle, Math.PI);
+  assert.equal(shots[5].isRing, true);
+  assert.equal(shots[10].isSpreadExtra, true);
+
+  const volley = buildPlayerVolleySpecs({
+    shots,
+    availableShots: 3,
+    player: { x: 100, y: 50 },
+    upg: {
+      critChance: 0.5,
+      bounceTier: 1,
+      homingTier: 1,
+      payload: true,
+    },
+    bulletSpeed: 10,
+    baseRadius: 4,
+    baseDamage: 12,
+    lifeMs: 800,
+    overchargeBonus: 1.2,
+    overloadBonus: 1.5,
+    getPierceLeft: (shot) => shot.offset === 0 ? 2 : 1,
+    getBloodPactHealCap: () => 9,
+    now: 1000,
+    random: (() => {
+      const rolls = [0.4, 0.8, 0.2];
+      let idx = 0;
+      return () => rolls[idx++];
+    })(),
+  });
+
+  assert.equal(volley.length, 3);
+  assert.equal(volley[0].crit, true);
+  assert.equal(volley[1].crit, false);
+  assert.equal(volley[2].crit, true);
+  assert.equal(volley[0].radius, 5.12);
+  assert.equal(volley[1].radius, 4);
+  assert.equal(volley[0].bounceLeft, 2);
+  assert.equal(volley[1].pierceLeft, 1);
+  assert.equal(volley[2].pierceLeft, 2);
+  assert.equal(volley[0].homing, true);
+  assert.ok(Math.abs(volley[0].dmg - 21.6) < 1e-9);
+  assert.equal(volley[0].expireAt, 1800);
+  assert.equal(volley[0].extras.hasPayload, true);
+  assert.equal(volley[0].extras.bloodPactHealCap, 9);
+  assert.equal(volley[0].x, 100);
+  assert.equal(volley[0].y, 46.5);
 });
 
 test('room flow helpers keep threshold values', () => {

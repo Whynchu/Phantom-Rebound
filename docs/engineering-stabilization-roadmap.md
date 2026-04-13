@@ -19,11 +19,24 @@ Recent stabilization stages landed after `1.16.51`:
 - `e34a295` Extracted leaderboard refresh/submit async orchestration into [src/platform/leaderboardRuntime.js](C:/Development/Phantom-Rebound/src/platform/leaderboardRuntime.js:1).
 - `df482c5` Extracted app-shell/menu-chrome helper behavior into [src/ui/shell.js](C:/Development/Phantom-Rebound/src/ui/shell.js:1).
 - `238356f` Hardened release gate by adding browser-module syntax validation to [scripts/verify-all.ps1](C:/Development/Phantom-Rebound/scripts/verify-all.ps1:1), which catches scope leaks that CommonJS checks can miss.
+- `04d5b2d` Tightened mobile viewport handling in [script.js](C:/Development/Phantom-Rebound/script.js:1) for taller phone-width arenas and stronger iPhone gesture suppression.
+- `experimental` extraction stage: room clear/intro overlay helpers now live in [src/ui/roomOverlays.js](C:/Development/Phantom-Rebound/src/ui/roomOverlays.js:1), and page-level gesture suppression now lives in [src/platform/gestureGuards.js](C:/Development/Phantom-Rebound/src/platform/gestureGuards.js:1), both with regression coverage in [scripts/test-systems.mjs](C:/Development/Phantom-Rebound/scripts/test-systems.mjs:1).
+- `experimental` extraction stage: patch notes, leaderboard screen controls, boon panel toggles, and popup-close wiring now live in [src/ui/appChrome.js](C:/Development/Phantom-Rebound/src/ui/appChrome.js:1), reducing entrypoint DOM glue and adding regression coverage for app chrome interactions.
+- `experimental` extraction stage: player-name sync plus start/restart/main-menu flow now live in [src/ui/sessionFlow.js](C:/Development/Phantom-Rebound/src/ui/sessionFlow.js:1), removing another block of screen-state wiring from `script.js` and adding regression coverage for session transitions.
+- `experimental` extraction stage: enemy projectile creation/staging helpers now live in [src/entities/projectiles.js](C:/Development/Phantom-Rebound/src/entities/projectiles.js:1), with `script.js` retaining only thin adapters for current runtime state and regression coverage added for danger/elite projectile generation.
+- `experimental` extraction stage: player output/grey projectile constructors now live in [src/entities/playerProjectiles.js](C:/Development/Phantom-Rebound/src/entities/playerProjectiles.js:1), reducing repeated `bullets.push(...)` sites across fire, echo, split, absorb-refraction, mirror, and burst logic.
+- `experimental` extraction stage: player shot-layout and volley-spec construction now live in [src/entities/playerFire.js](C:/Development/Phantom-Rebound/src/entities/playerFire.js:1), pulling `firePlayer()` angle/lane planning and reusable bullet-spec assembly out of `script.js` while keeping the runtime entrypoint focused on charge spend, SFX, and side effects.
 
 Validation status:
 
 - `verify-all.ps1` passes with current extraction stack.
 - [scripts/test-systems.mjs](C:/Development/Phantom-Rebound/scripts/test-systems.mjs:1) now covers room flow/runtime, telemetry, progression, leaderboard local helpers, and diagnostics payload building.
+- The regression harness also covers room overlay class/text transitions and gesture suppression timing guards.
+- The regression harness also covers patch-notes, leaderboard-control, and boon-panel event binding behavior.
+- The regression harness also covers player-name state syncing and start/restart/main-menu transition wiring.
+- The regression harness also covers elite-stage projectile palette application and enemy projectile spawn helpers.
+- The regression harness also covers player output-bullet creation, grey-drop spawning, split fragments, and radial player bursts.
+- The regression harness also covers player lane-offset generation, shot-plan construction, and volley-spec assembly.
 
 ## Purpose
 

@@ -1,6 +1,26 @@
 import { C, ROOM_SCRIPTS, BOSS_ROOMS, DECAY_BASE, M, VERSION } from './src/data/gameData.js';
 import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';
+import {
+  applyEliteBulletStage as applyEliteBulletStageValue,
+  getDoubleBounceBulletPalette as getDoubleBounceBulletPaletteValue,
+  spawnAimedEnemyBullet,
+  spawnRadialEnemyBullet,
+  spawnTriangleBurst as spawnTriangleBurstValue,
+  spawnEliteBullet as spawnEliteBulletValue,
+  spawnEliteTriangleBurst as spawnEliteTriangleBurstValue,
+} from './src/entities/projectiles.js';
+import {
+  pushOutputBullet,
+  spawnGreyDrops as spawnGreyDropsValue,
+  spawnSplitOutputBullets,
+  spawnRadialOutputBurst,
+} from './src/entities/playerProjectiles.js';
+import {
+  createLaneOffsets as createLaneOffsetsValue,
+  buildPlayerShotPlan,
+  buildPlayerVolleySpecs,
+} from './src/entities/playerFire.js';
 import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoystickControls, tickJoystick } from './src/input/joystick.js';
 import { fetchRemoteLeaderboard, submitRemoteScore, submitRunDiagnostic } from './src/platform/leaderboardService.js';
 import {
@@ -9,6 +29,7 @@ import {
   submitLeaderboardEntryRemote,
 } from './src/platform/leaderboardRuntime.js';
 import { bindResponsiveViewport } from './src/platform/viewport.js';
+import { bindGestureGuards } from './src/platform/gestureGuards.js';
 import { readText, writeText, readJson, writeJson, removeKey } from './src/platform/storage.js';
 import { buildGameLoopCrashReport, saveRunCrashReport } from './src/platform/diagnostics.js';
 import {
@@ -37,6 +58,23 @@ import {
 import { renderGameOverBoonsList, showLeaderboardBoonsPopup } from './src/ui/boonsPanel.js';
 import { renderPatchNotesPanel, setPatchNotesVisibility } from './src/ui/patchNotes.js';
 import { showGameOverScreen } from './src/ui/gameOver.js';
+import {
+  bindPatchNotesControls,
+  bindLeaderboardControls,
+  bindBoonsPanelControls,
+  bindPopupClose,
+} from './src/ui/appChrome.js';
+import {
+  setPlayerNameState,
+  bindNameInputs,
+  bindSessionFlow,
+} from './src/ui/sessionFlow.js';
+import {
+  showRoomClearOverlay,
+  showBossDefeatedOverlay,
+  showRoomIntroOverlay,
+  hideRoomIntroOverlay,
+} from './src/ui/roomOverlays.js';
 import {
   revealAppShell as revealAppShellView,
   syncColorDrivenCopy as syncColorDrivenCopyView,
@@ -83,23 +121,7 @@ renderVersionTag(VERSION);
 const _now = new Date();
 const _isEaster = (_now.getMonth() === 3 && _now.getDate() >= 4 && _now.getDate() <= 6); // Apr 4-6
 
-// Suppress iOS Safari magnifier / long-press context menu on the whole page
-document.addEventListener('contextmenu', (e) => e.preventDefault());
-// Block dblclick — iOS can route double-tap zoom through this even when CSS manipulation is set
-document.addEventListener('dblclick', (e) => e.preventDefault());
-let lastTouchEndAt = 0;
-document.addEventListener('touchend', (event) => {
-  const target = event.target;
-  if(target && target.closest && target.closest('input, textarea, select')) return;
-  const now = Date.now();
-  if(now - lastTouchEndAt < 320) {
-    event.preventDefault();
-  }
-  lastTouchEndAt = now;
-}, { passive: false });
-document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
-document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
-document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
+bindGestureGuards({ doc: document });
 let startDangerCopy;
 
 function revealAppShell() {
@@ -138,6 +160,10 @@ const patchNotesCurrent = document.getElementById('patch-notes-current');
 const patchNotesList = document.getElementById('patch-notes-list');
 const patchNotesArchiveNote = document.getElementById('patch-notes-archive-note');
 const patchNotesCloseBtn = document.getElementById('btn-patch-notes-close');
+const roomClearEl = document.getElementById('room-clear');
+const roomClearTextEl = document.getElementById('room-clear-txt');
+const roomIntroEl = document.getElementById('room-intro');
+const roomIntroTextEl = document.getElementById('room-intro-txt');
 const lbPeriodBtns = document.querySelectorAll('[data-lb-period]');
 const lbScopeBtns = document.querySelectorAll('[data-lb-scope]');
 const goBoonsBtn = document.getElementById('btn-go-boons');
@@ -732,44 +758,43 @@ function getProjectileHitDamage(multiplier = 1) {
   });
 }
 
-function getEliteBulletStagePalette() {
-  const threat = getThreatPalette();
-  return [
-    { fill: threat.elite.hex, core: C.getRgba(threat.elite.light, 0.9) },
-    { fill: threat.advanced.hex, core: C.getRgba(threat.advanced.light, 0.9) },
-    { fill: threat.danger.hex, core: C.getRgba(threat.danger.light, 0.9) },
-  ];
-}
-
 function applyEliteBulletStage(bullet, stage) {
-  const palette = getEliteBulletStagePalette();
-  const nextStage = Math.max(0, Math.min(stage, palette.length - 1));
-  bullet.eliteStage = nextStage;
-  bullet.eliteColor = palette[nextStage].fill;
-  bullet.eliteCore = palette[nextStage].core;
-  bullet.bounceStages = nextStage < palette.length - 1 ? 1 : 0;
+  return applyEliteBulletStageValue({
+    bullet,
+    stage,
+    getThreatPalette,
+    getRgba: C.getRgba,
+  });
 }
 
 function getDoubleBounceBulletPalette() {
-  const threat = getThreatPalette();
-  return {
-    fill: threat.advanced.hex,
-    core: C.getRgba(threat.advanced.light, 0.9),
-  };
+  return getDoubleBounceBulletPaletteValue({
+    getThreatPalette,
+    getRgba: C.getRgba,
+  });
 }
 
 function spawnEB(ex,ey) {
-  const a=Math.atan2(player.y-ey,player.x-ex)+(Math.random()-.5)*.22;
-  const spd=(145+Math.random()*40) * bulletSpeedScale();
-  bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:4.5,decayStart:null,bounces:0});
-  recordDangerBulletSpawn();
+  spawnAimedEnemyBullet({
+    bullets,
+    player,
+    x: ex,
+    y: ey,
+    bulletSpeedScale,
+    onSpawn: recordDangerBulletSpawn,
+  });
 }
 
 function spawnZB(ex,ey,idx,total) {
-  const a=(Math.PI*2/total)*idx;
-  const spd=125 * bulletSpeedScale();
-  bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:4.5,decayStart:null,bounces:0});
-  recordDangerBulletSpawn();
+  spawnRadialEnemyBullet({
+    bullets,
+    x: ex,
+    y: ey,
+    idx,
+    total,
+    bulletSpeedScale,
+    onSpawn: recordDangerBulletSpawn,
+  });
 }
 
 function spawnEliteZB(ex, ey, idx, total, stageOverride) {
@@ -780,46 +805,59 @@ function spawnEliteZB(ex, ey, idx, total, stageOverride) {
 }
 
 function spawnDBB(ex,ey) {
-  const a=Math.atan2(player.y-ey,player.x-ex)+(Math.random()-.5)*.22;
-  const spd=(145+Math.random()*40) * bulletSpeedScale();
-  bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:4.5,decayStart:null,bounces:0,doubleBounce:true,bounceCount:0});
-  recordDangerBulletSpawn();
+  spawnAimedEnemyBullet({
+    bullets,
+    player,
+    x: ex,
+    y: ey,
+    bulletSpeedScale,
+    extras: { doubleBounce: true, bounceCount: 0 },
+    onSpawn: recordDangerBulletSpawn,
+  });
 }
 
 function spawnTB(ex,ey) {
-  const a=Math.atan2(player.y-ey,player.x-ex)+(Math.random()-.5)*.18;
-  const spd=(145+Math.random()*40) * bulletSpeedScale();
-  bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:7,decayStart:null,bounces:0,isTriangle:true,wallBounces:0});
-  recordDangerBulletSpawn();
+  spawnAimedEnemyBullet({
+    bullets,
+    player,
+    x: ex,
+    y: ey,
+    spread: 0.18,
+    radius: 7,
+    bulletSpeedScale,
+    extras: { isTriangle: true, wallBounces: 0 },
+    onSpawn: recordDangerBulletSpawn,
+  });
 }
 
 function spawnTriangleBurst(ex, ey, origVx, origVy) {
-  const baseAngle = Math.atan2(origVy, origVx);
-  const burstSpd = 140 * bulletSpeedScale();
-  for(let i = 0; i < 3; i++) {
-    const angle = baseAngle + (i - 1) * (Math.PI * 2 / 3);
-    bullets.push({x:ex,y:ey,vx:Math.cos(angle)*burstSpd,vy:Math.sin(angle)*burstSpd,state:'danger',r:5,decayStart:null,bounces:0,dangerBounceBudget:1});
-  }
-  recordDangerBulletSpawn(3);
-  sparks(ex, ey, C.danger, 6, 50);
+  spawnTriangleBurstValue({
+    bullets,
+    x: ex,
+    y: ey,
+    origVx,
+    origVy,
+    bulletSpeedScale,
+    onSpawn: recordDangerBulletSpawn,
+    sparks,
+    sparkColor: C.danger,
+  });
 }
 
 // Elite bullets advance through the current threat palette rather than fixed colors.
 function spawnEliteBullet(ex, ey, angle, speed, stageOverride, extras = {}) {
-  const stage = stageOverride !== undefined ? stageOverride : 0;
-  const bullet = {
-    x: ex, y: ey,
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed,
-    state: 'danger',
-    r: extras.r ?? 5,
-    decayStart: null,
-    bounces: 0,
-    ...extras,
-  };
-  applyEliteBulletStage(bullet, stage);
-  bullets.push(bullet);
-  recordDangerBulletSpawn();
+  spawnEliteBulletValue({
+    bullets,
+    x: ex,
+    y: ey,
+    angle,
+    speed,
+    stage: stageOverride !== undefined ? stageOverride : 0,
+    extras,
+    onSpawn: recordDangerBulletSpawn,
+    getThreatPalette,
+    getRgba: C.getRgba,
+  });
 }
 
 // Elite triangle shots use the same staged palette, just scaled up.
@@ -830,17 +868,23 @@ function spawnEliteTriangleBullet(ex, ey) {
 }
 
 function spawnEliteTriangleBurst(ex, ey, origVx, origVy) {
-  const baseAngle = Math.atan2(origVy, origVx);
-  const burstSpd = 140 * bulletSpeedScale();
-  for(let i = 0; i < 3; i++) {
-    const angle = baseAngle + (i - 1) * (Math.PI * 2 / 3);
-    spawnEliteBullet(ex, ey, angle, burstSpd, 2, { dangerBounceBudget: 1 });
-  }
-  sparks(ex, ey, getThreatPalette().advanced.hex, 6, 60);
+  spawnEliteTriangleBurstValue({
+    bullets,
+    x: ex,
+    y: ey,
+    origVx,
+    origVy,
+    bulletSpeedScale,
+    onSpawn: recordDangerBulletSpawn,
+    sparks,
+    sparkColor: getThreatPalette().advanced.hex,
+    getThreatPalette,
+    getRgba: C.getRgba,
+  });
 }
 
 function createLaneOffsets(count, spacing) {
-  return Array.from({ length: count }, (_, idx) => (idx - (count - 1) / 2) * spacing);
+  return createLaneOffsetsValue(count, spacing);
 }
 
 function drawGooBall(x, y, radius, fillColor, coreColor, wobbleSeed, alpha = 1) {
@@ -972,31 +1016,12 @@ function getPlayerShotChargeReserve(isStill, enemyCount = enemies.length) {
 
 function firePlayer(tx,ty) {
   if(charge < 1) return;
-  const base=Math.atan2(ty-player.y,tx-player.x);
-  const angs=[];
-  const forwardOffsets = createLaneOffsets(1 + UPG.forwardShotTier, 7 * Math.min(1.6, UPG.shotSize));
-
-  for(const laneOffset of forwardOffsets) angs.push({ angle: base, offset: laneOffset });
-  if(UPG.spreadTier>=1){
-    angs.push({ angle: base-0.28, offset: 0 }, { angle: base+0.28, offset: 0 });
-  }
-  if(UPG.spreadTier>=2){
-    angs.push({ angle: base-0.45, offset: 0 }, { angle: base-0.22, offset: 0 }, { angle: base+0.22, offset: 0 }, { angle: base+0.45, offset: 0 });
-  }
-  if(UPG.dualShot>0){
-    angs.push({ angle: base + Math.PI, offset: 0 });
-  }
-  if(UPG.ringShots>0){
-    for(let i=0;i<UPG.ringShots;i++){
-      angs.push({ angle: (Math.PI*2/UPG.ringShots)*i, offset: 0, isRing: true });
-    }
-  }
-  
-  // Spread Shot adds a fixed cone around the primary aim instead of tripling every lane.
-  if(UPG.spreadShot){
-    angs.push({ angle: base - 0.35, offset: 0, isSpreadExtra: true });
-    angs.push({ angle: base + 0.35, offset: 0, isSpreadExtra: true });
-  }
+  const angs = buildPlayerShotPlan({
+    tx,
+    ty,
+    player,
+    upg: UPG,
+  });
 
   const availableShots = Math.min(Math.floor(charge), angs.length);
   if(availableShots <= 0) return;
@@ -1027,29 +1052,22 @@ function firePlayer(tx,ty) {
     charge = 0;
   }
 
-  for(const shot of angs.slice(0, availableShots)) {
-    const a = shot.angle;
-    const sideX = Math.cos(a + Math.PI / 2) * shot.offset;
-    const sideY = Math.sin(a + Math.PI / 2) * shot.offset;
-    const crit = Math.random()<UPG.critChance;
-    bullets.push({
-      x:player.x + sideX, y:player.y + sideY,
-      vx:Math.cos(a)*bspd,
-      vy:Math.sin(a)*bspd,
-      state:'output', r:crit ? baseRadius * 1.28 : baseRadius, decayStart:null,
-      bounceLeft: UPG.bounceTier>0?2:0,
-      pierceLeft: UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),
-      homing: UPG.homingTier>0,
-      crit,
-      dmg: baseDmg * volleyPerBulletDamageMult * overchargeBonus * overloadBonus,
-      expireAt: now + lifeMs,
-      hitIds: new Set(),
-      isRing: shot.isRing || false,
-      hasPayload: UPG.payload || false,
-      bloodPactHeals: 0,
-      bloodPactHealCap: getBloodPactHealCap(),
-    });
-  }
+  const volleySpecs = buildPlayerVolleySpecs({
+    shots: angs,
+    availableShots,
+    player,
+    upg: UPG,
+    bulletSpeed: bspd,
+    baseRadius,
+    baseDamage: baseDmg * volleyPerBulletDamageMult,
+    lifeMs,
+    overchargeBonus,
+    overloadBonus,
+    getPierceLeft: (shot) => UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),
+    getBloodPactHealCap,
+    now,
+  });
+  volleySpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
   charge=Math.max(0,charge-availableShots);
   recordShotSpend(availableShots);
   sparks(player.x,player.y,C.green,4 + Math.min(4, availableShots),55);
@@ -1074,12 +1092,23 @@ function firePlayer(tx,ty) {
     if(_echoCounter>=5){
       _echoCounter=0;
       const eNow=performance.now();
-      for(const shot of angs.slice(0,availableShots)){
-        const a=shot.angle;
-        const sideX=Math.cos(a+Math.PI/2)*shot.offset;
-        const sideY=Math.sin(a+Math.PI/2)*shot.offset;
-        bullets.push({x:player.x+sideX,y:player.y+sideY,vx:Math.cos(a)*bspd,vy:Math.sin(a)*bspd,state:'output',r:baseRadius,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),homing:UPG.homingTier>0,crit:false,dmg:baseDmg * volleyPerBulletDamageMult,expireAt:eNow+lifeMs,hitIds:new Set(),isRing: shot.isRing || false,hasPayload: UPG.payload || false,bloodPactHeals:0,bloodPactHealCap:getBloodPactHealCap()});
-      }
+      const echoSpecs = buildPlayerVolleySpecs({
+        shots: angs,
+        availableShots,
+        player,
+        upg: { ...UPG, critChance: 0 },
+        bulletSpeed: bspd,
+        baseRadius,
+        baseDamage: baseDmg * volleyPerBulletDamageMult,
+        lifeMs,
+        overchargeBonus: 1,
+        overloadBonus: 1,
+        getPierceLeft: (shot) => UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),
+        getBloodPactHealCap,
+        now: eNow,
+        random: () => 1,
+      });
+      echoSpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
     }
   }
 }
@@ -1096,12 +1125,14 @@ function sparks(x,y,col,n=6,spd=80) {
 }
 
 function spawnGreyDrops(x,y,ts,count=getEnemyGreyDropCount()) {
-  const dropCount = Math.max(1, Math.floor(count));
-  const room = Math.min(dropCount, MAX_BULLETS - bullets.length);
-  for(let i=0;i<room;i++){
-    const a=Math.random()*Math.PI*2,s=50+Math.random()*55;
-    bullets.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,state:'grey',r:4.5,decayStart:ts,bounces:0});
-  }
+  spawnGreyDropsValue({
+    bullets,
+    x,
+    y,
+    ts,
+    count,
+    maxBullets: MAX_BULLETS,
+  });
 }
 function burstBlueDissipate(x, y) {
   const threat = getThreatPalette();
@@ -1938,11 +1969,14 @@ function update(dt,ts){
             const splitNow=performance.now();
             const splitDeltas = UPG.splitShotEvolved ? [-0.42, 0, 0.42] : [-0.35, 0.35];
             const splitDamageFactor = UPG.splitShotEvolved ? 0.85 : 0.8;
-            for(const delta of splitDeltas){
-              const sa=Math.atan2(b.vy,b.vx)+delta;
-              const sp=Math.hypot(b.vx,b.vy);
-              bullets.push({x:b.x,y:b.y,vx:Math.cos(sa)*sp,vy:Math.sin(sa)*sp,state:'output',r:b.r*0.8,decayStart:null,bounceLeft:0,pierceLeft:b.pierceLeft,homing:b.homing,crit:b.crit,dmg:b.dmg*splitDamageFactor,expireAt:splitNow+2000,hitIds:new Set(),hasSplit:true,bloodPactHeals:b.bloodPactHeals || 0,bloodPactHealCap:b.bloodPactHealCap || getBloodPactHealCap()});
-            }
+            spawnSplitOutputBullets({
+              bullets,
+              sourceBullet: b,
+              splitDeltas,
+              damageFactor: splitDamageFactor,
+              expireAt: splitNow + 2000,
+              fallbackBloodPactHealCap: getBloodPactHealCap(),
+            });
           }
         } else {
           // Payload: explode when no bounces left, damaging enemies in AoE
@@ -1989,7 +2023,20 @@ function update(dt,ts){
           if(UPG.refractionCount <= 4){
             const angle = Math.atan2(player.y - b.y, player.x - b.x);
             const rNow = performance.now();
-            bullets.push({x: b.x, y: b.y, vx: Math.cos(angle) * 140 * GLOBAL_SPEED_LIFT, vy: Math.sin(angle) * 140 * GLOBAL_SPEED_LIFT, state: 'output', r: 3.2, decayStart: null, bounceLeft: 0, pierceLeft: 0, homing: true, crit: false, dmg: 0.75, expireAt: rNow + 1600, hitIds: new Set()});
+            pushOutputBullet({
+              bullets,
+              x: b.x,
+              y: b.y,
+              vx: Math.cos(angle) * 140 * GLOBAL_SPEED_LIFT,
+              vy: Math.sin(angle) * 140 * GLOBAL_SPEED_LIFT,
+              radius: 3.2,
+              bounceLeft: 0,
+              pierceLeft: 0,
+              homing: true,
+              crit: false,
+              dmg: 0.75,
+              expireAt: rNow + 1600,
+            });
             if(UPG.refractionCount >= 4){
               UPG.refractionCooldown = 900;
               UPG.refractionCount = 0;
@@ -2059,7 +2106,20 @@ function update(dt,ts){
             if(UPG.shieldMirror && (ts - (s.mirrorCooldown||0)) > 300){
               s.mirrorCooldown = ts;
               const mNow = performance.now();
-              bullets.push({x:sx,y:sy,vx:b.vx,vy:b.vy,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*(UPG.aegisTitan ? MIRROR_SHIELD_DAMAGE_FACTOR * 2 : MIRROR_SHIELD_DAMAGE_FACTOR)*getAegisBatteryDamageMult(),expireAt:mNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
+              pushOutputBullet({
+                bullets,
+                x:sx,
+                y:sy,
+                vx:b.vx,
+                vy:b.vy,
+                radius:4.5*Math.min(2.5,UPG.shotSize),
+                bounceLeft:0,
+                pierceLeft:0,
+                homing:false,
+                crit:false,
+                dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*(UPG.aegisTitan ? MIRROR_SHIELD_DAMAGE_FACTOR * 2 : MIRROR_SHIELD_DAMAGE_FACTOR)*getAegisBatteryDamageMult(),
+                expireAt:mNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),
+              });
             }
             // Tempered Shield: two-stage (purple -> blue -> pop)
             if(UPG.shieldTempered && s.hardened){
@@ -2071,10 +2131,20 @@ function update(dt,ts){
             if(UPG.shieldBurst){
               const bNow=performance.now();
               const burstCount = UPG.aegisTitan ? 8 : 4;
-              for(let ba=0;ba<burstCount;ba++){
-                const bang=ba*Math.PI*2/burstCount;
-                bullets.push({x:player.x,y:player.y,vx:Math.cos(bang)*230*GLOBAL_SPEED_LIFT,vy:Math.sin(bang)*230*GLOBAL_SPEED_LIFT,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*AEGIS_NOVA_DAMAGE_FACTOR*getAegisBatteryDamageMult(),expireAt:bNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
-              }
+              spawnRadialOutputBurst({
+                bullets,
+                x: player.x,
+                y: player.y,
+                count: burstCount,
+                speed: 230 * GLOBAL_SPEED_LIFT,
+                radius: 4.5*Math.min(2.5,UPG.shotSize),
+                bounceLeft: 0,
+                pierceLeft: 0,
+                homing: false,
+                crit: false,
+                dmg: (UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*AEGIS_NOVA_DAMAGE_FACTOR*getAegisBatteryDamageMult(),
+                expireAt: bNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),
+              });
             }
             // Barrier Pulse: +2 charge + magnet pulse
             if(UPG.barrierPulse){
@@ -2151,7 +2221,20 @@ function update(dt,ts){
           UPG.mirrorTideCooldown = 1500;
           const reflectAngle = Math.atan2(b.vy, b.vx) + Math.PI;
           const mNow = performance.now();
-          bullets.push({x: player.x, y: player.y, vx: Math.cos(reflectAngle) * 200 * GLOBAL_SPEED_LIFT, vy: Math.sin(reflectAngle) * 200 * GLOBAL_SPEED_LIFT, state: 'output', r: b.r, decayStart: null, bounceLeft: 0, pierceLeft: 0, homing: false, crit: false, dmg: (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1), expireAt: mNow + 2000, hitIds: new Set()});
+          pushOutputBullet({
+            bullets,
+            x: player.x,
+            y: player.y,
+            vx: Math.cos(reflectAngle) * 200 * GLOBAL_SPEED_LIFT,
+            vy: Math.sin(reflectAngle) * 200 * GLOBAL_SPEED_LIFT,
+            radius: b.r,
+            bounceLeft: 0,
+            pierceLeft: 0,
+            homing: false,
+            crit: false,
+            dmg: (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1),
+            expireAt: mNow + 2000,
+          });
           sparks(player.x, player.y, getThreatPalette().elite.hex, 12, 150);
           bullets.splice(i, 1);
           continue;
@@ -2323,33 +2406,30 @@ function update(dt,ts){
 
 // ── ROOM CLEAR FLASH ──────────────────────────────────────────────────────────
 function showRoomClear(){
-  const el=document.getElementById('room-clear');
-  el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'),1400);
+  showRoomClearOverlay({
+    panelEl: roomClearEl,
+    textEl: roomClearTextEl,
+  });
 }
 
 function showBossDefeated() {
-  const el = document.getElementById('room-clear');
-  const txt = document.getElementById('room-clear-txt');
-  txt.textContent = 'BOSS DEFEATED';
-  el.classList.add('show', 'boss-clear');
-  setTimeout(() => {
-    el.classList.remove('show', 'boss-clear');
-    txt.textContent = 'ROOM CLEAR';
-  }, 2000);
+  showBossDefeatedOverlay({
+    panelEl: roomClearEl,
+    textEl: roomClearTextEl,
+  });
 }
 
 function showRoomIntro(text, isGo) {
-  const el = document.getElementById('room-intro');
-  const txt = document.getElementById('room-intro-txt');
-  txt.textContent = text;
-  el.classList.toggle('go', Boolean(isGo));
-  el.classList.add('show');
+  showRoomIntroOverlay({
+    panelEl: roomIntroEl,
+    textEl: roomIntroTextEl,
+    text,
+    isGo,
+  });
 }
 
 function hideRoomIntro() {
-  const el = document.getElementById('room-intro');
-  el.classList.remove('show', 'go');
+  hideRoomIntroOverlay({ panelEl: roomIntroEl });
 }
 
 // ── DRAW ──────────────────────────────────────────────────────────────────────
@@ -2771,92 +2851,91 @@ bindJoystickControls({
 });
 
 renderPatchNotes();
-patchNotesBtn?.addEventListener('click', () => setPatchNotesOpen(true));
-patchNotesCloseBtn?.addEventListener('click', () => setPatchNotesOpen(false));
-patchNotesPanel?.addEventListener('click', (event) => {
-  if(event.target === patchNotesPanel) setPatchNotesOpen(false);
-});
-document.addEventListener('keydown', (event) => {
-  if(event.key === 'Escape') {
-    setPatchNotesOpen(false);
-  }
-});
 function openLeaderboardScreen() {
   lbScreen.classList.remove('off');
   refreshLeaderboardView();
 }
 
-if(lbOpenBtn){
-  lbOpenBtn.addEventListener('click', openLeaderboardScreen);
-}
-if(lbOpenBtnGo){
-  lbOpenBtnGo.addEventListener('click', openLeaderboardScreen);
-}
-lbCloseBtn.addEventListener('click', () => lbScreen.classList.add('off'));
-lbPeriodBtns.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    lbPeriod = btn.dataset.lbPeriod;
-    refreshLeaderboardView();
-  });
+bindPatchNotesControls({
+  button: patchNotesBtn,
+  closeButton: patchNotesCloseBtn,
+  panelEl: patchNotesPanel,
+  onOpenChange: setPatchNotesOpen,
+  doc: document,
 });
-lbScopeBtns.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    lbScope = btn.dataset.lbScope;
+
+bindLeaderboardControls({
+  openButtons: [lbOpenBtn, lbOpenBtnGo],
+  closeButton: lbCloseBtn,
+  periodButtons: [...lbPeriodBtns],
+  scopeButtons: [...lbScopeBtns],
+  onOpen: openLeaderboardScreen,
+  onClose: () => lbScreen.classList.add('off'),
+  onPeriodChange: (period) => {
+    lbPeriod = period;
     refreshLeaderboardView();
-  });
+  },
+  onScopeChange: (scope) => {
+    lbScope = scope;
+    refreshLeaderboardView();
+  },
 });
 
 function setPlayerName(v, { syncInputs = false } = {}){
-  const sanitized = sanitizePlayerName(v);
-  playerName = sanitized || 'RUNNER';
-  writeText(NAME_KEY, sanitized);
-  if(syncInputs){
-    nameInputStart.value = sanitized;
-    nameInputGo.value = sanitized;
-  }
-  refreshLeaderboardView();
+  playerName = setPlayerNameState({
+    value: v,
+    sanitizePlayerName,
+    persistName: (sanitized) => writeText(NAME_KEY, sanitized),
+    inputs: [nameInputStart, nameInputGo],
+    syncInputs,
+    onNameChange: () => refreshLeaderboardView(),
+  });
 }
 
-nameInputStart.addEventListener('input', (e)=>setPlayerName(e.target.value));
-nameInputGo.addEventListener('input', (e)=>setPlayerName(e.target.value));
+bindNameInputs({
+  inputs: [nameInputStart, nameInputGo],
+  setPlayerName,
+});
 
 // Initialize color picker on start screen
 renderColorSelector('color-picker');
 syncColorDrivenCopy();
 
-// Start game from name entry screen
-document.getElementById('btn-start').onclick=()=>{
-  setPlayerName(nameInputStart.value, { syncInputs: true });
-  setMenuChromeVisible(false);
-  startScreen.classList.add('off');
-  init();gstate='playing';lastT=performance.now();raf=requestAnimationFrame(loop);
-};
-
-document.getElementById('btn-restart').onclick=()=>{
-  setPlayerName(nameInputGo.value, { syncInputs: true });
-  setMenuChromeVisible(false);
-  gameOverScreen.classList.add('off');
-  if(goBoonsPanel) goBoonsPanel.classList.add('off');
-  init();gstate='playing';lastT=performance.now();raf=requestAnimationFrame(loop);
-};
-
-mainMenuBtn?.addEventListener('click', () => {
-  setPlayerName(nameInputGo.value, { syncInputs: true });
-  gameOverScreen.classList.add('off');
-  if(goBoonsPanel) goBoonsPanel.classList.add('off');
-  lbScreen.classList.add('off');
-  setMenuChromeVisible(true);
-  startScreen.classList.remove('off');
-  gstate = 'start';
+bindSessionFlow({
+  startButton: document.getElementById('btn-start'),
+  restartButton: document.getElementById('btn-restart'),
+  mainMenuButton: mainMenuBtn,
+  startInput: nameInputStart,
+  gameOverInput: nameInputGo,
+  setPlayerName,
+  setMenuChromeVisible,
+  startScreen,
+  gameOverScreen,
+  boonsPanelEl: goBoonsPanel,
+  leaderboardScreen: lbScreen,
+  initRun: init,
+  beginLoop: () => {
+    lastT = performance.now();
+    raf = requestAnimationFrame(loop);
+  },
+  setGameState: (nextState) => {
+    gstate = nextState;
+  },
 });
 
-goBoonsBtn?.addEventListener('click', ()=>goBoonsPanel?.classList.toggle('off'));
-goBoonsCloseBtn?.addEventListener('click', ()=>goBoonsPanel?.classList.add('off'));
+bindBoonsPanelControls({
+  toggleButton: goBoonsBtn,
+  panelEl: goBoonsPanel,
+  closeButton: goBoonsCloseBtn,
+});
 
 const lbBoonsPopup = document.getElementById('lb-boons-popup');
 const lbBoonsPopupTitle = document.getElementById('lb-boons-popup-title');
 const lbBoonsPopupList = document.getElementById('lb-boons-popup-list');
-document.getElementById('btn-lb-boons-close')?.addEventListener('click', () => lbBoonsPopup?.classList.add('off'));
+bindPopupClose({
+  closeButton: document.getElementById('btn-lb-boons-close'),
+  panelEl: lbBoonsPopup,
+});
 
 function showLbBoonsPopup(runnerName, boons, boonOrder = '') {
   showLeaderboardBoonsPopup({
