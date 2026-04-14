@@ -20,6 +20,11 @@ import {
 } from '../src/systems/outputHit.js';
 import { resolveEnemyKillEffects } from '../src/systems/killRewards.js';
 import {
+  resolveLifelineRecovery,
+  resolveDangerPlayerHit,
+  resolveSlipstreamNearMiss,
+} from '../src/systems/dangerHit.js';
+import {
   weightedPick,
   generateWeightedWave,
   buildSpawnQueue,
@@ -476,6 +481,125 @@ test('kill reward helpers derive boss, sustain, and burst side effects determini
   assert.equal(plainEffects.bloodMoonGreyDrops, 0);
   assert.equal(plainEffects.sanguineBurstCount, 0);
   assert.equal(plainEffects.nextUpgradeState.escalationKills, 0);
+});
+
+test('danger hit helpers resolve void block, phase dash, mirror tide, direct hit, and slipstream deterministically', () => {
+  const lifeline = resolveLifelineRecovery({
+    hpAfterDamage: -10,
+    lifeline: true,
+    lifelineTriggerCount: 0,
+    lifelineUses: 1,
+  });
+  assert.equal(lifeline.triggered, true);
+  assert.equal(lifeline.nextHp, 1);
+  assert.equal(lifeline.nextLifelineTriggerCount, 1);
+
+  const voidBlock = resolveDangerPlayerHit({
+    bullet: { x: 0, y: 0, r: 5 },
+    player: { x: 0, y: 0, r: 10 },
+    upgrades: {
+      voidWalker: true,
+      voidZoneActive: true,
+      voidZoneTimer: 5000,
+    },
+    ts: 1000,
+    hp: 100,
+    maxHp: 100,
+    phaseDamage: 1,
+    directDamage: 20,
+    projectileInvulnSeconds: 1,
+  });
+  assert.equal(voidBlock.kind, 'void-block');
+
+  const phaseDash = resolveDangerPlayerHit({
+    bullet: { x: 0, y: 0, r: 5 },
+    player: { x: 10, y: 0, r: 10 },
+    upgrades: {
+      voidWalker: true,
+      voidZoneActive: false,
+      voidZoneTimer: 0,
+      phaseDash: true,
+      phaseDashCooldown: 0,
+      phaseDashRoomUses: 0,
+      phaseDashRoomLimit: 1,
+      hitChargeGain: 2,
+      lifeline: false,
+    },
+    ts: 1000,
+    hp: 50,
+    maxHp: 100,
+    phaseDamage: 5,
+    directDamage: 20,
+    projectileInvulnSeconds: 1,
+  });
+  assert.equal(phaseDash.kind, 'phase-dash');
+  assert.equal(phaseDash.damage, 5);
+  assert.equal(phaseDash.nextHp, 45);
+  assert.equal(phaseDash.shouldGainHitCharge, true);
+  assert.equal(phaseDash.nextPhaseDashRoomUses, 1);
+  assert.equal(phaseDash.nextPhaseDashCooldown, 3500);
+  assert.equal(phaseDash.nextVoidZoneActive, true);
+  assert.equal(phaseDash.nextVoidZoneTimer, 3000);
+
+  const mirror = resolveDangerPlayerHit({
+    bullet: { x: 0, y: 0, r: 5, vx: 0, vy: 3 },
+    player: { x: 0, y: 0, r: 10 },
+    upgrades: {
+      voidWalker: false,
+      mirrorTide: true,
+      mirrorTideCooldown: 0,
+      mirrorTideRoomUses: 0,
+      mirrorTideRoomLimit: 1,
+    },
+    ts: 1000,
+    hp: 50,
+    maxHp: 100,
+    phaseDamage: 5,
+    directDamage: 20,
+    projectileInvulnSeconds: 1,
+  });
+  assert.equal(mirror.kind, 'mirror-tide');
+  assert.equal(mirror.nextMirrorTideRoomUses, 1);
+  assert.equal(mirror.nextMirrorTideCooldown, 1500);
+  assert.equal(mirror.reflectAngle, Math.PI * 1.5);
+
+  const direct = resolveDangerPlayerHit({
+    bullet: { x: 0, y: 0, r: 5 },
+    player: { x: 0, y: 0, r: 10 },
+    upgrades: {
+      voidWalker: false,
+      phaseDash: false,
+      mirrorTide: false,
+      hitChargeGain: 1,
+      empBurst: true,
+      empBurstUsed: false,
+      lifeline: true,
+      lifelineTriggerCount: 0,
+      lifelineUses: 1,
+    },
+    ts: 1000,
+    hp: 20,
+    maxHp: 100,
+    phaseDamage: 5,
+    directDamage: 30,
+    projectileInvulnSeconds: 0.8,
+  });
+  assert.equal(direct.kind, 'direct-hit');
+  assert.equal(direct.nextHp, 1);
+  assert.equal(direct.shouldEmpBurst, true);
+  assert.equal(direct.nextEmpBurstUsed, true);
+  assert.equal(direct.lifelineTriggered, true);
+  assert.equal(direct.invincibleSeconds, 2);
+
+  const slipstream = resolveSlipstreamNearMiss({
+    bullet: { x: 20, y: 0, r: 5 },
+    player: { x: 0, y: 0, r: 10 },
+    upgrades: { slipTier: 1, slipChargeGain: 0.5, ghostFlow: true },
+    slipCooldown: 0,
+  });
+  assert.equal(slipstream.shouldTrigger, true);
+  assert.equal(slipstream.chargeGain, 1);
+  assert.equal(slipstream.nextSlipCooldown, 150);
 });
 
 test('weightedPick uses candidate weights', () => {

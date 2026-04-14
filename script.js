@@ -111,6 +111,11 @@ import {
 } from './src/systems/outputHit.js';
 import { resolveEnemyKillEffects } from './src/systems/killRewards.js';
 import {
+  resolveLifelineRecovery,
+  resolveDangerPlayerHit,
+  resolveSlipstreamNearMiss,
+} from './src/systems/dangerHit.js';
+import {
   createRunTelemetry as createRunTelemetryValue,
   createRoomTelemetry as createRoomTelemetryValue,
   buildRunTelemetryPayload as buildRunTelemetryPayloadValue,
@@ -2202,92 +2207,87 @@ function update(dt,ts){
     }
 
     if(b.state==='danger'&&player.invincible<=0){
-      
-      // VOID WALKER: void zone blocks danger bullets (part of legendary combo)
-      if(UPG.voidWalker && UPG.voidZoneActive && UPG.voidZoneTimer > ts){
+      const dangerHit = resolveDangerPlayerHit({
+        bullet: b,
+        player,
+        upgrades: UPG,
+        ts,
+        hp,
+        maxHp,
+        phaseDamage: getProjectileHitDamage(PHASE_DASH_DAMAGE_MULT),
+        directDamage: getProjectileHitDamage(),
+        projectileInvulnSeconds: getPostHitInvulnSeconds('projectile'),
+      });
+
+      if(dangerHit.kind === 'void-block'){
         bullets.splice(i,1);
         sparks(b.x,b.y,'#8b5cf6',8,120);
         continue;
       }
-      
-      if(Math.hypot(b.x-player.x,b.y-player.y)<player.r+b.r-2){
-        // Phase Dash: graze the hit for sharply reduced damage, then dash away.
-        if(
-          UPG.phaseDash &&
-          UPG.phaseDashCooldown <= 0 &&
-          (UPG.phaseDashRoomUses || 0) < (UPG.phaseDashRoomLimit || 0)
-        ){
-          if(currentRoomTelemetry) currentRoomTelemetry.safety.phaseDashProcs += 1;
-          UPG.phaseDashRoomUses = (UPG.phaseDashRoomUses || 0) + 1;
-          UPG.isDashing = true;
-          player.invincible = 0.45;
-          UPG.phaseDashCooldown = 3500;
-          // Dash away from the bullet
-          const awayAng = Math.atan2(player.y - b.y, player.x - b.x);
-          player.x += Math.cos(awayAng) * 75;
-          player.y += Math.sin(awayAng) * 75;
-          player.x = Math.max(M + player.r, Math.min(W - M - player.r, player.x));
-          player.y = Math.max(M + player.r, Math.min(H - M - player.r, player.y));
-          sparks(player.x, player.y, getThreatPalette().advanced.hex, 16, 200);
-          const phaseDamage = getProjectileHitDamage(PHASE_DASH_DAMAGE_MULT);
-          hp -= phaseDamage; recordPlayerDamage(phaseDamage, 'projectile'); player.distort = 0.18;
-          tookDamageThisRoom = true;
-          if(UPG.hitChargeGain > 0){
-            gainCharge(UPG.hitChargeGain, 'hitReward');
-          }
-          if(UPG.voidWalker){
-            UPG.voidZoneActive = true;
-            UPG.voidZoneTimer = ts + 2000;
-          }
-          bullets.splice(i, 1);
-          if(hp<=0){
-            if(UPG.lifeline && UPG.lifelineTriggerCount < (UPG.lifelineUses||1)){
-              UPG.lifelineTriggerCount++; UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,C.lifelineEffect,16,100);
-            }
-            else { gameOver(); return; }
-          }
-          continue;
-        }
-        // Mirror Tide: reflect danger hit as output bullet
-        if(
-          UPG.mirrorTide &&
-          UPG.mirrorTideCooldown <= 0 &&
-          (UPG.mirrorTideRoomUses || 0) < (UPG.mirrorTideRoomLimit || 0)
-        ){
-          if(currentRoomTelemetry) currentRoomTelemetry.safety.mirrorTideProcs += 1;
-          UPG.mirrorTideRoomUses = (UPG.mirrorTideRoomUses || 0) + 1;
-          UPG.mirrorTideCooldown = 1500;
-          const reflectAngle = Math.atan2(b.vy, b.vx) + Math.PI;
-          const mNow = performance.now();
-          pushOutputBullet({
-            bullets,
-            x: player.x,
-            y: player.y,
-            vx: Math.cos(reflectAngle) * 200 * GLOBAL_SPEED_LIFT,
-            vy: Math.sin(reflectAngle) * 200 * GLOBAL_SPEED_LIFT,
-            radius: b.r,
-            bounceLeft: 0,
-            pierceLeft: 0,
-            homing: false,
-            crit: false,
-            dmg: (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1),
-            expireAt: mNow + 2000,
-          });
-          sparks(player.x, player.y, getThreatPalette().elite.hex, 12, 150);
-          bullets.splice(i, 1);
-          continue;
-        }
-        
-        const finalDamage = getProjectileHitDamage();
-        hp-=finalDamage; recordPlayerDamage(finalDamage, 'projectile'); player.invincible=getPostHitInvulnSeconds('projectile'); player.distort=.45;
+
+      if(dangerHit.kind === 'phase-dash'){
+        if(currentRoomTelemetry) currentRoomTelemetry.safety.phaseDashProcs += 1;
+        UPG.phaseDashRoomUses = dangerHit.nextPhaseDashRoomUses;
+        UPG.phaseDashCooldown = dangerHit.nextPhaseDashCooldown;
+        UPG.isDashing = true;
+        player.invincible = dangerHit.invincibleSeconds;
+        const awayAng = dangerHit.awayAngle;
+        player.x += Math.cos(awayAng) * dangerHit.dashDistance;
+        player.y += Math.sin(awayAng) * dangerHit.dashDistance;
+        player.x = Math.max(M + player.r, Math.min(W - M - player.r, player.x));
+        player.y = Math.max(M + player.r, Math.min(H - M - player.r, player.y));
+        sparks(player.x, player.y, getThreatPalette().advanced.hex, 16, 200);
+        hp = dangerHit.nextHp;
+        recordPlayerDamage(dangerHit.damage, 'projectile');
+        player.distort = dangerHit.distortSeconds;
         tookDamageThisRoom = true;
-        if(UPG.hitChargeGain > 0){
-          gainCharge(UPG.hitChargeGain, 'hitReward');
+        if(dangerHit.shouldGainHitCharge) gainCharge(UPG.hitChargeGain, 'hitReward');
+        UPG.voidZoneActive = dangerHit.nextVoidZoneActive;
+        UPG.voidZoneTimer = dangerHit.nextVoidZoneTimer;
+        bullets.splice(i, 1);
+        if(dangerHit.lifelineTriggered){
+          UPG.lifelineTriggerCount = dangerHit.nextLifelineTriggerCount;
+          UPG.lifelineUsed = dangerHit.nextLifelineUsed;
+          sparks(player.x,player.y,C.lifelineEffect,16,100);
+        } else if(dangerHit.shouldGameOver) {
+          gameOver(); return;
         }
-        
-        // EMP Burst: at ≤30% HP + take damage, destroy all danger bullets (once per room)
-        if(UPG.empBurst && !UPG.empBurstUsed && hp <= maxHp * 0.3){
-          UPG.empBurstUsed = true;
+        continue;
+      }
+
+      if(dangerHit.kind === 'mirror-tide'){
+        if(currentRoomTelemetry) currentRoomTelemetry.safety.mirrorTideProcs += 1;
+        UPG.mirrorTideRoomUses = dangerHit.nextMirrorTideRoomUses;
+        UPG.mirrorTideCooldown = dangerHit.nextMirrorTideCooldown;
+        const mNow = performance.now();
+        pushOutputBullet({
+          bullets,
+          x: player.x,
+          y: player.y,
+          vx: Math.cos(dangerHit.reflectAngle) * 200 * GLOBAL_SPEED_LIFT,
+          vy: Math.sin(dangerHit.reflectAngle) * 200 * GLOBAL_SPEED_LIFT,
+          radius: b.r,
+          bounceLeft: 0,
+          pierceLeft: 0,
+          homing: false,
+          crit: false,
+          dmg: (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1),
+          expireAt: mNow + 2000,
+        });
+        sparks(player.x, player.y, getThreatPalette().elite.hex, 12, 150);
+        bullets.splice(i, 1);
+        continue;
+      }
+
+      if(dangerHit.kind === 'direct-hit'){
+        hp = dangerHit.nextHp;
+        recordPlayerDamage(dangerHit.damage, 'projectile');
+        player.invincible = dangerHit.invincibleSeconds;
+        player.distort = dangerHit.distortSeconds;
+        tookDamageThisRoom = true;
+        if(dangerHit.shouldGainHitCharge) gainCharge(UPG.hitChargeGain, 'hitReward');
+        if(dangerHit.shouldEmpBurst){
+          UPG.empBurstUsed = dangerHit.nextEmpBurstUsed;
           for(let ei = bullets.length - 1; ei >= 0; ei--){
             if(bullets[ei].state === 'danger'){
               sparks(bullets[ei].x, bullets[ei].y, '#fbbf24', 4, 100);
@@ -2296,32 +2296,54 @@ function update(dt,ts){
           }
           sparks(player.x, player.y, '#fbbf24', 20, 180);
         }
-        
+
         sparks(player.x,player.y,C.danger,10,85);
         bullets.splice(i,1);
-        // Colossus: shockwave converts nearby danger bullets to grey
         if(UPG.colossus && _colossusShockwaveCd <= 0){
           _colossusShockwaveCd = 4.0;
           for(let ci=bullets.length-1;ci>=0;ci--){ const cb=bullets[ci]; if(cb.state==='danger' && Math.hypot(cb.x-player.x,cb.y-player.y)<120){ cb.state='grey'; cb.decayStart=ts; } }
           sparks(player.x,player.y,getThreatPalette().advanced.hex,14,120);
         }
-        if(hp<=0){
-          if(UPG.lifeline && UPG.lifelineTriggerCount < (UPG.lifelineUses||1)){
-            UPG.lifelineTriggerCount++; UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,C.lifelineEffect,16,100);
-            if(UPG.lastStand){ const lsNow=performance.now(); for(let la=0;la<Math.floor(UPG.maxCharge);la++){ const lang=(Math.PI*2/Math.max(1,Math.floor(UPG.maxCharge)))*la; bullets.push({x:player.x,y:player.y,vx:Math.cos(lang)*220*GLOBAL_SPEED_LIFT,vy:Math.sin(lang)*220*GLOBAL_SPEED_LIFT,state:'output',r:4.5,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:lsNow+2000,hitIds:new Set(),bloodPactHeals:0,bloodPactHealCap:getBloodPactHealCap()}); } }
+        if(dangerHit.lifelineTriggered){
+          UPG.lifelineTriggerCount = dangerHit.nextLifelineTriggerCount;
+          UPG.lifelineUsed = dangerHit.nextLifelineUsed;
+          sparks(player.x,player.y,C.lifelineEffect,16,100);
+          if(UPG.lastStand){
+            const lsNow=performance.now();
+            spawnRadialOutputBurst({
+              bullets,
+              x: player.x,
+              y: player.y,
+              count: Math.max(1, Math.floor(UPG.maxCharge)),
+              speed: 220 * GLOBAL_SPEED_LIFT,
+              radius: 4.5,
+              bounceLeft: UPG.bounceTier>0 ? 2 : 0,
+              pierceLeft: UPG.pierceTier,
+              homing: false,
+              crit: false,
+              dmg: (UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),
+              expireAt: lsNow + 2000,
+              extras: {
+                bloodPactHeals: 0,
+                bloodPactHealCap: getBloodPactHealCap(),
+              },
+            });
           }
-          else { gameOver(); return; }
+        } else if(dangerHit.shouldGameOver) {
+          gameOver(); return;
         }
         continue;
       }
-      // Slipstream: near-miss detection
-      if(UPG.slipTier>0 && _slipCooldown<=0){
-        const dist=Math.hypot(b.x-player.x,b.y-player.y);
-        if(dist < player.r+b.r+10 && dist >= player.r+b.r-2){
-          const slipGain = UPG.slipChargeGain * (UPG.ghostFlow ? 2 : 1);
-          gainCharge(slipGain, 'slipstream');
-          _slipCooldown=150;
-        }
+
+      const slipstream = resolveSlipstreamNearMiss({
+        bullet: b,
+        player,
+        upgrades: UPG,
+        slipCooldown: _slipCooldown,
+      });
+      if(slipstream.shouldTrigger){
+        gainCharge(slipstream.chargeGain, 'slipstream');
+        _slipCooldown = slipstream.nextSlipCooldown;
       }
     }
 

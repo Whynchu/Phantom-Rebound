@@ -30,6 +30,7 @@ Recent stabilization stages landed after `1.16.51`:
 - `experimental` extraction stage: bullet lifecycle transition helpers now live in [src/systems/bulletRuntime.js](C:/Development/Phantom-Rebound/src/systems/bulletRuntime.js:1), centralizing output expiry, out-of-bounds cleanup, danger-bounce state changes, and output-bounce/split decisions while leaving VFX and gameplay side effects in the main loop for now.
 - `experimental` extraction stage: output-hit resolution helpers now live in [src/systems/outputHit.js](C:/Development/Phantom-Rebound/src/systems/outputHit.js:1), centralizing crit/dead-man damage math, blood-pact eligibility, pierce/volatile-round decisions, and sanguine-burst cadence while keeping kill rewards and room-side effects in `script.js`.
 - `experimental` extraction stage: enemy kill reward derivation now lives in [src/systems/killRewards.js](C:/Development/Phantom-Rebound/src/systems/killRewards.js:1), centralizing boss-clear rewards, vampiric/blood-moon/corona/final-form reward values, crimson harvest drops, and streak timer updates while `script.js` applies the concrete side effects.
+- `experimental` extraction stage: danger-hit/player-defense resolution now lives in [src/systems/dangerHit.js](C:/Development/Phantom-Rebound/src/systems/dangerHit.js:1), centralizing void-zone blocks, phase-dash vs mirror-tide vs direct-hit branching, lifeline recovery state, and slipstream near-miss detection while `script.js` applies movement/VFX and bullet cleanup.
 
 Validation status:
 
@@ -45,6 +46,7 @@ Validation status:
 - The regression harness also covers bullet expiry, out-of-bounds cleanup, danger bounce transitions, and output bounce/split decisions.
 - The regression harness also covers output-hit damage resolution, blood-pact eligibility, pierce/volatile-round behavior, and sanguine-burst cadence.
 - The regression harness also covers enemy kill reward derivation for boss rewards, sustain, streak timers, and reward-spawn counts.
+- The regression harness also covers void-zone blocking, phase-dash/mirror-tide/direct-hit decisions, lifeline recovery, and slipstream near-miss behavior.
 
 ## Purpose
 
