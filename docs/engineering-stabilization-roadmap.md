@@ -27,6 +27,7 @@ Recent stabilization stages landed after `1.16.51`:
 - `experimental` extraction stage: player output/grey projectile constructors now live in [src/entities/playerProjectiles.js](C:/Development/Phantom-Rebound/src/entities/playerProjectiles.js:1), reducing repeated `bullets.push(...)` sites across fire, echo, split, absorb-refraction, mirror, and burst logic.
 - `experimental` extraction stage: player shot-layout and volley-spec construction now live in [src/entities/playerFire.js](C:/Development/Phantom-Rebound/src/entities/playerFire.js:1), pulling `firePlayer()` angle/lane planning and reusable bullet-spec assembly out of `script.js` while keeping the runtime entrypoint focused on charge spend, SFX, and side effects.
 - `experimental` extraction stage: orbit/shield runtime helpers now live in [src/entities/defenseRuntime.js](C:/Development/Phantom-Rebound/src/entities/defenseRuntime.js:1), centralizing orb timer sync, orbit/shield slot positioning, shield cooldown ticking, ready-shield counting, and Aegis Battery timer stepping for reuse across combat branches.
+- `experimental` extraction stage: bullet lifecycle transition helpers now live in [src/systems/bulletRuntime.js](C:/Development/Phantom-Rebound/src/systems/bulletRuntime.js:1), centralizing output expiry, out-of-bounds cleanup, danger-bounce state changes, and output-bounce/split decisions while leaving VFX and gameplay side effects in the main loop for now.
 
 Validation status:
 
@@ -39,6 +40,7 @@ Validation status:
 - The regression harness also covers player output-bullet creation, grey-drop spawning, split fragments, and radial player bursts.
 - The regression harness also covers player lane-offset generation, shot-plan construction, and volley-spec assembly.
 - The regression harness also covers orbit timer sync, shield cooldown ticking, orbit/shield slot positioning, and Aegis Battery timing behavior.
+- The regression harness also covers bullet expiry, out-of-bounds cleanup, danger bounce transitions, and output bounce/split decisions.
 
 ## Purpose
 

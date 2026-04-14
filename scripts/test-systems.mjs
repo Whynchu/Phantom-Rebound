@@ -9,6 +9,12 @@ import {
 } from '../src/systems/scoring.js';
 import { computeProjectileHitDamage } from '../src/systems/damage.js';
 import {
+  shouldExpireOutputBullet,
+  shouldRemoveBulletOutOfBounds,
+  resolveDangerBounceState,
+  resolveOutputBounceState,
+} from '../src/systems/bulletRuntime.js';
+import {
   weightedPick,
   generateWeightedWave,
   buildSpawnQueue,
@@ -220,6 +226,54 @@ test('computeProjectileHitDamage applies external multipliers', () => {
     multiplier: 0.05,
   });
   assert.equal(damage, 4);
+});
+
+test('bullet runtime helpers keep expiry and bounce transitions deterministic', () => {
+  assert.equal(shouldExpireOutputBullet({ state: 'output', expireAt: 100 }, 100), true);
+  assert.equal(shouldExpireOutputBullet({ state: 'danger', expireAt: 100 }, 100), false);
+  assert.equal(shouldRemoveBulletOutOfBounds({ x: -11, y: 0 }, 100, 100), true);
+  assert.equal(shouldRemoveBulletOutOfBounds({ x: 50, y: 50 }, 100, 100), false);
+
+  const eliteBullet = { state: 'danger', eliteStage: 0, bounceStages: 2 };
+  const eliteResult = resolveDangerBounceState(eliteBullet, 1000);
+  assert.equal(eliteResult.kind, 'elite-stage');
+  assert.equal(eliteResult.nextEliteStage, 1);
+
+  const triangleBullet = { state: 'danger', isTriangle: true, wallBounces: 0 };
+  const triangleResult = resolveDangerBounceState(triangleBullet, 1000);
+  assert.equal(triangleResult.kind, 'triangle-burst');
+  assert.equal(triangleBullet.wallBounces, 1);
+
+  const budgetBullet = { state: 'danger', dangerBounceBudget: 1 };
+  const budgetResult = resolveDangerBounceState(budgetBullet, 900);
+  assert.equal(budgetResult.kind, 'convert-grey');
+  assert.equal(budgetBullet.state, 'grey');
+  assert.equal(budgetBullet.decayStart, 900);
+  assert.equal(budgetBullet.dangerBounceBudget, 0);
+
+  const doubleBounceBullet = { state: 'danger', doubleBounce: true, bounceCount: 0 };
+  const doubleFirst = resolveDangerBounceState(doubleBounceBullet, 1000);
+  assert.equal(doubleFirst.kind, 'double-bounce-continue');
+  assert.equal(doubleBounceBullet.state, 'danger');
+  const doubleSecond = resolveDangerBounceState(doubleBounceBullet, 1100);
+  assert.equal(doubleSecond.kind, 'convert-grey');
+  assert.equal(doubleBounceBullet.state, 'grey');
+
+  const splitBullet = { bounceLeft: 2, hasSplit: false };
+  const splitResult = resolveOutputBounceState(splitBullet, { splitShot: true, splitShotEvolved: true });
+  assert.equal(splitResult.kind, 'split');
+  assert.deepEqual(splitResult.splitDeltas, [-0.42, 0, 0.42]);
+  assert.equal(splitBullet.bounceLeft, 1);
+  assert.equal(splitBullet.hasSplit, true);
+
+  const continueBullet = { bounceLeft: 1, hasSplit: true };
+  const continueResult = resolveOutputBounceState(continueBullet, { splitShot: true, splitShotEvolved: false });
+  assert.equal(continueResult.kind, 'continue');
+  assert.equal(continueBullet.bounceLeft, 0);
+
+  const removeResult = resolveOutputBounceState({ bounceLeft: 0 }, { splitShot: false });
+  assert.equal(removeResult.kind, 'remove');
+  assert.equal(removeResult.removeBullet, true);
 });
 
 test('weightedPick uses candidate weights', () => {

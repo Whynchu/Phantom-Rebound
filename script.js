@@ -100,6 +100,12 @@ import {
   buildSpawnQueue as buildSpawnQueueValue,
 } from './src/systems/spawnBudget.js';
 import {
+  shouldExpireOutputBullet,
+  shouldRemoveBulletOutOfBounds,
+  resolveDangerBounceState,
+  resolveOutputBounceState,
+} from './src/systems/bulletRuntime.js';
+import {
   createRunTelemetry as createRunTelemetryValue,
   createRoomTelemetry as createRoomTelemetryValue,
   buildRunTelemetryPayload as buildRunTelemetryPayloadValue,
@@ -1908,7 +1914,7 @@ function update(dt,ts){
       continue;
     }
 
-    if(b.state==='output' && b.expireAt && ts>=b.expireAt){
+    if(shouldExpireOutputBullet(b, ts)){
       // Payload: explode on expiration, damaging enemies in AoE
       if(b.hasPayload && enemies.length > 0){
         const aoeRadius = 48;
@@ -1956,45 +1962,32 @@ function update(dt,ts){
     if(bounced){
       if(b.state==='danger'){
         burstBlueDissipate(b.x, b.y);
-        if(b.eliteStage !== undefined && b.bounceStages !== undefined && b.bounceStages > 0){
-          // Elite bullet: transition to next stage on wall bounce
-          applyEliteBulletStage(b, (b.eliteStage || 0) + 1);
+        const dangerBounce = resolveDangerBounceState(b, ts);
+        if(dangerBounce.kind === 'elite-stage'){
+          applyEliteBulletStage(b, dangerBounce.nextEliteStage);
           sparks(b.x, b.y, b.eliteColor, 4, 40);
-        } else if(b.isTriangle){
-          b.wallBounces++;
-          if(b.wallBounces>=1){
-            spawnTriangleBurst(b.x, b.y, b.vx, b.vy);
-            bullets.splice(i,1);continue;
-          }
-        } else if((b.dangerBounceBudget || 0) > 0){
-          b.dangerBounceBudget--;
-          b.state='grey'; b.decayStart=ts;
-          sparks(b.x, b.y, C.grey, 4, 35);
-        } else if(b.doubleBounce){
-          b.bounceCount++;
-          if(b.bounceCount>=2){b.state='grey';b.decayStart=ts;sparks(b.x,b.y,C.grey,4,35);}
-        } else {
-          b.state='grey';b.decayStart=ts;
+        } else if(dangerBounce.kind === 'triangle-burst'){
+          spawnTriangleBurst(b.x, b.y, b.vx, b.vy);
+          bullets.splice(i,1);continue;
+        } else if(dangerBounce.kind === 'convert-grey'){
           sparks(b.x,b.y,C.grey,4,35);
         }
       } else if(b.state==='output'){
-        if(b.bounceLeft>0){
-          b.bounceLeft--;
-          if(UPG.splitShot && !b.hasSplit){
-            b.hasSplit=true;
-            const splitNow=performance.now();
-            const splitDeltas = UPG.splitShotEvolved ? [-0.42, 0, 0.42] : [-0.35, 0.35];
-            const splitDamageFactor = UPG.splitShotEvolved ? 0.85 : 0.8;
-            spawnSplitOutputBullets({
-              bullets,
-              sourceBullet: b,
-              splitDeltas,
-              damageFactor: splitDamageFactor,
-              expireAt: splitNow + 2000,
-              fallbackBloodPactHealCap: getBloodPactHealCap(),
-            });
-          }
-        } else {
+        const outputBounce = resolveOutputBounceState(b, {
+          splitShot: UPG.splitShot,
+          splitShotEvolved: UPG.splitShotEvolved,
+        });
+        if(outputBounce.kind === 'split'){
+          const splitNow=performance.now();
+          spawnSplitOutputBullets({
+            bullets,
+            sourceBullet: b,
+            splitDeltas: outputBounce.splitDeltas,
+            damageFactor: outputBounce.splitDamageFactor,
+            expireAt: splitNow + 2000,
+            fallbackBloodPactHealCap: getBloodPactHealCap(),
+          });
+        } else if(outputBounce.removeBullet) {
           // Payload: explode when no bounces left, damaging enemies in AoE
           if(b.hasPayload && enemies.length > 0){
             const aoeRadius = 48;
@@ -2430,7 +2423,7 @@ function update(dt,ts){
         }
       }
       if(removeBullet){bullets.splice(i,1);continue;}
-      if(b.x<-10||b.x>W+10||b.y<-10||b.y>H+10){bullets.splice(i,1);continue;}
+      if(shouldRemoveBulletOutOfBounds(b, W, H)){bullets.splice(i,1);continue;}
     }
   }
 
