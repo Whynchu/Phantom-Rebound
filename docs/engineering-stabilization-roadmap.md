@@ -41,6 +41,8 @@ Recent stabilization stages landed after `1.16.51`:
 - `experimental` extraction stage: post-hit shockwave and last-stand burst derivation now lives in [src/systems/dangerHit.js](C:/Development/Phantom-Rebound/src/systems/dangerHit.js:1) via `convertNearbyDangerBulletsToGrey` and `buildLastStandBurstSpec`, reducing duplicated hit-resolution side effects between rusher and projectile branches.
 - `experimental` extraction stage: orbit-kill reward derivation now lives in [src/systems/killRewards.js](C:/Development/Phantom-Rebound/src/systems/killRewards.js:1) via `resolveOrbitKillEffects`, centralizing score/kill deltas plus final-form charge eligibility for orbit contact kills.
 - `experimental` extraction stage: shared post-hit aftermath derivation now lives in [src/systems/dangerHit.js](C:/Development/Phantom-Rebound/src/systems/dangerHit.js:1) via `resolvePostHitAftermath`, centralizing lifeline state handoff, optional colossus shockwave trigger, and optional last-stand burst spec generation for rusher/direct/phase hit paths.
+- `experimental` extraction stage: output-kill reward-action derivation now lives in [src/systems/killRewards.js](C:/Development/Phantom-Rebound/src/systems/killRewards.js:1) via `applyKillUpgradeState` and `buildKillRewardActions`, centralizing kill-state upgrade writes plus reward action generation (boss clear, sustain/charge rewards, grey drops, sanguine bursts).
+- `experimental` extraction stage: mirror shield reflection and shield-burst output specs now live in [src/entities/defenseRuntime.js](C:/Development/Phantom-Rebound/src/entities/defenseRuntime.js:1) via `buildMirrorShieldReflectionSpec` and `buildShieldBurstSpec`, reducing inline defensive projectile math in `script.js`.
 
 Validation status:
 
@@ -67,6 +69,8 @@ Validation status:
 - The regression harness also covers post-hit nearby-danger conversion and last-stand burst spec derivation.
 - The regression harness also covers orbit-kill score/final-form reward derivation.
 - The regression harness also covers shared post-hit aftermath derivation (lifeline, colossus shockwave trigger, and last-stand burst spec).
+- The regression harness also covers output-kill reward action generation and upgrade-state application.
+- The regression harness also covers mirror-shield reflection and shield-burst spec derivation.
 
 ## Purpose
 

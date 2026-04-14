@@ -18,7 +18,12 @@ import {
   resolveOutputEnemyHit,
   resolveSanguineBurst,
 } from '../src/systems/outputHit.js';
-import { resolveEnemyKillEffects, resolveOrbitKillEffects } from '../src/systems/killRewards.js';
+import {
+  resolveEnemyKillEffects,
+  resolveOrbitKillEffects,
+  applyKillUpgradeState,
+  buildKillRewardActions,
+} from '../src/systems/killRewards.js';
 import {
   resolveLifelineRecovery,
   resolveDangerPlayerHit,
@@ -97,6 +102,8 @@ import {
   countReadyShields,
   advanceAegisBatteryTimer,
   buildAegisBatteryBoltSpec,
+  buildMirrorShieldReflectionSpec,
+  buildShieldBurstSpec,
   buildChargedOrbVolleyForSlot,
 } from '../src/entities/defenseRuntime.js';
 import {
@@ -516,6 +523,57 @@ test('kill reward helpers derive boss, sustain, and burst side effects determini
     maxHp: 100,
   });
   assert.equal(orbitNoFinalForm.shouldGrantFinalFormCharge, false);
+
+  const upgradeState = {};
+  applyKillUpgradeState(upgradeState, {
+    escalationKills: 4,
+    predatorKillStreak: 2,
+    predatorKillStreakTime: 7000,
+    bloodRushStacks: 3,
+    bloodRushTimer: 6000,
+    sanguineKillCount: 1,
+  });
+  assert.equal(upgradeState.escalationKills, 4);
+  assert.equal(upgradeState.predatorKillStreak, 2);
+  assert.equal(upgradeState.predatorKillStreakTime, 7000);
+  assert.equal(upgradeState.bloodRushStacks, 3);
+  assert.equal(upgradeState.bloodRushTimer, 6000);
+  assert.equal(upgradeState.sanguineKillCount, 1);
+
+  const rewardActions = buildKillRewardActions({
+    killEffects: {
+      bossCleared: true,
+      bossRewardHeal: 40,
+      vampiricHeal: 4,
+      vampiricCharge: 0.25,
+      crimsonHarvestGreyDrops: 1,
+      sanguineBurstCount: 6,
+      bloodMoonHeal: 8,
+      bloodMoonGreyDrops: 3,
+      coronaCharge: 1,
+      finalFormCharge: 0.5,
+    },
+    enemyX: 10,
+    enemyY: 20,
+    playerX: 30,
+    playerY: 40,
+    ts: 1000,
+    upgrades: {
+      bounceTier: 1,
+      pierceTier: 2,
+      homingTier: 1,
+      playerDamageMult: 1.5,
+      denseDamageMult: 2,
+    },
+    globalSpeedLift: 1.2,
+    bloodPactHealCap: 3,
+    random: () => 0.5,
+  });
+  assert.ok(rewardActions.some((action) => action.type === 'bossClear' && action.healAmount === 40));
+  assert.ok(rewardActions.some((action) => action.type === 'sustainHeal' && action.amount === 4));
+  assert.ok(rewardActions.some((action) => action.type === 'gainCharge' && action.source === 'vampiric'));
+  assert.ok(rewardActions.some((action) => action.type === 'spawnSanguineBurst' && action.count === 6));
+  assert.equal(rewardActions.filter((action) => action.type === 'spawnGreyBullet').length, 4);
 });
 
 test('danger hit helpers resolve void block, phase dash, mirror tide, direct hit, and slipstream deterministically', () => {
@@ -1745,6 +1803,47 @@ test('defense runtime helpers keep orbit and shield state deterministic', () => 
   assert.equal(bolt.crit, false);
   assert.equal(bolt.expireAt, 2700);
   assert.ok(Math.abs(bolt.dmg - 5.1) < 1e-9);
+
+  const reflection = buildMirrorShieldReflectionSpec({
+    x: 10,
+    y: 20,
+    vx: 5,
+    vy: 6,
+    shotSize: 3,
+    playerDamageMult: 2,
+    denseDamageMult: 1.5,
+    aegisTitan: true,
+    mirrorShieldDamageFactor: 0.8,
+    aegisBatteryDamageMult: 1.2,
+    now: 1000,
+    playerShotLifeMs: 2000,
+    shotLifeMult: 1.1,
+  });
+  assert.equal(reflection.x, 10);
+  assert.equal(reflection.y, 20);
+  assert.equal(reflection.radius, 11.25);
+  assert.equal(reflection.expireAt, 3200);
+  assert.ok(Math.abs(reflection.dmg - 5.76) < 1e-9);
+
+  const shieldBurst = buildShieldBurstSpec({
+    x: 5,
+    y: 6,
+    aegisTitan: true,
+    globalSpeedLift: 1.2,
+    shotSize: 2.4,
+    playerDamageMult: 1.5,
+    denseDamageMult: 2,
+    aegisNovaDamageFactor: 0.75,
+    aegisBatteryDamageMult: 1.1,
+    now: 1000,
+    playerShotLifeMs: 2000,
+    shotLifeMult: 1.2,
+  });
+  assert.equal(shieldBurst.count, 8);
+  assert.equal(shieldBurst.speed, 276);
+  assert.ok(Math.abs(shieldBurst.radius - 10.8) < 1e-9);
+  assert.ok(Math.abs(shieldBurst.dmg - 2.475) < 1e-9);
+  assert.equal(shieldBurst.expireAt, 3400);
 
   const volleyNoFire = buildChargedOrbVolleyForSlot({
     slotIndex: 0,

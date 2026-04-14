@@ -112,6 +112,65 @@ function buildAegisBatteryBoltSpec({
   };
 }
 
+function buildMirrorShieldReflectionSpec({
+  x,
+  y,
+  vx,
+  vy,
+  shotSize = 1,
+  playerDamageMult = 1,
+  denseDamageMult = 1,
+  aegisTitan = false,
+  mirrorShieldDamageFactor = 1,
+  aegisBatteryDamageMult = 1,
+  now = 0,
+  playerShotLifeMs = 2000,
+  shotLifeMult = 1,
+} = {}) {
+  return {
+    x,
+    y,
+    vx,
+    vy,
+    radius: 4.5 * Math.min(2.5, shotSize),
+    bounceLeft: 0,
+    pierceLeft: 0,
+    homing: false,
+    crit: false,
+    dmg: playerDamageMult * denseDamageMult * (aegisTitan ? mirrorShieldDamageFactor * 2 : mirrorShieldDamageFactor) * aegisBatteryDamageMult,
+    expireAt: now + playerShotLifeMs * shotLifeMult,
+  };
+}
+
+function buildShieldBurstSpec({
+  x,
+  y,
+  aegisTitan = false,
+  globalSpeedLift = 1,
+  shotSize = 1,
+  playerDamageMult = 1,
+  denseDamageMult = 1,
+  aegisNovaDamageFactor = 1,
+  aegisBatteryDamageMult = 1,
+  now = 0,
+  playerShotLifeMs = 2000,
+  shotLifeMult = 1,
+} = {}) {
+  return {
+    x,
+    y,
+    count: aegisTitan ? 8 : 4,
+    speed: 230 * globalSpeedLift,
+    radius: 4.5 * Math.min(2.5, shotSize),
+    bounceLeft: 0,
+    pierceLeft: 0,
+    homing: false,
+    crit: false,
+    dmg: playerDamageMult * denseDamageMult * aegisNovaDamageFactor * aegisBatteryDamageMult,
+    expireAt: now + playerShotLifeMs * shotLifeMult,
+  };
+}
+
 function buildChargedOrbVolleyForSlot({
   slotIndex,
   timerMs = 0,
@@ -215,5 +274,7 @@ export {
   countReadyShields,
   advanceAegisBatteryTimer,
   buildAegisBatteryBoltSpec,
+  buildMirrorShieldReflectionSpec,
+  buildShieldBurstSpec,
   buildChargedOrbVolleyForSlot,
 };

@@ -35,6 +35,8 @@ import {
   countReadyShields,
   advanceAegisBatteryTimer,
   buildAegisBatteryBoltSpec,
+  buildMirrorShieldReflectionSpec,
+  buildShieldBurstSpec,
   buildChargedOrbVolleyForSlot,
 } from './src/entities/defenseRuntime.js';
 import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoystickControls, tickJoystick } from './src/input/joystick.js';
@@ -116,7 +118,12 @@ import {
 import {
   resolveOutputEnemyHit,
 } from './src/systems/outputHit.js';
-import { resolveEnemyKillEffects, resolveOrbitKillEffects } from './src/systems/killRewards.js';
+import {
+  resolveEnemyKillEffects,
+  resolveOrbitKillEffects,
+  applyKillUpgradeState,
+  buildKillRewardActions,
+} from './src/systems/killRewards.js';
 import {
   resolveDangerPlayerHit,
   resolveSlipstreamNearMiss,
@@ -2115,21 +2122,22 @@ function update(dt,ts){
             // Mirror Shield: reflect bullet back as output
             if(UPG.shieldMirror && (ts - (s.mirrorCooldown||0)) > 300){
               s.mirrorCooldown = ts;
-              const mNow = performance.now();
-              pushOutputBullet({
-                bullets,
-                x:sx,
-                y:sy,
-                vx:b.vx,
-                vy:b.vy,
-                radius:4.5*Math.min(2.5,UPG.shotSize),
-                bounceLeft:0,
-                pierceLeft:0,
-                homing:false,
-                crit:false,
-                dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*(UPG.aegisTitan ? MIRROR_SHIELD_DAMAGE_FACTOR * 2 : MIRROR_SHIELD_DAMAGE_FACTOR)*getAegisBatteryDamageMult(),
-                expireAt:mNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),
+              const reflectionSpec = buildMirrorShieldReflectionSpec({
+                x: sx,
+                y: sy,
+                vx: b.vx,
+                vy: b.vy,
+                shotSize: UPG.shotSize,
+                playerDamageMult: UPG.playerDamageMult || 1,
+                denseDamageMult: UPG.denseDamageMult || 1,
+                aegisTitan: UPG.aegisTitan,
+                mirrorShieldDamageFactor: MIRROR_SHIELD_DAMAGE_FACTOR,
+                aegisBatteryDamageMult: getAegisBatteryDamageMult(),
+                now: performance.now(),
+                playerShotLifeMs: PLAYER_SHOT_LIFE_MS,
+                shotLifeMult: UPG.shotLifeMult || 1,
               });
+              pushOutputBullet({ bullets, ...reflectionSpec });
             }
             // Tempered Shield: two-stage (purple -> blue -> pop)
             if(UPG.shieldTempered && s.hardened){
@@ -2139,22 +2147,21 @@ function update(dt,ts){
             }
             // Shield pops — Shield Burst fires 4/8-way output
             if(UPG.shieldBurst){
-              const bNow=performance.now();
-              const burstCount = UPG.aegisTitan ? 8 : 4;
-              spawnRadialOutputBurst({
-                bullets,
+              const shieldBurstSpec = buildShieldBurstSpec({
                 x: player.x,
                 y: player.y,
-                count: burstCount,
-                speed: 230 * GLOBAL_SPEED_LIFT,
-                radius: 4.5*Math.min(2.5,UPG.shotSize),
-                bounceLeft: 0,
-                pierceLeft: 0,
-                homing: false,
-                crit: false,
-                dmg: (UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*AEGIS_NOVA_DAMAGE_FACTOR*getAegisBatteryDamageMult(),
-                expireAt: bNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),
+                aegisTitan: UPG.aegisTitan,
+                globalSpeedLift: GLOBAL_SPEED_LIFT,
+                shotSize: UPG.shotSize,
+                playerDamageMult: UPG.playerDamageMult || 1,
+                denseDamageMult: UPG.denseDamageMult || 1,
+                aegisNovaDamageFactor: AEGIS_NOVA_DAMAGE_FACTOR,
+                aegisBatteryDamageMult: getAegisBatteryDamageMult(),
+                now: performance.now(),
+                playerShotLifeMs: PLAYER_SHOT_LIFE_MS,
+                shotLifeMult: UPG.shotLifeMult || 1,
               });
+              spawnRadialOutputBurst({ bullets, ...shieldBurstSpec });
             }
             // Barrier Pulse: +2 charge + magnet pulse
             if(UPG.barrierPulse){
@@ -2358,70 +2365,65 @@ function update(dt,ts){
               vampiricHealPerKill: VAMPIRIC_HEAL_PER_KILL,
               vampiricChargePerKill: VAMPIRIC_CHARGE_PER_KILL,
             });
-            UPG.escalationKills = killEffects.nextUpgradeState.escalationKills;
-            UPG.predatorKillStreak = killEffects.nextUpgradeState.predatorKillStreak;
-            UPG.predatorKillStreakTime = killEffects.nextUpgradeState.predatorKillStreakTime;
-            UPG.bloodRushStacks = killEffects.nextUpgradeState.bloodRushStacks;
-            UPG.bloodRushTimer = killEffects.nextUpgradeState.bloodRushTimer;
-            UPG.sanguineKillCount = killEffects.nextUpgradeState.sanguineKillCount;
-            if(killEffects.bossCleared) {
-              bossAlive = false;
-              bossClears += 1;
-              healPlayer(killEffects.bossRewardHeal, 'bossReward');
-              showBossDefeated();
-            }
-            if(killEffects.vampiricHeal > 0){
-              applyKillSustainHeal(killEffects.vampiricHeal, 'vampiric');
-              gainCharge(killEffects.vampiricCharge, 'vampiric');
-            }
-            for(let drop = 0; drop < killEffects.crimsonHarvestGreyDrops; drop++){
-              pushGreyBullet({
-                bullets,
-                x: e.x,
-                y: e.y,
-                vx: (Math.random()-0.5)*150,
-                vy: (Math.random()-0.5)*150,
-                radius: 5,
-                decayStart: ts,
-              });
-            }
-            if(killEffects.sanguineBurstCount > 0){
-              spawnRadialOutputBurst({
-                bullets,
-                x: player.x,
-                y: player.y,
-                count: killEffects.sanguineBurstCount,
-                speed: 220 * GLOBAL_SPEED_LIFT,
-                radius: 5.5,
-                bounceLeft: UPG.bounceTier,
-                pierceLeft: UPG.pierceTier,
-                homing: UPG.homingTier>0,
-                crit: false,
-                dmg: (UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),
-                expireAt: ts+2200,
-                extras: {
-                  bloodPactHeals: 0,
-                  bloodPactHealCap: getBloodPactHealCap(),
-                },
-              });
-            }
-            if(killEffects.bloodMoonHeal > 0){
-              applyKillSustainHeal(killEffects.bloodMoonHeal, 'vampiric');
-              for(let bloodMoonDrop = 0; bloodMoonDrop < killEffects.bloodMoonGreyDrops; bloodMoonDrop++){
-                const ang = (Math.PI*2/3)*bloodMoonDrop + Math.random()*0.3;
+            applyKillUpgradeState(UPG, killEffects.nextUpgradeState);
+            const killRewardActions = buildKillRewardActions({
+              killEffects,
+              enemyX: e.x,
+              enemyY: e.y,
+              playerX: player.x,
+              playerY: player.y,
+              ts,
+              upgrades: UPG,
+              globalSpeedLift: GLOBAL_SPEED_LIFT,
+              bloodPactHealCap: getBloodPactHealCap(),
+              random: Math.random,
+            });
+            for(const action of killRewardActions){
+              if(action.type === 'bossClear'){
+                bossAlive = false;
+                bossClears += 1;
+                healPlayer(action.healAmount, 'bossReward');
+                showBossDefeated();
+                continue;
+              }
+              if(action.type === 'sustainHeal'){
+                applyKillSustainHeal(action.amount, action.source);
+                continue;
+              }
+              if(action.type === 'gainCharge'){
+                gainCharge(action.amount, action.source);
+                continue;
+              }
+              if(action.type === 'spawnGreyBullet'){
                 pushGreyBullet({
                   bullets,
-                  x: e.x,
-                  y: e.y,
-                  vx: Math.cos(ang)*120,
-                  vy: Math.sin(ang)*120,
-                  radius: 5,
-                  decayStart: ts,
+                  x: action.x,
+                  y: action.y,
+                  vx: action.vx,
+                  vy: action.vy,
+                  radius: action.radius,
+                  decayStart: action.decayStart,
+                });
+                continue;
+              }
+              if(action.type === 'spawnSanguineBurst'){
+                spawnRadialOutputBurst({
+                  bullets,
+                  x: action.x,
+                  y: action.y,
+                  count: action.count,
+                  speed: action.speed,
+                  radius: action.radius,
+                  bounceLeft: action.bounceLeft,
+                  pierceLeft: action.pierceLeft,
+                  homing: action.homing,
+                  crit: action.crit,
+                  dmg: action.dmg,
+                  expireAt: action.expireAt,
+                  extras: action.extras,
                 });
               }
             }
-            if(killEffects.coronaCharge > 0) gainCharge(killEffects.coronaCharge, 'corona');
-            if(killEffects.finalFormCharge > 0) gainCharge(killEffects.finalFormCharge, 'finalForm');
             enemies.splice(j,1);
           }
           if(hitResolution.piercesAfterHit){

@@ -66,4 +66,116 @@ function resolveOrbitKillEffects({
   };
 }
 
-export { resolveEnemyKillEffects, resolveOrbitKillEffects };
+function applyKillUpgradeState(upgrades, nextUpgradeState = {}) {
+  upgrades.escalationKills = nextUpgradeState.escalationKills;
+  upgrades.predatorKillStreak = nextUpgradeState.predatorKillStreak;
+  upgrades.predatorKillStreakTime = nextUpgradeState.predatorKillStreakTime;
+  upgrades.bloodRushStacks = nextUpgradeState.bloodRushStacks;
+  upgrades.bloodRushTimer = nextUpgradeState.bloodRushTimer;
+  upgrades.sanguineKillCount = nextUpgradeState.sanguineKillCount;
+}
+
+function buildKillRewardActions({
+  killEffects,
+  enemyX,
+  enemyY,
+  playerX,
+  playerY,
+  ts,
+  upgrades,
+  globalSpeedLift = 1,
+  bloodPactHealCap = 0,
+  random = Math.random,
+} = {}) {
+  const actions = [];
+  if(killEffects.bossCleared) {
+    actions.push({
+      type: 'bossClear',
+      healAmount: killEffects.bossRewardHeal,
+    });
+  }
+  if(killEffects.vampiricHeal > 0) {
+    actions.push({
+      type: 'sustainHeal',
+      amount: killEffects.vampiricHeal,
+      source: 'vampiric',
+    });
+    actions.push({
+      type: 'gainCharge',
+      amount: killEffects.vampiricCharge,
+      source: 'vampiric',
+    });
+  }
+  for(let drop = 0; drop < killEffects.crimsonHarvestGreyDrops; drop++) {
+    actions.push({
+      type: 'spawnGreyBullet',
+      x: enemyX,
+      y: enemyY,
+      vx: (random() - 0.5) * 150,
+      vy: (random() - 0.5) * 150,
+      radius: 5,
+      decayStart: ts,
+    });
+  }
+  if(killEffects.sanguineBurstCount > 0) {
+    actions.push({
+      type: 'spawnSanguineBurst',
+      x: playerX,
+      y: playerY,
+      count: killEffects.sanguineBurstCount,
+      speed: 220 * globalSpeedLift,
+      radius: 5.5,
+      bounceLeft: upgrades.bounceTier,
+      pierceLeft: upgrades.pierceTier,
+      homing: upgrades.homingTier > 0,
+      crit: false,
+      dmg: (upgrades.playerDamageMult || 1) * (upgrades.denseDamageMult || 1),
+      expireAt: ts + 2200,
+      extras: {
+        bloodPactHeals: 0,
+        bloodPactHealCap,
+      },
+    });
+  }
+  if(killEffects.bloodMoonHeal > 0) {
+    actions.push({
+      type: 'sustainHeal',
+      amount: killEffects.bloodMoonHeal,
+      source: 'vampiric',
+    });
+    for(let bloodMoonDrop = 0; bloodMoonDrop < killEffects.bloodMoonGreyDrops; bloodMoonDrop++) {
+      const ang = (Math.PI * 2 / 3) * bloodMoonDrop + random() * 0.3;
+      actions.push({
+        type: 'spawnGreyBullet',
+        x: enemyX,
+        y: enemyY,
+        vx: Math.cos(ang) * 120,
+        vy: Math.sin(ang) * 120,
+        radius: 5,
+        decayStart: ts,
+      });
+    }
+  }
+  if(killEffects.coronaCharge > 0) {
+    actions.push({
+      type: 'gainCharge',
+      amount: killEffects.coronaCharge,
+      source: 'corona',
+    });
+  }
+  if(killEffects.finalFormCharge > 0) {
+    actions.push({
+      type: 'gainCharge',
+      amount: killEffects.finalFormCharge,
+      source: 'finalForm',
+    });
+  }
+  return actions;
+}
+
+export {
+  resolveEnemyKillEffects,
+  resolveOrbitKillEffects,
+  applyKillUpgradeState,
+  buildKillRewardActions,
+};
