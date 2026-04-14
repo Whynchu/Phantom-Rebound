@@ -18,7 +18,7 @@ import {
   resolveOutputEnemyHit,
   resolveSanguineBurst,
 } from '../src/systems/outputHit.js';
-import { resolveEnemyKillEffects } from '../src/systems/killRewards.js';
+import { resolveEnemyKillEffects, resolveOrbitKillEffects } from '../src/systems/killRewards.js';
 import {
   resolveLifelineRecovery,
   resolveDangerPlayerHit,
@@ -495,6 +495,26 @@ test('kill reward helpers derive boss, sustain, and burst side effects determini
   assert.equal(plainEffects.bloodMoonGreyDrops, 0);
   assert.equal(plainEffects.sanguineBurstCount, 0);
   assert.equal(plainEffects.nextUpgradeState.escalationKills, 0);
+
+  const orbitEffects = resolveOrbitKillEffects({
+    scorePerKill: 240,
+    finalForm: true,
+    hp: 10,
+    maxHp: 100,
+    finalFormChargeGain: 0.5,
+  });
+  assert.equal(orbitEffects.scoreDelta, 240);
+  assert.equal(orbitEffects.killsDelta, 1);
+  assert.equal(orbitEffects.shouldGrantFinalFormCharge, true);
+  assert.equal(orbitEffects.finalFormChargeGain, 0.5);
+
+  const orbitNoFinalForm = resolveOrbitKillEffects({
+    scorePerKill: 120,
+    finalForm: false,
+    hp: 5,
+    maxHp: 100,
+  });
+  assert.equal(orbitNoFinalForm.shouldGrantFinalFormCharge, false);
 });
 
 test('danger hit helpers resolve void block, phase dash, mirror tide, direct hit, and slipstream deterministically', () => {

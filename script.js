@@ -116,7 +116,7 @@ import {
 import {
   resolveOutputEnemyHit,
 } from './src/systems/outputHit.js';
-import { resolveEnemyKillEffects } from './src/systems/killRewards.js';
+import { resolveEnemyKillEffects, resolveOrbitKillEffects } from './src/systems/killRewards.js';
 import {
   resolveLifelineRecovery,
   resolveDangerPlayerHit,
@@ -1777,12 +1777,21 @@ function update(dt,ts){
         sparks(orbitContact.slotX, orbitContact.slotY, C.green, 4, 45);
       }
       if(orbitContact.killed){
-        score += computeKillScore(e.pts, false);
-        kills++;
+        const orbitKillEffects = resolveOrbitKillEffects({
+          scorePerKill: computeKillScore(e.pts, false),
+          finalForm: UPG.finalForm,
+          hp,
+          maxHp,
+          finalFormChargeGain: 0.5,
+        });
+        score += orbitKillEffects.scoreDelta;
+        kills += orbitKillEffects.killsDelta;
         recordKill('orbit');
         sparks(e.x,e.y,e.col,14,95);
         spawnGreyDrops(e.x,e.y,ts);
-        if(UPG.finalForm && hp <= maxHp * 0.15){ gainCharge(0.5, 'finalForm'); }
+        if(orbitKillEffects.shouldGrantFinalFormCharge){
+          gainCharge(orbitKillEffects.finalFormChargeGain, 'finalForm');
+        }
         enemies.splice(ei,1);
         continue;
       }

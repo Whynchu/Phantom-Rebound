@@ -39,6 +39,7 @@ Recent stabilization stages landed after `1.16.51`:
 - `experimental` extraction stage: Aegis battery bolt target/shot derivation now lives in [src/entities/defenseRuntime.js](C:/Development/Phantom-Rebound/src/entities/defenseRuntime.js:1) via `buildAegisBatteryBoltSpec`, centralizing nearest-target selection and bolt spec creation while `script.js` retains only spawn/VFX side effects.
 - `experimental` extraction stage: enemy combat-step orchestration now lives in [src/entities/enemyRuntime.js](C:/Development/Phantom-Rebound/src/entities/enemyRuntime.js:1) via `stepEnemyCombatState`, centralizing per-type movement/fire-intent branching (siphon/rusher/ranged) while `script.js` keeps hit and spawn side effects.
 - `experimental` extraction stage: post-hit shockwave and last-stand burst derivation now lives in [src/systems/dangerHit.js](C:/Development/Phantom-Rebound/src/systems/dangerHit.js:1) via `convertNearbyDangerBulletsToGrey` and `buildLastStandBurstSpec`, reducing duplicated hit-resolution side effects between rusher and projectile branches.
+- `experimental` extraction stage: orbit-kill reward derivation now lives in [src/systems/killRewards.js](C:/Development/Phantom-Rebound/src/systems/killRewards.js:1) via `resolveOrbitKillEffects`, centralizing score/kill deltas plus final-form charge eligibility for orbit contact kills.
 
 Validation status:
 
@@ -63,6 +64,7 @@ Validation status:
 - The regression harness also covers Aegis battery bolt gating, nearest-target selection, and bolt stat derivation.
 - The regression harness also covers enemy combat-step orchestration across siphon, rusher, and ranged paths.
 - The regression harness also covers post-hit nearby-danger conversion and last-stand burst spec derivation.
+- The regression harness also covers orbit-kill score/final-form reward derivation.
 
 ## Purpose
 

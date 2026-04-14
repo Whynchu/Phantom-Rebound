@@ -51,4 +51,19 @@ function resolveEnemyKillEffects({
   };
 }
 
-export { resolveEnemyKillEffects };
+function resolveOrbitKillEffects({
+  scorePerKill = 0,
+  finalForm = false,
+  hp = 0,
+  maxHp = 0,
+  finalFormChargeGain = 0.5,
+} = {}) {
+  return {
+    scoreDelta: scorePerKill,
+    killsDelta: 1,
+    shouldGrantFinalFormCharge: Boolean(finalForm && hp <= maxHp * 0.15),
+    finalFormChargeGain,
+  };
+}
+
+export { resolveEnemyKillEffects, resolveOrbitKillEffects };
