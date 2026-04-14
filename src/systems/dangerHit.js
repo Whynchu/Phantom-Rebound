@@ -164,9 +164,62 @@ function resolveRusherContactHit({
   };
 }
 
+function convertNearbyDangerBulletsToGrey({
+  bullets,
+  originX,
+  originY,
+  radius = 120,
+  ts,
+} = {}) {
+  if(!Array.isArray(bullets) || bullets.length <= 0) return 0;
+  let converted = 0;
+  for(let i = bullets.length - 1; i >= 0; i--) {
+    const bullet = bullets[i];
+    if(!bullet || bullet.state !== 'danger') continue;
+    if(Math.hypot(bullet.x - originX, bullet.y - originY) >= radius) continue;
+    bullet.state = 'grey';
+    bullet.decayStart = ts;
+    converted++;
+  }
+  return converted;
+}
+
+function buildLastStandBurstSpec({
+  x,
+  y,
+  maxCharge,
+  speed,
+  bounceTier = 0,
+  pierceTier = 0,
+  damageMult = 1,
+  denseDamageMult = 1,
+  now,
+  bloodPactHealCap = 0,
+} = {}) {
+  return {
+    x,
+    y,
+    count: Math.max(1, Math.floor(maxCharge || 1)),
+    speed,
+    radius: 4.5,
+    bounceLeft: bounceTier > 0 ? 2 : 0,
+    pierceLeft: pierceTier,
+    homing: false,
+    crit: false,
+    dmg: damageMult * denseDamageMult,
+    expireAt: now + 2000,
+    extras: {
+      bloodPactHeals: 0,
+      bloodPactHealCap,
+    },
+  };
+}
+
 export {
   resolveLifelineRecovery,
   resolveDangerPlayerHit,
   resolveSlipstreamNearMiss,
   resolveRusherContactHit,
+  convertNearbyDangerBulletsToGrey,
+  buildLastStandBurstSpec,
 };

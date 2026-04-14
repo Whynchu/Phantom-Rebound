@@ -122,6 +122,8 @@ import {
   resolveDangerPlayerHit,
   resolveSlipstreamNearMiss,
   resolveRusherContactHit,
+  convertNearbyDangerBulletsToGrey,
+  buildLastStandBurstSpec,
 } from './src/systems/dangerHit.js';
 import {
   createRunTelemetry as createRunTelemetryValue,
@@ -1703,7 +1705,13 @@ function update(dt,ts){
         sparks(player.x,player.y,C.danger,10,90);
         if(UPG.colossus && _colossusShockwaveCd <= 0){
           _colossusShockwaveCd = 4.0;
-          for(let ci=bullets.length-1;ci>=0;ci--){ const cb=bullets[ci]; if(cb.state==='danger' && Math.hypot(cb.x-player.x,cb.y-player.y)<120){ cb.state='grey'; cb.decayStart=ts; } }
+          convertNearbyDangerBulletsToGrey({
+            bullets,
+            originX: player.x,
+            originY: player.y,
+            radius: 120,
+            ts,
+          });
           sparks(player.x,player.y,getThreatPalette().advanced.hex,14,120);
         }
         if(rusherHit.lifelineTriggered){
@@ -1711,25 +1719,19 @@ function update(dt,ts){
           UPG.lifelineUsed = rusherHit.nextLifelineUsed;
           sparks(player.x,player.y,C.lifelineEffect,16,100);
           if(rusherHit.shouldTriggerLastStand){
-            const lsNow=performance.now();
-            spawnRadialOutputBurst({
-              bullets,
+            const burstSpec = buildLastStandBurstSpec({
               x: player.x,
               y: player.y,
-              count: Math.max(1, Math.floor(UPG.maxCharge)),
+              maxCharge: UPG.maxCharge,
               speed: 220 * GLOBAL_SPEED_LIFT,
-              radius: 4.5,
-              bounceLeft: UPG.bounceTier>0 ? 2 : 0,
-              pierceLeft: UPG.pierceTier,
-              homing: false,
-              crit: false,
-              dmg: (UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),
-              expireAt: lsNow + 2000,
-              extras: {
-                bloodPactHeals: 0,
-                bloodPactHealCap: getBloodPactHealCap(),
-              },
+              bounceTier: UPG.bounceTier,
+              pierceTier: UPG.pierceTier,
+              damageMult: UPG.playerDamageMult || 1,
+              denseDamageMult: UPG.denseDamageMult || 1,
+              now: performance.now(),
+              bloodPactHealCap: getBloodPactHealCap(),
             });
+            spawnRadialOutputBurst({ bullets, ...burstSpec });
           }
         } else if(rusherHit.shouldGameOver) {
           gameOver(); return;
@@ -2258,7 +2260,13 @@ function update(dt,ts){
         bullets.splice(i,1);
         if(UPG.colossus && _colossusShockwaveCd <= 0){
           _colossusShockwaveCd = 4.0;
-          for(let ci=bullets.length-1;ci>=0;ci--){ const cb=bullets[ci]; if(cb.state==='danger' && Math.hypot(cb.x-player.x,cb.y-player.y)<120){ cb.state='grey'; cb.decayStart=ts; } }
+          convertNearbyDangerBulletsToGrey({
+            bullets,
+            originX: player.x,
+            originY: player.y,
+            radius: 120,
+            ts,
+          });
           sparks(player.x,player.y,getThreatPalette().advanced.hex,14,120);
         }
         if(dangerHit.lifelineTriggered){
@@ -2266,25 +2274,19 @@ function update(dt,ts){
           UPG.lifelineUsed = dangerHit.nextLifelineUsed;
           sparks(player.x,player.y,C.lifelineEffect,16,100);
           if(UPG.lastStand){
-            const lsNow=performance.now();
-            spawnRadialOutputBurst({
-              bullets,
+            const burstSpec = buildLastStandBurstSpec({
               x: player.x,
               y: player.y,
-              count: Math.max(1, Math.floor(UPG.maxCharge)),
+              maxCharge: UPG.maxCharge,
               speed: 220 * GLOBAL_SPEED_LIFT,
-              radius: 4.5,
-              bounceLeft: UPG.bounceTier>0 ? 2 : 0,
-              pierceLeft: UPG.pierceTier,
-              homing: false,
-              crit: false,
-              dmg: (UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),
-              expireAt: lsNow + 2000,
-              extras: {
-                bloodPactHeals: 0,
-                bloodPactHealCap: getBloodPactHealCap(),
-              },
+              bounceTier: UPG.bounceTier,
+              pierceTier: UPG.pierceTier,
+              damageMult: UPG.playerDamageMult || 1,
+              denseDamageMult: UPG.denseDamageMult || 1,
+              now: performance.now(),
+              bloodPactHealCap: getBloodPactHealCap(),
             });
+            spawnRadialOutputBurst({ bullets, ...burstSpec });
           }
         } else if(dangerHit.shouldGameOver) {
           gameOver(); return;

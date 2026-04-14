@@ -24,6 +24,8 @@ import {
   resolveDangerPlayerHit,
   resolveSlipstreamNearMiss,
   resolveRusherContactHit,
+  convertNearbyDangerBulletsToGrey,
+  buildLastStandBurstSpec,
 } from '../src/systems/dangerHit.js';
 import {
   weightedPick,
@@ -639,6 +641,49 @@ test('danger hit helpers resolve void block, phase dash, mirror tide, direct hit
   assert.equal(rusherLifeline.nextLifelineTriggerCount, 1);
   assert.equal(rusherLifeline.shouldTriggerLastStand, true);
   assert.equal(rusherLifeline.invincibleSeconds, 2);
+
+  const nearbyBullets = [
+    { x: 0, y: 0, state: 'danger' },
+    { x: 200, y: 0, state: 'danger' },
+    { x: 10, y: 0, state: 'output' },
+  ];
+  const converted = convertNearbyDangerBulletsToGrey({
+    bullets: nearbyBullets,
+    originX: 0,
+    originY: 0,
+    radius: 120,
+    ts: 5000,
+  });
+  assert.equal(converted, 1);
+  assert.equal(nearbyBullets[0].state, 'grey');
+  assert.equal(nearbyBullets[0].decayStart, 5000);
+  assert.equal(nearbyBullets[1].state, 'danger');
+
+  const lastStandBurst = buildLastStandBurstSpec({
+    x: 15,
+    y: 25,
+    maxCharge: 9.7,
+    speed: 220,
+    bounceTier: 1,
+    pierceTier: 2,
+    damageMult: 1.5,
+    denseDamageMult: 2,
+    now: 1000,
+    bloodPactHealCap: 3,
+  });
+  assert.equal(lastStandBurst.x, 15);
+  assert.equal(lastStandBurst.y, 25);
+  assert.equal(lastStandBurst.count, 9);
+  assert.equal(lastStandBurst.speed, 220);
+  assert.equal(lastStandBurst.bounceLeft, 2);
+  assert.equal(lastStandBurst.pierceLeft, 2);
+  assert.equal(lastStandBurst.radius, 4.5);
+  assert.equal(lastStandBurst.homing, false);
+  assert.equal(lastStandBurst.crit, false);
+  assert.equal(lastStandBurst.dmg, 3);
+  assert.equal(lastStandBurst.expireAt, 3000);
+  assert.equal(lastStandBurst.extras.bloodPactHeals, 0);
+  assert.equal(lastStandBurst.extras.bloodPactHealCap, 3);
 });
 
 test('weightedPick uses candidate weights', () => {
