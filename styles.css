@@ -288,7 +288,7 @@ body.compact-viewport #wrap {
 }
 #charge-section { flex:1; }
 #charge-row { display:flex; justify-content:space-between; align-items:center; }
-#charge-lbl { font-size:9px; letter-spacing:.15em; color:var(--dim); text-transform:uppercase; }
+#charge-lbl { font-size:9px; letter-spacing:.15em; color:var(--muted); text-transform:uppercase; }
 #charge-badge { font-size:10px; font-weight:700; color:var(--accent); background:rgba(var(--accent-rgb),0.07); border:1px solid rgba(var(--accent-rgb),0.18); padding:2px 8px; border-radius:3px; }
 #charge-track {
   width: 100%;
@@ -309,7 +309,9 @@ body.compact-viewport #wrap {
 }
 #sps-box { text-align:center; min-width:52px; }
 #sps-num { font-family:'Syne',sans-serif; font-weight:800; font-size:22px; color:var(--accent); line-height:1; }
-#sps-lbl { font-size:8px; letter-spacing:.2em; color:var(--dim); text-transform:uppercase; margin-top:2px; }
+#sps-lbl { font-size:8px; letter-spacing:.2em; color:var(--muted); text-transform:uppercase; margin-top:2px; }
+/* Keep the start-screen version tag legible on mobile and low-contrast displays */
+#version-tag { color: var(--muted); }
 /* LEGEND */
 #legend { display:flex; justify-content:center; gap:16px; font-size:9px; letter-spacing:.1em; color:var(--dim); text-transform:uppercase; }
 .leg { display:flex; align-items:center; gap:5px; }
@@ -768,6 +770,10 @@ body.keyboard-open .screen {
 
 /* Mobile Safari centering fix */
 @media screen and (max-width: 768px) {
+  :root {
+    --muted: #888888;
+    --dim: #777777;
+  }
   html, body {
     height: -webkit-fill-available;
     height: calc(var(--vh, 1vh) * 100);
