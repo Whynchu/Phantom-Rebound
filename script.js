@@ -36,6 +36,7 @@ import {
   tickShieldCooldowns,
   countReadyShields,
   advanceAegisBatteryTimer,
+  buildAegisBatteryBoltSpec,
   buildChargedOrbVolleyForSlot,
 } from './src/entities/defenseRuntime.js';
 import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoystickControls, tickJoystick } from './src/input/joystick.js';
@@ -1864,15 +1865,22 @@ function update(dt,ts){
     });
     UPG.aegisBatteryTimer = aegisStep.timer;
     if(aegisStep.shouldFire){
-      const target = enemies.reduce((best, enemy) => {
-        const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-        return (!best || dist < best.dist) ? { enemy, dist } : best;
-      }, null);
-      if(target){
-        const ang = Math.atan2(target.enemy.y - player.y, target.enemy.x - player.x);
-        const boltNow = performance.now();
-        const batteryDamage = (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (1.1 + readyShieldCount * 0.2);
-        bullets.push({x:player.x,y:player.y,vx:Math.cos(ang)*210*GLOBAL_SPEED_LIFT,vy:Math.sin(ang)*210*GLOBAL_SPEED_LIFT,state:'output',r:4.2,decayStart:null,bounceLeft:0,pierceLeft:0,homing:true,crit:false,dmg:batteryDamage,expireAt:boltNow+1700,hitIds:new Set()});
+      const boltSpec = buildAegisBatteryBoltSpec({
+        shouldFire: aegisStep.shouldFire,
+        enemies,
+        originX: player.x,
+        originY: player.y,
+        damageMult: UPG.playerDamageMult || 1,
+        denseDamageMult: UPG.denseDamageMult || 1,
+        readyShieldCount,
+        shotSpeed: 210 * GLOBAL_SPEED_LIFT,
+        now: performance.now(),
+      });
+      if(boltSpec){
+        pushOutputBullet({
+          bullets,
+          ...boltSpec,
+        });
         sparks(player.x, player.y, C.shieldActive, 6, 70);
       }
     }

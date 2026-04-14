@@ -92,6 +92,7 @@ import {
   tickShieldCooldowns,
   countReadyShields,
   advanceAegisBatteryTimer,
+  buildAegisBatteryBoltSpec,
   buildChargedOrbVolleyForSlot,
 } from '../src/entities/defenseRuntime.js';
 import {
@@ -1600,6 +1601,38 @@ test('defense runtime helpers keep orbit and shield state deterministic', () => 
   });
   assert.equal(reset.timer, 0);
   assert.equal(reset.shouldFire, false);
+
+  const noBolt = buildAegisBatteryBoltSpec({
+    shouldFire: false,
+    enemies: [{ x: 10, y: 0 }],
+    originX: 0,
+    originY: 0,
+    now: 1000,
+  });
+  assert.equal(noBolt, null);
+
+  const bolt = buildAegisBatteryBoltSpec({
+    shouldFire: true,
+    enemies: [{ x: 30, y: 0 }, { x: 12, y: 0 }],
+    originX: 0,
+    originY: 0,
+    damageMult: 1.5,
+    denseDamageMult: 2,
+    readyShieldCount: 3,
+    shotSpeed: 210,
+    now: 1000,
+    expireMs: 1700,
+  });
+  assert.ok(bolt);
+  assert.equal(bolt.x, 0);
+  assert.equal(bolt.y, 0);
+  assert.equal(bolt.vx, 210);
+  assert.equal(bolt.vy, 0);
+  assert.equal(bolt.radius, 4.2);
+  assert.equal(bolt.homing, true);
+  assert.equal(bolt.crit, false);
+  assert.equal(bolt.expireAt, 2700);
+  assert.ok(Math.abs(bolt.dmg - 5.1) < 1e-9);
 
   const volleyNoFire = buildChargedOrbVolleyForSlot({
     slotIndex: 0,

@@ -76,6 +76,42 @@ function advanceAegisBatteryTimer({
   return { timer: nextTimer, shouldFire: false };
 }
 
+function buildAegisBatteryBoltSpec({
+  shouldFire,
+  enemies,
+  originX,
+  originY,
+  damageMult = 1,
+  denseDamageMult = 1,
+  readyShieldCount = 0,
+  shotSpeed = 210,
+  now = 0,
+  expireMs = 1700,
+} = {}) {
+  if(!shouldFire || !enemies || enemies.length <= 0) return null;
+  const target = enemies.reduce((best, enemy) => {
+    const dist = Math.hypot(enemy.x - originX, enemy.y - originY);
+    return (!best || dist < best.dist) ? { enemy, dist } : best;
+  }, null);
+  if(!target) return null;
+
+  const aim = Math.atan2(target.enemy.y - originY, target.enemy.x - originX);
+  const batteryDamage = damageMult * denseDamageMult * (1.1 + readyShieldCount * 0.2);
+  return {
+    x: originX,
+    y: originY,
+    vx: Math.cos(aim) * shotSpeed,
+    vy: Math.sin(aim) * shotSpeed,
+    radius: 4.2,
+    bounceLeft: 0,
+    pierceLeft: 0,
+    homing: true,
+    crit: false,
+    dmg: batteryDamage,
+    expireAt: now + expireMs,
+  };
+}
+
 function buildChargedOrbVolleyForSlot({
   slotIndex,
   timerMs = 0,
@@ -178,5 +214,6 @@ export {
   tickShieldCooldowns,
   countReadyShields,
   advanceAegisBatteryTimer,
+  buildAegisBatteryBoltSpec,
   buildChargedOrbVolleyForSlot,
 };
