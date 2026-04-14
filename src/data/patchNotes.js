@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.57',
+    label: 'ENGINEERING STABILIZATION',
+    summary: [
+      'This experimental-channel build continues the architecture audit work so future gameplay changes are safer to ship. Combat side effects were further split out of the main loop, and player-color persistence was moved out of data modules so core imports stay Node-safe for tooling and tests.'
+    ],
+    highlights: [
+      'Extracted output-kill reward action derivation into systems helpers, reducing one of the largest inline side-effect blocks in `script.js`.',
+      'Extracted mirror-shield reflection and shield-burst projectile spec builders into defense runtime helpers.',
+      'Removed player-color localStorage coupling from data modules; color persistence now initializes and saves through runtime/platform storage flow.'
+    ]
+  },
+  {
     version: '1.16.51',
     label: 'ENGINEERING STABILIZATION',
     summary: [
