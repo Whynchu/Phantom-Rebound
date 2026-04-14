@@ -139,8 +139,34 @@ function resolveSlipstreamNearMiss({
   };
 }
 
+function resolveRusherContactHit({
+  hp,
+  upgrades,
+  contactDamage = 18,
+  contactInvulnSeconds = 0.8,
+} = {}) {
+  const recovery = resolveLifelineRecovery({
+    hpAfterDamage: hp - contactDamage,
+    lifeline: upgrades.lifeline,
+    lifelineTriggerCount: upgrades.lifelineTriggerCount || 0,
+    lifelineUses: upgrades.lifelineUses || 1,
+  });
+  return {
+    damage: contactDamage,
+    nextHp: recovery.nextHp,
+    invincibleSeconds: recovery.triggered ? 2.0 : contactInvulnSeconds,
+    distortSeconds: 0.4,
+    lifelineTriggered: recovery.triggered,
+    nextLifelineTriggerCount: recovery.nextLifelineTriggerCount,
+    nextLifelineUsed: recovery.nextLifelineUsed,
+    shouldTriggerLastStand: Boolean(recovery.triggered && upgrades.lastStand),
+    shouldGameOver: !recovery.triggered && recovery.nextHp <= 0,
+  };
+}
+
 export {
   resolveLifelineRecovery,
   resolveDangerPlayerHit,
   resolveSlipstreamNearMiss,
+  resolveRusherContactHit,
 };

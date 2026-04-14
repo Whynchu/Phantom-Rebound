@@ -122,6 +122,7 @@ import {
   resolveLifelineRecovery,
   resolveDangerPlayerHit,
   resolveSlipstreamNearMiss,
+  resolveRusherContactHit,
 } from './src/systems/dangerHit.js';
 import {
   createRunTelemetry as createRunTelemetryValue,
@@ -1695,19 +1696,49 @@ function update(dt,ts){
         margin: M,
       });
       if(rusherStep.distanceToPlayer<player.r+e.r+2 && player.invincible<=0){
-        hp-=18; recordPlayerDamage(18, 'contact'); player.invincible=getPostHitInvulnSeconds('contact'); player.distort=.4;
+        const rusherHit = resolveRusherContactHit({
+          hp,
+          upgrades: UPG,
+          contactDamage: 18,
+          contactInvulnSeconds: getPostHitInvulnSeconds('contact'),
+        });
+        hp = rusherHit.nextHp;
+        recordPlayerDamage(rusherHit.damage, 'contact');
+        player.invincible = rusherHit.invincibleSeconds;
+        player.distort = rusherHit.distortSeconds;
         sparks(player.x,player.y,C.danger,10,90);
         if(UPG.colossus && _colossusShockwaveCd <= 0){
           _colossusShockwaveCd = 4.0;
           for(let ci=bullets.length-1;ci>=0;ci--){ const cb=bullets[ci]; if(cb.state==='danger' && Math.hypot(cb.x-player.x,cb.y-player.y)<120){ cb.state='grey'; cb.decayStart=ts; } }
           sparks(player.x,player.y,getThreatPalette().advanced.hex,14,120);
         }
-        if(hp<=0){
-          if(UPG.lifeline && UPG.lifelineTriggerCount < (UPG.lifelineUses||1)){
-            UPG.lifelineTriggerCount++; UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,C.lifelineEffect,16,100);
-            if(UPG.lastStand){ const lsNow=performance.now(); for(let la=0;la<Math.floor(UPG.maxCharge);la++){ const lang=(Math.PI*2/Math.max(1,Math.floor(UPG.maxCharge)))*la; bullets.push({x:player.x,y:player.y,vx:Math.cos(lang)*220*GLOBAL_SPEED_LIFT,vy:Math.sin(lang)*220*GLOBAL_SPEED_LIFT,state:'output',r:4.5,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:lsNow+2000,hitIds:new Set(),bloodPactHeals:0,bloodPactHealCap:getBloodPactHealCap()}); } }
+        if(rusherHit.lifelineTriggered){
+          UPG.lifelineTriggerCount = rusherHit.nextLifelineTriggerCount;
+          UPG.lifelineUsed = rusherHit.nextLifelineUsed;
+          sparks(player.x,player.y,C.lifelineEffect,16,100);
+          if(rusherHit.shouldTriggerLastStand){
+            const lsNow=performance.now();
+            spawnRadialOutputBurst({
+              bullets,
+              x: player.x,
+              y: player.y,
+              count: Math.max(1, Math.floor(UPG.maxCharge)),
+              speed: 220 * GLOBAL_SPEED_LIFT,
+              radius: 4.5,
+              bounceLeft: UPG.bounceTier>0 ? 2 : 0,
+              pierceLeft: UPG.pierceTier,
+              homing: false,
+              crit: false,
+              dmg: (UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),
+              expireAt: lsNow + 2000,
+              extras: {
+                bloodPactHeals: 0,
+                bloodPactHealCap: getBloodPactHealCap(),
+              },
+            });
           }
-          else { gameOver(); return; }
+        } else if(rusherHit.shouldGameOver) {
+          gameOver(); return;
         }
       }
     } else {

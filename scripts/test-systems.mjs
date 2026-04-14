@@ -23,6 +23,7 @@ import {
   resolveLifelineRecovery,
   resolveDangerPlayerHit,
   resolveSlipstreamNearMiss,
+  resolveRusherContactHit,
 } from '../src/systems/dangerHit.js';
 import {
   weightedPick,
@@ -609,6 +610,33 @@ test('danger hit helpers resolve void block, phase dash, mirror tide, direct hit
   assert.equal(slipstream.shouldTrigger, true);
   assert.equal(slipstream.chargeGain, 1);
   assert.equal(slipstream.nextSlipCooldown, 150);
+
+  const rusherNoLifeline = resolveRusherContactHit({
+    hp: 30,
+    upgrades: { lifeline: false, lastStand: false },
+    contactDamage: 18,
+    contactInvulnSeconds: 0.6,
+  });
+  assert.equal(rusherNoLifeline.nextHp, 12);
+  assert.equal(rusherNoLifeline.lifelineTriggered, false);
+  assert.equal(rusherNoLifeline.shouldGameOver, false);
+
+  const rusherLifeline = resolveRusherContactHit({
+    hp: 10,
+    upgrades: {
+      lifeline: true,
+      lifelineTriggerCount: 0,
+      lifelineUses: 1,
+      lastStand: true,
+    },
+    contactDamage: 18,
+    contactInvulnSeconds: 0.6,
+  });
+  assert.equal(rusherLifeline.nextHp, 1);
+  assert.equal(rusherLifeline.lifelineTriggered, true);
+  assert.equal(rusherLifeline.nextLifelineTriggerCount, 1);
+  assert.equal(rusherLifeline.shouldTriggerLastStand, true);
+  assert.equal(rusherLifeline.invincibleSeconds, 2);
 });
 
 test('weightedPick uses candidate weights', () => {
