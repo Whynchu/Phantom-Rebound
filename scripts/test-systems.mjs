@@ -76,6 +76,7 @@ import {
   stepSiphonEnemy,
   stepRusherEnemy,
   advanceRangedEnemyCombatState,
+  stepEnemyCombatState,
   applyDisruptorPostFire,
   fireEnemyBurst,
   applyOrbitSphereContact,
@@ -1748,6 +1749,51 @@ test('enemy runtime helpers keep movement and fire cadence deterministic', () =>
   assert.equal(rangedStep.inWindup, true);
   assert.equal(rangedStep.shouldFire, true);
   assert.equal(ranged.fT, 0);
+
+  const siphonCombat = stepEnemyCombatState(
+    { x: 10, y: 10, r: 5, isSiphon: true },
+    {
+      player: { x: 10, y: 10 },
+      ts: 0,
+      dt: 0.1,
+      width: 200,
+      height: 200,
+      margin: 10,
+    },
+  );
+  assert.equal(siphonCombat.kind, 'siphon');
+  assert.equal(siphonCombat.shouldDrainCharge, true);
+
+  const rusherCombat = stepEnemyCombatState(
+    { x: 0, y: 0, r: 5, spd: 20, isRusher: true },
+    {
+      player: { x: 20, y: 0 },
+      ts: 0,
+      dt: 0.1,
+      width: 200,
+      height: 200,
+      margin: 0,
+    },
+  );
+  assert.equal(rusherCombat.kind, 'rusher');
+  assert.ok(rusherCombat.distanceToPlayer > 0);
+
+  const rangedCombat = stepEnemyCombatState(
+    { x: 50, y: 50, r: 5, spd: 40, fT: 900, fRate: 1000, eid: 2, strafeSpd: 0.6, disruptorCooldown: 0 },
+    {
+      player: { x: 150, y: 50 },
+      ts: 0,
+      dt: 0.2,
+      width: 200,
+      height: 200,
+      margin: 10,
+      gravityWell2: false,
+      windupMs: 520,
+    },
+  );
+  assert.equal(rangedCombat.kind, 'ranged');
+  assert.equal(rangedCombat.shouldFire, true);
+  assert.equal(rangedCombat.inWindup, true);
 
   const cooldownApplied = applyDisruptorPostFire(ranged);
   assert.equal(cooldownApplied, true);

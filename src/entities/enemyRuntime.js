@@ -89,6 +89,63 @@ function advanceRangedEnemyCombatState(enemy, {
   };
 }
 
+function stepEnemyCombatState(enemy, {
+  player,
+  ts,
+  dt,
+  width,
+  height,
+  margin,
+  gravityWell2 = false,
+  windupMs = 520,
+} = {}) {
+  if(enemy.isSiphon) {
+    const siphonStep = stepSiphonEnemy(enemy, {
+      ts,
+      dt,
+      width,
+      height,
+      margin,
+      player,
+    });
+    return {
+      kind: 'siphon',
+      shouldDrainCharge: siphonStep.shouldDrainCharge,
+    };
+  }
+
+  if(enemy.isRusher) {
+    const rusherStep = stepRusherEnemy(enemy, {
+      player,
+      dt,
+      width,
+      height,
+      margin,
+    });
+    return {
+      kind: 'rusher',
+      distanceToPlayer: rusherStep.distanceToPlayer,
+    };
+  }
+
+  const rangedStep = advanceRangedEnemyCombatState(enemy, {
+    player,
+    ts,
+    dt,
+    width,
+    height,
+    margin,
+    gravityWell2,
+    windupMs,
+  });
+  return {
+    kind: 'ranged',
+    distanceToPlayer: rangedStep.distanceToPlayer,
+    inWindup: rangedStep.inWindup,
+    shouldFire: rangedStep.shouldFire,
+  };
+}
+
 function applyDisruptorPostFire(enemy) {
   if(enemy.type !== 'disruptor') return false;
   enemy.disruptorBulletCount += enemy.burst;
@@ -202,6 +259,7 @@ export {
   stepSiphonEnemy,
   stepRusherEnemy,
   advanceRangedEnemyCombatState,
+  stepEnemyCombatState,
   applyDisruptorPostFire,
   fireEnemyBurst,
   applyOrbitSphereContact,

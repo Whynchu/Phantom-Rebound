@@ -37,6 +37,7 @@ Recent stabilization stages landed after `1.16.51`:
 - `experimental` extraction stage: charged-orb firing resolution now lives in [src/entities/defenseRuntime.js](C:/Development/Phantom-Rebound/src/entities/defenseRuntime.js:1) via `buildChargedOrbVolleyForSlot`, centralizing per-slot timer advancement, target selection, charge gating, and shot spec generation.
 - `experimental` extraction stage: rusher contact hit resolution now lives in [src/systems/dangerHit.js](C:/Development/Phantom-Rebound/src/systems/dangerHit.js:1) via `resolveRusherContactHit`, centralizing contact damage/lifeline/last-stand/game-over branching while `script.js` applies VFX and projectile side effects.
 - `experimental` extraction stage: Aegis battery bolt target/shot derivation now lives in [src/entities/defenseRuntime.js](C:/Development/Phantom-Rebound/src/entities/defenseRuntime.js:1) via `buildAegisBatteryBoltSpec`, centralizing nearest-target selection and bolt spec creation while `script.js` retains only spawn/VFX side effects.
+- `experimental` extraction stage: enemy combat-step orchestration now lives in [src/entities/enemyRuntime.js](C:/Development/Phantom-Rebound/src/entities/enemyRuntime.js:1) via `stepEnemyCombatState`, centralizing per-type movement/fire-intent branching (siphon/rusher/ranged) while `script.js` keeps hit and spawn side effects.
 
 Validation status:
 
@@ -59,6 +60,7 @@ Validation status:
 - The regression harness also covers charged-orb per-slot fire timing, charge spend, and shot-spec generation.
 - The regression harness also covers rusher contact hit outcomes including lifeline and last-stand triggers.
 - The regression harness also covers Aegis battery bolt gating, nearest-target selection, and bolt stat derivation.
+- The regression harness also covers enemy combat-step orchestration across siphon, rusher, and ranged paths.
 
 ## Purpose
 

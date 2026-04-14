@@ -2,9 +2,7 @@ import { C, ROOM_SCRIPTS, BOSS_ROOMS, DECAY_BASE, M, VERSION } from './src/data/
 import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';
 import {
-  stepSiphonEnemy,
-  stepRusherEnemy,
-  advanceRangedEnemyCombatState,
+  stepEnemyCombatState,
   fireEnemyBurst,
   applyOrbitSphereContact,
 } from './src/entities/enemyRuntime.js';
@@ -1678,25 +1676,20 @@ function update(dt,ts){
   const WINDUP_MS = 520; // tell duration before firing
   for(let ei=enemies.length-1;ei>=0;ei--){
     const e=enemies[ei];
-    if(e.isSiphon){
-      const siphonStep = stepSiphonEnemy(e, {
-        ts,
-        dt,
-        width: W,
-        height: H,
-        margin: M,
-        player,
-      });
-      if(siphonStep.shouldDrainCharge){charge=Math.max(0,charge-2.8*dt);sparks(player.x,player.y,C.siphon,1,35);}
-    } else if(e.isRusher){
-      const rusherStep = stepRusherEnemy(e, {
-        player,
-        dt,
-        width: W,
-        height: H,
-        margin: M,
-      });
-      if(rusherStep.distanceToPlayer<player.r+e.r+2 && player.invincible<=0){
+    const combatStep = stepEnemyCombatState(e, {
+      player,
+      ts,
+      dt,
+      width: W,
+      height: H,
+      margin: M,
+      gravityWell2: UPG.gravityWell2,
+      windupMs: WINDUP_MS,
+    });
+    if(combatStep.kind === 'siphon'){
+      if(combatStep.shouldDrainCharge){charge=Math.max(0,charge-2.8*dt);sparks(player.x,player.y,C.siphon,1,35);}
+    } else if(combatStep.kind === 'rusher'){
+      if(combatStep.distanceToPlayer<player.r+e.r+2 && player.invincible<=0){
         const rusherHit = resolveRusherContactHit({
           hp,
           upgrades: UPG,
@@ -1743,18 +1736,7 @@ function update(dt,ts){
         }
       }
     } else {
-      const rangedStep = advanceRangedEnemyCombatState(e, {
-        player,
-        ts,
-        dt,
-        width: W,
-        height: H,
-        margin: M,
-        gravityWell2: UPG.gravityWell2,
-        windupMs: WINDUP_MS,
-      });
-
-      if(rangedStep.shouldFire){
+      if(combatStep.shouldFire){
         fireEnemyBurst(e, {
           player,
           bulletSpeedScale,
