@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.58',
+    label: 'ENGINEERING STABILIZATION',
+    summary: [
+      'This follow-up targets iOS interaction reliability. Double-tap/selection gesture guards were hardened to suppress the native loupe behavior during gameplay, and keyboard-open viewport handling was stabilized to reduce layout jumps and black overlay artifacts when entering callsigns.'
+    ],
+    highlights: [
+      'Added stronger double-tap and selection suppression outside form fields for iOS Safari gameplay interactions.',
+      'Added keyboard-open viewport handling to avoid aggressive resize recalc while text inputs are focused.',
+      'Disabled heavy backdrop effects while keyboard is open to avoid visual artifacts during callsign entry.'
+    ]
+  },
+  {
     version: '1.16.57',
     label: 'ENGINEERING STABILIZATION',
     summary: [
