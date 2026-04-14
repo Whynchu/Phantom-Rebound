@@ -76,6 +76,101 @@ function advanceAegisBatteryTimer({
   return { timer: nextTimer, shouldFire: false };
 }
 
+function buildChargedOrbVolleyForSlot({
+  slotIndex,
+  timerMs = 0,
+  dtMs,
+  fireIntervalMs,
+  orbCooldown,
+  orbitSphereTier,
+  ts,
+  rotationSpeed,
+  radius,
+  originX,
+  originY,
+  enemies,
+  getOrbitSlotPosition,
+  orbTwin = false,
+  orbitalFocus = false,
+  orbOvercharge = false,
+  orbPierce = false,
+  charge = 0,
+  reservedForPlayer = 0,
+  chargeRatio = 0,
+  twinDamageMult = 1,
+  focusDamageMult = 1,
+  focusChargeScale = 0.8,
+  overchargeDamageMult = 1,
+  shotSpeed = 220,
+  now,
+  bloodPactHealCap = 0,
+} = {}) {
+  if((orbCooldown?.[slotIndex] || 0) > 0) {
+    return { nextTimerMs: timerMs, fired: false, chargeSpent: 0, shotSpecs: [] };
+  }
+
+  const nextTimer = (timerMs || 0) + dtMs;
+  if(nextTimer < fireIntervalMs) {
+    return { nextTimerMs: nextTimer, fired: false, chargeSpent: 0, shotSpecs: [] };
+  }
+
+  const orbitSlot = getOrbitSlotPosition({
+    index: slotIndex,
+    orbitSphereTier,
+    ts,
+    rotationSpeed,
+    radius,
+    originX,
+    originY,
+  });
+  const target = enemies.reduce((best, enemy) => {
+    const dist = Math.hypot(enemy.x - orbitSlot.x, enemy.y - orbitSlot.y);
+    return (!best || dist < best.dist) ? { enemy, dist } : best;
+  }, null);
+  if(!target) {
+    return { nextTimerMs: 0, fired: false, chargeSpent: 0, shotSpecs: [] };
+  }
+
+  const aim = Math.atan2(target.enemy.y - orbitSlot.y, target.enemy.x - orbitSlot.x);
+  const shotAngles = orbTwin ? [aim - 0.14, aim + 0.14] : [aim];
+  const orbChargeAvailable = Math.max(0, Math.floor(charge) - reservedForPlayer);
+  const shotsAvailable = Math.min(orbChargeAvailable, shotAngles.length);
+  if(shotsAvailable <= 0) {
+    return { nextTimerMs: 0, fired: false, chargeSpent: 0, shotSpecs: [] };
+  }
+
+  let totalDamage = 1.4;
+  if(orbitalFocus) totalDamage *= focusDamageMult * (1 + chargeRatio * focusChargeScale);
+  if(orbOvercharge) totalDamage *= 1 + chargeRatio * overchargeDamageMult;
+  if(orbTwin) totalDamage *= twinDamageMult;
+  const perShotDamage = totalDamage / shotsAvailable;
+
+  const shotSpecs = shotAngles.slice(0, shotsAvailable).map((angle) => ({
+    x: orbitSlot.x,
+    y: orbitSlot.y,
+    vx: Math.cos(angle) * shotSpeed,
+    vy: Math.sin(angle) * shotSpeed,
+    radius: orbOvercharge ? 4.1 : 3.8,
+    bounceLeft: 0,
+    pierceLeft: orbPierce ? 1 : 0,
+    homing: orbitalFocus,
+    crit: false,
+    dmg: perShotDamage,
+    expireAt: now + 1300,
+    extras: {
+      bloodPactHeals: 0,
+      bloodPactHealCap,
+    },
+  }));
+
+  return {
+    nextTimerMs: 0,
+    fired: true,
+    chargeSpent: shotsAvailable,
+    shotSpecs,
+  };
+}
+
 export {
   syncOrbRuntimeArrays,
   getOrbitSlotPosition,
@@ -83,4 +178,5 @@ export {
   tickShieldCooldowns,
   countReadyShields,
   advanceAegisBatteryTimer,
+  buildChargedOrbVolleyForSlot,
 };

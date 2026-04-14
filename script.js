@@ -36,6 +36,7 @@ import {
   tickShieldCooldowns,
   countReadyShields,
   advanceAegisBatteryTimer,
+  buildChargedOrbVolleyForSlot,
 } from './src/entities/defenseRuntime.js';
 import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoystickControls, tickJoystick } from './src/input/joystick.js';
 import { fetchRemoteLeaderboard, submitRemoteScore, submitRunDiagnostic } from './src/platform/leaderboardService.js';
@@ -1776,61 +1777,46 @@ function update(dt,ts){
   if(UPG.chargedOrbs && UPG.orbitSphereTier>0 && enemies.length>0){
     syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
     for(let si=0;si<UPG.orbitSphereTier;si++){
-      if(_orbCooldown[si]>0) continue;
-      _orbFireTimers[si]=((_orbFireTimers[si]||0)+dt*1000);
       const orbFireInterval = CHARGED_ORB_FIRE_INTERVAL_MS * (UPG.orbitalFocus ? ORBITAL_FOCUS_CHARGED_ORB_INTERVAL_MULT : 1);
-      if(_orbFireTimers[si] >= orbFireInterval){
-        _orbFireTimers[si]=0;
-        const orbitSlot = getOrbitSlotPosition({
-          index: si,
-          orbitSphereTier: UPG.orbitSphereTier,
-          ts,
-          rotationSpeed: ORBIT_ROTATION_SPD,
-          radius: ORBIT_SPHERE_R,
-          originX: player.x,
-          originY: player.y,
+      const orbVolley = buildChargedOrbVolleyForSlot({
+        slotIndex: si,
+        timerMs: _orbFireTimers[si] || 0,
+        dtMs: dt * 1000,
+        fireIntervalMs: orbFireInterval,
+        orbCooldown: _orbCooldown,
+        orbitSphereTier: UPG.orbitSphereTier,
+        ts,
+        rotationSpeed: ORBIT_ROTATION_SPD,
+        radius: ORBIT_SPHERE_R,
+        originX: player.x,
+        originY: player.y,
+        enemies,
+        getOrbitSlotPosition,
+        orbTwin: UPG.orbTwin,
+        orbitalFocus: UPG.orbitalFocus,
+        orbOvercharge: UPG.orbOvercharge,
+        orbPierce: UPG.orbPierce,
+        charge,
+        reservedForPlayer: getPlayerShotChargeReserve(isStill, enemies.length),
+        chargeRatio: getChargeRatio(),
+        twinDamageMult: ORB_TWIN_TOTAL_DAMAGE_MULT,
+        focusDamageMult: ORBITAL_FOCUS_CHARGED_ORB_DAMAGE_MULT,
+        focusChargeScale: 0.8,
+        overchargeDamageMult: ORB_OVERCHARGE_DAMAGE_MULT,
+        shotSpeed: 220 * GLOBAL_SPEED_LIFT,
+        now: performance.now(),
+        bloodPactHealCap: getBloodPactHealCap(),
+      });
+      _orbFireTimers[si] = orbVolley.nextTimerMs;
+      if(!orbVolley.fired) continue;
+      for(const shotSpec of orbVolley.shotSpecs){
+        pushOutputBullet({
+          bullets,
+          ...shotSpec,
         });
-        const ox=orbitSlot.x;
-        const oy=orbitSlot.y;
-        const tgt=enemies.reduce((b,e)=>{const d=Math.hypot(e.x-ox,e.y-oy);return(!b||d<b.d)?{e,d}:b;},null);
-        if(tgt){
-          const ang=Math.atan2(tgt.e.y-oy,tgt.e.x-ox);
-          const oNow=performance.now();
-          const chargeRatio = getChargeRatio();
-          const orbShotAngles = UPG.orbTwin ? [ang - 0.14, ang + 0.14] : [ang];
-          const reservedForPlayer = getPlayerShotChargeReserve(isStill, enemies.length);
-          const orbChargeAvailable = Math.max(0, Math.floor(charge) - reservedForPlayer);
-          const orbShotsAvailable = Math.min(orbChargeAvailable, orbShotAngles.length);
-          if(orbShotsAvailable <= 0) continue;
-          let orbTotalDamage = 1.4;
-          if(UPG.orbitalFocus) orbTotalDamage *= ORBITAL_FOCUS_CHARGED_ORB_DAMAGE_MULT * (1 + chargeRatio * 0.8);
-          if(UPG.orbOvercharge) orbTotalDamage *= 1 + chargeRatio * ORB_OVERCHARGE_DAMAGE_MULT;
-          if(UPG.orbTwin) orbTotalDamage *= ORB_TWIN_TOTAL_DAMAGE_MULT;
-          const orbPerShotDamage = orbTotalDamage / orbShotsAvailable;
-          for(const orbAngle of orbShotAngles.slice(0, orbShotsAvailable)){
-            bullets.push({
-              x:ox,
-              y:oy,
-              vx:Math.cos(orbAngle)*220*GLOBAL_SPEED_LIFT,
-              vy:Math.sin(orbAngle)*220*GLOBAL_SPEED_LIFT,
-              state:'output',
-              r:UPG.orbOvercharge ? 4.1 : 3.8,
-              decayStart:null,
-              bounceLeft:0,
-              pierceLeft:UPG.orbPierce ? 1 : 0,
-              homing:UPG.orbitalFocus,
-              crit:false,
-              dmg:orbPerShotDamage,
-              expireAt:oNow+1300,
-              hitIds:new Set(),
-              bloodPactHeals:0,
-              bloodPactHealCap:getBloodPactHealCap()
-            });
-          }
-          charge = Math.max(0, charge - orbShotsAvailable);
-          recordShotSpend(orbShotsAvailable);
-        }
       }
+      charge = Math.max(0, charge - orbVolley.chargeSpent);
+      recordShotSpend(orbVolley.chargeSpent);
     }
   }
 

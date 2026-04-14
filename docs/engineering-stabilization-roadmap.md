@@ -34,6 +34,7 @@ Recent stabilization stages landed after `1.16.51`:
 - `experimental` extraction stage: enemy movement/fire-cycle helpers now live in [src/entities/enemyRuntime.js](C:/Development/Phantom-Rebound/src/entities/enemyRuntime.js:1), centralizing siphon/rusher stepping, ranged-enemy windup/fire cadence, and disruptor cooldown handling while projectile-spawn specifics remain in `script.js`.
 - `experimental` extraction stage: enemy burst-pattern routing now lives in [src/entities/enemyRuntime.js](C:/Development/Phantom-Rebound/src/entities/enemyRuntime.js:1) via `fireEnemyBurst`, moving zoner/triangle/elite/purple/disruptor fire branching out of `script.js` while preserving existing spawn callbacks.
 - `experimental` extraction stage: orbit-sphere enemy contact resolution now lives in [src/entities/enemyRuntime.js](C:/Development/Phantom-Rebound/src/entities/enemyRuntime.js:1) via `applyOrbitSphereContact`, centralizing cooldown-gated per-orb contact damage and kill-state detection.
+- `experimental` extraction stage: charged-orb firing resolution now lives in [src/entities/defenseRuntime.js](C:/Development/Phantom-Rebound/src/entities/defenseRuntime.js:1) via `buildChargedOrbVolleyForSlot`, centralizing per-slot timer advancement, target selection, charge gating, and shot spec generation.
 
 Validation status:
 
@@ -53,6 +54,7 @@ Validation status:
 - The regression harness also covers enemy movement stepping, ranged fire cadence, and disruptor post-fire cooldown behavior.
 - The regression harness also covers enemy burst fire routing across zoner/triangle/elite/purple/disruptor paths.
 - The regression harness also covers orbit-sphere contact damage timing and kill transitions.
+- The regression harness also covers charged-orb per-slot fire timing, charge spend, and shot-spec generation.
 
 ## Purpose
 

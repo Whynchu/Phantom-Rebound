@@ -91,6 +91,7 @@ import {
   tickShieldCooldowns,
   countReadyShields,
   advanceAegisBatteryTimer,
+  buildChargedOrbVolleyForSlot,
 } from '../src/entities/defenseRuntime.js';
 import {
   advanceRoomIntroPhase,
@@ -1571,6 +1572,65 @@ test('defense runtime helpers keep orbit and shield state deterministic', () => 
   });
   assert.equal(reset.timer, 0);
   assert.equal(reset.shouldFire, false);
+
+  const volleyNoFire = buildChargedOrbVolleyForSlot({
+    slotIndex: 0,
+    timerMs: 100,
+    dtMs: 50,
+    fireIntervalMs: 200,
+    orbCooldown: [0],
+    orbitSphereTier: 1,
+    ts: 0,
+    rotationSpeed: 0,
+    radius: 40,
+    originX: 0,
+    originY: 0,
+    enemies: [{ x: 100, y: 0 }],
+    getOrbitSlotPosition: ({ originX, originY }) => ({ x: originX + 40, y: originY }),
+    charge: 5,
+    reservedForPlayer: 0,
+    now: 1000,
+  });
+  assert.equal(volleyNoFire.fired, false);
+  assert.equal(volleyNoFire.nextTimerMs, 150);
+
+  const volleyFire = buildChargedOrbVolleyForSlot({
+    slotIndex: 0,
+    timerMs: 180,
+    dtMs: 50,
+    fireIntervalMs: 200,
+    orbCooldown: [0],
+    orbitSphereTier: 1,
+    ts: 0,
+    rotationSpeed: 0,
+    radius: 40,
+    originX: 0,
+    originY: 0,
+    enemies: [{ x: 100, y: 0 }],
+    getOrbitSlotPosition: ({ originX, originY }) => ({ x: originX + 40, y: originY }),
+    orbTwin: true,
+    orbitalFocus: true,
+    orbOvercharge: true,
+    orbPierce: true,
+    charge: 5,
+    reservedForPlayer: 1,
+    chargeRatio: 0.5,
+    twinDamageMult: 1.6,
+    focusDamageMult: 1.6,
+    focusChargeScale: 0.8,
+    overchargeDamageMult: 1.1,
+    shotSpeed: 220,
+    now: 1000,
+    bloodPactHealCap: 2,
+  });
+  assert.equal(volleyFire.fired, true);
+  assert.equal(volleyFire.nextTimerMs, 0);
+  assert.equal(volleyFire.chargeSpent, 2);
+  assert.equal(volleyFire.shotSpecs.length, 2);
+  assert.equal(volleyFire.shotSpecs[0].pierceLeft, 1);
+  assert.equal(volleyFire.shotSpecs[0].homing, true);
+  assert.equal(volleyFire.shotSpecs[0].radius, 4.1);
+  assert.equal(volleyFire.shotSpecs[0].extras.bloodPactHealCap, 2);
 });
 
 test('enemy runtime helpers keep movement and fire cadence deterministic', () => {
