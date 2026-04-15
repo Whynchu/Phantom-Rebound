@@ -1,6 +1,45 @@
 import { C, ROOM_SCRIPTS, BOSS_ROOMS, DECAY_BASE, M, VERSION } from './src/data/gameData.js';
 import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';
+import {
+  resolveEnemySeparation,
+  stepEnemyCombatState,
+  fireEnemyBurst,
+  applyOrbitSphereContact,
+} from './src/entities/enemyRuntime.js';
+import {
+  applyEliteBulletStage as applyEliteBulletStageValue,
+  getDoubleBounceBulletPalette as getDoubleBounceBulletPaletteValue,
+  spawnAimedEnemyBullet,
+  spawnRadialEnemyBullet,
+  spawnTriangleBurst as spawnTriangleBurstValue,
+  spawnEliteBullet as spawnEliteBulletValue,
+  spawnEliteTriangleBurst as spawnEliteTriangleBurstValue,
+} from './src/entities/projectiles.js';
+import {
+  pushGreyBullet,
+  pushOutputBullet,
+  spawnGreyDrops as spawnGreyDropsValue,
+  spawnSplitOutputBullets,
+  spawnRadialOutputBurst,
+} from './src/entities/playerProjectiles.js';
+import {
+  createLaneOffsets as createLaneOffsetsValue,
+  buildPlayerShotPlan,
+  buildPlayerVolleySpecs,
+} from './src/entities/playerFire.js';
+import {
+  syncOrbRuntimeArrays,
+  getOrbitSlotPosition,
+  getShieldSlotPosition,
+  tickShieldCooldowns,
+  countReadyShields,
+  advanceAegisBatteryTimer,
+  buildAegisBatteryBoltSpec,
+  buildMirrorShieldReflectionSpec,
+  buildShieldBurstSpec,
+  buildChargedOrbVolleyForSlot,
+} from './src/entities/defenseRuntime.js';
 import { JOY_DEADZONE, JOY_MAX, createJoystickState, resetJoystickState, bindJoystickControls, tickJoystick } from './src/input/joystick.js';
 import { fetchRemoteLeaderboard, submitRemoteScore, submitRunDiagnostic } from './src/platform/leaderboardService.js';
 import {
@@ -9,6 +48,7 @@ import {
   submitLeaderboardEntryRemote,
 } from './src/platform/leaderboardRuntime.js';
 import { bindResponsiveViewport } from './src/platform/viewport.js';
+import { bindGestureGuards } from './src/platform/gestureGuards.js';
 import { readText, writeText, readJson, writeJson, removeKey } from './src/platform/storage.js';
 import { buildGameLoopCrashReport, saveRunCrashReport } from './src/platform/diagnostics.js';
 import {
@@ -26,7 +66,7 @@ import {
 } from './src/platform/leaderboardController.js';
 import { showBoonSelection } from './src/ui/boonSelection.js';
 import { renderVersionTag } from './src/ui/versionTag.js';
-import { PLAYER_COLORS, getPlayerColor, getPlayerColorScheme, getThreatPalette, loadPlayerColorFromStorage } from './src/data/colorScheme.js';
+import { PLAYER_COLORS, getPlayerColor, getPlayerColorScheme, getThreatPalette, setPlayerColor } from './src/data/colorScheme.js';
 import { PATCH_NOTES, PATCH_NOTES_ARCHIVE_MESSAGE } from './src/data/patchNotes.js';
 import { renderColorSelector } from './src/ui/colorSelector.js';
 import { formatRunTime, renderHud } from './src/ui/hud.js';
@@ -37,6 +77,23 @@ import {
 import { renderGameOverBoonsList, showLeaderboardBoonsPopup } from './src/ui/boonsPanel.js';
 import { renderPatchNotesPanel, setPatchNotesVisibility } from './src/ui/patchNotes.js';
 import { showGameOverScreen } from './src/ui/gameOver.js';
+import {
+  bindPatchNotesControls,
+  bindLeaderboardControls,
+  bindBoonsPanelControls,
+  bindPopupClose,
+} from './src/ui/appChrome.js';
+import {
+  setPlayerNameState,
+  bindNameInputs,
+  bindSessionFlow,
+} from './src/ui/sessionFlow.js';
+import {
+  showRoomClearOverlay,
+  showBossDefeatedOverlay,
+  showRoomIntroOverlay,
+  hideRoomIntroOverlay,
+} from './src/ui/roomOverlays.js';
 import {
   revealAppShell as revealAppShellView,
   syncColorDrivenCopy as syncColorDrivenCopyView,
@@ -53,6 +110,28 @@ import {
   generateWeightedWave as generateWeightedWaveValue,
   buildSpawnQueue as buildSpawnQueueValue,
 } from './src/systems/spawnBudget.js';
+import {
+  shouldExpireOutputBullet,
+  shouldRemoveBulletOutOfBounds,
+  resolveDangerBounceState,
+  resolveOutputBounceState,
+} from './src/systems/bulletRuntime.js';
+import {
+  resolveOutputEnemyHit,
+} from './src/systems/outputHit.js';
+import {
+  resolveEnemyKillEffects,
+  resolveOrbitKillEffects,
+  applyKillUpgradeState,
+  buildKillRewardActions,
+} from './src/systems/killRewards.js';
+import {
+  resolveDangerPlayerHit,
+  resolveSlipstreamNearMiss,
+  resolveRusherContactHit,
+  convertNearbyDangerBulletsToGrey,
+  resolvePostHitAftermath,
+} from './src/systems/dangerHit.js';
 import {
   createRunTelemetry as createRunTelemetryValue,
   createRoomTelemetry as createRoomTelemetryValue,
@@ -76,30 +155,16 @@ import {
   advanceClearPhase,
 } from './src/core/roomRuntime.js';
 
-loadPlayerColorFromStorage();
+const PLAYER_COLOR_KEY = 'phantom-player-color';
+const storedPlayerColor = readText(PLAYER_COLOR_KEY, 'green');
+setPlayerColor(PLAYER_COLORS[storedPlayerColor] ? storedPlayerColor : 'green');
 renderVersionTag(VERSION);
 
 // 🐰 Easter seasonal flag — show bunny ears on Easter weekend
 const _now = new Date();
 const _isEaster = (_now.getMonth() === 3 && _now.getDate() >= 4 && _now.getDate() <= 6); // Apr 4-6
 
-// Suppress iOS Safari magnifier / long-press context menu on the whole page
-document.addEventListener('contextmenu', (e) => e.preventDefault());
-// Block dblclick — iOS can route double-tap zoom through this even when CSS manipulation is set
-document.addEventListener('dblclick', (e) => e.preventDefault());
-let lastTouchEndAt = 0;
-document.addEventListener('touchend', (event) => {
-  const target = event.target;
-  if(target && target.closest && target.closest('input, textarea, select')) return;
-  const now = Date.now();
-  if(now - lastTouchEndAt < 320) {
-    event.preventDefault();
-  }
-  lastTouchEndAt = now;
-}, { passive: false });
-document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
-document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
-document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
+bindGestureGuards({ doc: document });
 let startDangerCopy;
 
 function revealAppShell() {
@@ -111,6 +176,8 @@ function syncColorDrivenCopy() {
 }
 
 window.addEventListener('phantom:player-color-change', (event) => {
+  const colorKey = event.detail?.key || getPlayerColor();
+  writeText(PLAYER_COLOR_KEY, colorKey);
   syncColorDrivenCopy(event.detail?.scheme || getPlayerColorScheme());
 });
 
@@ -133,11 +200,26 @@ const lbCurrent = document.getElementById('lb-current');
 const lbStatus = document.getElementById('lb-status');
 const lbList = document.getElementById('leaderboard-list');
 const patchNotesBtn = document.getElementById('btn-patch-notes');
+const versionOpenBtn = document.getElementById('btn-version-open');
 const patchNotesPanel = document.getElementById('patch-notes-panel');
+const versionPanel = document.getElementById('version-panel');
 const patchNotesCurrent = document.getElementById('patch-notes-current');
 const patchNotesList = document.getElementById('patch-notes-list');
 const patchNotesArchiveNote = document.getElementById('patch-notes-archive-note');
 const patchNotesCloseBtn = document.getElementById('btn-patch-notes-close');
+const versionCurrentEl = document.getElementById('version-current');
+const versionLatestEl = document.getElementById('version-latest');
+const versionStatusEl = document.getElementById('version-status');
+const versionCheckedAtEl = document.getElementById('version-checked-at');
+const versionRefreshBtn = document.getElementById('btn-version-refresh');
+const versionCloseBtn = document.getElementById('btn-version-close');
+const versionUpdateBtn = document.getElementById('btn-version-update');
+const UPDATE_AVAILABLE_KEY = 'phantom-rebound-update-available';
+let latestAvailableVersion = null;
+const roomClearEl = document.getElementById('room-clear');
+const roomClearTextEl = document.getElementById('room-clear-txt');
+const roomIntroEl = document.getElementById('room-intro');
+const roomIntroTextEl = document.getElementById('room-intro-txt');
 const lbPeriodBtns = document.querySelectorAll('[data-lb-period]');
 const lbScopeBtns = document.querySelectorAll('[data-lb-scope]');
 const goBoonsBtn = document.getElementById('btn-go-boons');
@@ -248,7 +330,57 @@ function renderPatchNotes() {
 }
 
 function setPatchNotesOpen(isOpen) {
+  if(isOpen) setVersionPanelOpen(false);
   setPatchNotesVisibility(patchNotesPanel, isOpen);
+}
+
+function setVersionPanelOpen(isOpen) {
+  if(!versionPanel) return;
+  if(isOpen) setPatchNotesOpen(false);
+  versionPanel.classList.toggle('off', !isOpen);
+  versionPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+  if(isOpen) refreshVersionStatus();
+}
+
+function setVersionStatusClass(element, mode) {
+  if(!element) return;
+  element.classList.remove('ok', 'warn', 'err');
+  if(mode) element.classList.add(mode);
+}
+
+async function refreshVersionStatus() {
+  if(!versionCurrentEl || !versionLatestEl || !versionStatusEl || !versionCheckedAtEl) return;
+  const currentBuild = VERSION.num;
+  versionCurrentEl.textContent = `v${currentBuild}`;
+  versionLatestEl.textContent = 'Checking...';
+  versionStatusEl.textContent = 'Checking...';
+  versionCheckedAtEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  setVersionStatusClass(versionStatusEl, null);
+  versionUpdateBtn?.classList.remove('show');
+  latestAvailableVersion = null;
+
+  try {
+    const response = await fetch(`version.json?ts=${Date.now()}`, { cache: 'no-store' });
+    if(!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const latestVersion = data?.version || 'Unknown';
+    versionLatestEl.textContent = latestVersion === 'Unknown' ? latestVersion : `v${latestVersion}`;
+    if(latestVersion === currentBuild) {
+      versionStatusEl.textContent = 'Up to date';
+      setVersionStatusClass(versionStatusEl, 'ok');
+      try { sessionStorage.removeItem(UPDATE_AVAILABLE_KEY); } catch {}
+    } else {
+      versionStatusEl.textContent = 'Update available';
+      setVersionStatusClass(versionStatusEl, 'warn');
+      versionUpdateBtn?.classList.add('show');
+      latestAvailableVersion = latestVersion;
+      try { sessionStorage.setItem(UPDATE_AVAILABLE_KEY, latestVersion); } catch {}
+    }
+  } catch {
+    versionLatestEl.textContent = 'Unavailable';
+    versionStatusEl.textContent = 'Check failed';
+    setVersionStatusClass(versionStatusEl, 'err');
+  }
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
@@ -732,44 +864,43 @@ function getProjectileHitDamage(multiplier = 1) {
   });
 }
 
-function getEliteBulletStagePalette() {
-  const threat = getThreatPalette();
-  return [
-    { fill: threat.elite.hex, core: C.getRgba(threat.elite.light, 0.9) },
-    { fill: threat.advanced.hex, core: C.getRgba(threat.advanced.light, 0.9) },
-    { fill: threat.danger.hex, core: C.getRgba(threat.danger.light, 0.9) },
-  ];
-}
-
 function applyEliteBulletStage(bullet, stage) {
-  const palette = getEliteBulletStagePalette();
-  const nextStage = Math.max(0, Math.min(stage, palette.length - 1));
-  bullet.eliteStage = nextStage;
-  bullet.eliteColor = palette[nextStage].fill;
-  bullet.eliteCore = palette[nextStage].core;
-  bullet.bounceStages = nextStage < palette.length - 1 ? 1 : 0;
+  return applyEliteBulletStageValue({
+    bullet,
+    stage,
+    getThreatPalette,
+    getRgba: C.getRgba,
+  });
 }
 
 function getDoubleBounceBulletPalette() {
-  const threat = getThreatPalette();
-  return {
-    fill: threat.advanced.hex,
-    core: C.getRgba(threat.advanced.light, 0.9),
-  };
+  return getDoubleBounceBulletPaletteValue({
+    getThreatPalette,
+    getRgba: C.getRgba,
+  });
 }
 
 function spawnEB(ex,ey) {
-  const a=Math.atan2(player.y-ey,player.x-ex)+(Math.random()-.5)*.22;
-  const spd=(145+Math.random()*40) * bulletSpeedScale();
-  bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:4.5,decayStart:null,bounces:0});
-  recordDangerBulletSpawn();
+  spawnAimedEnemyBullet({
+    bullets,
+    player,
+    x: ex,
+    y: ey,
+    bulletSpeedScale,
+    onSpawn: recordDangerBulletSpawn,
+  });
 }
 
 function spawnZB(ex,ey,idx,total) {
-  const a=(Math.PI*2/total)*idx;
-  const spd=125 * bulletSpeedScale();
-  bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:4.5,decayStart:null,bounces:0});
-  recordDangerBulletSpawn();
+  spawnRadialEnemyBullet({
+    bullets,
+    x: ex,
+    y: ey,
+    idx,
+    total,
+    bulletSpeedScale,
+    onSpawn: recordDangerBulletSpawn,
+  });
 }
 
 function spawnEliteZB(ex, ey, idx, total, stageOverride) {
@@ -780,46 +911,59 @@ function spawnEliteZB(ex, ey, idx, total, stageOverride) {
 }
 
 function spawnDBB(ex,ey) {
-  const a=Math.atan2(player.y-ey,player.x-ex)+(Math.random()-.5)*.22;
-  const spd=(145+Math.random()*40) * bulletSpeedScale();
-  bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:4.5,decayStart:null,bounces:0,doubleBounce:true,bounceCount:0});
-  recordDangerBulletSpawn();
+  spawnAimedEnemyBullet({
+    bullets,
+    player,
+    x: ex,
+    y: ey,
+    bulletSpeedScale,
+    extras: { doubleBounce: true, bounceCount: 0 },
+    onSpawn: recordDangerBulletSpawn,
+  });
 }
 
 function spawnTB(ex,ey) {
-  const a=Math.atan2(player.y-ey,player.x-ex)+(Math.random()-.5)*.18;
-  const spd=(145+Math.random()*40) * bulletSpeedScale();
-  bullets.push({x:ex,y:ey,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,state:'danger',r:7,decayStart:null,bounces:0,isTriangle:true,wallBounces:0});
-  recordDangerBulletSpawn();
+  spawnAimedEnemyBullet({
+    bullets,
+    player,
+    x: ex,
+    y: ey,
+    spread: 0.18,
+    radius: 7,
+    bulletSpeedScale,
+    extras: { isTriangle: true, wallBounces: 0 },
+    onSpawn: recordDangerBulletSpawn,
+  });
 }
 
 function spawnTriangleBurst(ex, ey, origVx, origVy) {
-  const baseAngle = Math.atan2(origVy, origVx);
-  const burstSpd = 140 * bulletSpeedScale();
-  for(let i = 0; i < 3; i++) {
-    const angle = baseAngle + (i - 1) * (Math.PI * 2 / 3);
-    bullets.push({x:ex,y:ey,vx:Math.cos(angle)*burstSpd,vy:Math.sin(angle)*burstSpd,state:'danger',r:5,decayStart:null,bounces:0,dangerBounceBudget:1});
-  }
-  recordDangerBulletSpawn(3);
-  sparks(ex, ey, C.danger, 6, 50);
+  spawnTriangleBurstValue({
+    bullets,
+    x: ex,
+    y: ey,
+    origVx,
+    origVy,
+    bulletSpeedScale,
+    onSpawn: recordDangerBulletSpawn,
+    sparks,
+    sparkColor: C.danger,
+  });
 }
 
 // Elite bullets advance through the current threat palette rather than fixed colors.
 function spawnEliteBullet(ex, ey, angle, speed, stageOverride, extras = {}) {
-  const stage = stageOverride !== undefined ? stageOverride : 0;
-  const bullet = {
-    x: ex, y: ey,
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed,
-    state: 'danger',
-    r: extras.r ?? 5,
-    decayStart: null,
-    bounces: 0,
-    ...extras,
-  };
-  applyEliteBulletStage(bullet, stage);
-  bullets.push(bullet);
-  recordDangerBulletSpawn();
+  spawnEliteBulletValue({
+    bullets,
+    x: ex,
+    y: ey,
+    angle,
+    speed,
+    stage: stageOverride !== undefined ? stageOverride : 0,
+    extras,
+    onSpawn: recordDangerBulletSpawn,
+    getThreatPalette,
+    getRgba: C.getRgba,
+  });
 }
 
 // Elite triangle shots use the same staged palette, just scaled up.
@@ -830,17 +974,23 @@ function spawnEliteTriangleBullet(ex, ey) {
 }
 
 function spawnEliteTriangleBurst(ex, ey, origVx, origVy) {
-  const baseAngle = Math.atan2(origVy, origVx);
-  const burstSpd = 140 * bulletSpeedScale();
-  for(let i = 0; i < 3; i++) {
-    const angle = baseAngle + (i - 1) * (Math.PI * 2 / 3);
-    spawnEliteBullet(ex, ey, angle, burstSpd, 2, { dangerBounceBudget: 1 });
-  }
-  sparks(ex, ey, getThreatPalette().advanced.hex, 6, 60);
+  spawnEliteTriangleBurstValue({
+    bullets,
+    x: ex,
+    y: ey,
+    origVx,
+    origVy,
+    bulletSpeedScale,
+    onSpawn: recordDangerBulletSpawn,
+    sparks,
+    sparkColor: getThreatPalette().advanced.hex,
+    getThreatPalette,
+    getRgba: C.getRgba,
+  });
 }
 
 function createLaneOffsets(count, spacing) {
-  return Array.from({ length: count }, (_, idx) => (idx - (count - 1) / 2) * spacing);
+  return createLaneOffsetsValue(count, spacing);
 }
 
 function drawGooBall(x, y, radius, fillColor, coreColor, wobbleSeed, alpha = 1) {
@@ -948,12 +1098,7 @@ function getChargeRatio() {
 }
 
 function getReadyShieldCount() {
-  if(!player.shields || player.shields.length === 0) return 0;
-  let ready = 0;
-  for(const shield of player.shields) {
-    if((shield.cooldown || 0) <= 0) ready++;
-  }
-  return ready;
+  return countReadyShields(player.shields);
 }
 
 function getAegisBatteryDamageMult() {
@@ -972,31 +1117,12 @@ function getPlayerShotChargeReserve(isStill, enemyCount = enemies.length) {
 
 function firePlayer(tx,ty) {
   if(charge < 1) return;
-  const base=Math.atan2(ty-player.y,tx-player.x);
-  const angs=[];
-  const forwardOffsets = createLaneOffsets(1 + UPG.forwardShotTier, 7 * Math.min(1.6, UPG.shotSize));
-
-  for(const laneOffset of forwardOffsets) angs.push({ angle: base, offset: laneOffset });
-  if(UPG.spreadTier>=1){
-    angs.push({ angle: base-0.28, offset: 0 }, { angle: base+0.28, offset: 0 });
-  }
-  if(UPG.spreadTier>=2){
-    angs.push({ angle: base-0.45, offset: 0 }, { angle: base-0.22, offset: 0 }, { angle: base+0.22, offset: 0 }, { angle: base+0.45, offset: 0 });
-  }
-  if(UPG.dualShot>0){
-    angs.push({ angle: base + Math.PI, offset: 0 });
-  }
-  if(UPG.ringShots>0){
-    for(let i=0;i<UPG.ringShots;i++){
-      angs.push({ angle: (Math.PI*2/UPG.ringShots)*i, offset: 0, isRing: true });
-    }
-  }
-  
-  // Spread Shot adds a fixed cone around the primary aim instead of tripling every lane.
-  if(UPG.spreadShot){
-    angs.push({ angle: base - 0.35, offset: 0, isSpreadExtra: true });
-    angs.push({ angle: base + 0.35, offset: 0, isSpreadExtra: true });
-  }
+  const angs = buildPlayerShotPlan({
+    tx,
+    ty,
+    player,
+    upg: UPG,
+  });
 
   const availableShots = Math.min(Math.floor(charge), angs.length);
   if(availableShots <= 0) return;
@@ -1027,29 +1153,22 @@ function firePlayer(tx,ty) {
     charge = 0;
   }
 
-  for(const shot of angs.slice(0, availableShots)) {
-    const a = shot.angle;
-    const sideX = Math.cos(a + Math.PI / 2) * shot.offset;
-    const sideY = Math.sin(a + Math.PI / 2) * shot.offset;
-    const crit = Math.random()<UPG.critChance;
-    bullets.push({
-      x:player.x + sideX, y:player.y + sideY,
-      vx:Math.cos(a)*bspd,
-      vy:Math.sin(a)*bspd,
-      state:'output', r:crit ? baseRadius * 1.28 : baseRadius, decayStart:null,
-      bounceLeft: UPG.bounceTier>0?2:0,
-      pierceLeft: UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),
-      homing: UPG.homingTier>0,
-      crit,
-      dmg: baseDmg * volleyPerBulletDamageMult * overchargeBonus * overloadBonus,
-      expireAt: now + lifeMs,
-      hitIds: new Set(),
-      isRing: shot.isRing || false,
-      hasPayload: UPG.payload || false,
-      bloodPactHeals: 0,
-      bloodPactHealCap: getBloodPactHealCap(),
-    });
-  }
+  const volleySpecs = buildPlayerVolleySpecs({
+    shots: angs,
+    availableShots,
+    player,
+    upg: UPG,
+    bulletSpeed: bspd,
+    baseRadius,
+    baseDamage: baseDmg * volleyPerBulletDamageMult,
+    lifeMs,
+    overchargeBonus,
+    overloadBonus,
+    getPierceLeft: (shot) => UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),
+    getBloodPactHealCap,
+    now,
+  });
+  volleySpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
   charge=Math.max(0,charge-availableShots);
   recordShotSpend(availableShots);
   sparks(player.x,player.y,C.green,4 + Math.min(4, availableShots),55);
@@ -1074,12 +1193,23 @@ function firePlayer(tx,ty) {
     if(_echoCounter>=5){
       _echoCounter=0;
       const eNow=performance.now();
-      for(const shot of angs.slice(0,availableShots)){
-        const a=shot.angle;
-        const sideX=Math.cos(a+Math.PI/2)*shot.offset;
-        const sideY=Math.sin(a+Math.PI/2)*shot.offset;
-        bullets.push({x:player.x+sideX,y:player.y+sideY,vx:Math.cos(a)*bspd,vy:Math.sin(a)*bspd,state:'output',r:baseRadius,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),homing:UPG.homingTier>0,crit:false,dmg:baseDmg * volleyPerBulletDamageMult,expireAt:eNow+lifeMs,hitIds:new Set(),isRing: shot.isRing || false,hasPayload: UPG.payload || false,bloodPactHeals:0,bloodPactHealCap:getBloodPactHealCap()});
-      }
+      const echoSpecs = buildPlayerVolleySpecs({
+        shots: angs,
+        availableShots,
+        player,
+        upg: { ...UPG, critChance: 0 },
+        bulletSpeed: bspd,
+        baseRadius,
+        baseDamage: baseDmg * volleyPerBulletDamageMult,
+        lifeMs,
+        overchargeBonus: 1,
+        overloadBonus: 1,
+        getPierceLeft: (shot) => UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),
+        getBloodPactHealCap,
+        now: eNow,
+        random: () => 1,
+      });
+      echoSpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
     }
   }
 }
@@ -1096,12 +1226,14 @@ function sparks(x,y,col,n=6,spd=80) {
 }
 
 function spawnGreyDrops(x,y,ts,count=getEnemyGreyDropCount()) {
-  const dropCount = Math.max(1, Math.floor(count));
-  const room = Math.min(dropCount, MAX_BULLETS - bullets.length);
-  for(let i=0;i<room;i++){
-    const a=Math.random()*Math.PI*2,s=50+Math.random()*55;
-    bullets.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,state:'grey',r:4.5,decayStart:ts,bounces:0});
-  }
+  spawnGreyDropsValue({
+    bullets,
+    x,
+    y,
+    ts,
+    count,
+    maxBullets: MAX_BULLETS,
+  });
 }
 function burstBlueDissipate(x, y) {
   const threat = getThreatPalette();
@@ -1424,13 +1556,7 @@ function update(dt,ts){
 
   // ── Shields — sync count to tier, tick cooldowns
   while(player.shields.length < UPG.shieldTier) player.shields.push({cooldown:0, hardened: !!UPG.shieldTempered, mirrorCooldown:-9999});
-  for(const s of player.shields){
-    if(s.cooldown>0){
-      const prev=s.cooldown;
-      s.cooldown=Math.max(0,s.cooldown-dt);
-      if(prev>0 && s.cooldown<=0 && UPG.shieldTempered) s.hardened=true;
-    }
-  }
+  tickShieldCooldowns(player.shields, dt, UPG.shieldTempered);
   if(_barrierPulseTimer>0) _barrierPulseTimer-=dt*1000;
   if(_absorbComboTimer>0){ _absorbComboTimer-=dt*1000; if(_absorbComboTimer<=0){_absorbComboCount=0;} }
   if(_chainMagnetTimer>0) _chainMagnetTimer-=dt*1000;
@@ -1622,229 +1748,224 @@ function update(dt,ts){
 
   // ── Enemies
   const WINDUP_MS = 520; // tell duration before firing
+  if(enemies.length > 1){
+    resolveEnemySeparation(enemies, {
+      width: W,
+      height: H,
+      margin: M,
+      separationPadding: 2,
+      maxIterations: 2,
+    });
+  }
   for(let ei=enemies.length-1;ei>=0;ei--){
     const e=enemies[ei];
-    if(e.isSiphon){
-      e.x+=Math.sin(ts*.0009+e.y)*22*dt;
-      e.y+=Math.cos(ts*.0011+e.x)*22*dt;
-      e.x=Math.max(M+e.r,Math.min(W-M-e.r,e.x));
-      e.y=Math.max(M+e.r,Math.min(H-M-e.r,e.y));
-      if(Math.hypot(e.x-player.x,e.y-player.y)<72){charge=Math.max(0,charge-2.8*dt);sparks(player.x,player.y,C.siphon,1,35);}
-    } else if(e.isRusher){
-      const dx=player.x-e.x, dy=player.y-e.y, d=Math.hypot(dx,dy);
-      if(d>e.r){
-        e.x+=dx/d*e.spd*dt;
-        e.y+=dy/d*e.spd*dt;
-      }
-      e.x=Math.max(M+e.r,Math.min(W-M-e.r,e.x));
-      e.y=Math.max(M+e.r,Math.min(H-M-e.r,e.y));
-      if(d<player.r+e.r+2 && player.invincible<=0){
-        hp-=18; recordPlayerDamage(18, 'contact'); player.invincible=getPostHitInvulnSeconds('contact'); player.distort=.4;
+    const combatStep = stepEnemyCombatState(e, {
+      player,
+      ts,
+      dt,
+      width: W,
+      height: H,
+      margin: M,
+      gravityWell2: UPG.gravityWell2,
+      windupMs: WINDUP_MS,
+    });
+    if(combatStep.kind === 'siphon'){
+      if(combatStep.shouldDrainCharge){charge=Math.max(0,charge-2.8*dt);sparks(player.x,player.y,C.siphon,1,35);}
+    } else if(combatStep.kind === 'rusher'){
+      if(combatStep.distanceToPlayer<player.r+e.r+2 && player.invincible<=0){
+        const rusherHit = resolveRusherContactHit({
+          hp,
+          upgrades: UPG,
+          contactDamage: 18,
+          contactInvulnSeconds: getPostHitInvulnSeconds('contact'),
+        });
+        hp = rusherHit.nextHp;
+        recordPlayerDamage(rusherHit.damage, 'contact');
+        player.invincible = rusherHit.invincibleSeconds;
+        player.distort = rusherHit.distortSeconds;
         sparks(player.x,player.y,C.danger,10,90);
-        if(UPG.colossus && _colossusShockwaveCd <= 0){
-          _colossusShockwaveCd = 4.0;
-          for(let ci=bullets.length-1;ci>=0;ci--){ const cb=bullets[ci]; if(cb.state==='danger' && Math.hypot(cb.x-player.x,cb.y-player.y)<120){ cb.state='grey'; cb.decayStart=ts; } }
+        const rusherAftermath = resolvePostHitAftermath({
+          hitResult: rusherHit,
+          upgrades: UPG,
+          colossusShockwaveCd: _colossusShockwaveCd,
+          enableShockwave: true,
+          shouldTriggerLastStand: rusherHit.shouldTriggerLastStand,
+          playerX: player.x,
+          playerY: player.y,
+          shotSpeed: 220 * GLOBAL_SPEED_LIFT,
+          now: performance.now(),
+          bloodPactHealCap: getBloodPactHealCap(),
+        });
+        if(rusherAftermath.triggerColossusShockwave){
+          _colossusShockwaveCd = rusherAftermath.nextColossusShockwaveCd;
+          convertNearbyDangerBulletsToGrey({
+            bullets,
+            originX: player.x,
+            originY: player.y,
+            radius: 120,
+            ts,
+          });
           sparks(player.x,player.y,getThreatPalette().advanced.hex,14,120);
         }
-        if(hp<=0){
-          if(UPG.lifeline && UPG.lifelineTriggerCount < (UPG.lifelineUses||1)){
-            UPG.lifelineTriggerCount++; UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,C.lifelineEffect,16,100);
-            if(UPG.lastStand){ const lsNow=performance.now(); for(let la=0;la<Math.floor(UPG.maxCharge);la++){ const lang=(Math.PI*2/Math.max(1,Math.floor(UPG.maxCharge)))*la; bullets.push({x:player.x,y:player.y,vx:Math.cos(lang)*220*GLOBAL_SPEED_LIFT,vy:Math.sin(lang)*220*GLOBAL_SPEED_LIFT,state:'output',r:4.5,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:lsNow+2000,hitIds:new Set(),bloodPactHeals:0,bloodPactHealCap:getBloodPactHealCap()}); } }
+        if(rusherAftermath.shouldApplyLifelineState){
+          UPG.lifelineTriggerCount = rusherAftermath.nextLifelineTriggerCount;
+          UPG.lifelineUsed = rusherAftermath.nextLifelineUsed;
+          sparks(player.x,player.y,C.lifelineEffect,16,100);
+          if(rusherAftermath.lastStandBurstSpec){
+            spawnRadialOutputBurst({ bullets, ...rusherAftermath.lastStandBurstSpec });
           }
-          else { gameOver(); return; }
+        } else if(rusherAftermath.shouldGameOver) {
+          gameOver(); return;
         }
       }
     } else {
-      const dx=player.x-e.x, dy=player.y-e.y, d=Math.hypot(dx,dy);
-      const fleeRange = e.fleeRange || 110;
-      let spd = e.spd;
-      
-      // Gravity Well tier 2: apply 20% enemy movement slowdown
-      if(UPG.gravityWell2) spd *= 0.8;
-
-      // Advance fire timer
-      e.fT += dt*1000;
-      const inWindup = e.fT >= e.fRate - WINDUP_MS;
-
-      if(!inWindup){
-        // Normal flee/orbit movement
-        if(d < fleeRange){
-          const nx=dx/d, ny=dy/d;
-          const strafeDir = (Math.sin(ts*0.0008 + e.eid*1.3) > 0) ? 1 : -1;
-          e.x -= nx*spd*dt + (-ny)*spd*(e.strafeSpd||0.6)*strafeDir*dt;
-          e.y -= ny*spd*dt + (nx)*spd*(e.strafeSpd||0.6)*strafeDir*dt;
-        } else if(d > fleeRange*1.6){
-          e.x += dx/d*spd*0.25*dt;
-          e.y += dy/d*spd*0.25*dt;
-        } else {
-          const strafeDir = (Math.sin(ts*0.0007 + e.eid*2.1) > 0) ? 1 : -1;
-          e.x += (-dy/d)*spd*(e.strafeSpd||0.6)*strafeDir*dt;
-          e.y += (dx/d)*spd*(e.strafeSpd||0.6)*strafeDir*dt;
-        }
-        e.x=Math.max(M+e.r,Math.min(W-M-e.r,e.x));
-        e.y=Math.max(M+e.r,Math.min(H-M-e.r,e.y));
-      }
-      // else: frozen during windup — no position update
-
-      // Disruptor cooldown tracking
-      if(e.disruptorCooldown > 0) {
-        e.disruptorCooldown -= dt*1000;
-      }
-
-      // Fire when timer expires (only if not in disruptor cooldown)
-      if(e.fT >= e.fRate && e.disruptorCooldown <= 0){
-        e.fT = 0;
-        if(e.type==='zoner' || e.type==='purple_zoner' || e.type==='orange_zoner'){
-          if(e.type==='orange_zoner'){
-            // Orange zoner is the elite-stage zoner and uses the rotated elite palette
-            for(let i=0;i<e.burst;i++) spawnEliteZB(e.x,e.y,i,e.burst,0); // stage 0 = elite hue
-          } else if(e.type==='purple_zoner'){
-            // Purple zoner shoots purple double-bounce bullets
-            for(let i=0;i<e.burst;i++) spawnDBB(e.x,e.y);
-          } else if(e.isElite){
-            // Regular zoner that rolled elite
-            for(let i=0;i<e.burst;i++) spawnEliteZB(e.x,e.y,i,e.burst,0); // stage 0 = elite hue
-          } else {
-            for(let i=0;i<e.burst;i++) spawnZB(e.x,e.y,i,e.burst);
-          }
-        } else if(e.type==='triangle'){
-          if(e.isElite){
-            for(let i=0;i<e.burst;i++) spawnEliteTriangleBullet(e.x,e.y);
-          } else {
-            for(let i=0;i<e.burst;i++) spawnTB(e.x,e.y);
-          }
-        } else {
-          const canShootPurple = canEnemyUsePurpleShots(e, roomIndex);
-          for(let i=0;i<e.burst;i++){
-            if(e.isElite){
-              // Elite enemies shoot bullets that stage through elite -> advanced -> danger hues
-              const angle = Math.atan2(player.y - e.y, player.x - e.x) + (Math.random() - 0.5) * 0.6;
-              const spd = (130 + Math.random() * 40) * bulletSpeedScale();
-              spawnEliteBullet(e.x, e.y, angle, spd, 0); // stage 0 = elite hue
-            } else if(canShootPurple) {
-              spawnDBB(e.x,e.y);
-            } else {
-              spawnEB(e.x,e.y);
-            }
-          }
-          // Disruptor cooldown: after 5 bullets, cooldown for 800ms
-          if(e.type==='disruptor'){
-            e.disruptorBulletCount += e.burst;
-            if(e.disruptorBulletCount >= 5){
-              e.disruptorBulletCount = 0;
-              e.disruptorCooldown = 800;
-            }
-          }
-        }
+      if(combatStep.shouldFire){
+        fireEnemyBurst(e, {
+          player,
+          bulletSpeedScale,
+          random: Math.random,
+          canEnemyUsePurpleShots: (enemy) => canEnemyUsePurpleShots(enemy, roomIndex),
+          spawnZoner: (idx, total) => spawnZB(e.x, e.y, idx, total),
+          spawnEliteZoner: (idx, total, stage) => spawnEliteZB(e.x, e.y, idx, total, stage),
+          spawnDoubleBounce: () => spawnDBB(e.x, e.y),
+          spawnTriangle: () => spawnTB(e.x, e.y),
+          spawnEliteTriangle: () => spawnEliteTriangleBullet(e.x, e.y),
+          spawnEliteBullet: (angle, speed, stage) => spawnEliteBullet(e.x, e.y, angle, speed, stage),
+          spawnEnemyBullet: () => spawnEB(e.x, e.y),
+        });
       }
     }
 
   if(UPG.orbitSphereTier > 0){
       // Sync arrays
-      while(_orbFireTimers.length < UPG.orbitSphereTier) _orbFireTimers.push(0);
-      while(_orbCooldown.length < UPG.orbitSphereTier) _orbCooldown.push(0);
-      if(!e.orbitHitAt) e.orbitHitAt = {};
-      for(let si=0;si<UPG.orbitSphereTier;si++){
-        if(_orbCooldown[si]>0) continue;
-        const sAngle=Math.PI*2/UPG.orbitSphereTier*si+ts*ORBIT_ROTATION_SPD;
-        const sx=player.x+Math.cos(sAngle)*ORBIT_SPHERE_R;
-        const sy=player.y+Math.sin(sAngle)*ORBIT_SPHERE_R;
-        const lastHitAt = e.orbitHitAt[si] || -99999;
-        if(ts - lastHitAt < 220) continue;
-        if(Math.hypot(e.x-sx,e.y-sy) < e.r + 6){
-          e.orbitHitAt[si] = ts;
-          const orbitContactDamage = 2 + (UPG.orbitalFocus ? ORBITAL_FOCUS_CONTACT_BONUS + getChargeRatio() * 1.5 : 0);
-          e.hp -= orbitContactDamage;
-          sparks(sx,sy,C.green,4,45);
-          if(e.hp<=0){
-            score += computeKillScore(e.pts, false);
-            kills++;
-            recordKill('orbit');
-            sparks(e.x,e.y,e.col,14,95);
-            spawnGreyDrops(e.x,e.y,ts);
-            if(UPG.finalForm && hp <= maxHp * 0.15){ gainCharge(0.5, 'finalForm'); }
-            enemies.splice(ei,1);
-            break;
-          }
+      syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
+      const orbitContact = applyOrbitSphereContact(e, {
+        orbCooldown: _orbCooldown,
+        orbitSphereTier: UPG.orbitSphereTier,
+        ts,
+        getOrbitSlotPosition,
+        rotationSpeed: ORBIT_ROTATION_SPD,
+        radius: ORBIT_SPHERE_R,
+        originX: player.x,
+        originY: player.y,
+        orbitalFocus: UPG.orbitalFocus,
+        chargeRatio: getChargeRatio(),
+        baseDamage: 2,
+        focusDamageBonus: ORBITAL_FOCUS_CONTACT_BONUS,
+        focusChargeScale: 1.5,
+      });
+      if(orbitContact.hit){
+        sparks(orbitContact.slotX, orbitContact.slotY, C.green, 4, 45);
+      }
+      if(orbitContact.killed){
+        const orbitKillEffects = resolveOrbitKillEffects({
+          scorePerKill: computeKillScore(e.pts, false),
+          finalForm: UPG.finalForm,
+          hp,
+          maxHp,
+          finalFormChargeGain: 0.5,
+        });
+        score += orbitKillEffects.scoreDelta;
+        kills += orbitKillEffects.killsDelta;
+        recordKill('orbit');
+        sparks(e.x,e.y,e.col,14,95);
+        spawnGreyDrops(e.x,e.y,ts);
+        if(orbitKillEffects.shouldGrantFinalFormCharge){
+          gainCharge(orbitKillEffects.finalFormChargeGain, 'finalForm');
         }
+        enemies.splice(ei,1);
+        continue;
       }
     }
+  }
+  if(enemies.length > 1){
+    resolveEnemySeparation(enemies, {
+      width: W,
+      height: H,
+      margin: M,
+      separationPadding: 2,
+      maxIterations: 2,
+    });
   }
 
   // ── Charged Orbs: each alive orb fires at nearest enemy every 1.8s
   if(UPG.chargedOrbs && UPG.orbitSphereTier>0 && enemies.length>0){
-    while(_orbFireTimers.length < UPG.orbitSphereTier) _orbFireTimers.push(0);
+    syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
     for(let si=0;si<UPG.orbitSphereTier;si++){
-      if(_orbCooldown[si]>0) continue;
-      _orbFireTimers[si]=((_orbFireTimers[si]||0)+dt*1000);
       const orbFireInterval = CHARGED_ORB_FIRE_INTERVAL_MS * (UPG.orbitalFocus ? ORBITAL_FOCUS_CHARGED_ORB_INTERVAL_MULT : 1);
-      if(_orbFireTimers[si] >= orbFireInterval){
-        _orbFireTimers[si]=0;
-        const sAngle=Math.PI*2/UPG.orbitSphereTier*si+ts*ORBIT_ROTATION_SPD;
-        const ox=player.x+Math.cos(sAngle)*ORBIT_SPHERE_R;
-        const oy=player.y+Math.sin(sAngle)*ORBIT_SPHERE_R;
-        const tgt=enemies.reduce((b,e)=>{const d=Math.hypot(e.x-ox,e.y-oy);return(!b||d<b.d)?{e,d}:b;},null);
-        if(tgt){
-          const ang=Math.atan2(tgt.e.y-oy,tgt.e.x-ox);
-          const oNow=performance.now();
-          const chargeRatio = getChargeRatio();
-          const orbShotAngles = UPG.orbTwin ? [ang - 0.14, ang + 0.14] : [ang];
-          const reservedForPlayer = getPlayerShotChargeReserve(isStill, enemies.length);
-          const orbChargeAvailable = Math.max(0, Math.floor(charge) - reservedForPlayer);
-          const orbShotsAvailable = Math.min(orbChargeAvailable, orbShotAngles.length);
-          if(orbShotsAvailable <= 0) continue;
-          let orbTotalDamage = 1.4;
-          if(UPG.orbitalFocus) orbTotalDamage *= ORBITAL_FOCUS_CHARGED_ORB_DAMAGE_MULT * (1 + chargeRatio * 0.8);
-          if(UPG.orbOvercharge) orbTotalDamage *= 1 + chargeRatio * ORB_OVERCHARGE_DAMAGE_MULT;
-          if(UPG.orbTwin) orbTotalDamage *= ORB_TWIN_TOTAL_DAMAGE_MULT;
-          const orbPerShotDamage = orbTotalDamage / orbShotsAvailable;
-          for(const orbAngle of orbShotAngles.slice(0, orbShotsAvailable)){
-            bullets.push({
-              x:ox,
-              y:oy,
-              vx:Math.cos(orbAngle)*220*GLOBAL_SPEED_LIFT,
-              vy:Math.sin(orbAngle)*220*GLOBAL_SPEED_LIFT,
-              state:'output',
-              r:UPG.orbOvercharge ? 4.1 : 3.8,
-              decayStart:null,
-              bounceLeft:0,
-              pierceLeft:UPG.orbPierce ? 1 : 0,
-              homing:UPG.orbitalFocus,
-              crit:false,
-              dmg:orbPerShotDamage,
-              expireAt:oNow+1300,
-              hitIds:new Set(),
-              bloodPactHeals:0,
-              bloodPactHealCap:getBloodPactHealCap()
-            });
-          }
-          charge = Math.max(0, charge - orbShotsAvailable);
-          recordShotSpend(orbShotsAvailable);
-        }
+      const orbVolley = buildChargedOrbVolleyForSlot({
+        slotIndex: si,
+        timerMs: _orbFireTimers[si] || 0,
+        dtMs: dt * 1000,
+        fireIntervalMs: orbFireInterval,
+        orbCooldown: _orbCooldown,
+        orbitSphereTier: UPG.orbitSphereTier,
+        ts,
+        rotationSpeed: ORBIT_ROTATION_SPD,
+        radius: ORBIT_SPHERE_R,
+        originX: player.x,
+        originY: player.y,
+        enemies,
+        getOrbitSlotPosition,
+        orbTwin: UPG.orbTwin,
+        orbitalFocus: UPG.orbitalFocus,
+        orbOvercharge: UPG.orbOvercharge,
+        orbPierce: UPG.orbPierce,
+        charge,
+        reservedForPlayer: getPlayerShotChargeReserve(isStill, enemies.length),
+        chargeRatio: getChargeRatio(),
+        twinDamageMult: ORB_TWIN_TOTAL_DAMAGE_MULT,
+        focusDamageMult: ORBITAL_FOCUS_CHARGED_ORB_DAMAGE_MULT,
+        focusChargeScale: 0.8,
+        overchargeDamageMult: ORB_OVERCHARGE_DAMAGE_MULT,
+        shotSpeed: 220 * GLOBAL_SPEED_LIFT,
+        now: performance.now(),
+        bloodPactHealCap: getBloodPactHealCap(),
+      });
+      _orbFireTimers[si] = orbVolley.nextTimerMs;
+      if(!orbVolley.fired) continue;
+      for(const shotSpec of orbVolley.shotSpecs){
+        pushOutputBullet({
+          bullets,
+          ...shotSpec,
+        });
       }
+      charge = Math.max(0, charge - orbVolley.chargeSpent);
+      recordShotSpend(orbVolley.chargeSpent);
     }
   }
 
   if(UPG.aegisBattery && UPG.shieldTier > 0 && enemies.length > 0){
     const readyShieldCount = getReadyShieldCount();
-    if(readyShieldCount >= UPG.shieldTier){
-      UPG.aegisBatteryTimer = (UPG.aegisBatteryTimer || 0) + dt * 1000;
-      if(UPG.aegisBatteryTimer >= AEGIS_BATTERY_BOLT_INTERVAL_MS){
-        UPG.aegisBatteryTimer = 0;
-        const target = enemies.reduce((best, enemy) => {
-          const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-          return (!best || dist < best.dist) ? { enemy, dist } : best;
-        }, null);
-        if(target){
-          const ang = Math.atan2(target.enemy.y - player.y, target.enemy.x - player.x);
-          const boltNow = performance.now();
-          const batteryDamage = (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (1.1 + readyShieldCount * 0.2);
-          bullets.push({x:player.x,y:player.y,vx:Math.cos(ang)*210*GLOBAL_SPEED_LIFT,vy:Math.sin(ang)*210*GLOBAL_SPEED_LIFT,state:'output',r:4.2,decayStart:null,bounceLeft:0,pierceLeft:0,homing:true,crit:false,dmg:batteryDamage,expireAt:boltNow+1700,hitIds:new Set()});
-          sparks(player.x, player.y, C.shieldActive, 6, 70);
-        }
+    const aegisStep = advanceAegisBatteryTimer({
+      aegisBattery: UPG.aegisBattery,
+      shieldTier: UPG.shieldTier,
+      enemiesCount: enemies.length,
+      readyShieldCount,
+      timer: UPG.aegisBatteryTimer || 0,
+      dtMs: dt * 1000,
+      intervalMs: AEGIS_BATTERY_BOLT_INTERVAL_MS,
+    });
+    UPG.aegisBatteryTimer = aegisStep.timer;
+    if(aegisStep.shouldFire){
+      const boltSpec = buildAegisBatteryBoltSpec({
+        shouldFire: aegisStep.shouldFire,
+        enemies,
+        originX: player.x,
+        originY: player.y,
+        damageMult: UPG.playerDamageMult || 1,
+        denseDamageMult: UPG.denseDamageMult || 1,
+        readyShieldCount,
+        shotSpeed: 210 * GLOBAL_SPEED_LIFT,
+        now: performance.now(),
+      });
+      if(boltSpec){
+        pushOutputBullet({
+          bullets,
+          ...boltSpec,
+        });
+        sparks(player.x, player.y, C.shieldActive, 6, 70);
       }
-    } else {
-      UPG.aegisBatteryTimer = 0;
     }
   } else if(UPG.aegisBattery) {
     UPG.aegisBatteryTimer = 0;
@@ -1861,7 +1982,7 @@ function update(dt,ts){
       continue;
     }
 
-    if(b.state==='output' && b.expireAt && ts>=b.expireAt){
+    if(shouldExpireOutputBullet(b, ts)){
       // Payload: explode on expiration, damaging enemies in AoE
       if(b.hasPayload && enemies.length > 0){
         const aoeRadius = 48;
@@ -1909,42 +2030,32 @@ function update(dt,ts){
     if(bounced){
       if(b.state==='danger'){
         burstBlueDissipate(b.x, b.y);
-        if(b.eliteStage !== undefined && b.bounceStages !== undefined && b.bounceStages > 0){
-          // Elite bullet: transition to next stage on wall bounce
-          applyEliteBulletStage(b, (b.eliteStage || 0) + 1);
+        const dangerBounce = resolveDangerBounceState(b, ts);
+        if(dangerBounce.kind === 'elite-stage'){
+          applyEliteBulletStage(b, dangerBounce.nextEliteStage);
           sparks(b.x, b.y, b.eliteColor, 4, 40);
-        } else if(b.isTriangle){
-          b.wallBounces++;
-          if(b.wallBounces>=1){
-            spawnTriangleBurst(b.x, b.y, b.vx, b.vy);
-            bullets.splice(i,1);continue;
-          }
-        } else if((b.dangerBounceBudget || 0) > 0){
-          b.dangerBounceBudget--;
-          b.state='grey'; b.decayStart=ts;
-          sparks(b.x, b.y, C.grey, 4, 35);
-        } else if(b.doubleBounce){
-          b.bounceCount++;
-          if(b.bounceCount>=2){b.state='grey';b.decayStart=ts;sparks(b.x,b.y,C.grey,4,35);}
-        } else {
-          b.state='grey';b.decayStart=ts;
+        } else if(dangerBounce.kind === 'triangle-burst'){
+          spawnTriangleBurst(b.x, b.y, b.vx, b.vy);
+          bullets.splice(i,1);continue;
+        } else if(dangerBounce.kind === 'convert-grey'){
           sparks(b.x,b.y,C.grey,4,35);
         }
       } else if(b.state==='output'){
-        if(b.bounceLeft>0){
-          b.bounceLeft--;
-          if(UPG.splitShot && !b.hasSplit){
-            b.hasSplit=true;
-            const splitNow=performance.now();
-            const splitDeltas = UPG.splitShotEvolved ? [-0.42, 0, 0.42] : [-0.35, 0.35];
-            const splitDamageFactor = UPG.splitShotEvolved ? 0.85 : 0.8;
-            for(const delta of splitDeltas){
-              const sa=Math.atan2(b.vy,b.vx)+delta;
-              const sp=Math.hypot(b.vx,b.vy);
-              bullets.push({x:b.x,y:b.y,vx:Math.cos(sa)*sp,vy:Math.sin(sa)*sp,state:'output',r:b.r*0.8,decayStart:null,bounceLeft:0,pierceLeft:b.pierceLeft,homing:b.homing,crit:b.crit,dmg:b.dmg*splitDamageFactor,expireAt:splitNow+2000,hitIds:new Set(),hasSplit:true,bloodPactHeals:b.bloodPactHeals || 0,bloodPactHealCap:b.bloodPactHealCap || getBloodPactHealCap()});
-            }
-          }
-        } else {
+        const outputBounce = resolveOutputBounceState(b, {
+          splitShot: UPG.splitShot,
+          splitShotEvolved: UPG.splitShotEvolved,
+        });
+        if(outputBounce.kind === 'split'){
+          const splitNow=performance.now();
+          spawnSplitOutputBullets({
+            bullets,
+            sourceBullet: b,
+            splitDeltas: outputBounce.splitDeltas,
+            damageFactor: outputBounce.splitDamageFactor,
+            expireAt: splitNow + 2000,
+            fallbackBloodPactHealCap: getBloodPactHealCap(),
+          });
+        } else if(outputBounce.removeBullet) {
           // Payload: explode when no bounces left, damaging enemies in AoE
           if(b.hasPayload && enemies.length > 0){
             const aoeRadius = 48;
@@ -1989,7 +2100,20 @@ function update(dt,ts){
           if(UPG.refractionCount <= 4){
             const angle = Math.atan2(player.y - b.y, player.x - b.x);
             const rNow = performance.now();
-            bullets.push({x: b.x, y: b.y, vx: Math.cos(angle) * 140 * GLOBAL_SPEED_LIFT, vy: Math.sin(angle) * 140 * GLOBAL_SPEED_LIFT, state: 'output', r: 3.2, decayStart: null, bounceLeft: 0, pierceLeft: 0, homing: true, crit: false, dmg: 0.75, expireAt: rNow + 1600, hitIds: new Set()});
+            pushOutputBullet({
+              bullets,
+              x: b.x,
+              y: b.y,
+              vx: Math.cos(angle) * 140 * GLOBAL_SPEED_LIFT,
+              vy: Math.sin(angle) * 140 * GLOBAL_SPEED_LIFT,
+              radius: 3.2,
+              bounceLeft: 0,
+              pierceLeft: 0,
+              homing: true,
+              crit: false,
+              dmg: 0.75,
+              expireAt: rNow + 1600,
+            });
             if(UPG.refractionCount >= 4){
               UPG.refractionCooldown = 900;
               UPG.refractionCount = 0;
@@ -2005,13 +2129,21 @@ function update(dt,ts){
       }
       // Absorb Orbs: grey bullets near any alive orbit sphere are absorbed
       if(UPG.absorbOrbs && UPG.orbitSphereTier>0){
-        while(_orbCooldown.length < UPG.orbitSphereTier) _orbCooldown.push(0);
+        syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
         let absorbed=false;
         for(let si=0;si<UPG.orbitSphereTier;si++){
           if(_orbCooldown[si]>0) continue;
-          const sAngle=Math.PI*2/UPG.orbitSphereTier*si+ts*ORBIT_ROTATION_SPD;
-          const sx=player.x+Math.cos(sAngle)*ORBIT_SPHERE_R;
-          const sy=player.y+Math.sin(sAngle)*ORBIT_SPHERE_R;
+          const orbitSlot = getOrbitSlotPosition({
+            index: si,
+            orbitSphereTier: UPG.orbitSphereTier,
+            ts,
+            rotationSpeed: ORBIT_ROTATION_SPD,
+            radius: ORBIT_SPHERE_R,
+            originX: player.x,
+            originY: player.y,
+          });
+          const sx=orbitSlot.x;
+          const sy=orbitSlot.y;
           if(Math.hypot(b.x-sx,b.y-sy)<b.r+12){
             gainCharge(UPG.absorbValue, 'orbAbsorb');
             sparks(sx,sy,C.ghost,4,40);
@@ -2024,13 +2156,21 @@ function update(dt,ts){
 
     // Volatile Orbs: a danger bullet near any alive orbit sphere destroys the sphere + bullet
     if(b.state==='danger' && UPG.volatileOrbs && UPG.orbitSphereTier>0 && _volatileOrbGlobalCooldown<=0){
-      while(_orbCooldown.length < UPG.orbitSphereTier) _orbCooldown.push(0);
+      syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
       let orbHit=false;
       for(let si=0;si<UPG.orbitSphereTier;si++){
         if(_orbCooldown[si]>0) continue;
-        const sAngle=Math.PI*2/UPG.orbitSphereTier*si+ts*ORBIT_ROTATION_SPD;
-        const sx=player.x+Math.cos(sAngle)*ORBIT_SPHERE_R;
-        const sy=player.y+Math.sin(sAngle)*ORBIT_SPHERE_R;
+        const orbitSlot = getOrbitSlotPosition({
+          index: si,
+          orbitSphereTier: UPG.orbitSphereTier,
+          ts,
+          rotationSpeed: ORBIT_ROTATION_SPD,
+          radius: ORBIT_SPHERE_R,
+          originX: player.x,
+          originY: player.y,
+        });
+        const sx=orbitSlot.x;
+        const sy=orbitSlot.y;
         if(Math.hypot(b.x-sx,b.y-sy)<b.r+7){
           _orbCooldown[si] = VOLATILE_ORB_COOLDOWN;
           _volatileOrbGlobalCooldown = VOLATILE_ORB_SHARED_COOLDOWN;
@@ -2049,17 +2189,39 @@ function update(dt,ts){
         for(let si=0;si<total;si++){
           const s=player.shields[si];
           if(s.cooldown>0) continue;
-          const sAngle=Math.PI*2/total*si+ts*SHIELD_ROTATION_SPD;
-          const sx=player.x+Math.cos(sAngle)*SHIELD_ORBIT_R;
-          const sy=player.y+Math.sin(sAngle)*SHIELD_ORBIT_R;
-          const shieldFacing = sAngle + Math.PI * 0.5;
+          const shieldSlot = getShieldSlotPosition({
+            index: si,
+            shieldCount: total,
+            ts,
+            rotationSpeed: SHIELD_ROTATION_SPD,
+            radius: SHIELD_ORBIT_R,
+            originX: player.x,
+            originY: player.y,
+          });
+          const sx=shieldSlot.x;
+          const sy=shieldSlot.y;
+          const shieldFacing = shieldSlot.facing;
           if(circleIntersectsShieldPlate(b.x, b.y, b.r, sx, sy, shieldFacing)){
             if(currentRoomTelemetry) currentRoomTelemetry.safety.shieldBlocks += 1;
             // Mirror Shield: reflect bullet back as output
             if(UPG.shieldMirror && (ts - (s.mirrorCooldown||0)) > 300){
               s.mirrorCooldown = ts;
-              const mNow = performance.now();
-              bullets.push({x:sx,y:sy,vx:b.vx,vy:b.vy,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*(UPG.aegisTitan ? MIRROR_SHIELD_DAMAGE_FACTOR * 2 : MIRROR_SHIELD_DAMAGE_FACTOR)*getAegisBatteryDamageMult(),expireAt:mNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
+              const reflectionSpec = buildMirrorShieldReflectionSpec({
+                x: sx,
+                y: sy,
+                vx: b.vx,
+                vy: b.vy,
+                shotSize: UPG.shotSize,
+                playerDamageMult: UPG.playerDamageMult || 1,
+                denseDamageMult: UPG.denseDamageMult || 1,
+                aegisTitan: UPG.aegisTitan,
+                mirrorShieldDamageFactor: MIRROR_SHIELD_DAMAGE_FACTOR,
+                aegisBatteryDamageMult: getAegisBatteryDamageMult(),
+                now: performance.now(),
+                playerShotLifeMs: PLAYER_SHOT_LIFE_MS,
+                shotLifeMult: UPG.shotLifeMult || 1,
+              });
+              pushOutputBullet({ bullets, ...reflectionSpec });
             }
             // Tempered Shield: two-stage (purple -> blue -> pop)
             if(UPG.shieldTempered && s.hardened){
@@ -2069,12 +2231,21 @@ function update(dt,ts){
             }
             // Shield pops — Shield Burst fires 4/8-way output
             if(UPG.shieldBurst){
-              const bNow=performance.now();
-              const burstCount = UPG.aegisTitan ? 8 : 4;
-              for(let ba=0;ba<burstCount;ba++){
-                const bang=ba*Math.PI*2/burstCount;
-                bullets.push({x:player.x,y:player.y,vx:Math.cos(bang)*230*GLOBAL_SPEED_LIFT,vy:Math.sin(bang)*230*GLOBAL_SPEED_LIFT,state:'output',r:4.5*Math.min(2.5,UPG.shotSize),decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1)*AEGIS_NOVA_DAMAGE_FACTOR*getAegisBatteryDamageMult(),expireAt:bNow+PLAYER_SHOT_LIFE_MS*(UPG.shotLifeMult||1),hitIds:new Set()});
-              }
+              const shieldBurstSpec = buildShieldBurstSpec({
+                x: player.x,
+                y: player.y,
+                aegisTitan: UPG.aegisTitan,
+                globalSpeedLift: GLOBAL_SPEED_LIFT,
+                shotSize: UPG.shotSize,
+                playerDamageMult: UPG.playerDamageMult || 1,
+                denseDamageMult: UPG.denseDamageMult || 1,
+                aegisNovaDamageFactor: AEGIS_NOVA_DAMAGE_FACTOR,
+                aegisBatteryDamageMult: getAegisBatteryDamageMult(),
+                now: performance.now(),
+                playerShotLifeMs: PLAYER_SHOT_LIFE_MS,
+                shotLifeMult: UPG.shotLifeMult || 1,
+              });
+              spawnRadialOutputBurst({ bullets, ...shieldBurstSpec });
             }
             // Barrier Pulse: +2 charge + magnet pulse
             if(UPG.barrierPulse){
@@ -2094,79 +2265,91 @@ function update(dt,ts){
     }
 
     if(b.state==='danger'&&player.invincible<=0){
-      
-      // VOID WALKER: void zone blocks danger bullets (part of legendary combo)
-      if(UPG.voidWalker && UPG.voidZoneActive && UPG.voidZoneTimer > ts){
+      const dangerHit = resolveDangerPlayerHit({
+        bullet: b,
+        player,
+        upgrades: UPG,
+        ts,
+        hp,
+        maxHp,
+        phaseDamage: getProjectileHitDamage(PHASE_DASH_DAMAGE_MULT),
+        directDamage: getProjectileHitDamage(),
+        projectileInvulnSeconds: getPostHitInvulnSeconds('projectile'),
+      });
+
+      if(dangerHit.kind === 'void-block'){
         bullets.splice(i,1);
         sparks(b.x,b.y,'#8b5cf6',8,120);
         continue;
       }
-      
-      if(Math.hypot(b.x-player.x,b.y-player.y)<player.r+b.r-2){
-        // Phase Dash: graze the hit for sharply reduced damage, then dash away.
-        if(
-          UPG.phaseDash &&
-          UPG.phaseDashCooldown <= 0 &&
-          (UPG.phaseDashRoomUses || 0) < (UPG.phaseDashRoomLimit || 0)
-        ){
-          if(currentRoomTelemetry) currentRoomTelemetry.safety.phaseDashProcs += 1;
-          UPG.phaseDashRoomUses = (UPG.phaseDashRoomUses || 0) + 1;
-          UPG.isDashing = true;
-          player.invincible = 0.45;
-          UPG.phaseDashCooldown = 3500;
-          // Dash away from the bullet
-          const awayAng = Math.atan2(player.y - b.y, player.x - b.x);
-          player.x += Math.cos(awayAng) * 75;
-          player.y += Math.sin(awayAng) * 75;
-          player.x = Math.max(M + player.r, Math.min(W - M - player.r, player.x));
-          player.y = Math.max(M + player.r, Math.min(H - M - player.r, player.y));
-          sparks(player.x, player.y, getThreatPalette().advanced.hex, 16, 200);
-          const phaseDamage = getProjectileHitDamage(PHASE_DASH_DAMAGE_MULT);
-          hp -= phaseDamage; recordPlayerDamage(phaseDamage, 'projectile'); player.distort = 0.18;
-          tookDamageThisRoom = true;
-          if(UPG.hitChargeGain > 0){
-            gainCharge(UPG.hitChargeGain, 'hitReward');
-          }
-          if(UPG.voidWalker){
-            UPG.voidZoneActive = true;
-            UPG.voidZoneTimer = ts + 2000;
-          }
-          bullets.splice(i, 1);
-          if(hp<=0){
-            if(UPG.lifeline && UPG.lifelineTriggerCount < (UPG.lifelineUses||1)){
-              UPG.lifelineTriggerCount++; UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,C.lifelineEffect,16,100);
-            }
-            else { gameOver(); return; }
-          }
-          continue;
-        }
-        // Mirror Tide: reflect danger hit as output bullet
-        if(
-          UPG.mirrorTide &&
-          UPG.mirrorTideCooldown <= 0 &&
-          (UPG.mirrorTideRoomUses || 0) < (UPG.mirrorTideRoomLimit || 0)
-        ){
-          if(currentRoomTelemetry) currentRoomTelemetry.safety.mirrorTideProcs += 1;
-          UPG.mirrorTideRoomUses = (UPG.mirrorTideRoomUses || 0) + 1;
-          UPG.mirrorTideCooldown = 1500;
-          const reflectAngle = Math.atan2(b.vy, b.vx) + Math.PI;
-          const mNow = performance.now();
-          bullets.push({x: player.x, y: player.y, vx: Math.cos(reflectAngle) * 200 * GLOBAL_SPEED_LIFT, vy: Math.sin(reflectAngle) * 200 * GLOBAL_SPEED_LIFT, state: 'output', r: b.r, decayStart: null, bounceLeft: 0, pierceLeft: 0, homing: false, crit: false, dmg: (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1), expireAt: mNow + 2000, hitIds: new Set()});
-          sparks(player.x, player.y, getThreatPalette().elite.hex, 12, 150);
-          bullets.splice(i, 1);
-          continue;
-        }
-        
-        const finalDamage = getProjectileHitDamage();
-        hp-=finalDamage; recordPlayerDamage(finalDamage, 'projectile'); player.invincible=getPostHitInvulnSeconds('projectile'); player.distort=.45;
+
+      if(dangerHit.kind === 'phase-dash'){
+        if(currentRoomTelemetry) currentRoomTelemetry.safety.phaseDashProcs += 1;
+        UPG.phaseDashRoomUses = dangerHit.nextPhaseDashRoomUses;
+        UPG.phaseDashCooldown = dangerHit.nextPhaseDashCooldown;
+        UPG.isDashing = true;
+        player.invincible = dangerHit.invincibleSeconds;
+        const awayAng = dangerHit.awayAngle;
+        player.x += Math.cos(awayAng) * dangerHit.dashDistance;
+        player.y += Math.sin(awayAng) * dangerHit.dashDistance;
+        player.x = Math.max(M + player.r, Math.min(W - M - player.r, player.x));
+        player.y = Math.max(M + player.r, Math.min(H - M - player.r, player.y));
+        sparks(player.x, player.y, getThreatPalette().advanced.hex, 16, 200);
+        hp = dangerHit.nextHp;
+        recordPlayerDamage(dangerHit.damage, 'projectile');
+        player.distort = dangerHit.distortSeconds;
         tookDamageThisRoom = true;
-        if(UPG.hitChargeGain > 0){
-          gainCharge(UPG.hitChargeGain, 'hitReward');
+        if(dangerHit.shouldGainHitCharge) gainCharge(UPG.hitChargeGain, 'hitReward');
+        UPG.voidZoneActive = dangerHit.nextVoidZoneActive;
+        UPG.voidZoneTimer = dangerHit.nextVoidZoneTimer;
+        bullets.splice(i, 1);
+        const phaseDashAftermath = resolvePostHitAftermath({
+          hitResult: dangerHit,
+          upgrades: UPG,
+        });
+        if(phaseDashAftermath.shouldApplyLifelineState){
+          UPG.lifelineTriggerCount = phaseDashAftermath.nextLifelineTriggerCount;
+          UPG.lifelineUsed = phaseDashAftermath.nextLifelineUsed;
+          sparks(player.x,player.y,C.lifelineEffect,16,100);
+        } else if(phaseDashAftermath.shouldGameOver) {
+          gameOver(); return;
         }
-        
-        // EMP Burst: at ≤30% HP + take damage, destroy all danger bullets (once per room)
-        if(UPG.empBurst && !UPG.empBurstUsed && hp <= maxHp * 0.3){
-          UPG.empBurstUsed = true;
+        continue;
+      }
+
+      if(dangerHit.kind === 'mirror-tide'){
+        if(currentRoomTelemetry) currentRoomTelemetry.safety.mirrorTideProcs += 1;
+        UPG.mirrorTideRoomUses = dangerHit.nextMirrorTideRoomUses;
+        UPG.mirrorTideCooldown = dangerHit.nextMirrorTideCooldown;
+        const mNow = performance.now();
+        pushOutputBullet({
+          bullets,
+          x: player.x,
+          y: player.y,
+          vx: Math.cos(dangerHit.reflectAngle) * 200 * GLOBAL_SPEED_LIFT,
+          vy: Math.sin(dangerHit.reflectAngle) * 200 * GLOBAL_SPEED_LIFT,
+          radius: b.r,
+          bounceLeft: 0,
+          pierceLeft: 0,
+          homing: false,
+          crit: false,
+          dmg: (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1),
+          expireAt: mNow + 2000,
+        });
+        sparks(player.x, player.y, getThreatPalette().elite.hex, 12, 150);
+        bullets.splice(i, 1);
+        continue;
+      }
+
+      if(dangerHit.kind === 'direct-hit'){
+        hp = dangerHit.nextHp;
+        recordPlayerDamage(dangerHit.damage, 'projectile');
+        player.invincible = dangerHit.invincibleSeconds;
+        player.distort = dangerHit.distortSeconds;
+        tookDamageThisRoom = true;
+        if(dangerHit.shouldGainHitCharge) gainCharge(UPG.hitChargeGain, 'hitReward');
+        if(dangerHit.shouldEmpBurst){
+          UPG.empBurstUsed = dangerHit.nextEmpBurstUsed;
           for(let ei = bullets.length - 1; ei >= 0; ei--){
             if(bullets[ei].state === 'danger'){
               sparks(bullets[ei].x, bullets[ei].y, '#fbbf24', 4, 100);
@@ -2175,32 +2358,54 @@ function update(dt,ts){
           }
           sparks(player.x, player.y, '#fbbf24', 20, 180);
         }
-        
+
         sparks(player.x,player.y,C.danger,10,85);
         bullets.splice(i,1);
-        // Colossus: shockwave converts nearby danger bullets to grey
-        if(UPG.colossus && _colossusShockwaveCd <= 0){
-          _colossusShockwaveCd = 4.0;
-          for(let ci=bullets.length-1;ci>=0;ci--){ const cb=bullets[ci]; if(cb.state==='danger' && Math.hypot(cb.x-player.x,cb.y-player.y)<120){ cb.state='grey'; cb.decayStart=ts; } }
+        const directHitAftermath = resolvePostHitAftermath({
+          hitResult: dangerHit,
+          upgrades: UPG,
+          colossusShockwaveCd: _colossusShockwaveCd,
+          enableShockwave: true,
+          shouldTriggerLastStand: Boolean(UPG.lastStand && dangerHit.lifelineTriggered),
+          playerX: player.x,
+          playerY: player.y,
+          shotSpeed: 220 * GLOBAL_SPEED_LIFT,
+          now: performance.now(),
+          bloodPactHealCap: getBloodPactHealCap(),
+        });
+        if(directHitAftermath.triggerColossusShockwave){
+          _colossusShockwaveCd = directHitAftermath.nextColossusShockwaveCd;
+          convertNearbyDangerBulletsToGrey({
+            bullets,
+            originX: player.x,
+            originY: player.y,
+            radius: 120,
+            ts,
+          });
           sparks(player.x,player.y,getThreatPalette().advanced.hex,14,120);
         }
-        if(hp<=0){
-          if(UPG.lifeline && UPG.lifelineTriggerCount < (UPG.lifelineUses||1)){
-            UPG.lifelineTriggerCount++; UPG.lifelineUsed=true; hp=1; player.invincible=2.0; sparks(player.x,player.y,C.lifelineEffect,16,100);
-            if(UPG.lastStand){ const lsNow=performance.now(); for(let la=0;la<Math.floor(UPG.maxCharge);la++){ const lang=(Math.PI*2/Math.max(1,Math.floor(UPG.maxCharge)))*la; bullets.push({x:player.x,y:player.y,vx:Math.cos(lang)*220*GLOBAL_SPEED_LIFT,vy:Math.sin(lang)*220*GLOBAL_SPEED_LIFT,state:'output',r:4.5,decayStart:null,bounceLeft:UPG.bounceTier>0?2:0,pierceLeft:UPG.pierceTier,homing:false,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:lsNow+2000,hitIds:new Set(),bloodPactHeals:0,bloodPactHealCap:getBloodPactHealCap()}); } }
+        if(directHitAftermath.shouldApplyLifelineState){
+          UPG.lifelineTriggerCount = directHitAftermath.nextLifelineTriggerCount;
+          UPG.lifelineUsed = directHitAftermath.nextLifelineUsed;
+          sparks(player.x,player.y,C.lifelineEffect,16,100);
+          if(directHitAftermath.lastStandBurstSpec){
+            spawnRadialOutputBurst({ bullets, ...directHitAftermath.lastStandBurstSpec });
           }
-          else { gameOver(); return; }
+        } else if(directHitAftermath.shouldGameOver) {
+          gameOver(); return;
         }
         continue;
       }
-      // Slipstream: near-miss detection
-      if(UPG.slipTier>0 && _slipCooldown<=0){
-        const dist=Math.hypot(b.x-player.x,b.y-player.y);
-        if(dist < player.r+b.r+10 && dist >= player.r+b.r-2){
-          const slipGain = UPG.slipChargeGain * (UPG.ghostFlow ? 2 : 1);
-          gainCharge(slipGain, 'slipstream');
-          _slipCooldown=150;
-        }
+
+      const slipstream = resolveSlipstreamNearMiss({
+        bullet: b,
+        player,
+        upgrades: UPG,
+        slipCooldown: _slipCooldown,
+      });
+      if(slipstream.shouldTrigger){
+        gainCharge(slipstream.chargeGain, 'slipstream');
+        _slipCooldown = slipstream.nextSlipCooldown;
       }
     }
 
@@ -2211,16 +2416,21 @@ function update(dt,ts){
         if(b.hitIds.has(e.eid)) continue;
         if(Math.hypot(b.x-e.x,b.y-e.y)<b.r+e.r){
           b.hitIds.add(e.eid);
-          const deadManThreshold = maxHp * 0.15;
-          const deadManMult = (UPG.deadManTrigger && hp <= deadManThreshold) ? (UPG.finalForm ? 2.5 : 2) : 1;
-          const deadManPierce = UPG.deadManTrigger && hp <= deadManThreshold;
-          const dmg = (b.crit ? CRIT_DAMAGE_FACTOR : 1) * b.dmg * deadManMult;
-          e.hp-=dmg;
+          const hitResolution = resolveOutputEnemyHit({
+            bullet: b,
+            enemyHp: e.hp,
+            hp,
+            maxHp,
+            upgrades: UPG,
+            critDamageFactor: CRIT_DAMAGE_FACTOR,
+            bloodPactBaseHealCap: BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET,
+          });
+          e.hp = hitResolution.enemyHpAfterHit;
           sparks(b.x,b.y,b.crit?C.ghost:C.green,b.crit?8:5,b.crit?70:55);
           // Blood Pact: piercing shots restore 1 HP per enemy hit
-          if(UPG.bloodPact && b.pierceLeft > 0 && (b.bloodPactHeals || 0) < (b.bloodPactHealCap || BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET)){
+          if(hitResolution.shouldBloodPactHeal){
             applyKillSustainHeal(1, 'bloodPact');
-            b.bloodPactHeals = (b.bloodPactHeals || 0) + 1;
+            b.bloodPactHeals = hitResolution.nextBloodPactHeals;
           }
           if(e.hp<=0){
             score += computeKillScore(e.pts, b.crit);
@@ -2229,85 +2439,102 @@ function update(dt,ts){
             sparks(e.x,e.y,e.col, e.isBoss ? 30 : 14, e.isBoss ? 160 : 95);
             // Death bullets scatter as grey
             spawnGreyDrops(e.x,e.y,ts);
-            // Escalation: track kills in room for damage scaling
-            if(UPG.escalation) UPG.escalationKills = (UPG.escalationKills || 0) + 1;
-            // Boss death: big HP restore + stop escort respawns
-            if(e.isBoss) {
-              bossAlive = false;
-              bossClears += 1;
-              healPlayer(Math.floor(maxHp * 0.5), 'bossReward');
-              showBossDefeated();
+            const killEffects = resolveEnemyKillEffects({
+              enemy: e,
+              bullet: b,
+              upgrades: UPG,
+              hp,
+              maxHp,
+              ts,
+              vampiricHealPerKill: VAMPIRIC_HEAL_PER_KILL,
+              vampiricChargePerKill: VAMPIRIC_CHARGE_PER_KILL,
+            });
+            applyKillUpgradeState(UPG, killEffects.nextUpgradeState);
+            const killRewardActions = buildKillRewardActions({
+              killEffects,
+              enemyX: e.x,
+              enemyY: e.y,
+              playerX: player.x,
+              playerY: player.y,
+              ts,
+              upgrades: UPG,
+              globalSpeedLift: GLOBAL_SPEED_LIFT,
+              bloodPactHealCap: getBloodPactHealCap(),
+              random: Math.random,
+            });
+            for(const action of killRewardActions){
+              if(action.type === 'bossClear'){
+                bossAlive = false;
+                bossClears += 1;
+                healPlayer(action.healAmount, 'bossReward');
+                showBossDefeated();
+                continue;
+              }
+              if(action.type === 'sustainHeal'){
+                applyKillSustainHeal(action.amount, action.source);
+                continue;
+              }
+              if(action.type === 'gainCharge'){
+                gainCharge(action.amount, action.source);
+                continue;
+              }
+              if(action.type === 'spawnGreyBullet'){
+                pushGreyBullet({
+                  bullets,
+                  x: action.x,
+                  y: action.y,
+                  vx: action.vx,
+                  vy: action.vy,
+                  radius: action.radius,
+                  decayStart: action.decayStart,
+                });
+                continue;
+              }
+              if(action.type === 'spawnSanguineBurst'){
+                spawnRadialOutputBurst({
+                  bullets,
+                  x: action.x,
+                  y: action.y,
+                  count: action.count,
+                  speed: action.speed,
+                  radius: action.radius,
+                  bounceLeft: action.bounceLeft,
+                  pierceLeft: action.pierceLeft,
+                  homing: action.homing,
+                  crit: action.crit,
+                  dmg: action.dmg,
+                  expireAt: action.expireAt,
+                  extras: action.extras,
+                });
+              }
             }
-            // Vampiric Return: modest sustain per kill without fully funding the next volley.
-            if(UPG.vampiric){ 
-              applyKillSustainHeal(VAMPIRIC_HEAL_PER_KILL, 'vampiric');
-              gainCharge(VAMPIRIC_CHARGE_PER_KILL, 'vampiric');
-            }
-              // Predator's Instinct: track kill streak (5s window)
-              UPG.predatorKillStreak++;
-              UPG.predatorKillStreakTime = ts + 5000;
-              
-              // Blood Rush: grant +10% speed for 3s, stacks to +50%
-              if(UPG.bloodRush){
-                if(!UPG.bloodRushStacks) UPG.bloodRushStacks = 0;
-                UPG.bloodRushStacks = Math.min(5, UPG.bloodRushStacks + 1);
-                UPG.bloodRushTimer = ts + 3000;
-              }
-              
-              // Crimson Harvest: drop extra grey bullet at enemy position
-              if(UPG.crimsonHarvest){
-                bullets.push({x:e.x,y:e.y,vx:(Math.random()-0.5)*150,vy:(Math.random()-0.5)*150,state:'grey',r:5,decayStart:ts,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:0,hitIds:new Set()});
-              }
-              
-              // Sanguine Burst: every 8th kill (or 4th if Rampage) fires burst
-              if(UPG.sanguineBurst){
-                UPG.sanguineKillCount = (UPG.sanguineKillCount || 0) + 1;
-                const burstThreshold = UPG.rampageEvolved ? 4 : 8;
-                if(UPG.sanguineKillCount >= burstThreshold){
-                  UPG.sanguineKillCount = 0;
-                  const numShots = UPG.rampageEvolved ? 8 : 6;
-                  const angleStep = Math.PI * 2 / numShots;
-                  for(let a=0;a<numShots;a++){
-                    const ang = a * angleStep;
-                    const vx = Math.cos(ang) * 220 * GLOBAL_SPEED_LIFT;
-                    const vy = Math.sin(ang) * 220 * GLOBAL_SPEED_LIFT;
-                    bullets.push({x:player.x,y:player.y,vx,vy,state:'output',r:5.5,decayStart:null,bounceLeft:UPG.bounceTier,pierceLeft:UPG.pierceTier,homing:UPG.homingTier>0,crit:false,dmg:(UPG.playerDamageMult||1)*(UPG.denseDamageMult||1),expireAt:ts+2200,hitIds:new Set(),bloodPactHeals:0,bloodPactHealCap:getBloodPactHealCap()});
-                  }
-                }
-              }
-              
-              // BLOOD MOON: enhanced kill rewards
-              if(UPG.bloodMoon){
-                applyKillSustainHeal(8, 'vampiric');
-                for(let i=0;i<3;i++){
-                  const ang = (Math.PI*2/3)*i + Math.random()*0.3;
-                  bullets.push({x:e.x,y:e.y,vx:Math.cos(ang)*120,vy:Math.sin(ang)*120,state:'grey',r:5,decayStart:ts,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:0,hitIds:new Set()});
-                }
-              }
-              
-            // Corona: ring kills refund 1 charge
-            if(b.isRing && UPG.corona){ gainCharge(1, 'corona'); }
-            // Final Form: low-HP kills grant charge
-            if(UPG.finalForm && hp <= maxHp * 0.15){ gainCharge(0.5, 'finalForm'); }
             enemies.splice(j,1);
           }
-          if(deadManPierce || b.pierceLeft>0){
-            if(!deadManPierce){
-              b.pierceLeft--;
-              if((b.pierceLeft===0 || UPG.volatileAllTargets) && UPG.volatileRounds){
-                const vNow=performance.now();
-                for(let va=0;va<4;va++){
-                  const vang=va*Math.PI/2;
-                  bullets.push({x:b.x,y:b.y,vx:Math.cos(vang)*180*GLOBAL_SPEED_LIFT,vy:Math.sin(vang)*180*GLOBAL_SPEED_LIFT,state:'output',r:b.r*0.75,decayStart:null,bounceLeft:0,pierceLeft:0,homing:false,crit:false,dmg:b.dmg*0.65,expireAt:vNow+1600,hitIds:new Set()});
-                }
-                sparks(b.x,b.y,C.green,6,60);
-              }
+          if(hitResolution.piercesAfterHit){
+            b.pierceLeft = hitResolution.nextPierceLeft;
+            if(hitResolution.shouldTriggerVolatile){
+              const vNow=performance.now();
+              spawnRadialOutputBurst({
+                bullets,
+                x: b.x,
+                y: b.y,
+                count: 4,
+                speed: 180 * GLOBAL_SPEED_LIFT,
+                radius: b.r * 0.75,
+                bounceLeft: 0,
+                pierceLeft: 0,
+                homing: false,
+                crit: false,
+                dmg: b.dmg * 0.65,
+                expireAt: vNow + 1600,
+              });
+              sparks(b.x,b.y,C.green,6,60);
             }
           } else { removeBullet=true; break; }
         }
       }
       if(removeBullet){bullets.splice(i,1);continue;}
-      if(b.x<-10||b.x>W+10||b.y<-10||b.y>H+10){bullets.splice(i,1);continue;}
+      if(shouldRemoveBulletOutOfBounds(b, W, H)){bullets.splice(i,1);continue;}
     }
   }
 
@@ -2323,33 +2550,30 @@ function update(dt,ts){
 
 // ── ROOM CLEAR FLASH ──────────────────────────────────────────────────────────
 function showRoomClear(){
-  const el=document.getElementById('room-clear');
-  el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'),1400);
+  showRoomClearOverlay({
+    panelEl: roomClearEl,
+    textEl: roomClearTextEl,
+  });
 }
 
 function showBossDefeated() {
-  const el = document.getElementById('room-clear');
-  const txt = document.getElementById('room-clear-txt');
-  txt.textContent = 'BOSS DEFEATED';
-  el.classList.add('show', 'boss-clear');
-  setTimeout(() => {
-    el.classList.remove('show', 'boss-clear');
-    txt.textContent = 'ROOM CLEAR';
-  }, 2000);
+  showBossDefeatedOverlay({
+    panelEl: roomClearEl,
+    textEl: roomClearTextEl,
+  });
 }
 
 function showRoomIntro(text, isGo) {
-  const el = document.getElementById('room-intro');
-  const txt = document.getElementById('room-intro-txt');
-  txt.textContent = text;
-  el.classList.toggle('go', Boolean(isGo));
-  el.classList.add('show');
+  showRoomIntroOverlay({
+    panelEl: roomIntroEl,
+    textEl: roomIntroTextEl,
+    text,
+    isGo,
+  });
 }
 
 function hideRoomIntro() {
-  const el = document.getElementById('room-intro');
-  el.classList.remove('show', 'go');
+  hideRoomIntroOverlay({ panelEl: roomIntroEl });
 }
 
 // ── DRAW ──────────────────────────────────────────────────────────────────────
@@ -2771,92 +2995,114 @@ bindJoystickControls({
 });
 
 renderPatchNotes();
-patchNotesBtn?.addEventListener('click', () => setPatchNotesOpen(true));
-patchNotesCloseBtn?.addEventListener('click', () => setPatchNotesOpen(false));
-patchNotesPanel?.addEventListener('click', (event) => {
-  if(event.target === patchNotesPanel) setPatchNotesOpen(false);
-});
-document.addEventListener('keydown', (event) => {
-  if(event.key === 'Escape') {
-    setPatchNotesOpen(false);
-  }
-});
 function openLeaderboardScreen() {
   lbScreen.classList.remove('off');
   refreshLeaderboardView();
 }
 
-if(lbOpenBtn){
-  lbOpenBtn.addEventListener('click', openLeaderboardScreen);
-}
-if(lbOpenBtnGo){
-  lbOpenBtnGo.addEventListener('click', openLeaderboardScreen);
-}
-lbCloseBtn.addEventListener('click', () => lbScreen.classList.add('off'));
-lbPeriodBtns.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    lbPeriod = btn.dataset.lbPeriod;
-    refreshLeaderboardView();
-  });
+bindPatchNotesControls({
+  button: patchNotesBtn,
+  closeButton: patchNotesCloseBtn,
+  panelEl: patchNotesPanel,
+  onOpenChange: setPatchNotesOpen,
+  doc: document,
 });
-lbScopeBtns.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    lbScope = btn.dataset.lbScope;
+
+bindPatchNotesControls({
+  button: versionOpenBtn,
+  closeButton: versionCloseBtn,
+  panelEl: versionPanel,
+  onOpenChange: setVersionPanelOpen,
+  doc: document,
+});
+versionRefreshBtn?.addEventListener('click', () => {
+  refreshVersionStatus();
+});
+versionUpdateBtn?.addEventListener('click', () => {
+  const url = new URL(window.location.href);
+  url.searchParams.set('build', latestAvailableVersion || VERSION.num);
+  url.searchParams.set('ts', String(Date.now()));
+  window.location.replace(url.toString());
+});
+try {
+  const flaggedVersion = sessionStorage.getItem(UPDATE_AVAILABLE_KEY);
+  if(flaggedVersion && flaggedVersion !== VERSION.num) {
+    setVersionPanelOpen(true);
+  }
+} catch {}
+
+bindLeaderboardControls({
+  openButtons: [lbOpenBtn, lbOpenBtnGo],
+  closeButton: lbCloseBtn,
+  periodButtons: [...lbPeriodBtns],
+  scopeButtons: [...lbScopeBtns],
+  onOpen: openLeaderboardScreen,
+  onClose: () => lbScreen.classList.add('off'),
+  onPeriodChange: (period) => {
+    lbPeriod = period;
     refreshLeaderboardView();
-  });
+  },
+  onScopeChange: (scope) => {
+    lbScope = scope;
+    refreshLeaderboardView();
+  },
 });
 
 function setPlayerName(v, { syncInputs = false } = {}){
-  const sanitized = sanitizePlayerName(v);
-  playerName = sanitized || 'RUNNER';
-  writeText(NAME_KEY, sanitized);
-  if(syncInputs){
-    nameInputStart.value = sanitized;
-    nameInputGo.value = sanitized;
-  }
-  refreshLeaderboardView();
+  playerName = setPlayerNameState({
+    value: v,
+    sanitizePlayerName,
+    persistName: (sanitized) => writeText(NAME_KEY, sanitized),
+    inputs: [nameInputStart, nameInputGo],
+    syncInputs,
+    onNameChange: () => refreshLeaderboardView(),
+  });
 }
 
-nameInputStart.addEventListener('input', (e)=>setPlayerName(e.target.value));
-nameInputGo.addEventListener('input', (e)=>setPlayerName(e.target.value));
+bindNameInputs({
+  inputs: [nameInputStart, nameInputGo],
+  setPlayerName,
+});
 
 // Initialize color picker on start screen
 renderColorSelector('color-picker');
 syncColorDrivenCopy();
 
-// Start game from name entry screen
-document.getElementById('btn-start').onclick=()=>{
-  setPlayerName(nameInputStart.value, { syncInputs: true });
-  setMenuChromeVisible(false);
-  startScreen.classList.add('off');
-  init();gstate='playing';lastT=performance.now();raf=requestAnimationFrame(loop);
-};
-
-document.getElementById('btn-restart').onclick=()=>{
-  setPlayerName(nameInputGo.value, { syncInputs: true });
-  setMenuChromeVisible(false);
-  gameOverScreen.classList.add('off');
-  if(goBoonsPanel) goBoonsPanel.classList.add('off');
-  init();gstate='playing';lastT=performance.now();raf=requestAnimationFrame(loop);
-};
-
-mainMenuBtn?.addEventListener('click', () => {
-  setPlayerName(nameInputGo.value, { syncInputs: true });
-  gameOverScreen.classList.add('off');
-  if(goBoonsPanel) goBoonsPanel.classList.add('off');
-  lbScreen.classList.add('off');
-  setMenuChromeVisible(true);
-  startScreen.classList.remove('off');
-  gstate = 'start';
+bindSessionFlow({
+  startButton: document.getElementById('btn-start'),
+  restartButton: document.getElementById('btn-restart'),
+  mainMenuButton: mainMenuBtn,
+  startInput: nameInputStart,
+  gameOverInput: nameInputGo,
+  setPlayerName,
+  setMenuChromeVisible,
+  startScreen,
+  gameOverScreen,
+  boonsPanelEl: goBoonsPanel,
+  leaderboardScreen: lbScreen,
+  initRun: init,
+  beginLoop: () => {
+    lastT = performance.now();
+    raf = requestAnimationFrame(loop);
+  },
+  setGameState: (nextState) => {
+    gstate = nextState;
+  },
 });
 
-goBoonsBtn?.addEventListener('click', ()=>goBoonsPanel?.classList.toggle('off'));
-goBoonsCloseBtn?.addEventListener('click', ()=>goBoonsPanel?.classList.add('off'));
+bindBoonsPanelControls({
+  toggleButton: goBoonsBtn,
+  panelEl: goBoonsPanel,
+  closeButton: goBoonsCloseBtn,
+});
 
 const lbBoonsPopup = document.getElementById('lb-boons-popup');
 const lbBoonsPopupTitle = document.getElementById('lb-boons-popup-title');
 const lbBoonsPopupList = document.getElementById('lb-boons-popup-list');
-document.getElementById('btn-lb-boons-close')?.addEventListener('click', () => lbBoonsPopup?.classList.add('off'));
+bindPopupClose({
+  closeButton: document.getElementById('btn-lb-boons-close'),
+  panelEl: lbBoonsPopup,
+});
 
 function showLbBoonsPopup(runnerName, boons, boonOrder = '') {
   showLeaderboardBoonsPopup({

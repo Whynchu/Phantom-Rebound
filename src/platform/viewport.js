@@ -14,16 +14,47 @@ function fixSafariViewport() {
   }
 }
 
+function isTextInputElement(element) {
+  if(!element || typeof element.tagName !== 'string') return false;
+  const tagName = element.tagName.toLowerCase();
+  return tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+}
+
+function isKeyboardOpenResize() {
+  if(typeof document === 'undefined' || !window.visualViewport) return false;
+  if(!isTextInputElement(document.activeElement)) return false;
+  const baselineHeight = Math.max(window.innerHeight, document.documentElement?.clientHeight || 0);
+  if(baselineHeight <= 0) return false;
+  return window.visualViewport.height < baselineHeight * 0.82;
+}
+
 function bindResponsiveViewport(onResize) {
   const handleResize = () => {
+    if(isKeyboardOpenResize()) {
+      document.body?.classList?.add('keyboard-open');
+      return;
+    }
+    document.body?.classList?.remove('keyboard-open');
     fixSafariViewport();
     onResize();
+  };
+
+  const handleFocusIn = () => {
+    if(isKeyboardOpenResize()) {
+      document.body?.classList?.add('keyboard-open');
+    }
+  };
+  const handleFocusOut = () => {
+    document.body?.classList?.remove('keyboard-open');
+    setTimeout(handleResize, 40);
   };
 
   window.addEventListener('resize', handleResize);
   window.addEventListener('orientationchange', () => {
     setTimeout(handleResize, 100);
   });
+  window.addEventListener('focusin', handleFocusIn);
+  window.addEventListener('focusout', handleFocusOut);
 
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', handleResize);

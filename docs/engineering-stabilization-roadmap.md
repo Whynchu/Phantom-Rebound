@@ -19,11 +19,60 @@ Recent stabilization stages landed after `1.16.51`:
 - `e34a295` Extracted leaderboard refresh/submit async orchestration into [src/platform/leaderboardRuntime.js](C:/Development/Phantom-Rebound/src/platform/leaderboardRuntime.js:1).
 - `df482c5` Extracted app-shell/menu-chrome helper behavior into [src/ui/shell.js](C:/Development/Phantom-Rebound/src/ui/shell.js:1).
 - `238356f` Hardened release gate by adding browser-module syntax validation to [scripts/verify-all.ps1](C:/Development/Phantom-Rebound/scripts/verify-all.ps1:1), which catches scope leaks that CommonJS checks can miss.
+- `04d5b2d` Tightened mobile viewport handling in [script.js](C:/Development/Phantom-Rebound/script.js:1) for taller phone-width arenas and stronger iPhone gesture suppression.
+- `experimental` extraction stage: room clear/intro overlay helpers now live in [src/ui/roomOverlays.js](C:/Development/Phantom-Rebound/src/ui/roomOverlays.js:1), and page-level gesture suppression now lives in [src/platform/gestureGuards.js](C:/Development/Phantom-Rebound/src/platform/gestureGuards.js:1), both with regression coverage in [scripts/test-systems.mjs](C:/Development/Phantom-Rebound/scripts/test-systems.mjs:1).
+- `experimental` extraction stage: patch notes, leaderboard screen controls, boon panel toggles, and popup-close wiring now live in [src/ui/appChrome.js](C:/Development/Phantom-Rebound/src/ui/appChrome.js:1), reducing entrypoint DOM glue and adding regression coverage for app chrome interactions.
+- `experimental` extraction stage: player-name sync plus start/restart/main-menu flow now live in [src/ui/sessionFlow.js](C:/Development/Phantom-Rebound/src/ui/sessionFlow.js:1), removing another block of screen-state wiring from `script.js` and adding regression coverage for session transitions.
+- `experimental` extraction stage: enemy projectile creation/staging helpers now live in [src/entities/projectiles.js](C:/Development/Phantom-Rebound/src/entities/projectiles.js:1), with `script.js` retaining only thin adapters for current runtime state and regression coverage added for danger/elite projectile generation.
+- `experimental` extraction stage: player output/grey projectile constructors now live in [src/entities/playerProjectiles.js](C:/Development/Phantom-Rebound/src/entities/playerProjectiles.js:1), reducing repeated `bullets.push(...)` sites across fire, echo, split, absorb-refraction, mirror, and burst logic.
+- `experimental` extraction stage: player shot-layout and volley-spec construction now live in [src/entities/playerFire.js](C:/Development/Phantom-Rebound/src/entities/playerFire.js:1), pulling `firePlayer()` angle/lane planning and reusable bullet-spec assembly out of `script.js` while keeping the runtime entrypoint focused on charge spend, SFX, and side effects.
+- `experimental` extraction stage: orbit/shield runtime helpers now live in [src/entities/defenseRuntime.js](C:/Development/Phantom-Rebound/src/entities/defenseRuntime.js:1), centralizing orb timer sync, orbit/shield slot positioning, shield cooldown ticking, ready-shield counting, and Aegis Battery timer stepping for reuse across combat branches.
+- `experimental` extraction stage: bullet lifecycle transition helpers now live in [src/systems/bulletRuntime.js](C:/Development/Phantom-Rebound/src/systems/bulletRuntime.js:1), centralizing output expiry, out-of-bounds cleanup, danger-bounce state changes, and output-bounce/split decisions while leaving VFX and gameplay side effects in the main loop for now.
+- `experimental` extraction stage: output-hit resolution helpers now live in [src/systems/outputHit.js](C:/Development/Phantom-Rebound/src/systems/outputHit.js:1), centralizing crit/dead-man damage math, blood-pact eligibility, pierce/volatile-round decisions, and sanguine-burst cadence while keeping kill rewards and room-side effects in `script.js`.
+- `experimental` extraction stage: enemy kill reward derivation now lives in [src/systems/killRewards.js](C:/Development/Phantom-Rebound/src/systems/killRewards.js:1), centralizing boss-clear rewards, vampiric/blood-moon/corona/final-form reward values, crimson harvest drops, and streak timer updates while `script.js` applies the concrete side effects.
+- `experimental` extraction stage: danger-hit/player-defense resolution now lives in [src/systems/dangerHit.js](C:/Development/Phantom-Rebound/src/systems/dangerHit.js:1), centralizing void-zone blocks, phase-dash vs mirror-tide vs direct-hit branching, lifeline recovery state, and slipstream near-miss detection while `script.js` applies movement/VFX and bullet cleanup.
+- `experimental` extraction stage: enemy movement/fire-cycle helpers now live in [src/entities/enemyRuntime.js](C:/Development/Phantom-Rebound/src/entities/enemyRuntime.js:1), centralizing siphon/rusher stepping, ranged-enemy windup/fire cadence, and disruptor cooldown handling while projectile-spawn specifics remain in `script.js`.
+- `experimental` extraction stage: enemy burst-pattern routing now lives in [src/entities/enemyRuntime.js](C:/Development/Phantom-Rebound/src/entities/enemyRuntime.js:1) via `fireEnemyBurst`, moving zoner/triangle/elite/purple/disruptor fire branching out of `script.js` while preserving existing spawn callbacks.
+- `experimental` extraction stage: orbit-sphere enemy contact resolution now lives in [src/entities/enemyRuntime.js](C:/Development/Phantom-Rebound/src/entities/enemyRuntime.js:1) via `applyOrbitSphereContact`, centralizing cooldown-gated per-orb contact damage and kill-state detection.
+- `experimental` extraction stage: charged-orb firing resolution now lives in [src/entities/defenseRuntime.js](C:/Development/Phantom-Rebound/src/entities/defenseRuntime.js:1) via `buildChargedOrbVolleyForSlot`, centralizing per-slot timer advancement, target selection, charge gating, and shot spec generation.
+- `experimental` extraction stage: rusher contact hit resolution now lives in [src/systems/dangerHit.js](C:/Development/Phantom-Rebound/src/systems/dangerHit.js:1) via `resolveRusherContactHit`, centralizing contact damage/lifeline/last-stand/game-over branching while `script.js` applies VFX and projectile side effects.
+- `experimental` extraction stage: Aegis battery bolt target/shot derivation now lives in [src/entities/defenseRuntime.js](C:/Development/Phantom-Rebound/src/entities/defenseRuntime.js:1) via `buildAegisBatteryBoltSpec`, centralizing nearest-target selection and bolt spec creation while `script.js` retains only spawn/VFX side effects.
+- `experimental` extraction stage: enemy combat-step orchestration now lives in [src/entities/enemyRuntime.js](C:/Development/Phantom-Rebound/src/entities/enemyRuntime.js:1) via `stepEnemyCombatState`, centralizing per-type movement/fire-intent branching (siphon/rusher/ranged) while `script.js` keeps hit and spawn side effects.
+- `experimental` extraction stage: post-hit shockwave and last-stand burst derivation now lives in [src/systems/dangerHit.js](C:/Development/Phantom-Rebound/src/systems/dangerHit.js:1) via `convertNearbyDangerBulletsToGrey` and `buildLastStandBurstSpec`, reducing duplicated hit-resolution side effects between rusher and projectile branches.
+- `experimental` extraction stage: orbit-kill reward derivation now lives in [src/systems/killRewards.js](C:/Development/Phantom-Rebound/src/systems/killRewards.js:1) via `resolveOrbitKillEffects`, centralizing score/kill deltas plus final-form charge eligibility for orbit contact kills.
+- `experimental` extraction stage: shared post-hit aftermath derivation now lives in [src/systems/dangerHit.js](C:/Development/Phantom-Rebound/src/systems/dangerHit.js:1) via `resolvePostHitAftermath`, centralizing lifeline state handoff, optional colossus shockwave trigger, and optional last-stand burst spec generation for rusher/direct/phase hit paths.
+- `experimental` extraction stage: output-kill reward-action derivation now lives in [src/systems/killRewards.js](C:/Development/Phantom-Rebound/src/systems/killRewards.js:1) via `applyKillUpgradeState` and `buildKillRewardActions`, centralizing kill-state upgrade writes plus reward action generation (boss clear, sustain/charge rewards, grey drops, sanguine bursts).
+- `experimental` extraction stage: mirror shield reflection and shield-burst output specs now live in [src/entities/defenseRuntime.js](C:/Development/Phantom-Rebound/src/entities/defenseRuntime.js:1) via `buildMirrorShieldReflectionSpec` and `buildShieldBurstSpec`, reducing inline defensive projectile math in `script.js`.
+- `experimental` phase-1 coupling cleanup: player-color storage reads/writes were removed from [src/data/colorScheme.js](C:/Development/Phantom-Rebound/src/data/colorScheme.js:1), with persistence/bootstrap now handled in [script.js](C:/Development/Phantom-Rebound/script.js:1) via platform storage adapters.
 
 Validation status:
 
 - `verify-all.ps1` passes with current extraction stack.
 - [scripts/test-systems.mjs](C:/Development/Phantom-Rebound/scripts/test-systems.mjs:1) now covers room flow/runtime, telemetry, progression, leaderboard local helpers, and diagnostics payload building.
+- The regression harness also covers room overlay class/text transitions and gesture suppression timing guards.
+- The regression harness also covers patch-notes, leaderboard-control, and boon-panel event binding behavior.
+- The regression harness also covers player-name state syncing and start/restart/main-menu transition wiring.
+- The regression harness also covers elite-stage projectile palette application and enemy projectile spawn helpers.
+- The regression harness also covers player output-bullet creation, grey-drop spawning, split fragments, and radial player bursts.
+- The regression harness also covers player lane-offset generation, shot-plan construction, and volley-spec assembly.
+- The regression harness also covers orbit timer sync, shield cooldown ticking, orbit/shield slot positioning, and Aegis Battery timing behavior.
+- The regression harness also covers bullet expiry, out-of-bounds cleanup, danger bounce transitions, and output bounce/split decisions.
+- The regression harness also covers output-hit damage resolution, blood-pact eligibility, pierce/volatile-round behavior, and sanguine-burst cadence.
+- The regression harness also covers enemy kill reward derivation for boss rewards, sustain, streak timers, and reward-spawn counts.
+- The regression harness also covers void-zone blocking, phase-dash/mirror-tide/direct-hit decisions, lifeline recovery, and slipstream near-miss behavior.
+- The regression harness also covers enemy movement stepping, ranged fire cadence, and disruptor post-fire cooldown behavior.
+- The regression harness also covers enemy burst fire routing across zoner/triangle/elite/purple/disruptor paths.
+- The regression harness also covers orbit-sphere contact damage timing and kill transitions.
+- The regression harness also covers charged-orb per-slot fire timing, charge spend, and shot-spec generation.
+- The regression harness also covers rusher contact hit outcomes including lifeline and last-stand triggers.
+- The regression harness also covers Aegis battery bolt gating, nearest-target selection, and bolt stat derivation.
+- The regression harness also covers enemy combat-step orchestration across siphon, rusher, and ranged paths.
+- The regression harness also covers post-hit nearby-danger conversion and last-stand burst spec derivation.
+- The regression harness also covers orbit-kill score/final-form reward derivation.
+- The regression harness also covers shared post-hit aftermath derivation (lifeline, colossus shockwave trigger, and last-stand burst spec).
+- The regression harness also covers output-kill reward action generation and upgrade-state application.
+- The regression harness also covers mirror-shield reflection and shield-burst spec derivation.
+- The regression harness also covers Node-safe color selection updates without browser storage dependencies.
 
 ## Purpose
 

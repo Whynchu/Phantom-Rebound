@@ -147,7 +147,7 @@ function setPlayerColor(colorKey) {
   activePlayerColor = colorKey;
   
   // Update ALL CSS variables so the entire UI adapts
-  if (document.documentElement) {
+  if (typeof document !== 'undefined' && document.documentElement) {
     const s = PLAYER_COLORS[activePlayerColor];
     const threat = getThreatPalette();
     const root = document.documentElement.style;
@@ -164,12 +164,6 @@ function setPlayerColor(colorKey) {
     root.setProperty('--player-accent-light', s.light);
     root.setProperty('--player-accent-dark', s.dark);
     root.setProperty('--player-danger', threat.danger.hex);
-  }
-  
-  try {
-    localStorage.setItem('phantom-player-color', colorKey);
-  } catch (e) {
-    console.warn('Could not save color to localStorage:', e);
   }
 
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
@@ -197,15 +191,6 @@ function getPlayerColor() {
   return activePlayerColor;
 }
 
-function loadPlayerColorFromStorage() {
-  const saved = localStorage.getItem('phantom-player-color');
-  if (saved && PLAYER_COLORS[saved]) {
-    setPlayerColor(saved);
-  } else {
-    setPlayerColor('green');
-  }
-}
-
 function getColorOptions() {
   return Object.entries(PLAYER_COLORS).map(([key, scheme]) => ({
     key,
@@ -223,7 +208,6 @@ export {
   getPlayerColorScheme,
   getThreatPalette,
   getPlayerColor,
-  loadPlayerColorFromStorage,
   getColorOptions,
   hexToRgb
 };

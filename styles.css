@@ -20,6 +20,11 @@
   --siphon:  #a78bfa;
 }
 * { margin:0; padding:0; box-sizing:border-box; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; touch-action:manipulation; }
+input, textarea, select {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
 /* Prevent iOS from auto-scaling small text (triggers column zoom) */
 html { -webkit-text-size-adjust: none; text-size-adjust: none; }
 html { background: #050505; }
@@ -66,6 +71,9 @@ body::before {
   background: repeating-linear-gradient(0deg,rgba(0,0,0,0.055) 0px,rgba(0,0,0,0.055) 1px,transparent 1px,transparent 3px);
   pointer-events:none; z-index:100;
 }
+body.keyboard-open::before {
+  display: none;
+}
 #wrap {
   position: relative;
   width: min(400px, calc(100vw - 16px));
@@ -97,6 +105,12 @@ body.compact-viewport #wrap {
 }
 #patch-notes-panel {
   z-index: 13;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 18px 18px 16px;
+}
+#version-panel {
+  z-index: 14;
   justify-content: flex-start;
   gap: 10px;
   padding: 18px 18px 16px;
@@ -187,6 +201,52 @@ body.compact-viewport #wrap {
 #btn-patch-notes-close {
   align-self: center;
 }
+.version-title {
+  font-size: 30px;
+}
+.version-grid {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.version-k {
+  font-size: 9px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.version-v {
+  font-family: 'Syne', sans-serif;
+  font-size: 12px;
+  color: #fff;
+}
+.version-v.ok { color: var(--accent); }
+.version-v.warn { color: #fbbf24; }
+.version-v.err { color: #f87171; }
+.version-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+#btn-version-update {
+  display: none;
+}
+#btn-version-update.show {
+  display: inline-block;
+}
 /* TOP HUD */
 #top-hud {
   display: grid;
@@ -210,7 +270,7 @@ body.compact-viewport #wrap {
 #room-counter { font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.18em; color:var(--muted); }
 #room-counter { grid-area: room; justify-self: start; }
 #score-txt { grid-area: score; justify-self: end; }
-#btn-patch-notes { grid-area: patch; justify-self: center; }
+#top-actions { grid-area: patch; justify-self: center; display:flex; gap:6px; align-items:center; }
 #top-hud-secondary {
   grid-area: meta;
   display: flex;
@@ -228,7 +288,7 @@ body.compact-viewport #wrap {
 }
 #charge-section { flex:1; }
 #charge-row { display:flex; justify-content:space-between; align-items:center; }
-#charge-lbl { font-size:9px; letter-spacing:.15em; color:var(--dim); text-transform:uppercase; }
+#charge-lbl { font-size:9px; letter-spacing:.15em; color:var(--muted); text-transform:uppercase; }
 #charge-badge { font-size:10px; font-weight:700; color:var(--accent); background:rgba(var(--accent-rgb),0.07); border:1px solid rgba(var(--accent-rgb),0.18); padding:2px 8px; border-radius:3px; }
 #charge-track {
   width: 100%;
@@ -249,7 +309,9 @@ body.compact-viewport #wrap {
 }
 #sps-box { text-align:center; min-width:52px; }
 #sps-num { font-family:'Syne',sans-serif; font-weight:800; font-size:22px; color:var(--accent); line-height:1; }
-#sps-lbl { font-size:8px; letter-spacing:.2em; color:var(--dim); text-transform:uppercase; margin-top:2px; }
+#sps-lbl { font-size:8px; letter-spacing:.2em; color:var(--muted); text-transform:uppercase; margin-top:2px; }
+/* Keep the start-screen version tag legible on mobile and low-contrast displays */
+#version-tag { color: var(--muted); }
 /* LEGEND */
 #legend { display:flex; justify-content:center; gap:16px; font-size:9px; letter-spacing:.1em; color:var(--dim); text-transform:uppercase; }
 .leg { display:flex; align-items:center; gap:5px; }
@@ -269,6 +331,11 @@ body:not(.menu-chrome-visible) #legend {
   opacity:1;
   transform:translateY(0);
   transition:opacity .18s ease, transform .18s ease;
+}
+body.keyboard-open .screen {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(22,22,22,0.98);
 }
 .screen.off { display:none; }
 .screen.screen-entering { opacity:0; transform:translateY(10px); }
@@ -703,6 +770,10 @@ body:not(.menu-chrome-visible) #legend {
 
 /* Mobile Safari centering fix */
 @media screen and (max-width: 768px) {
+  :root {
+    --muted: #888888;
+    --dim: #777777;
+  }
   html, body {
     height: -webkit-fill-available;
     height: calc(var(--vh, 1vh) * 100);
