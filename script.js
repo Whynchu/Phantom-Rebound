@@ -1,5 +1,5 @@
 import { C, ROOM_SCRIPTS, BOSS_ROOMS, DECAY_BASE, M, VERSION } from './src/data/gameData.js';
-import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
+import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, getPayloadBlastRadius, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';
 import {
   resolveEnemySeparation,
@@ -774,6 +774,18 @@ function startRoom(idx) {
     spawnEnemy(entry.t, entry.isBoss, entry.bossScale || 1);
   }
   showRoomIntro(currentRoomIsBoss ? 'BOSS!' : 'READY?', false);
+}
+
+function triggerPayloadBlast(bullet, enemies) {
+  if(!bullet?.hasPayload || !enemies || enemies.length === 0) return;
+  const aoeRadius = getPayloadBlastRadius(UPG, bullet.r || 4.5);
+  const impactDamage = bullet.dmg * 0.6;
+  for(const e of enemies){
+    if(Math.hypot(e.x - bullet.x, e.y - bullet.y) < aoeRadius + e.r){
+      e.hp -= impactDamage;
+    }
+  }
+  sparks(bullet.x, bullet.y, '#ff6b35', 8 + Math.min(6, Math.round((aoeRadius - 64) / 8)), 60);
 }
 
 function getRoomMaxOnScreen(idx, isBossRoom) {
@@ -1993,15 +2005,7 @@ function update(dt,ts){
 
     if(shouldExpireOutputBullet(b, ts)){
       // Payload: explode on expiration, damaging enemies in AoE
-      if(b.hasPayload && enemies.length > 0){
-        const aoeRadius = 48;
-        for(const e of enemies){
-          if(Math.hypot(e.x - b.x, e.y - b.y) < aoeRadius + e.r){
-            e.hp -= b.dmg * 0.6; // AoE damage is 60% of bullet damage
-          }
-        }
-        sparks(b.x, b.y, '#ff6b35', 8, 60);
-      }
+      triggerPayloadBlast(b, enemies);
       bullets.splice(i,1);
       continue;
     }
@@ -2066,15 +2070,7 @@ function update(dt,ts){
           });
         } else if(outputBounce.removeBullet) {
           // Payload: explode when no bounces left, damaging enemies in AoE
-          if(b.hasPayload && enemies.length > 0){
-            const aoeRadius = 48;
-            for(const e of enemies){
-              if(Math.hypot(e.x - b.x, e.y - b.y) < aoeRadius + e.r){
-                e.hp -= b.dmg * 0.6; // AoE damage is 60% of bullet damage
-              }
-            }
-            sparks(b.x, b.y, '#ff6b35', 8, 60);
-          }
+          triggerPayloadBlast(b, enemies);
           bullets.splice(i,1);
           continue;
         }

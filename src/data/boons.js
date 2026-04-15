@@ -25,6 +25,9 @@ const KINETIC_FAST_FILL_MIN_PCT = 0.05;
 const KINETIC_FAST_FILL_LOW_CAP = 12;
 const KINETIC_FAST_FILL_HIGH_CAP = 120;
 const KINETIC_FAST_FILL_MULT = 1.75;
+const PAYLOAD_BASE_RADIUS = 64;
+const PAYLOAD_RADIUS_PER_TIER = 14;
+const PAYLOAD_RADIUS_MAX = 112;
 
 function getLateBloomGrowth(roomIndex = 0) {
   const room = roomIndex || 0;
@@ -68,6 +71,12 @@ function getKineticChargeMultiplier(upg, currentCharge = 0) {
 
 function getKineticChargeRate(upg, currentCharge = 0) {
   return (upg.moveChargeRate || 0) * getKineticChargeMultiplier(upg, currentCharge);
+}
+
+function getPayloadBlastRadius(upg, bulletRadius = 4.5) {
+  const payloadTier = Math.max(0, upg?.payloadRadiusTier || 0);
+  const bulletBonus = Math.max(0, bulletRadius - 4.5) * 2.75;
+  return Math.min(PAYLOAD_RADIUS_MAX, PAYLOAD_BASE_RADIUS + bulletBonus + payloadTier * PAYLOAD_RADIUS_PER_TIER);
 }
 
 function syncChargeCapacity(upg) {
@@ -185,6 +194,7 @@ function getDefaultUpgrades() {
     escalation: false, escalationKills: 0,
     spreadShot: false,
     payload: false,
+    payloadRadiusTier: 0,
     shockwave: false, shockwaveCooldown: 0,
     nullZone: false,
     gravityWell2: false,
@@ -265,7 +275,8 @@ const BOONS = [
   {name:'Guard Bloom',tag:'SURVIVE',icon:'🛡️',desc:'Scales defense by room. -6% damage.',apply(upg){if(hasLateBloomVariant(upg))return; upg.lateBloomVariant='defense';}},
   {name:'Escalation',tag:'OFFENSE',icon:'📈',desc:'+3% damage per kill this room. Max +60%.',apply(upg){if(upg.escalation)return; upg.escalation=true;}},
   {name:'Spread Shot',tag:'OFFENSE',icon:'⬄',desc:'3-shot cone. +2 charge cost.',apply(upg){if(upg.spreadShot)return; upg.spreadShot=true;syncChargeCapacity(upg);}},
-  {name:'Payload',tag:'OFFENSE',icon:'💣',desc:'Shots explode on impact.',requires:upg=>upg.biggerBulletsTier>0,apply(upg){if(upg.payload)return; upg.payload=true;}},
+  {name:'Payload',tag:'OFFENSE',icon:'💣',desc:'Shots explode on impact. Larger blast by default.',requires:upg=>upg.biggerBulletsTier>0,apply(upg){if(upg.payload)return; upg.payload=true;}},
+  {name:'Payload Bloom',tag:'OFFENSE',icon:'💣+',desc:'Expand payload blast radius. Max 3.',requires:upg=>upg.payload,apply(upg){upg.payloadRadiusTier=Math.min(3,(upg.payloadRadiusTier||0)+1);}},
   {name:'Shockwave',tag:'OFFENSE',icon:'⚡',desc:'Full charge releases a push wave.',apply(upg){if(upg.shockwave)return; upg.shockwave=true;}},
   // Null Zone removed — unfun invincibility loop
   {name:'Gravity Well',tag:'UTILITY',icon:'⊙',desc:'Picking this a 2nd time adds: enemies move 20% slower within 90px.',evolvesWith:['Gravity Well'],evolvedVersion:{name:'Gravity Well II',icon:'⊙+',desc:'Slows both danger bullets AND enemies 30%.'},apply(upg){if(!upg.gravityWell)return; if(upg.gravityWell2)return; upg.gravityWell2=true;}},
@@ -297,6 +308,7 @@ function getBoonWeight(boon, upg) {
   const ORB_MODS    = new Set(['Volatile Orbs','Charged Orbs','Absorb Orbs','Orb Twin','Orb Pierce','Orb Overcharge','Orbital Focus']);
   const BOUNCE_MODS = new Set(['Split Shot','Fracture']);
   const PIERCE_MODS = new Set(['Volatile Rounds','Chain Reaction']);
+  if(boon.name === 'Payload Bloom' && upg.payload) return 3;
   if(SHIELD_MODS.has(boon.name) && upg.shieldTier > 0) return 3;
   if(ORB_MODS.has(boon.name)    && upg.orbitSphereTier > 0) return 3;
   if(BOUNCE_MODS.has(boon.name) && upg.bounceTier > 0) return 3;
@@ -486,7 +498,8 @@ function getActiveBoonEntries(upg) {
   if(upg.lateBloomVariant === 'defense') entries.push({icon:'🛡️',name:'Guard Bloom',detail:`-${lateBloomPct}% dmg taken, -6% dmg`});
   if(upg.escalation) entries.push({icon:'📈',name:'Escalation',detail:`+${Math.round(Math.min(ESCALATION_MAX_BONUS, (upg.escalationKills||0) * ESCALATION_KILL_PCT) * 100)}% dmg`});
   if(upg.spreadShot) entries.push({icon:'⬄',name:'Spread Shot',detail:'3-bullet cone spread'});
-  if(upg.payload) entries.push({icon:'💣',name:'Payload',detail:'Shots explode on impact'});
+  if(upg.payload) entries.push({icon:'💣',name:'Payload',detail:`Shots explode on impact${upg.payloadRadiusTier > 0 ? `, ${Math.round(getPayloadBlastRadius(upg))}px blast` : `, ${Math.round(getPayloadBlastRadius(upg))}px default blast`}`});
+  if(upg.payloadRadiusTier > 0) entries.push({icon:'💣+',name:'Payload Bloom',detail:`Tier ${upg.payloadRadiusTier} — ${Math.round(getPayloadBlastRadius(upg))}px blast`});
   if(upg.shockwave) entries.push({icon:'⚡',name:'Shockwave',detail:'Full charge → push enemies'});
 
   if(upg.gravityWell2) entries.push({icon:'⊙+',name:'Gravity Well II',detail:'Slows bullets & enemies'});
@@ -531,5 +544,5 @@ function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
   return picks;
 }
 
-export { BOONS, SPS_LADDER, CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getHyperbolicScale, getDefaultUpgrades, getRequiredShotCount, getKineticFastFillPct, getKineticChargeMultiplier, getKineticChargeRate, syncChargeCapacity, pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, getLateBloomBonusPct, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY };
+export { BOONS, SPS_LADDER, CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getHyperbolicScale, getDefaultUpgrades, getRequiredShotCount, getKineticFastFillPct, getKineticChargeMultiplier, getKineticChargeRate, getPayloadBlastRadius, syncChargeCapacity, pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, getLateBloomBonusPct, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY };
 

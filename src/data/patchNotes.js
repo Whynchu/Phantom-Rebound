@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.63',
+    label: 'PAYLOAD BLOOM',
+    summary: [
+      'Payload now has a larger default blast radius, and a new Payload Bloom boon can push that area wider in tiers so the payoff feels like an explosion instead of a point-blank pop.'
+    ],
+    highlights: [
+      'Payload explosions now use a larger default AoE and scale with bullet size.',
+      'Added Payload Bloom as a tiered follow-up boon for bigger blasts.',
+      'Explosion feedback now scales a bit with the blast so larger payloads read better in combat.'
+    ]
+  },
+  {
     version: '1.16.62',
     label: 'ROOM PREVIEW',
     summary: [
