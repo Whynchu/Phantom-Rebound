@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.62',
+    label: 'ROOM PREVIEW',
+    summary: [
+      'Room openers now expose enemy layout during READY so players can parse the map before combat starts. The first wave is pre-placed for readability, but no combat actions occur until the intro completes.'
+    ],
+    highlights: [
+      'First-wave enemies now spawn during READY/BOSS intro instead of appearing only at GO.',
+      'Enemy AI and firing remain inactive during intro, preserving a true read phase.',
+      'Player auto-fire and orb offensive systems are also gated until combat starts.'
+    ]
+  },
+  {
     version: '1.16.61',
     label: 'SURVIVAL READABILITY',
     summary: [

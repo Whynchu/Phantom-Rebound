@@ -768,6 +768,11 @@ function startRoom(idx) {
   player.vx = 0;
   player.vy = 0;
   startRoomTelemetry(idx + 1, def);
+  // Spawn the first wave before READY so players can parse the room layout.
+  while(spawnQueue.length && spawnQueue[0].waveIndex === activeWaveIndex) {
+    const entry = spawnQueue.shift();
+    spawnEnemy(entry.t, entry.isBoss, entry.bossScale || 1);
+  }
   showRoomIntro(currentRoomIsBoss ? 'BOSS!' : 'READY?', false);
 }
 
@@ -1715,6 +1720,8 @@ function update(dt,ts){
 
   // 'reward' and 'between' phases are handled by showUpgrades / card click callbacks
 
+  const combatActive = roomPhase === 'spawning' || roomPhase === 'fighting';
+
   // ── Auto-fire: only while still, and always gated by SPS interval
   const isStill = !joy.active || joy.mag <= JOY_DEADZONE;
   recordControlTelemetry(dt, isStill);
@@ -1734,7 +1741,7 @@ function update(dt,ts){
     UPG.overloadActive = true;
   }
 
-  if(charge >= 1 && isStill){
+  if(combatActive && charge >= 1 && isStill){
     fireT += dt;
     const interval = 1 / (UPG.sps * 2);
     if(fireT >= interval){
@@ -1747,149 +1754,151 @@ function update(dt,ts){
   prevStill = isStill;
 
   // ── Enemies
-  const WINDUP_MS = 520; // tell duration before firing
-  if(enemies.length > 1){
-    resolveEnemySeparation(enemies, {
-      width: W,
-      height: H,
-      margin: M,
-      separationPadding: 2,
-      maxIterations: 2,
-    });
-  }
-  for(let ei=enemies.length-1;ei>=0;ei--){
-    const e=enemies[ei];
-    const combatStep = stepEnemyCombatState(e, {
-      player,
-      ts,
-      dt,
-      width: W,
-      height: H,
-      margin: M,
-      gravityWell2: UPG.gravityWell2,
-      windupMs: WINDUP_MS,
-    });
-    if(combatStep.kind === 'siphon'){
-      if(combatStep.shouldDrainCharge){charge=Math.max(0,charge-2.8*dt);sparks(player.x,player.y,C.siphon,1,35);}
-    } else if(combatStep.kind === 'rusher'){
-      if(combatStep.distanceToPlayer<player.r+e.r+2 && player.invincible<=0){
-        const rusherHit = resolveRusherContactHit({
-          hp,
-          upgrades: UPG,
-          contactDamage: 18,
-          contactInvulnSeconds: getPostHitInvulnSeconds('contact'),
-        });
-        hp = rusherHit.nextHp;
-        recordPlayerDamage(rusherHit.damage, 'contact');
-        player.invincible = rusherHit.invincibleSeconds;
-        player.distort = rusherHit.distortSeconds;
-        sparks(player.x,player.y,C.danger,10,90);
-        const rusherAftermath = resolvePostHitAftermath({
-          hitResult: rusherHit,
-          upgrades: UPG,
-          colossusShockwaveCd: _colossusShockwaveCd,
-          enableShockwave: true,
-          shouldTriggerLastStand: rusherHit.shouldTriggerLastStand,
-          playerX: player.x,
-          playerY: player.y,
-          shotSpeed: 220 * GLOBAL_SPEED_LIFT,
-          now: performance.now(),
-          bloodPactHealCap: getBloodPactHealCap(),
-        });
-        if(rusherAftermath.triggerColossusShockwave){
-          _colossusShockwaveCd = rusherAftermath.nextColossusShockwaveCd;
-          convertNearbyDangerBulletsToGrey({
-            bullets,
-            originX: player.x,
-            originY: player.y,
-            radius: 120,
-            ts,
-          });
-          sparks(player.x,player.y,getThreatPalette().advanced.hex,14,120);
-        }
-        if(rusherAftermath.shouldApplyLifelineState){
-          UPG.lifelineTriggerCount = rusherAftermath.nextLifelineTriggerCount;
-          UPG.lifelineUsed = rusherAftermath.nextLifelineUsed;
-          sparks(player.x,player.y,C.lifelineEffect,16,100);
-          if(rusherAftermath.lastStandBurstSpec){
-            spawnRadialOutputBurst({ bullets, ...rusherAftermath.lastStandBurstSpec });
-          }
-        } else if(rusherAftermath.shouldGameOver) {
-          gameOver(); return;
-        }
-      }
-    } else {
-      if(combatStep.shouldFire){
-        fireEnemyBurst(e, {
-          player,
-          bulletSpeedScale,
-          random: Math.random,
-          canEnemyUsePurpleShots: (enemy) => canEnemyUsePurpleShots(enemy, roomIndex),
-          spawnZoner: (idx, total) => spawnZB(e.x, e.y, idx, total),
-          spawnEliteZoner: (idx, total, stage) => spawnEliteZB(e.x, e.y, idx, total, stage),
-          spawnDoubleBounce: () => spawnDBB(e.x, e.y),
-          spawnTriangle: () => spawnTB(e.x, e.y),
-          spawnEliteTriangle: () => spawnEliteTriangleBullet(e.x, e.y),
-          spawnEliteBullet: (angle, speed, stage) => spawnEliteBullet(e.x, e.y, angle, speed, stage),
-          spawnEnemyBullet: () => spawnEB(e.x, e.y),
-        });
-      }
-    }
-
-  if(UPG.orbitSphereTier > 0){
-      // Sync arrays
-      syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
-      const orbitContact = applyOrbitSphereContact(e, {
-        orbCooldown: _orbCooldown,
-        orbitSphereTier: UPG.orbitSphereTier,
-        ts,
-        getOrbitSlotPosition,
-        rotationSpeed: ORBIT_ROTATION_SPD,
-        radius: ORBIT_SPHERE_R,
-        originX: player.x,
-        originY: player.y,
-        orbitalFocus: UPG.orbitalFocus,
-        chargeRatio: getChargeRatio(),
-        baseDamage: 2,
-        focusDamageBonus: ORBITAL_FOCUS_CONTACT_BONUS,
-        focusChargeScale: 1.5,
+  if(combatActive){
+    const WINDUP_MS = 520; // tell duration before firing
+    if(enemies.length > 1){
+      resolveEnemySeparation(enemies, {
+        width: W,
+        height: H,
+        margin: M,
+        separationPadding: 2,
+        maxIterations: 2,
       });
-      if(orbitContact.hit){
-        sparks(orbitContact.slotX, orbitContact.slotY, C.green, 4, 45);
-      }
-      if(orbitContact.killed){
-        const orbitKillEffects = resolveOrbitKillEffects({
-          scorePerKill: computeKillScore(e.pts, false),
-          finalForm: UPG.finalForm,
-          hp,
-          maxHp,
-          finalFormChargeGain: 0.5,
-        });
-        score += orbitKillEffects.scoreDelta;
-        kills += orbitKillEffects.killsDelta;
-        recordKill('orbit');
-        sparks(e.x,e.y,e.col,14,95);
-        spawnGreyDrops(e.x,e.y,ts);
-        if(orbitKillEffects.shouldGrantFinalFormCharge){
-          gainCharge(orbitKillEffects.finalFormChargeGain, 'finalForm');
+    }
+    for(let ei=enemies.length-1;ei>=0;ei--){
+      const e=enemies[ei];
+      const combatStep = stepEnemyCombatState(e, {
+        player,
+        ts,
+        dt,
+        width: W,
+        height: H,
+        margin: M,
+        gravityWell2: UPG.gravityWell2,
+        windupMs: WINDUP_MS,
+      });
+      if(combatStep.kind === 'siphon'){
+        if(combatStep.shouldDrainCharge){charge=Math.max(0,charge-2.8*dt);sparks(player.x,player.y,C.siphon,1,35);}
+      } else if(combatStep.kind === 'rusher'){
+        if(combatStep.distanceToPlayer<player.r+e.r+2 && player.invincible<=0){
+          const rusherHit = resolveRusherContactHit({
+            hp,
+            upgrades: UPG,
+            contactDamage: 18,
+            contactInvulnSeconds: getPostHitInvulnSeconds('contact'),
+          });
+          hp = rusherHit.nextHp;
+          recordPlayerDamage(rusherHit.damage, 'contact');
+          player.invincible = rusherHit.invincibleSeconds;
+          player.distort = rusherHit.distortSeconds;
+          sparks(player.x,player.y,C.danger,10,90);
+          const rusherAftermath = resolvePostHitAftermath({
+            hitResult: rusherHit,
+            upgrades: UPG,
+            colossusShockwaveCd: _colossusShockwaveCd,
+            enableShockwave: true,
+            shouldTriggerLastStand: rusherHit.shouldTriggerLastStand,
+            playerX: player.x,
+            playerY: player.y,
+            shotSpeed: 220 * GLOBAL_SPEED_LIFT,
+            now: performance.now(),
+            bloodPactHealCap: getBloodPactHealCap(),
+          });
+          if(rusherAftermath.triggerColossusShockwave){
+            _colossusShockwaveCd = rusherAftermath.nextColossusShockwaveCd;
+            convertNearbyDangerBulletsToGrey({
+              bullets,
+              originX: player.x,
+              originY: player.y,
+              radius: 120,
+              ts,
+            });
+            sparks(player.x,player.y,getThreatPalette().advanced.hex,14,120);
+          }
+          if(rusherAftermath.shouldApplyLifelineState){
+            UPG.lifelineTriggerCount = rusherAftermath.nextLifelineTriggerCount;
+            UPG.lifelineUsed = rusherAftermath.nextLifelineUsed;
+            sparks(player.x,player.y,C.lifelineEffect,16,100);
+            if(rusherAftermath.lastStandBurstSpec){
+              spawnRadialOutputBurst({ bullets, ...rusherAftermath.lastStandBurstSpec });
+            }
+          } else if(rusherAftermath.shouldGameOver) {
+            gameOver(); return;
+          }
         }
-        enemies.splice(ei,1);
-        continue;
+      } else {
+        if(combatStep.shouldFire){
+          fireEnemyBurst(e, {
+            player,
+            bulletSpeedScale,
+            random: Math.random,
+            canEnemyUsePurpleShots: (enemy) => canEnemyUsePurpleShots(enemy, roomIndex),
+            spawnZoner: (idx, total) => spawnZB(e.x, e.y, idx, total),
+            spawnEliteZoner: (idx, total, stage) => spawnEliteZB(e.x, e.y, idx, total, stage),
+            spawnDoubleBounce: () => spawnDBB(e.x, e.y),
+            spawnTriangle: () => spawnTB(e.x, e.y),
+            spawnEliteTriangle: () => spawnEliteTriangleBullet(e.x, e.y),
+            spawnEliteBullet: (angle, speed, stage) => spawnEliteBullet(e.x, e.y, angle, speed, stage),
+            spawnEnemyBullet: () => spawnEB(e.x, e.y),
+          });
+        }
+      }
+
+      if(UPG.orbitSphereTier > 0){
+        // Sync arrays
+        syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
+        const orbitContact = applyOrbitSphereContact(e, {
+          orbCooldown: _orbCooldown,
+          orbitSphereTier: UPG.orbitSphereTier,
+          ts,
+          getOrbitSlotPosition,
+          rotationSpeed: ORBIT_ROTATION_SPD,
+          radius: ORBIT_SPHERE_R,
+          originX: player.x,
+          originY: player.y,
+          orbitalFocus: UPG.orbitalFocus,
+          chargeRatio: getChargeRatio(),
+          baseDamage: 2,
+          focusDamageBonus: ORBITAL_FOCUS_CONTACT_BONUS,
+          focusChargeScale: 1.5,
+        });
+        if(orbitContact.hit){
+          sparks(orbitContact.slotX, orbitContact.slotY, C.green, 4, 45);
+        }
+        if(orbitContact.killed){
+          const orbitKillEffects = resolveOrbitKillEffects({
+            scorePerKill: computeKillScore(e.pts, false),
+            finalForm: UPG.finalForm,
+            hp,
+            maxHp,
+            finalFormChargeGain: 0.5,
+          });
+          score += orbitKillEffects.scoreDelta;
+          kills += orbitKillEffects.killsDelta;
+          recordKill('orbit');
+          sparks(e.x,e.y,e.col,14,95);
+          spawnGreyDrops(e.x,e.y,ts);
+          if(orbitKillEffects.shouldGrantFinalFormCharge){
+            gainCharge(orbitKillEffects.finalFormChargeGain, 'finalForm');
+          }
+          enemies.splice(ei,1);
+          continue;
+        }
       }
     }
-  }
-  if(enemies.length > 1){
-    resolveEnemySeparation(enemies, {
-      width: W,
-      height: H,
-      margin: M,
-      separationPadding: 2,
-      maxIterations: 2,
-    });
+    if(enemies.length > 1){
+      resolveEnemySeparation(enemies, {
+        width: W,
+        height: H,
+        margin: M,
+        separationPadding: 2,
+        maxIterations: 2,
+      });
+    }
   }
 
   // ── Charged Orbs: each alive orb fires at nearest enemy every 1.8s
-  if(UPG.chargedOrbs && UPG.orbitSphereTier>0 && enemies.length>0){
+  if(combatActive && UPG.chargedOrbs && UPG.orbitSphereTier>0 && enemies.length>0){
     syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
     for(let si=0;si<UPG.orbitSphereTier;si++){
       const orbFireInterval = CHARGED_ORB_FIRE_INTERVAL_MS * (UPG.orbitalFocus ? ORBITAL_FOCUS_CHARGED_ORB_INTERVAL_MULT : 1);
@@ -1935,7 +1944,7 @@ function update(dt,ts){
     }
   }
 
-  if(UPG.aegisBattery && UPG.shieldTier > 0 && enemies.length > 0){
+  if(combatActive && UPG.aegisBattery && UPG.shieldTier > 0 && enemies.length > 0){
     const readyShieldCount = getReadyShieldCount();
     const aegisStep = advanceAegisBatteryTimer({
       aegisBattery: UPG.aegisBattery,
