@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.61',
+    label: 'SURVIVAL READABILITY',
+    summary: [
+      'This pass improves survival readability and progression clarity. MINI is now a tiered path instead of a one-time binary pick, and the ghost HP bar now scales with max HP so tankier builds read correctly in combat.'
+    ],
+    highlights: [
+      'MINI now has 3 stages (max tier 3) instead of a single one-time pickup.',
+      'Each MINI tier now applies -20% size and -10% max HP, with tier shown in active boons.',
+      'Player HP bar length now scales with max HP so high-HP builds visibly carry a larger bar.'
+    ]
+  },
+  {
     version: '1.16.60',
     label: 'READABILITY PASS',
     summary: [

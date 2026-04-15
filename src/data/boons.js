@@ -2,6 +2,9 @@ const SPS_LADDER = [0.5,1.2,2.2,3.8,6.0,8.8];
 const MAX_SHIELD_TIER = 4;
 const TITAN_HP_PCT = [1.00, 0.50, 0.25, 0.10, 0.05];
 const TITAN_SLOW_PCT = 0.05;
+const MINI_MAX_TIER = 3;
+const MINI_SIZE_MULT_PER_TIER = 0.80;
+const MINI_HP_MULT_PER_TIER = 0.90;
 const HEAL_PCT = [1.00, 0.66, 0.66];
 const BERSERKER_HP = 50;
 const EXTRA_LIFE_GAINS = [40, 34, 28, 22, 18, 14];
@@ -133,6 +136,7 @@ function getDefaultUpgrades() {
     kineticTier:      0,
     titanTier:        0,
     miniTaken:        false,
+    miniTier:         0,
     playerSizeMult:   1,
     playerDamageMult: 1,
     titanSlowMult:    1,
@@ -220,8 +224,8 @@ const BOONS = [
   {name:'Room Regen',tag:'SURVIVE',icon:'💚',desc:'+18 HP on room clear. Max 54.',apply(upg){upg.regenTick=Math.min(ROOM_REGEN_MAX,upg.regenTick+ROOM_REGEN_PER_PICK);}},
   {name:'Armor Weave',tag:'SURVIVE',icon:'🧱',desc:'Damage taken: -18% / -36% / -50%.',apply(upg){const multipliers=[1,0.82,0.64,0.5];upg.armorTier=Math.min(3,upg.armorTier+1);upg.damageTakenMult=multipliers[upg.armorTier];},evolvesWith:['Titan Heart'],evolvedVersion:{name:'Living Fortress',icon:'🧱+',desc:'Armor scales with missing HP.',apply(upg){const multipliers=[1,0.82,0.64,0.5];upg.armorTier=Math.min(3,upg.armorTier+1);upg.damageTakenMult=multipliers[upg.armorTier];upg.livingFortress=true;}}},
   {name:'Hit Battery',tag:'SURVIVE',icon:'⚕️',desc:'Getting hit grants charge. Max 3.',apply(upg){upg.capacitorTier=Math.min(3,upg.capacitorTier+1);upg.hitChargeGain=Math.min(6,upg.hitChargeGain+2);}},
-  {name:'MINI',tag:'SURVIVE',icon:'·',desc:'−50% size, −25% max HP. Exclusive with Titan Heart.',apply(upg, state){if(upg.miniTaken || upg.titanTier > 0) return; upg.miniTaken = true; upg.playerSizeMult *= 0.5; state.maxHp = Math.max(10, Math.round(state.maxHp * 0.75)); state.hp = Math.min(state.maxHp, Math.max(1, Math.round(state.hp * 0.75)));}},
-  {name:'Titan Heart',tag:'SURVIVE',icon:'⬢',desc:'+HP, +5% dmg, -5% spd. No MINI.',apply(upg, state){if(upg.miniTaken || upg.titanTier >= TITAN_HP_PCT.length) return; const hpPct = TITAN_HP_PCT[upg.titanTier]; upg.titanTier++; upg.playerSizeMult = 1 + upg.titanTier * 0.25; upg.playerDamageMult = 1 + upg.titanTier * 0.05; upg.titanSlowMult = Math.max(0.7, 1 - upg.titanTier * TITAN_SLOW_PCT); const gain = Math.max(1, Math.round(state.maxHp * hpPct)); state.maxHp += gain; state.hp = Math.min(state.hp, state.maxHp);}},
+  {name:'MINI',tag:'SURVIVE',icon:'·',desc:'Tiered shrink (max 3). Each tier: -20% size, -10% max HP. No Titan Heart.',apply(upg, state){const currentMiniTier = Math.max(upg.miniTier || 0, upg.miniTaken ? 1 : 0); if(currentMiniTier >= MINI_MAX_TIER || upg.titanTier > 0) return; const nextMiniTier = currentMiniTier + 1; upg.miniTier = nextMiniTier; upg.miniTaken = true; upg.playerSizeMult *= MINI_SIZE_MULT_PER_TIER; state.maxHp = Math.max(10, Math.round(state.maxHp * MINI_HP_MULT_PER_TIER)); state.hp = Math.min(state.maxHp, Math.max(1, Math.round(state.hp * MINI_HP_MULT_PER_TIER)));}},
+  {name:'Titan Heart',tag:'SURVIVE',icon:'⬢',desc:'+HP, +5% dmg, -5% spd. No MINI.',apply(upg, state){const currentMiniTier = Math.max(upg.miniTier || 0, upg.miniTaken ? 1 : 0); if(currentMiniTier > 0 || upg.titanTier >= TITAN_HP_PCT.length) return; const hpPct = TITAN_HP_PCT[upg.titanTier]; upg.titanTier++; upg.playerSizeMult = 1 + upg.titanTier * 0.25; upg.playerDamageMult = 1 + upg.titanTier * 0.05; upg.titanSlowMult = Math.max(0.7, 1 - upg.titanTier * TITAN_SLOW_PCT); const gain = Math.max(1, Math.round(state.maxHp * hpPct)); state.maxHp += gain; state.hp = Math.min(state.hp, state.maxHp);}},
   {name:'Shield Plate',tag:'SURVIVE',icon:'🛡️',desc:`+1 shield plate. Max ${MAX_SHIELD_TIER}.`,apply(upg){upg.shieldTier=Math.min(MAX_SHIELD_TIER,upg.shieldTier+1);}},
   {name:'Tempered Shield',tag:'SURVIVE',icon:'🛡️+',desc:'Shields gain a purple first layer.',apply(upg){if(upg.shieldTempered||upg.shieldTier===0)return; upg.shieldTempered=true;}},
   {name:'Mirror Shield',tag:'SURVIVE',icon:'🪞',desc:'Blocked shots fire 60% countershots.',isActive:upg=>upg.shieldMirror,apply(upg){if(upg.shieldMirror||upg.shieldTier===0)return; upg.shieldMirror=true;}},
@@ -439,7 +443,8 @@ function getActiveBoonEntries(upg) {
   if(upg.regenTick > 0) entries.push({ icon:'💚', name:'Room Regen', detail:`${upg.regenTick} HP per room clear` });
   if(upg.armorTier > 0) entries.push({ icon: upg.livingFortress?'🧱+':'🧱', name: upg.livingFortress?'Living Fortress':'Armor Weave', detail:`${Math.round((1 - upg.damageTakenMult) * 100)}% damage reduction` });
   if(upg.capacitorTier > 0) entries.push({ icon:'⚕️', name:'Hit Battery', detail:`+${upg.hitChargeGain.toFixed(1)} charge on hit` });
-  if(upg.miniTaken) entries.push({ icon:'·', name:'MINI', detail:'50% smaller, 25% less max HP' });
+  const miniTier = Math.max(upg.miniTier || 0, upg.miniTaken ? 1 : 0);
+  if(miniTier > 0) entries.push({ icon:'·', name:'MINI', detail:`Tier ${miniTier} — -20% size, -10% max HP per tier` });
   if(upg.titanTier > 0) entries.push({ icon:'⬢', name:'Titan Heart', detail:`Tier ${upg.titanTier} - +${Math.round((upg.playerDamageMult - 1) * 100)}% dmg, -${Math.round((1 - upg.titanSlowMult) * 100)}% speed` });
   if(upg.shieldTier > 0) entries.push({ icon:'🛡️', name:'Shield Plate', detail:`${upg.shieldTier} plate${upg.shieldTier === 1 ? '' : 's'}` });
   if(upg.shieldTempered) entries.push({ icon:'🛡️+', name:'Tempered Shield', detail:'2-stage shields' });

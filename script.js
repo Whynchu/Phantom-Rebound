@@ -2952,7 +2952,8 @@ function drawGhost(ts){
   }
 
   // ── HP bar above ghost (drawn in local space, above dome)
-  const barW=size*2.8, barH=4;
+  const hpBarScale = Math.max(0.75, Math.min(2.4, Math.pow(Math.max(1, maxHp) / BASE_PLAYER_HP, 0.35)));
+  const barW=size*2.8*hpBarScale, barH=4;
   const barY = -size * (1.55 + (_isEaster ? 1.5 : 0));
   const barX=-barW/2;
   const hpFrac=Math.max(0,hp/maxHp);
