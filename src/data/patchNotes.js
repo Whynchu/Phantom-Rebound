@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.68',
+    label: 'FEAR HOTFIX',
+    summary: [
+      'Fixes a close-range ranged-enemy freeze where units caught near firing threshold could lock up and neither fire nor move until distance reopened.'
+    ],
+    highlights: [
+      'Fear-range logic now suppresses windup state so close-pressure enemies remain mobile.',
+      'Ranged fire timers are clamped under fear conditions to prevent windup lock at point-blank distance.',
+      'LOS + fear behavior now transitions cleanly between evasive movement and firing prep.'
+    ]
+  },
+  {
     version: '1.16.67',
     label: 'FLANK HOTFIX',
     summary: [
