@@ -1,5 +1,20 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.69',
+    label: 'TESTER PASS',
+    summary: [
+      'This pass addresses the latest tester batch: hardened wall interactions, Titan sizing constraints, Spread Shot viability, wall-pathing behavior, and enemy naming display consistency.'
+    ],
+    highlights: [
+      'Player wall collision now uses sub-stepped movement to prevent high-speed clipping; wall cubes now occupy full grid cells.',
+      'Added Phase Walk boon for legal wall passage, and capped Titan Heart size growth to preserve center-window traversal.',
+      'Spread Shot reworked: lower shot tax, higher spread pellet damage, and extra spread pierce so it can compete with Twin Lance.',
+      'Rusher/disruptor LOS-blocked flanking pressure increased to reduce wall sticking around center cover.',
+      'Enemy nameplates now prefer defined labels (for example Buster) instead of raw type ids.',
+      'Added a tester feedback tracker document in docs for this review pass.'
+    ]
+  },
+  {
     version: '1.16.68',
     label: 'FEAR HOTFIX',
     summary: [

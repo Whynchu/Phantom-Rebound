@@ -402,7 +402,7 @@ const SHIELD_ROTATION_SPD  = 0.001; // radians per millisecond (≈1 rev / 6.3 s
 const ORBIT_SPHERE_R    = 40;   // orbital radius of passive orbit spheres (px)
 const ORBIT_ROTATION_SPD   = 0.003; // radians per millisecond (≈1 rev / 2.1 s)
 const GRID_SIZE = 28;
-const WALL_CUBE_SIZE = 20;
+const WALL_CUBE_SIZE = GRID_SIZE;
 const PLAYER_SHOT_LIFE_MS = 1100;
 const DENSE_DESPERATION_BONUS = 2.4;
 const CRIT_DAMAGE_FACTOR = 2.4;
@@ -768,13 +768,18 @@ function getCircleRectContactNormal(x, y, radius, rect) {
   return { nx: 0, ny: 1, push: radius };
 }
 
-function resolveEntityObstacleCollisions(entity) {
+function resolveEntityObstacleCollisions(entity, maxPasses = 3) {
   if(!entity || !roomObstacles.length) return;
-  for(const obstacle of roomObstacles){
-    const contact = getCircleRectContactNormal(entity.x, entity.y, entity.r, obstacle);
-    if(!contact) continue;
-    entity.x += contact.nx * (contact.push + 0.05);
-    entity.y += contact.ny * (contact.push + 0.05);
+  for(let pass = 0; pass < maxPasses; pass++){
+    let hadContact = false;
+    for(const obstacle of roomObstacles){
+      const contact = getCircleRectContactNormal(entity.x, entity.y, entity.r, obstacle);
+      if(!contact) continue;
+      hadContact = true;
+      entity.x += contact.nx * (contact.push + 0.05);
+      entity.y += contact.ny * (contact.push + 0.05);
+    }
+    if(!hadContact) break;
   }
 }
 
@@ -1648,9 +1653,14 @@ function update(dt,ts){
     player.vx = 0;
     player.vy = 0;
   }
-  player.x=Math.max(M+player.r,Math.min(W-M-player.r,player.x+player.vx*dt));
-  player.y=Math.max(M+player.r,Math.min(H-M-player.r,player.y+player.vy*dt));
-  resolveEntityObstacleCollisions(player);
+  const playerTravel = Math.hypot(player.vx, player.vy) * dt;
+  const playerSteps = Math.min(10, Math.max(1, Math.ceil(playerTravel / 8)));
+  const playerStepDt = dt / playerSteps;
+  for(let step = 0; step < playerSteps; step++){
+    player.x=Math.max(M+player.r,Math.min(W-M-player.r,player.x+player.vx*playerStepDt));
+    player.y=Math.max(M+player.r,Math.min(H-M-player.r,player.y+player.vy*playerStepDt));
+    if(!UPG.phaseWalk) resolveEntityObstacleCollisions(player);
+  }
   if(player.invincible>0)player.invincible-=dt;
   if(player.distort>0)player.distort-=dt;
 
@@ -2805,7 +2815,8 @@ function draw(ts){
     ctx.fillStyle = e.isBoss ? C.getRgba(e.col, 0.72) : 'rgba(180,180,180,0.45)';
     ctx.font = e.isBoss ? 'bold 9px IBM Plex Mono,monospace' : '7px IBM Plex Mono,monospace';
     ctx.textAlign='center';
-    ctx.fillText(e.isBoss ? '★ BOSS' : e.type.toUpperCase(), e.x, e.y + e.r + (e.isBoss ? 14 : 11));
+    const enemyName = e.label || e.type;
+    ctx.fillText(e.isBoss ? '★ BOSS' : enemyName.toUpperCase(), e.x, e.y + e.r + (e.isBoss ? 14 : 11));
     ctx.restore();
   }
 

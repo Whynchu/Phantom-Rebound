@@ -69,10 +69,10 @@ function buildPlayerVolleySpecs({
       vy: Math.sin(angle) * bulletSpeed,
       radius: crit ? baseRadius * 1.28 : baseRadius,
       bounceLeft: (upg.bounceTier || 0) > 0 ? 2 : 0,
-      pierceLeft: getPierceLeft(shot),
+      pierceLeft: getPierceLeft(shot) + (shot.isSpreadExtra ? (upg.spreadShotPierceBonus || 0) : 0),
       homing: (upg.homingTier || 0) > 0,
       crit,
-      dmg: baseDamage * overchargeBonus * overloadBonus,
+      dmg: baseDamage * overchargeBonus * overloadBonus * (shot.isSpreadExtra ? (upg.spreadShotDamageMult || 1) : 1),
       expireAt: now + lifeMs,
       extras: {
         isRing: shot.isRing || false,

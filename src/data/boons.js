@@ -2,6 +2,7 @@ const SPS_LADDER = [0.5,1.2,2.2,3.8,6.0,8.8];
 const MAX_SHIELD_TIER = 4;
 const TITAN_HP_PCT = [1.00, 0.50, 0.25, 0.10, 0.05];
 const TITAN_SLOW_PCT = 0.05;
+const TITAN_MAX_SIZE_MULT = 2.0;
 const MINI_MAX_TIER = 3;
 const MINI_SIZE_MULT_PER_TIER = 0.80;
 const MINI_HP_MULT_PER_TIER = 0.90;
@@ -51,7 +52,7 @@ function getHyperbolicScale(tier) {
 
 function getRequiredShotCount(upg) {
   let count = 1 + (upg.forwardShotTier || 0) + (upg.ringShots || 0) + (upg.dualShot > 0 ? 1 : 0);
-  if(upg.spreadShot) count += 2;
+  if(upg.spreadShot) count += 1;
   return Math.max(1, count);
 }
 
@@ -193,8 +194,11 @@ function getDefaultUpgrades() {
     lateBloomVariant: '',
     escalation: false, escalationKills: 0,
     spreadShot: false,
+    spreadShotDamageMult: 1,
+    spreadShotPierceBonus: 0,
     payload: false,
     payloadRadiusTier: 0,
+    phaseWalk: false,
     shockwave: false, shockwaveCooldown: 0,
     nullZone: false,
     gravityWell2: false,
@@ -235,7 +239,7 @@ const BOONS = [
   {name:'Armor Weave',tag:'SURVIVE',icon:'🧱',desc:'Damage taken: -18% / -36% / -50%.',apply(upg){const multipliers=[1,0.82,0.64,0.5];upg.armorTier=Math.min(3,upg.armorTier+1);upg.damageTakenMult=multipliers[upg.armorTier];},evolvesWith:['Titan Heart'],evolvedVersion:{name:'Living Fortress',icon:'🧱+',desc:'Armor scales with missing HP.',apply(upg){const multipliers=[1,0.82,0.64,0.5];upg.armorTier=Math.min(3,upg.armorTier+1);upg.damageTakenMult=multipliers[upg.armorTier];upg.livingFortress=true;}}},
   {name:'Hit Battery',tag:'SURVIVE',icon:'⚕️',desc:'Getting hit grants charge. Max 3.',apply(upg){upg.capacitorTier=Math.min(3,upg.capacitorTier+1);upg.hitChargeGain=Math.min(6,upg.hitChargeGain+2);}},
   {name:'MINI',tag:'SURVIVE',icon:'·',desc:'Tiered shrink (max 3). Each tier: -20% size, -10% max HP. No Titan Heart.',apply(upg, state){const currentMiniTier = Math.max(upg.miniTier || 0, upg.miniTaken ? 1 : 0); if(currentMiniTier >= MINI_MAX_TIER || upg.titanTier > 0) return; const nextMiniTier = currentMiniTier + 1; upg.miniTier = nextMiniTier; upg.miniTaken = true; upg.playerSizeMult *= MINI_SIZE_MULT_PER_TIER; state.maxHp = Math.max(10, Math.round(state.maxHp * MINI_HP_MULT_PER_TIER)); state.hp = Math.min(state.maxHp, Math.max(1, Math.round(state.hp * MINI_HP_MULT_PER_TIER)));}},
-  {name:'Titan Heart',tag:'SURVIVE',icon:'⬢',desc:'+HP, +5% dmg, -5% spd. No MINI.',apply(upg, state){const currentMiniTier = Math.max(upg.miniTier || 0, upg.miniTaken ? 1 : 0); if(currentMiniTier > 0 || upg.titanTier >= TITAN_HP_PCT.length) return; const hpPct = TITAN_HP_PCT[upg.titanTier]; upg.titanTier++; upg.playerSizeMult = 1 + upg.titanTier * 0.25; upg.playerDamageMult = 1 + upg.titanTier * 0.05; upg.titanSlowMult = Math.max(0.7, 1 - upg.titanTier * TITAN_SLOW_PCT); const gain = Math.max(1, Math.round(state.maxHp * hpPct)); state.maxHp += gain; state.hp = Math.min(state.hp, state.maxHp);}},
+  {name:'Titan Heart',tag:'SURVIVE',icon:'⬢',desc:'+HP, +5% dmg, -5% spd. No MINI.',apply(upg, state){const currentMiniTier = Math.max(upg.miniTier || 0, upg.miniTaken ? 1 : 0); if(currentMiniTier > 0 || upg.titanTier >= TITAN_HP_PCT.length) return; const hpPct = TITAN_HP_PCT[upg.titanTier]; upg.titanTier++; upg.playerSizeMult = Math.min(TITAN_MAX_SIZE_MULT, 1 + upg.titanTier * 0.25); upg.playerDamageMult = 1 + upg.titanTier * 0.05; upg.titanSlowMult = Math.max(0.7, 1 - upg.titanTier * TITAN_SLOW_PCT); const gain = Math.max(1, Math.round(state.maxHp * hpPct)); state.maxHp += gain; state.hp = Math.min(state.hp, state.maxHp);}},
   {name:'Shield Plate',tag:'SURVIVE',icon:'🛡️',desc:`+1 shield plate. Max ${MAX_SHIELD_TIER}.`,apply(upg){upg.shieldTier=Math.min(MAX_SHIELD_TIER,upg.shieldTier+1);}},
   {name:'Tempered Shield',tag:'SURVIVE',icon:'🛡️+',desc:'Shields gain a purple first layer.',apply(upg){if(upg.shieldTempered||upg.shieldTier===0)return; upg.shieldTempered=true;}},
   {name:'Mirror Shield',tag:'SURVIVE',icon:'🪞',desc:'Blocked shots fire 60% countershots.',isActive:upg=>upg.shieldMirror,apply(upg){if(upg.shieldMirror||upg.shieldTier===0)return; upg.shieldMirror=true;}},
@@ -274,7 +278,8 @@ const BOONS = [
   {name:'Swift Bloom',tag:'UTILITY',icon:'🍃',desc:'Scales speed by room. +6% damage taken.',apply(upg){if(hasLateBloomVariant(upg))return; upg.lateBloomVariant='speed';}},
   {name:'Guard Bloom',tag:'SURVIVE',icon:'🛡️',desc:'Scales defense by room. -6% damage.',apply(upg){if(hasLateBloomVariant(upg))return; upg.lateBloomVariant='defense';}},
   {name:'Escalation',tag:'OFFENSE',icon:'📈',desc:'+3% damage per kill this room. Max +60%.',apply(upg){if(upg.escalation)return; upg.escalation=true;}},
-  {name:'Spread Shot',tag:'OFFENSE',icon:'⬄',desc:'3-shot cone. +2 charge cost.',apply(upg){if(upg.spreadShot)return; upg.spreadShot=true;syncChargeCapacity(upg);}},
+  {name:'Spread Shot',tag:'OFFENSE',icon:'⬄',desc:'3-shot cone. +1 charge cost, +35% spread pellet damage, +1 spread pierce.',apply(upg){if(upg.spreadShot)return; upg.spreadShot=true; upg.spreadShotDamageMult=1.35; upg.spreadShotPierceBonus=1; syncChargeCapacity(upg);}},
+  {name:'Phase Walk',tag:'UTILITY',icon:'⬚',desc:'Move through wall cubes.',requires:upg=>upg.phaseDash || upg.phaseDashTier > 0,apply(upg){if(upg.phaseWalk)return; upg.phaseWalk=true;}},
   {name:'Payload',tag:'OFFENSE',icon:'💣',desc:'Shots explode on impact. Larger blast by default.',requires:upg=>upg.biggerBulletsTier>0,apply(upg){if(upg.payload)return; upg.payload=true;}},
   {name:'Payload Bloom',tag:'OFFENSE',icon:'💣+',desc:'Expand payload blast radius. Max 3.',requires:upg=>upg.payload,apply(upg){upg.payloadRadiusTier=Math.min(3,(upg.payloadRadiusTier||0)+1);}},
   {name:'Shockwave',tag:'OFFENSE',icon:'⚡',desc:'Full charge releases a push wave.',apply(upg){if(upg.shockwave)return; upg.shockwave=true;}},
@@ -497,7 +502,8 @@ function getActiveBoonEntries(upg) {
   if(upg.lateBloomVariant === 'speed') entries.push({icon:'🍃',name:'Swift Bloom',detail:`+${lateBloomPct}% speed, +6% dmg taken`});
   if(upg.lateBloomVariant === 'defense') entries.push({icon:'🛡️',name:'Guard Bloom',detail:`-${lateBloomPct}% dmg taken, -6% dmg`});
   if(upg.escalation) entries.push({icon:'📈',name:'Escalation',detail:`+${Math.round(Math.min(ESCALATION_MAX_BONUS, (upg.escalationKills||0) * ESCALATION_KILL_PCT) * 100)}% dmg`});
-  if(upg.spreadShot) entries.push({icon:'⬄',name:'Spread Shot',detail:'3-bullet cone spread'});
+  if(upg.spreadShot) entries.push({icon:'⬄',name:'Spread Shot',detail:`3-bullet cone, +35% spread dmg, +${upg.spreadShotPierceBonus||0} spread pierce`});
+  if(upg.phaseWalk) entries.push({icon:'⬚',name:'Phase Walk',detail:'Move through wall cubes'});
   if(upg.payload) entries.push({icon:'💣',name:'Payload',detail:`Shots explode on impact${upg.payloadRadiusTier > 0 ? `, ${Math.round(getPayloadBlastRadius(upg))}px blast` : `, ${Math.round(getPayloadBlastRadius(upg))}px default blast`}`});
   if(upg.payloadRadiusTier > 0) entries.push({icon:'💣+',name:'Payload Bloom',detail:`Tier ${upg.payloadRadiusTier} — ${Math.round(getPayloadBlastRadius(upg))}px blast`});
   if(upg.shockwave) entries.push({icon:'⚡',name:'Shockwave',detail:'Full charge → push enemies'});

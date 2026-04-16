@@ -202,14 +202,17 @@ function stepRusherEnemy(enemy, {
     const ny = dy / distance;
     const hasLos = hasLineOfSightToPlayer(enemy, player, obstacles);
     if(hasLos) {
+      enemy.losBlockedMs = 0;
       enemy.x += nx * enemy.spd * dt;
       enemy.y += ny * enemy.spd * dt;
     } else {
+      enemy.losBlockedMs = (enemy.losBlockedMs || 0) + dt * 1000;
+      const flankBoost = enemy.losBlockedMs > 650 ? 1.45 : 1.0;
       const strafeDir = (Math.sin(ts * 0.0009 + enemy.eid * 1.7) > 0) ? 1 : -1;
       const tx = -ny * strafeDir;
       const ty = nx * strafeDir;
-      enemy.x += (nx * 0.6 + tx * 0.85) * enemy.spd * dt;
-      enemy.y += (ny * 0.6 + ty * 0.85) * enemy.spd * dt;
+      enemy.x += (nx * 0.95 + tx * 1.2) * flankBoost * enemy.spd * dt;
+      enemy.y += (ny * 0.95 + ty * 1.2) * flankBoost * enemy.spd * dt;
     }
   }
   applyObstacleSteering(enemy, {
