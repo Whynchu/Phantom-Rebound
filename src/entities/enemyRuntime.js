@@ -203,6 +203,8 @@ function advanceRangedEnemyCombatState(enemy, {
   const dy = player.y - enemy.y;
   const distance = Math.hypot(dx, dy);
   const fleeRange = enemy.fleeRange || 110;
+  const fearRange = Math.max(138, fleeRange + 20);
+  const inFearRange = distance < fearRange;
   let speed = enemy.spd;
   if(gravityWell2) speed *= 0.8;
 
@@ -213,7 +215,13 @@ function advanceRangedEnemyCombatState(enemy, {
   if(!inWindup && distance > 0) {
     const nx = dx / distance;
     const ny = dy / distance;
-    if(!hasLos) {
+    if(inFearRange) {
+      const panicStrafeDir = (Math.sin(ts * 0.001 + enemy.eid * 2.6) > 0) ? 1 : -1;
+      enemy.x -= nx * speed * 1.18 * dt;
+      enemy.y -= ny * speed * 1.18 * dt;
+      enemy.x += (-ny) * speed * (enemy.strafeSpd || 0.6) * 0.95 * panicStrafeDir * dt;
+      enemy.y += nx * speed * (enemy.strafeSpd || 0.6) * 0.95 * panicStrafeDir * dt;
+    } else if(!hasLos) {
       const strafeDir = (Math.sin(ts * 0.0008 + enemy.eid * 1.3) > 0) ? 1 : -1;
       enemy.x += (-ny) * speed * (enemy.strafeSpd || 0.6) * 1.35 * strafeDir * dt;
       enemy.y += nx * speed * (enemy.strafeSpd || 0.6) * 1.35 * strafeDir * dt;
@@ -247,7 +255,9 @@ function advanceRangedEnemyCombatState(enemy, {
 
   const shouldFireBase = enemy.fT >= enemy.fRate && enemy.disruptorCooldown <= 0;
   const canShootWithoutLos = enemy.type === 'zoner' || enemy.type === 'purple_zoner' || enemy.type === 'orange_zoner';
-  const shouldFire = shouldFireBase && (canShootWithoutLos || hasLineOfSightToPlayer(enemy, player, obstacles));
+  const shouldFire = shouldFireBase
+    && !inFearRange
+    && (canShootWithoutLos || hasLineOfSightToPlayer(enemy, player, obstacles));
   if(shouldFire) enemy.fT = 0;
 
   return {
