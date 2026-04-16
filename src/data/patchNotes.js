@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.71',
+    label: 'POINTER POLISH',
+    summary: [
+      'The live aim marker is now a clean equilateral triangle that matches the selected player theme color at 60% opacity for better visual consistency.'
+    ],
+    highlights: [
+      'Replaced the previous pointer shape with an equilateral triangle aim indicator.',
+      'Aim marker color now uses the active player theme (`C.green`) so it always matches the selected color.',
+      'Pointer opacity tuned to 60% for subtle readability without clutter.'
+    ]
+  },
+  {
     version: '1.16.70',
     label: 'AIM CLARITY PASS',
     summary: [

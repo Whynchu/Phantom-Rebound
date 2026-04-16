@@ -407,8 +407,7 @@ const GRID_SIZE = 28;
 const WALL_CUBE_SIZE = GRID_SIZE;
 const TARGET_LOS_SOFT_PENALTY_PX = 30;
 const AIM_ARROW_OFFSET = 15;
-const AIM_ARROW_LENGTH = 8;
-const AIM_ARROW_HALF_WIDTH = 3.5;
+const AIM_TRI_SIDE = 8;
 const PLAYER_SHOT_LIFE_MS = 1100;
 const DENSE_DESPERATION_BONUS = 2.4;
 const CRIT_DAMAGE_FACTOR = 2.4;
@@ -2903,23 +2902,19 @@ function draw(ts){
   if(show && playerAimHasTarget){
     const drift = Math.sin(ts * 0.01) * 0.8;
     const dist = player.r + AIM_ARROW_OFFSET + drift;
-    const bx = player.x + Math.cos(playerAimAngle) * dist;
-    const by = player.y + Math.sin(playerAimAngle) * dist;
-    const tx = bx + Math.cos(playerAimAngle) * AIM_ARROW_LENGTH;
-    const ty = by + Math.sin(playerAimAngle) * AIM_ARROW_LENGTH;
-    const nx = Math.cos(playerAimAngle + Math.PI * 0.5) * AIM_ARROW_HALF_WIDTH;
-    const ny = Math.sin(playerAimAngle + Math.PI * 0.5) * AIM_ARROW_HALF_WIDTH;
+    const cx = player.x + Math.cos(playerAimAngle) * dist;
+    const cy = player.y + Math.sin(playerAimAngle) * dist;
+    const triH = AIM_TRI_SIDE * 0.8660254;
     ctx.save();
-    ctx.fillStyle='rgba(215,255,232,0.82)';
-    ctx.strokeStyle='rgba(120,255,192,0.95)';
-    ctx.lineWidth=1;
+    ctx.translate(cx, cy);
+    ctx.rotate(playerAimAngle);
+    ctx.fillStyle = C.getRgba(C.green, 0.6);
     ctx.beginPath();
-    ctx.moveTo(tx, ty);
-    ctx.lineTo(bx - nx, by - ny);
-    ctx.lineTo(bx + nx, by + ny);
+    ctx.moveTo((triH * 2) / 3, 0);
+    ctx.lineTo(-(triH / 3), AIM_TRI_SIDE / 2);
+    ctx.lineTo(-(triH / 3), -(AIM_TRI_SIDE / 2));
     ctx.closePath();
     ctx.fill();
-    ctx.stroke();
     ctx.restore();
   }
 
