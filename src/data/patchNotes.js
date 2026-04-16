@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.67',
+    label: 'FLANK HOTFIX',
+    summary: [
+      'Enemy lane-hunting now pushes harder around cover, and aimed shooters bias toward clearer firing angles so wall cubes are harder to cheese.'
+    ],
+    highlights: [
+      'LOS-blocked ranged enemies now build flank pressure over time and commit harder to angle-chasing.',
+      'Aimed enemy shots now search nearby aim offsets and prefer trajectories less likely to clip wall cubes.',
+      'Double-bounce and standard aimed shots both use the clear-lane angle solver before spread is applied.'
+    ]
+  },
+  {
     version: '1.16.66',
     label: 'LOS HOTFIX',
     summary: [
