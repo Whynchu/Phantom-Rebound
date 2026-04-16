@@ -408,6 +408,8 @@ const WALL_CUBE_SIZE = GRID_SIZE;
 const TARGET_LOS_SOFT_PENALTY_PX = 30;
 const AIM_ARROW_OFFSET = 15;
 const AIM_TRI_SIDE = 8;
+const PHASE_WALK_MAX_OVERLAP_MS = 1000;
+const PHASE_WALK_IDLE_EJECT_MS = 120;
 const PLAYER_SHOT_LIFE_MS = 1100;
 const DENSE_DESPERATION_BONUS = 2.4;
 const CRIT_DAMAGE_FACTOR = 2.4;
@@ -788,6 +790,27 @@ function resolveEntityObstacleCollisions(entity, maxPasses = 3) {
   }
 }
 
+function isEntityOverlappingObstacle(entity) {
+  if(!entity || !roomObstacles.length) return false;
+  for(const obstacle of roomObstacles){
+    if(getCircleRectContactNormal(entity.x, entity.y, entity.r, obstacle)) return true;
+  }
+  return false;
+}
+
+function ejectEntityFromObstacles(entity) {
+  if(!entity) return;
+  resolveEntityObstacleCollisions(entity, 14);
+  if(!isEntityOverlappingObstacle(entity)) return;
+  for(const obstacle of roomObstacles){
+    const contact = getCircleRectContactNormal(entity.x, entity.y, entity.r, obstacle);
+    if(!contact) continue;
+    entity.x += contact.nx * (contact.push + entity.r + 2);
+    entity.y += contact.ny * (contact.push + entity.r + 2);
+  }
+  resolveEntityObstacleCollisions(entity, 14);
+}
+
 function resolveBulletObstacleCollision(bullet) {
   if(!bullet || !roomObstacles.length) return false;
   for(const obstacle of roomObstacles){
@@ -912,7 +935,11 @@ function startRoom(idx) {
   player.vy = 0;
   startRoomTelemetry(idx + 1, def);
   // Spawn the first wave before READY so players can parse the room layout.
-  while(spawnQueue.length && spawnQueue[0].waveIndex === activeWaveIndex) {
+  while(
+    spawnQueue.length
+    && spawnQueue[0].waveIndex === activeWaveIndex
+    && enemies.length < currentRoomMaxOnScreen
+  ) {
     const entry = spawnQueue.shift();
     spawnEnemy(entry.t, entry.isBoss, entry.bossScale || 1);
   }
@@ -1723,10 +1750,30 @@ function update(dt,ts){
   const playerTravel = Math.hypot(player.vx, player.vy) * dt;
   const playerSteps = Math.min(10, Math.max(1, Math.ceil(playerTravel / 8)));
   const playerStepDt = dt / playerSteps;
+  const playerIsMoving = Math.hypot(player.vx, player.vy) > 12;
   for(let step = 0; step < playerSteps; step++){
     player.x=Math.max(M+player.r,Math.min(W-M-player.r,player.x+player.vx*playerStepDt));
     player.y=Math.max(M+player.r,Math.min(H-M-player.r,player.y+player.vy*playerStepDt));
-    if(!UPG.phaseWalk) resolveEntityObstacleCollisions(player);
+    if(!UPG.phaseWalk) {
+      resolveEntityObstacleCollisions(player);
+      player.phaseWalkOverlapMs = 0;
+      player.phaseWalkIdleMs = 0;
+    } else if(isEntityOverlappingObstacle(player)) {
+      player.phaseWalkOverlapMs += playerStepDt * 1000;
+      if(playerIsMoving) player.phaseWalkIdleMs = 0;
+      else player.phaseWalkIdleMs += playerStepDt * 1000;
+      if(
+        player.phaseWalkOverlapMs >= PHASE_WALK_MAX_OVERLAP_MS
+        || player.phaseWalkIdleMs >= PHASE_WALK_IDLE_EJECT_MS
+      ) {
+        ejectEntityFromObstacles(player);
+        player.phaseWalkOverlapMs = 0;
+        player.phaseWalkIdleMs = 0;
+      }
+    } else {
+      player.phaseWalkOverlapMs = 0;
+      player.phaseWalkIdleMs = 0;
+    }
   }
   if(player.invincible>0)player.invincible-=dt;
   if(player.distort>0)player.distort-=dt;

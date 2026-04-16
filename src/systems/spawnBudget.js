@@ -14,13 +14,21 @@ function weightedPick(candidates, randomFn = Math.random) {
   return candidates[candidates.length - 1].type;
 }
 
+const LATE_PREMIUM_TYPES = new Set([
+  'triangle',
+  'purple_chaser',
+  'purple_disruptor',
+  'purple_zoner',
+  'orange_zoner',
+]);
+
 function generateWeightedWave(roomIdx, enemyTypes, randomFn = Math.random) {
   const unlocked = getUnlockedEnemyTypes(roomIdx, enemyTypes);
   const entries = new Map();
   const earlyRoomBudgetPenalty = roomIdx >= 12 && roomIdx <= 14 ? 2.25 : 0;
   const room20BudgetBonus = Math.max(0, roomIdx - 19) * 0.55;
-  const room40BudgetBonus = Math.max(0, roomIdx - 39) * 0.9;
-  const room80BudgetBonus = Math.max(0, roomIdx - 79) * 1.1;
+  const room40BudgetBonus = Math.max(0, roomIdx - 39) * 0.55;
+  const room80BudgetBonus = Math.max(0, roomIdx - 79) * 0.85;
   const budgetBase = 5.0 + roomIdx * 1.35 + room20BudgetBonus + room40BudgetBonus + room80BudgetBonus - earlyRoomBudgetPenalty;
   let budget = budgetBase;
   let shooterCount = 0;
@@ -54,9 +62,14 @@ function generateWeightedWave(roomIdx, enemyTypes, randomFn = Math.random) {
       .map((type) => {
         const def = enemyTypes[type];
         const pressureBias = def.ammoPressure > 0 ? 1.15 : (def.isSiphon ? 0.28 : 0.78);
-        const affordability = 1 / def.spawnValue;
+        const affordabilityPower = roomIdx >= 40 ? 0.82 : 1;
+        const affordability = 1 / Math.pow(def.spawnValue, affordabilityPower);
         const roomBias = 1 + Math.min(1.2, Math.max(0, roomIdx - def.unlockRoom) * 0.08);
-        return { type, weight: pressureBias * affordability * roomBias };
+        const lateThreatBias = roomIdx >= 40 ? 1 + Math.min(0.22, Math.max(0, def.spawnValue - 4) * 0.04) : 1;
+        const premiumBias = roomIdx >= 40 && LATE_PREMIUM_TYPES.has(type)
+          ? 1 + Math.min(0.2, 0.08 + Math.max(0, roomIdx - 39) * 0.004)
+          : 1;
+        return { type, weight: pressureBias * affordability * roomBias * lateThreatBias * premiumBias };
       });
 
     if(candidates.length === 0) break;

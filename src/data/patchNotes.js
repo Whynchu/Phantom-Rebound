@@ -1,5 +1,18 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.75',
+    label: 'LATE ROOM TUNING',
+    summary: [
+      'Phase Walk no longer supports indefinite wall camping, and room 40+ pacing has been shifted modestly away from cheap enemy floods toward sturdier premium threats.'
+    ],
+    highlights: [
+      'Phase Walk now behaves as a short wall breach: lingering inside cover for too long or idling inside it forces an eject back into legal space.',
+      'Initial room spawns now respect the intended on-screen enemy cap instead of front-loading oversized first waves.',
+      'Post-40 wave budget growth has been softened and spawn weighting now leans a bit less toward cheap enemies, without overcorrecting room density.',
+      'Triangles and double-bounce late threats now get extra HP scaling so fewer enemies can carry more of the room difficulty.'
+    ]
+  },
+  {
     version: '1.16.74',
     label: 'PATHING + UX HOTFIX',
     summary: [

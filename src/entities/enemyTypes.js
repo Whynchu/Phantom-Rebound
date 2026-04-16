@@ -40,6 +40,24 @@ function resolveEnemyColor(role, palette) {
   }
 }
 
+function getLateThreatHpMultiplier(type, roomIndex) {
+  if(roomIndex < 39) return 1;
+  const lateDepth = roomIndex - 39;
+  switch(type) {
+    case 'triangle':
+      return 1 + Math.min(0.55, 0.18 + lateDepth * 0.012);
+    case 'purple_disruptor':
+      return 1 + Math.min(0.48, 0.16 + lateDepth * 0.01);
+    case 'purple_zoner':
+    case 'orange_zoner':
+      return 1 + Math.min(0.42, 0.14 + lateDepth * 0.009);
+    case 'purple_chaser':
+      return 1 + Math.min(0.32, 0.10 + lateDepth * 0.007);
+    default:
+      return 1;
+  }
+}
+
 function getEnemyDefinition(type) {
   const def = ENEMY_TYPES[type];
   if(!def) return def;
@@ -114,7 +132,7 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
 
   const hpVal = isBoss
     ? Math.max(1, Math.round(def.hp * hpMult * 5 * bossScale))
-    : Math.max(1, Math.round(def.hp * hpMult * (isElite ? 1.3 : 1)));
+    : Math.max(1, Math.round(def.hp * hpMult * getLateThreatHpMultiplier(type, roomIndex) * (isElite ? 1.3 : 1)));
 
   return {
     ...def,

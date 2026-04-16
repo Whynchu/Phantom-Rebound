@@ -5,6 +5,8 @@ function createInitialPlayerState(width, height) {
     r: 9,
     vx: 0,
     vy: 0,
+    phaseWalkOverlapMs: 0,
+    phaseWalkIdleMs: 0,
     invincible: 0,
     distort: 0,
     deadAt: 0,

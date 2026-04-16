@@ -279,7 +279,7 @@ const BOONS = [
   {name:'Guard Bloom',tag:'SURVIVE',icon:'🛡️',desc:'Scales defense by room. -6% damage.',apply(upg){if(hasLateBloomVariant(upg))return; upg.lateBloomVariant='defense';}},
   {name:'Escalation',tag:'OFFENSE',icon:'📈',desc:'+3% damage per kill this room. Max +60%.',apply(upg){if(upg.escalation)return; upg.escalation=true;}},
   {name:'Spread Shot',tag:'OFFENSE',icon:'⬄',desc:'3-shot cone. +1 charge cost, +35% spread pellet damage, +1 spread pierce.',apply(upg){if(upg.spreadShot)return; upg.spreadShot=true; upg.spreadShotDamageMult=1.35; upg.spreadShotPierceBonus=1; syncChargeCapacity(upg);}},
-  {name:'Phase Walk',tag:'UTILITY',icon:'⬚',desc:'Move through wall cubes.',requires:upg=>upg.phaseDash || upg.phaseDashTier > 0,apply(upg){if(upg.phaseWalk)return; upg.phaseWalk=true;}},
+  {name:'Phase Walk',tag:'UTILITY',icon:'⬚',desc:'Briefly phase through wall cubes before being ejected.',requires:upg=>upg.phaseDash || upg.phaseDashTier > 0,apply(upg){if(upg.phaseWalk)return; upg.phaseWalk=true;}},
   {name:'Payload',tag:'OFFENSE',icon:'💣',desc:'Shots explode on impact. Larger blast by default.',requires:upg=>upg.biggerBulletsTier>0,apply(upg){if(upg.payload)return; upg.payload=true;}},
   {name:'Payload Bloom',tag:'OFFENSE',icon:'💣+',desc:'Expand payload blast radius. Max 3.',requires:upg=>upg.payload,apply(upg){upg.payloadRadiusTier=Math.min(3,(upg.payloadRadiusTier||0)+1);}},
   {name:'Shockwave',tag:'OFFENSE',icon:'⚡',desc:'Full charge releases a push wave.',apply(upg){if(upg.shockwave)return; upg.shockwave=true;}},
@@ -501,7 +501,7 @@ function getActiveBoonEntries(upg) {
   if(upg.lateBloomVariant === 'defense') entries.push({icon:'🛡️',name:'Guard Bloom',detail:`-${lateBloomPct}% dmg taken, -6% dmg`});
   if(upg.escalation) entries.push({icon:'📈',name:'Escalation',detail:`+${Math.round(Math.min(ESCALATION_MAX_BONUS, (upg.escalationKills||0) * ESCALATION_KILL_PCT) * 100)}% dmg`});
   if(upg.spreadShot) entries.push({icon:'⬄',name:'Spread Shot',detail:`3-bullet cone, +35% spread dmg, +${upg.spreadShotPierceBonus||0} spread pierce`});
-  if(upg.phaseWalk) entries.push({icon:'⬚',name:'Phase Walk',detail:'Move through wall cubes'});
+  if(upg.phaseWalk) entries.push({icon:'⬚',name:'Phase Walk',detail:'Brief wall breach, then forced eject'});
   if(upg.payload) entries.push({icon:'💣',name:'Payload',detail:`Shots explode on impact${upg.payloadRadiusTier > 0 ? `, ${Math.round(getPayloadBlastRadius(upg))}px blast` : `, ${Math.round(getPayloadBlastRadius(upg))}px default blast`}`});
   if(upg.payloadRadiusTier > 0) entries.push({icon:'💣+',name:'Payload Bloom',detail:`Tier ${upg.payloadRadiusTier} — ${Math.round(getPayloadBlastRadius(upg))}px blast`});
   if(upg.shockwave) entries.push({icon:'⚡',name:'Shockwave',detail:'Full charge → push enemies'});
