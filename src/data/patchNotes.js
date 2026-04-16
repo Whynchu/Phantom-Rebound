@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.70',
+    label: 'AIM CLARITY PASS',
+    summary: [
+      'Auto-targeting now softly prefers clear line-of-sight targets when wall cover creates near-tie distance cases, and the ghost now shows a subtle live aim arrow for better shot readability.'
+    ],
+    highlights: [
+      'Added a soft LOS penalty to auto-target scoring so blocked targets can lose to nearby hittable targets without forcing strict LOS priority.',
+      'Player aim direction is now tracked continuously in combat based on the selected auto-target.',
+      'Added a small animated aim arrow near the ghost to show current aim direction at a glance.'
+    ]
+  },
+  {
     version: '1.16.69',
     label: 'TESTER PASS',
     summary: [

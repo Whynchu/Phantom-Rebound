@@ -391,6 +391,8 @@ let bullets = [], enemies = [], particles = [];
 let score=0, kills=0;
 let charge=0, fireT=0, stillTimer=0, prevStill=false;
 let hp=BASE_PLAYER_HP, maxHp=BASE_PLAYER_HP;
+let playerAimAngle = -Math.PI * 0.5;
+let playerAimHasTarget = false;
 const joy = createJoystickState();
 const GAME_OVER_ANIM_MS = 850;
 const SHIELD_HALF_W = 9;
@@ -403,6 +405,10 @@ const ORBIT_SPHERE_R    = 40;   // orbital radius of passive orbit spheres (px)
 const ORBIT_ROTATION_SPD   = 0.003; // radians per millisecond (≈1 rev / 2.1 s)
 const GRID_SIZE = 28;
 const WALL_CUBE_SIZE = GRID_SIZE;
+const TARGET_LOS_SOFT_PENALTY_PX = 30;
+const AIM_ARROW_OFFSET = 15;
+const AIM_ARROW_LENGTH = 8;
+const AIM_ARROW_HALF_WIDTH = 3.5;
 const PLAYER_SHOT_LIFE_MS = 1100;
 const DENSE_DESPERATION_BONUS = 2.4;
 const CRIT_DAMAGE_FACTOR = 2.4;
@@ -795,6 +801,60 @@ function resolveBulletObstacleCollision(bullet) {
     return true;
   }
   return false;
+}
+
+function segmentIntersectsRect(ax, ay, bx, by, rect, pad = 0) {
+  const minX = rect.x - pad;
+  const maxX = rect.x + rect.w + pad;
+  const minY = rect.y - pad;
+  const maxY = rect.y + rect.h + pad;
+  const dx = bx - ax;
+  const dy = by - ay;
+  let tMin = 0;
+  let tMax = 1;
+  const tests = [
+    { p: -dx, q: ax - minX },
+    { p: dx, q: maxX - ax },
+    { p: -dy, q: ay - minY },
+    { p: dy, q: maxY - ay },
+  ];
+  for(const { p, q } of tests){
+    if(Math.abs(p) < 0.000001){
+      if(q < 0) return false;
+      continue;
+    }
+    const t = q / p;
+    if(p < 0){
+      if(t > tMax) return false;
+      if(t > tMin) tMin = t;
+    } else {
+      if(t < tMin) return false;
+      if(t < tMax) tMax = t;
+    }
+  }
+  return tMax >= tMin;
+}
+
+function hasObstacleLineBlock(ax, ay, bx, by, pad = 1.5) {
+  for(const obstacle of roomObstacles){
+    if(segmentIntersectsRect(ax, ay, bx, by, obstacle, pad)) return true;
+  }
+  return false;
+}
+
+function pickPlayerAutoTarget(px, py) {
+  let best = null;
+  for(const e of enemies){
+    const dx = e.x - px;
+    const dy = e.y - py;
+    const dist = Math.hypot(dx, dy);
+    const blocked = hasObstacleLineBlock(px, py, e.x, e.y);
+    const score = dist + (blocked ? TARGET_LOS_SOFT_PENALTY_PX : 0);
+    if(!best || score < best.score || (score === best.score && dist < best.dist)){
+      best = { e, dist, score };
+    }
+  }
+  return best;
 }
 
 function beginWaveIntro(nextWaveIndex) {
@@ -1221,6 +1281,12 @@ function getPlayerShotChargeReserve(isStill, enemyCount = enemies.length) {
 
 function firePlayer(tx,ty) {
   if(charge < 1) return;
+  const aimDx = tx - player.x;
+  const aimDy = ty - player.y;
+  if(Math.abs(aimDx) > 0.001 || Math.abs(aimDy) > 0.001){
+    playerAimAngle = Math.atan2(aimDy, aimDx);
+    playerAimHasTarget = true;
+  }
   const angs = buildPlayerShotPlan({
     tx,
     ty,
@@ -1567,6 +1633,8 @@ function init() {
   lastStallSpawnAt = runMetrics.lastStallSpawnAt;
   enemyIdSeq = runMetrics.enemyIdSeq;
   bossClears = runMetrics.bossClears;
+  playerAimAngle = -Math.PI * 0.5;
+  playerAimHasTarget = false;
   player = createInitialPlayerState(cv.width, cv.height);
   _barrierPulseTimer = runtimeTimers.barrierPulseTimer;
   _slipCooldown = runtimeTimers.slipCooldown;
@@ -1846,13 +1914,22 @@ function update(dt,ts){
     UPG.overloadActive = true;
   }
 
+  const autoTarget = combatActive && enemies.length > 0
+    ? pickPlayerAutoTarget(player.x, player.y)
+    : null;
+  if(autoTarget){
+    playerAimAngle = Math.atan2(autoTarget.e.y - player.y, autoTarget.e.x - player.x);
+    playerAimHasTarget = true;
+  } else if(!combatActive || enemies.length === 0){
+    playerAimHasTarget = false;
+  }
+
   if(combatActive && charge >= 1 && isStill){
     fireT += dt;
     const interval = 1 / (UPG.sps * 2);
     if(fireT >= interval){
       fireT = fireT % interval;
-      const tgt=enemies.reduce((b,e)=>{const d=Math.hypot(e.x-player.x,e.y-player.y);return(!b||d<b.d)?{e,d}:b;},null);
-      if(tgt) firePlayer(tgt.e.x,tgt.e.y);
+      if(autoTarget) firePlayer(autoTarget.e.x,autoTarget.e.y);
     }
   }
 
@@ -2823,6 +2900,28 @@ function draw(ts){
   // Ghost player sprite
   const show=player.invincible<=0||Math.floor(ts/90)%2===0;
   if(show){ drawGhost(ts); }
+  if(show && playerAimHasTarget){
+    const drift = Math.sin(ts * 0.01) * 0.8;
+    const dist = player.r + AIM_ARROW_OFFSET + drift;
+    const bx = player.x + Math.cos(playerAimAngle) * dist;
+    const by = player.y + Math.sin(playerAimAngle) * dist;
+    const tx = bx + Math.cos(playerAimAngle) * AIM_ARROW_LENGTH;
+    const ty = by + Math.sin(playerAimAngle) * AIM_ARROW_LENGTH;
+    const nx = Math.cos(playerAimAngle + Math.PI * 0.5) * AIM_ARROW_HALF_WIDTH;
+    const ny = Math.sin(playerAimAngle + Math.PI * 0.5) * AIM_ARROW_HALF_WIDTH;
+    ctx.save();
+    ctx.fillStyle='rgba(215,255,232,0.82)';
+    ctx.strokeStyle='rgba(120,255,192,0.95)';
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(bx - nx, by - ny);
+    ctx.lineTo(bx + nx, by + ny);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // Shields
   if(player.shields && player.shields.length>0){
