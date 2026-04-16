@@ -1869,6 +1869,7 @@ function update(dt,ts){
         margin: M,
         gravityWell2: UPG.gravityWell2,
         windupMs: WINDUP_MS,
+        obstacles: roomObstacles,
       });
       resolveEntityObstacleCollisions(e);
       if(combatStep.kind === 'siphon'){
