@@ -879,7 +879,7 @@ function captureTelemetrySnapshot(roomNumber) {
     maxCharge: roundTelemetryValue(UPG.maxCharge || 0),
     currentCharge: roundTelemetryValue(charge || 0),
     requiredShotCount: getRequiredShotCount(UPG),
-    damageMult: roundTelemetryValue((UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (UPG.heavyRoundsDamageMult || 1) * Math.min(1.45, 1 + Math.min(UPG.sustainedFireShots || 0, 15) * 0.03)),
+    damageMult: roundTelemetryValue((UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (UPG.heavyRoundsDamageMult || 1) * Math.min(1.45, 1 + Math.min(UPG.sustainedFireShots || 0, 15) * 0.03) * Math.max(0.5, 1 - (UPG.spsTier || 0) * 0.04)),
     denseTier: UPG.denseTier || 0,
     denseDamageMult: roundTelemetryValue(UPG.denseDamageMult || 1),
     chargeCapTier: UPG.chargeCapTier || 0,
@@ -1625,9 +1625,11 @@ function firePlayer(tx,ty) {
   const lateBloomMods = getLateBloomMods(roomIndex || 0);
   // Escalation: per-kill damage in current room (max +40%)
   const escalationBonus = UPG.escalation ? 1 + Math.min((UPG.escalationKills || 0) * ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS) : 1;
+  // Fire-rate scaling penalty: -4% damage per SPS tier so speed builds trade individual power for volume
+  const spsFireRateScaling = Math.max(0.5, 1 - (UPG.spsTier || 0) * 0.04);
   // Sustained Fire bonus: +3% damage per consecutive shot, max +45%, decays 1s after last shot
   const sustainedFireBonus = Math.min(1.45, 1 + Math.min(UPG.sustainedFireShots || 0, 15) * 0.03);
-  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (UPG.heavyRoundsDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus * sustainedFireBonus;
+  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (UPG.heavyRoundsDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus * sustainedFireBonus * spsFireRateScaling;
   const lifeMs = PLAYER_SHOT_LIFE_MS * (UPG.shotLifeMult || 1);
   const now = performance.now();
   const overchargeBonus = (UPG.overchargeVent && charge >= UPG.maxCharge) ? 1.6 : 1;

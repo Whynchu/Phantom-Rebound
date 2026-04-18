@@ -1,5 +1,18 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.100',
+    label: 'FIRE RATE DAMAGE SCALING',
+    summary: [
+      'Fire-rate scaling penalty added: high-speed builds now sacrifice per-shot damage to balance the DPS advantage.',
+      'Each Rapid Fire tier reduces damage by 4% (tier 0: 1.0×, tier 6: 0.76×). Encourages archetype diversity.'
+    ],
+    highlights: [
+      'Speed builds get more shots but hit softer; heavy builds get fewer shots but harder each.',
+      'At tier 6 SPS (17.6 shots/sec raw): 0.76× damage/shot but 1.8× total DPS vs tier 0.',
+      'Prevents "scaling stack with everything" playstyle; forces meaningful build choices.'
+    ]
+  },
+  {
     version: '1.16.99',
     label: 'SUSTAINED FIRE & SPS SYNERGY',
     summary: [
