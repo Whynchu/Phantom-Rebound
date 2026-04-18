@@ -1,5 +1,18 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.86',
+    label: 'HATS + GHOST PREVIEW',
+    summary: [
+      'The main menu now has a live ghost preview and a first-pass hat system, so cosmetics can be selected up front and rendered both in the menu and in live gameplay.'
+    ],
+    highlights: [
+      'Added a new live ghost preview under the title on the main menu.',
+      'Added a dedicated Hats panel with saved local selection state.',
+      'The old bunny ears are now a real hat option instead of a seasonal hardcoded layer.',
+      'Added first-pass Viking Helm cosmetic rendering for both menu preview and gameplay.'
+    ]
+  },
+  {
     version: '1.16.85',
     label: 'PAYLOAD BLAST RETUNE',
     summary: [

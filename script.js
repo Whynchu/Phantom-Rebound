@@ -157,15 +157,20 @@ import {
 
 const PLAYER_COLOR_KEY = 'phantom-player-color';
 const COLOR_ASSIST_KEY = 'phantom-color-assist';
+const PLAYER_HAT_KEY = 'phantom-player-hat';
+const HAT_OPTIONS = [
+  { key: 'none', name: 'No Hat', tag: 'Default', description: 'The plain ghost silhouette with no vanity headwear.' },
+  { key: 'bunny', name: 'Bunny Ears', tag: 'Spring', description: 'Tall soft ears adapted from the old Easter ghost look.' },
+  { key: 'viking', name: 'Viking Helm', tag: 'Founders', description: 'A broad metal helm with side horns for a louder silhouette.' },
+];
 const storedColorAssist = readText(COLOR_ASSIST_KEY, 'off');
 setColorAssistMode(storedColorAssist);
 const storedPlayerColor = readText(PLAYER_COLOR_KEY, 'green');
 setPlayerColor(PLAYER_COLORS[storedPlayerColor] ? storedPlayerColor : 'green');
+let playerHat = HAT_OPTIONS.some((option) => option.key === readText(PLAYER_HAT_KEY, 'none'))
+  ? readText(PLAYER_HAT_KEY, 'none')
+  : 'none';
 renderVersionTag(VERSION);
-
-// 🐰 Easter seasonal flag — show bunny ears on Easter weekend
-const _now = new Date();
-const _isEaster = (_now.getMonth() === 3 && _now.getDate() >= 4 && _now.getDate() <= 6); // Apr 4-6
 
 bindGestureGuards({ doc: document });
 let startDangerCopy;
@@ -182,7 +187,20 @@ function refreshThemeBoundUi() {
   renderColorSelector('color-picker');
   syncColorDrivenCopy();
   renderSettingsPanel();
+  renderHatsPanel();
+  drawStartGhostPreview(performance.now());
   renderLeaderboard();
+}
+
+function getSelectedHatOption() {
+  return HAT_OPTIONS.find((option) => option.key === playerHat) || HAT_OPTIONS[0];
+}
+
+function setPlayerHat(nextHat) {
+  if(!HAT_OPTIONS.some((option) => option.key === nextHat)) return;
+  playerHat = nextHat;
+  writeText(PLAYER_HAT_KEY, playerHat);
+  refreshThemeBoundUi();
 }
 
 window.addEventListener('phantom:player-color-change', (event) => {
@@ -220,14 +238,20 @@ const patchNotesPanel = document.getElementById('patch-notes-panel');
 const versionPanel = document.getElementById('version-panel');
 const settingsOpenBtn = document.getElementById('btn-settings-open');
 const settingsPanel = document.getElementById('settings-panel');
+const hatsOpenBtn = document.getElementById('btn-hats-open');
+const hatsPanel = document.getElementById('hats-panel');
 const patchNotesCurrent = document.getElementById('patch-notes-current');
 const patchNotesList = document.getElementById('patch-notes-list');
 const patchNotesArchiveNote = document.getElementById('patch-notes-archive-note');
 const patchNotesCloseBtn = document.getElementById('btn-patch-notes-close');
 const settingsCloseBtn = document.getElementById('btn-settings-close');
+const hatsCloseBtn = document.getElementById('btn-hats-close');
 const settingsColorAssistButtons = document.getElementById('settings-color-assist-buttons');
 const settingsPreviewCopy = document.getElementById('settings-preview-copy');
 const settingsPreviewGrid = document.getElementById('settings-preview-grid');
+const hatsGrid = document.getElementById('hats-grid');
+const startGhostPreview = document.getElementById('start-ghost-preview');
+const startGhostPreviewCtx = startGhostPreview ? startGhostPreview.getContext('2d') : null;
 const versionCurrentEl = document.getElementById('version-current');
 const versionLatestEl = document.getElementById('version-latest');
 const versionStatusEl = document.getElementById('version-status');
@@ -435,10 +459,41 @@ function renderSettingsPanel() {
   }
 }
 
+function renderHatsPanel() {
+  if(!hatsGrid) return;
+  hatsGrid.innerHTML = '';
+  const activeHat = getSelectedHatOption().key;
+  for(const hat of HAT_OPTIONS) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `hat-card btn-secondary${hat.key === activeHat ? ' active' : ''}`;
+    button.setAttribute('aria-pressed', hat.key === activeHat ? 'true' : 'false');
+
+    const name = document.createElement('div');
+    name.className = 'hat-card-name';
+    name.textContent = hat.name;
+
+    const tag = document.createElement('div');
+    tag.className = 'hat-card-tag';
+    tag.textContent = hat.tag;
+
+    const copy = document.createElement('div');
+    copy.className = 'hat-card-copy';
+    copy.textContent = hat.description;
+
+    button.appendChild(name);
+    button.appendChild(tag);
+    button.appendChild(copy);
+    button.addEventListener('click', () => setPlayerHat(hat.key));
+    hatsGrid.appendChild(button);
+  }
+}
+
 function setPatchNotesOpen(isOpen) {
   if(isOpen) {
     setVersionPanelOpen(false);
     setSettingsPanelOpen(false);
+    setHatsPanelOpen(false);
   }
   setPatchNotesVisibility(patchNotesPanel, isOpen);
 }
@@ -448,6 +503,7 @@ function setVersionPanelOpen(isOpen) {
   if(isOpen) {
     setPatchNotesOpen(false);
     setSettingsPanelOpen(false);
+    setHatsPanelOpen(false);
   }
   versionPanel.classList.toggle('off', !isOpen);
   versionPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
@@ -459,10 +515,23 @@ function setSettingsPanelOpen(isOpen) {
   if(isOpen) {
     setPatchNotesOpen(false);
     setVersionPanelOpen(false);
+    setHatsPanelOpen(false);
     renderSettingsPanel();
   }
   settingsPanel.classList.toggle('off', !isOpen);
   settingsPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+}
+
+function setHatsPanelOpen(isOpen) {
+  if(!hatsPanel) return;
+  if(isOpen) {
+    setPatchNotesOpen(false);
+    setVersionPanelOpen(false);
+    setSettingsPanelOpen(false);
+    renderHatsPanel();
+  }
+  hatsPanel.classList.toggle('off', !isOpen);
+  hatsPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
 }
 
 function setVersionStatusClass(element, mode) {
@@ -561,6 +630,7 @@ let lbPeriod = 'daily';
 let lbScope = 'everyone';
 const lbSync = createLeaderboardSyncState();
 let raf=0, lastT=0;
+let startGhostPreviewRaf = 0;
 let gameOverShown = false;
 let boonRerolls = 1;
 let damagelessRooms = 0;
@@ -3313,6 +3383,112 @@ function draw(ts){
   }
 }
 
+function drawGhostHatLayer(ctxRef, hatKey, size, bodyColor, ts) {
+  if(!hatKey || hatKey === 'none') return;
+  if(hatKey === 'bunny') {
+    const earH = size * 1.6;
+    const earW = size * 0.35;
+    const earBase = -size * 1.1;
+    ctxRef.save();
+
+    ctxRef.save();
+    ctxRef.translate(-size * 0.3, earBase);
+    ctxRef.rotate(-0.15);
+    ctxRef.fillStyle = bodyColor;
+    ctxRef.beginPath();
+    ctxRef.ellipse(0, -earH * 0.5, earW, earH * 0.5, 0, 0, Math.PI * 2);
+    ctxRef.fill();
+    ctxRef.strokeStyle = 'rgba(56,48,56,0.55)';
+    ctxRef.lineWidth = Math.max(1.2, size * 0.08);
+    ctxRef.stroke();
+    ctxRef.fillStyle = 'rgba(255,180,200,0.55)';
+    ctxRef.beginPath();
+    ctxRef.ellipse(0, -earH * 0.5, earW * 0.5, earH * 0.38, 0, 0, Math.PI * 2);
+    ctxRef.fill();
+    ctxRef.restore();
+
+    ctxRef.save();
+    ctxRef.translate(size * 0.3, earBase);
+    ctxRef.rotate(0.9);
+    ctxRef.fillStyle = bodyColor;
+    ctxRef.beginPath();
+    ctxRef.ellipse(0, -earH * 0.4, earW * 0.9, earH * 0.42, 0, 0, Math.PI * 2);
+    ctxRef.fill();
+    ctxRef.strokeStyle = 'rgba(56,48,56,0.55)';
+    ctxRef.lineWidth = Math.max(1.2, size * 0.08);
+    ctxRef.stroke();
+    ctxRef.fillStyle = 'rgba(255,180,200,0.55)';
+    ctxRef.beginPath();
+    ctxRef.ellipse(0, -earH * 0.4, earW * 0.45, earH * 0.3, 0, 0, Math.PI * 2);
+    ctxRef.fill();
+    ctxRef.restore();
+
+    ctxRef.restore();
+    return;
+  }
+  if(hatKey === 'viking') {
+    const bob = Math.sin(ts * 0.0028) * size * 0.04;
+    ctxRef.save();
+    ctxRef.translate(0, -size * 0.92 + bob);
+    const helmW = size * 1.52;
+    const helmH = size * 0.8;
+    const hornW = size * 0.5;
+    const hornH = size * 0.72;
+
+    ctxRef.fillStyle = 'rgba(194,201,210,0.98)';
+    ctxRef.beginPath();
+    ctxRef.moveTo(-helmW * 0.58, helmH * 0.16);
+    ctxRef.quadraticCurveTo(-helmW * 0.48, -helmH * 0.66, 0, -helmH * 0.84);
+    ctxRef.quadraticCurveTo(helmW * 0.48, -helmH * 0.66, helmW * 0.58, helmH * 0.16);
+    ctxRef.lineTo(helmW * 0.36, helmH * 0.48);
+    ctxRef.quadraticCurveTo(0, helmH * 0.7, -helmW * 0.36, helmH * 0.48);
+    ctxRef.closePath();
+    ctxRef.fill();
+
+    ctxRef.fillStyle = 'rgba(88,102,122,0.55)';
+    ctxRef.beginPath();
+    ctxRef.rect(-helmW * 0.07, -helmH * 0.76, helmW * 0.14, helmH * 1.38);
+    ctxRef.fill();
+
+    const drawHorn = (direction = 1) => {
+      ctxRef.save();
+      ctxRef.scale(direction, 1);
+      ctxRef.translate(helmW * 0.46, -helmH * 0.08);
+      ctxRef.rotate(direction * 0.18);
+      ctxRef.fillStyle = 'rgba(244,228,198,0.96)';
+      ctxRef.beginPath();
+      ctxRef.moveTo(-hornW * 0.14, hornH * 0.16);
+      ctxRef.quadraticCurveTo(hornW * 0.16, -hornH * 0.12, hornW * 0.5, -hornH * 0.04);
+      ctxRef.quadraticCurveTo(hornW * 0.96, hornH * 0.2, hornW * 0.54, hornH * 0.58);
+      ctxRef.quadraticCurveTo(hornW * 0.1, hornH * 0.72, -hornW * 0.16, hornH * 0.42);
+      ctxRef.closePath();
+      ctxRef.fill();
+      ctxRef.strokeStyle = 'rgba(116,86,44,0.45)';
+      ctxRef.lineWidth = Math.max(1.2, size * 0.06);
+      ctxRef.stroke();
+      ctxRef.restore();
+    };
+    drawHorn(-1);
+    drawHorn(1);
+
+    ctxRef.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctxRef.lineWidth = Math.max(1.2, size * 0.06);
+    ctxRef.beginPath();
+    ctxRef.moveTo(-helmW * 0.34, -helmH * 0.38);
+    ctxRef.quadraticCurveTo(0, -helmH * 0.62, helmW * 0.34, -helmH * 0.38);
+    ctxRef.stroke();
+    ctxRef.restore();
+  }
+}
+
+function getHatHeightMultiplier(hatKey) {
+  switch(hatKey) {
+    case 'bunny': return 1.5;
+    case 'viking': return 0.9;
+    default: return 0;
+  }
+}
+
 // ── GHOST SPRITE ──────────────────────────────────────────────────────────────
 function drawGhost(ts){
   const p=player;
@@ -3383,52 +3559,7 @@ function drawGhost(ts){
   }
   ctx.closePath();ctx.fill();
   ctx.shadowBlur=0;
-
-  // 🐰 Easter bunny ears (seasonal)
-  if(_isEaster){
-    const earH = size * 1.6;
-    const earW = size * 0.35;
-    const earBase = -size * 1.1;
-    ctx.save();
-
-    // Left ear — tall and straight, slight outward tilt
-    ctx.save();
-    ctx.translate(-size * 0.3, earBase);
-    ctx.rotate(-0.15);
-    // Outer ear
-    ctx.fillStyle = `rgba(${bodyR},${bodyG},${bodyB},0.93)`;
-    ctx.beginPath();
-    ctx.ellipse(0, -earH * 0.5, earW, earH * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = `rgba(${Math.max(0,bodyR-40)},${Math.max(0,bodyG-30)},${Math.max(0,bodyB-40)},0.6)`;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    // Inner ear (pink)
-    ctx.fillStyle = 'rgba(255,180,200,0.55)';
-    ctx.beginPath();
-    ctx.ellipse(0, -earH * 0.5, earW * 0.5, earH * 0.38, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Right ear — flopped over to the right
-    ctx.save();
-    ctx.translate(size * 0.3, earBase);
-    ctx.rotate(0.9);
-    ctx.fillStyle = `rgba(${bodyR},${bodyG},${bodyB},0.93)`;
-    ctx.beginPath();
-    ctx.ellipse(0, -earH * 0.4, earW * 0.9, earH * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = `rgba(${Math.max(0,bodyR-40)},${Math.max(0,bodyG-30)},${Math.max(0,bodyB-40)},0.6)`;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(255,180,200,0.55)';
-    ctx.beginPath();
-    ctx.ellipse(0, -earH * 0.4, earW * 0.45, earH * 0.3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    ctx.restore();
-  }
+  drawGhostHatLayer(ctx, playerHat, size, `rgba(${bodyR},${bodyG},${bodyB},0.93)`, ts);
 
   ctx.fillStyle='#080f0a';
   ctx.beginPath();ctx.arc(-5.5,-size*.25,3,0,Math.PI*2);ctx.fill();
@@ -3470,7 +3601,7 @@ function drawGhost(ts){
   // ── HP bar above ghost (drawn in local space, above dome)
   const hpBarScale = Math.max(0.75, Math.min(2.4, Math.pow(Math.max(1, maxHp) / BASE_PLAYER_HP, 0.35)));
   const barW=size*2.8*hpBarScale, barH=4;
-  const barY = -size * (1.55 + (_isEaster ? 1.5 : 0));
+  const barY = -size * (1.55 + getHatHeightMultiplier(playerHat));
   const barX=-barW/2;
   const hpFrac=Math.max(0,hp/maxHp);
   // Track
@@ -3484,6 +3615,96 @@ function drawGhost(ts){
   ctx.shadowBlur=0;
 
   ctx.restore();
+}
+
+function drawStartGhostPreview(ts = performance.now()) {
+  if(!startGhostPreview || !startGhostPreviewCtx) return;
+  const previewCtx = startGhostPreviewCtx;
+  const width = startGhostPreview.width;
+  const height = startGhostPreview.height;
+  previewCtx.clearRect(0, 0, width, height);
+  previewCtx.fillStyle = 'rgba(5,5,5,0)';
+  previewCtx.fillRect(0, 0, width, height);
+
+  const t = ts / 1000;
+  const size = 30 + Math.sin(t * 1.8) * 1.6;
+  const chargeFrac = 0.78 + Math.sin(t * 2.2) * 0.08;
+  const ringRadius = size + 8;
+  const playerScheme = getPlayerColorScheme();
+  const threatPalette = getThreatPalette();
+  const ghostRgb = C.ghostRgb;
+  const bodyRgb = C.ghostBodyRgb;
+  const accentRgb = C.greenRgb;
+  const overloadPulse = Math.sin(t * 12) * 0.3 + 0.7;
+  const tintMix = Math.min(0.55, 0.34 + overloadPulse * 0.18);
+  const bodyR = Math.round(bodyRgb.r + (accentRgb.r - bodyRgb.r) * tintMix);
+  const bodyG = Math.round(bodyRgb.g + (accentRgb.g - bodyRgb.g) * tintMix);
+  const bodyB = Math.round(bodyRgb.b + (accentRgb.b - bodyRgb.b) * tintMix);
+  const bodyColor = `rgba(${bodyR},${bodyG},${bodyB},0.93)`;
+
+  previewCtx.save();
+  previewCtx.translate(width / 2, height / 2 + 12 + Math.sin(t * 3) * 2);
+  previewCtx.rotate(Math.sin(t * 1.5) * 0.08);
+
+  const glow = previewCtx.createRadialGradient(0, 0, 0, 0, 0, size * 3.1);
+  glow.addColorStop(0, `rgba(${ghostRgb.r},${ghostRgb.g},${ghostRgb.b},0.24)`);
+  glow.addColorStop(1, `rgba(${ghostRgb.r},${ghostRgb.g},${ghostRgb.b},0)`);
+  previewCtx.fillStyle = glow;
+  previewCtx.beginPath();
+  previewCtx.arc(0, 0, size * 3.1, 0, Math.PI * 2);
+  previewCtx.fill();
+
+  previewCtx.shadowBlur = 28;
+  previewCtx.shadowColor = playerScheme.light;
+  previewCtx.fillStyle = bodyColor;
+  previewCtx.beginPath();
+  previewCtx.arc(0, -size * 0.2, size, Math.PI, 0);
+  const tailW = size;
+  for(let s = 0; s <= 4; s++) {
+    const xOff = tailW - (s / 4) * tailW * 2;
+    const yOff = size * 0.8 + Math.sin(t * 3 + s) * 2;
+    if(s === 0) previewCtx.lineTo(tailW, yOff);
+    else previewCtx.lineTo(xOff, yOff);
+  }
+  previewCtx.closePath();
+  previewCtx.fill();
+  previewCtx.shadowBlur = 0;
+
+  drawGhostHatLayer(previewCtx, playerHat, size, bodyColor, ts);
+
+  previewCtx.fillStyle = '#080f0a';
+  previewCtx.beginPath(); previewCtx.arc(-5.5, -size * 0.25, 3, 0, Math.PI * 2); previewCtx.fill();
+  previewCtx.beginPath(); previewCtx.arc(5.5, -size * 0.25, 3, 0, Math.PI * 2); previewCtx.fill();
+  previewCtx.fillStyle = C.getRgba(C.green, 0.9);
+  previewCtx.beginPath(); previewCtx.arc(-4.5, -size * 0.3, 1.3, 0, Math.PI * 2); previewCtx.fill();
+  previewCtx.beginPath(); previewCtx.arc(4.5, -size * 0.3, 1.3, 0, Math.PI * 2); previewCtx.fill();
+  previewCtx.strokeStyle = 'rgba(0,0,0,0.55)';
+  previewCtx.lineWidth = 1.5;
+  previewCtx.beginPath(); previewCtx.arc(0, -size * 0.1, 4.5, 0.2, Math.PI - 0.2); previewCtx.stroke();
+
+  previewCtx.strokeStyle = 'rgba(255,255,255,0.12)';
+  previewCtx.lineWidth = 2;
+  previewCtx.beginPath();
+  previewCtx.arc(0, 0, ringRadius, 0, Math.PI * 2);
+  previewCtx.stroke();
+  previewCtx.strokeStyle = playerScheme.hex;
+  previewCtx.shadowColor = playerScheme.light;
+  previewCtx.shadowBlur = 10;
+  previewCtx.beginPath();
+  previewCtx.arc(0, 0, ringRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * chargeFrac);
+  previewCtx.stroke();
+  previewCtx.shadowBlur = 0;
+
+  previewCtx.fillStyle = threatPalette.danger.hex;
+  previewCtx.beginPath();
+  previewCtx.arc(size * 1.46, -size * 0.05, 6, 0, Math.PI * 2);
+  previewCtx.fill();
+  previewCtx.strokeStyle = 'rgba(255,255,255,0.16)';
+  previewCtx.beginPath();
+  previewCtx.arc(size * 1.46, -size * 0.05, 10, 0, Math.PI * 2);
+  previewCtx.stroke();
+
+  previewCtx.restore();
 }
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
@@ -3503,6 +3724,15 @@ function hudUpdate(){
       spsNumber: spsNumberEl,
     },
   });
+}
+
+function startGhostPreviewLoop() {
+  if(startGhostPreviewRaf) cancelAnimationFrame(startGhostPreviewRaf);
+  const tick = (ts) => {
+    drawStartGhostPreview(ts);
+    startGhostPreviewRaf = requestAnimationFrame(tick);
+  };
+  startGhostPreviewRaf = requestAnimationFrame(tick);
 }
 
 bindJoystickControls({
@@ -3538,6 +3768,14 @@ bindPatchNotesControls({
   closeButton: settingsCloseBtn,
   panelEl: settingsPanel,
   onOpenChange: setSettingsPanelOpen,
+  doc: document,
+});
+
+bindPatchNotesControls({
+  button: hatsOpenBtn,
+  closeButton: hatsCloseBtn,
+  panelEl: hatsPanel,
+  onOpenChange: setHatsPanelOpen,
   doc: document,
 });
 versionRefreshBtn?.addEventListener('click', () => {
@@ -3592,7 +3830,9 @@ bindNameInputs({
 // Initialize color picker on start screen
 renderColorSelector('color-picker');
 renderSettingsPanel();
+renderHatsPanel();
 syncColorDrivenCopy();
+startGhostPreviewLoop();
 
 bindSessionFlow({
   startButton: document.getElementById('btn-start'),
