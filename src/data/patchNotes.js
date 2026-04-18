@@ -1,5 +1,20 @@
 const PATCH_NOTES = [
   {
+    version: '1.17.0',
+    label: 'BALANCE OVERHAUL',
+    summary: [
+      'Major balance pass addressing charge sustainability for fast builds and introducing archetype-specific tradeoffs.',
+      'Game speed 1.45× → 1.55×, base SPS 0.5 → 0.8, new boons, and fire-rate scaling penalties create distinct playstyles.'
+    ],
+    highlights: [
+      'Heavy Rounds boon: -45% fire rate, +50% damage per tier (max 3) for slow/devastating builds.',
+      'Sustained Fire: passive +3% damage per consecutive shot (max +45%, decays after 1s) rewards positioning.',
+      'Kinetic Harvest SPS synergy: move charge rate × (1 + 0.15 × SPS tier) so fast builds can sustain via collection.',
+      'Fire-rate scaling penalty: -4% damage per SPS tier so speed trades individual power for volume.',
+      'Result: slow/heavy (Heavy Rounds + Dense Core) and fast/constant (Rapid Fire + Kinetic Harvest) both viable.'
+    ]
+  },
+  {
     version: '1.16.100',
     label: 'FIRE RATE DAMAGE SCALING',
     summary: [
