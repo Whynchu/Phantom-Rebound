@@ -1345,30 +1345,35 @@ function getEnemyBounceRingCount(enemy) {
   return 0;
 }
 
-function getRingedBodyRadius(totalRadius, count, lineWidth = 1.6, gap = 1.9) {
-  if(count <= 0) return totalRadius;
+function getBounceRingMetrics(totalRadius, count) {
+  const lineWidth = Math.max(1.2, totalRadius * 0.16);
+  const gap = Math.max(1.15, totalRadius * 0.13);
   const outerRadius = Math.max(0, totalRadius - lineWidth * 0.5);
-  const ringDepth = count * lineWidth + Math.max(0, count - 1) * gap;
-  return Math.max(totalRadius * 0.36, outerRadius - ringDepth - gap);
+  if(count <= 0) {
+    return { lineWidth, gap, outerRadius, bodyRadius: totalRadius };
+  }
+  const ringDepth = count * lineWidth + count * gap;
+  const bodyRadius = Math.max(totalRadius * 0.24, outerRadius - ringDepth);
+  return { lineWidth, gap, outerRadius, bodyRadius };
 }
 
-function drawBounceRings(x, y, totalRadius, count, color, alpha = 0.82, lineWidth = 1.6, gap = 1.9) {
-  if(count <= 0) return getRingedBodyRadius(totalRadius, 0, lineWidth, gap);
+function drawBounceRings(x, y, totalRadius, count, color, alpha = 0.92) {
+  const metrics = getBounceRingMetrics(totalRadius, count);
+  if(count <= 0) return metrics.bodyRadius;
   ctx.save();
   ctx.globalAlpha *= alpha;
   ctx.strokeStyle = color;
-  ctx.lineWidth = lineWidth;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 6;
-  let ringRadius = Math.max(0, totalRadius - lineWidth * 0.5);
+  ctx.lineWidth = metrics.lineWidth;
+  ctx.shadowBlur = 0;
+  let ringRadius = metrics.outerRadius;
   for(let i = 0; i < count; i++) {
     ctx.beginPath();
     ctx.arc(x, y, ringRadius, 0, Math.PI * 2);
     ctx.stroke();
-    ringRadius -= lineWidth + gap;
+    ringRadius -= metrics.lineWidth + metrics.gap;
   }
   ctx.restore();
-  return getRingedBodyRadius(totalRadius, count, lineWidth, gap);
+  return metrics.bodyRadius;
 }
 
 function drawBulletSprite(b, ts) {
@@ -1402,8 +1407,10 @@ function drawBulletSprite(b, ts) {
       ctx.fill();
       ctx.restore();
     } else {
-      const bodyRadius = drawBounceRings(b.x, b.y, b.r, getDangerBounceRingCount(b), bCol, 0.72);
+      const ringCount = getDangerBounceRingCount(b);
+      const bodyRadius = drawBounceRings(b.x, b.y, b.r, ringCount, bCol, 0.94);
       ctx.beginPath();ctx.arc(b.x,b.y,bodyRadius,0,Math.PI*2);ctx.fill();
+      drawBounceRings(b.x, b.y, b.r, ringCount, bCol, 0.98);
     }
     ctx.shadowBlur=0;ctx.fillStyle=bCore;
     if(!b.isTriangle){
@@ -3112,8 +3119,9 @@ function draw(ts){
       ctx.restore();
     } else {
       const ringCount = getEnemyBounceRingCount(e);
-      const bodyRadius = drawBounceRings(e.x, e.y, drawR, ringCount, e.col, 0.78);
+      const bodyRadius = drawBounceRings(e.x, e.y, drawR, ringCount, e.col, 0.94);
       ctx.beginPath();ctx.arc(e.x,e.y,bodyRadius,0,Math.PI*2);ctx.fill();
+      drawBounceRings(e.x, e.y, drawR, ringCount, e.col, 0.98);
       ctx.shadowBlur=0;
       // Inner glint
       ctx.fillStyle='rgba(255,255,255,0.18)';

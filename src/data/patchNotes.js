@@ -1,5 +1,18 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.81',
+    label: 'ICON + RING GEOMETRY',
+    summary: [
+      'Phase and Omega now visibly partition their fixed-size circle into a smaller center plus ring layers, and the Safari/Home Screen icon set has been regenerated from the same ghost construction the game actually draws.'
+    ],
+    highlights: [
+      'Ringed busters and ringed bullets now reserve explicit interior space for the center fill, so the ring layers are clearly visible inside the same outer diameter.',
+      'The runtime ring geometry now behaves as center-plus-rings instead of a nearly full-size core with rings competing on top.',
+      'Web-app icons were regenerated from the in-game ghost body shape and palette logic instead of a separate icon illustration.',
+      'Added a local icon generator script so future icon updates stay tied to the game art language.'
+    ]
+  },
+  {
     version: '1.16.80',
     label: 'WEB APP ICONS',
     summary: [
