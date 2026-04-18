@@ -1,5 +1,16 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.95',
+    label: 'HELMET REWORK',
+    summary: [
+      'This release folds in the latest Viking helmet rework so the hat silhouette can be pushed around more cleanly.'
+    ],
+    highlights: [
+      'Included the latest helmet rework pass.',
+      'No gameplay changes in this release.'
+    ]
+  },
+  {
     version: '1.16.94',
     label: 'HORN HAT POLISH',
     summary: [

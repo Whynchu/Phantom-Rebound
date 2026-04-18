@@ -3462,69 +3462,143 @@ function drawGhostHatLayer(ctxRef, hatKey, size, bodyColor, ts) {
     ctxRef.translate(0, -size * 0.92 + bob);
     const helmW = size * 1.52;
     const helmH = size * 0.8;
-    const hornW = size * 0.5;
-    const hornH = size * 0.72;
+    const lw = Math.max(1, size * 0.04);
 
-    ctxRef.fillStyle = 'rgba(194,201,210,0.98)';
-    ctxRef.beginPath();
-    ctxRef.moveTo(-helmW * 0.58, helmH * 0.16);
-    ctxRef.quadraticCurveTo(-helmW * 0.48, -helmH * 0.66, 0, -helmH * 0.84);
-    ctxRef.quadraticCurveTo(helmW * 0.48, -helmH * 0.66, helmW * 0.58, helmH * 0.16);
-    ctxRef.lineTo(helmW * 0.36, helmH * 0.48);
-    ctxRef.quadraticCurveTo(0, helmH * 0.7, -helmW * 0.36, helmH * 0.48);
-    ctxRef.closePath();
-    ctxRef.fill();
-
-    ctxRef.fillStyle = 'rgba(88,102,122,0.55)';
-    ctxRef.beginPath();
-    ctxRef.rect(-helmW * 0.07, -helmH * 0.76, helmW * 0.14, helmH * 1.38);
-    ctxRef.fill();
-
-    const drawHorn = (direction = 1) => {
+    // --- Horns (drawn behind helmet) ---
+    const drawHorn = (dir) => {
       ctxRef.save();
-      const tipX = direction * helmW * 0.92;
-      const tipY = -helmH * 0.52;
-      const innerBaseX = direction * helmW * 0.25;
-      const outerBaseX = direction * helmW * 0.75;
-      const baseY = -helmH * 0.08;
-      
-      // Create inner edge curve (thicker side of horn)
-      const innerMidX = direction * helmW * 0.35;
-      const innerMidY = -helmH * 0.3;
-      
-      // Create outer edge curve (thinner side of horn, tapers more)
-      const outerMidX = direction * helmW * 0.82;
-      const outerMidY = -helmH * 0.25;
-      
-      ctxRef.fillStyle = 'rgba(244,228,198,0.96)';
+      // Base of horn sits at the side of the dome
+      const bx1 = dir * helmW * 0.38; // inner base
+      const by1 = helmH * 0.08;
+      const bx2 = dir * helmW * 0.52; // outer base
+      const by2 = -helmH * 0.32;
+
+      // Tip of horn — far out and up
+      const tx = dir * helmW * 0.88;
+      const ty = -helmH * 1.1;
+
+      // Control points for the thick inner curve (belly of the horn)
+      const ic1x = dir * helmW * 0.28;
+      const ic1y = -helmH * 0.55;
+      const ic2x = dir * helmW * 0.52;
+      const ic2y = -helmH * 1.15;
+
+      // Control points for the thin outer curve (back of the horn)
+      const oc1x = dir * helmW * 0.95;
+      const oc1y = -helmH * 0.95;
+      const oc2x = dir * helmW * 0.72;
+      const oc2y = -helmH * 0.22;
+
+      // Horn fill
+      ctxRef.fillStyle = 'rgba(216,200,160,0.97)';
       ctxRef.beginPath();
-      ctxRef.moveTo(innerBaseX, baseY);
-      // Inner edge curves to tip
-      ctxRef.quadraticCurveTo(innerMidX, innerMidY, tipX, tipY);
-      // Outer edge curves back to base (tapers more sharply)
-      ctxRef.quadraticCurveTo(outerMidX, outerMidY, outerBaseX, -helmH * 0.4);
+      ctxRef.moveTo(bx1, by1);
+      ctxRef.bezierCurveTo(ic1x, ic1y, ic2x, ic2y, tx, ty);
+      ctxRef.bezierCurveTo(oc1x, oc1y, oc2x, oc2y, bx2, by2);
       ctxRef.closePath();
       ctxRef.fill();
-      
-      // Add subtle shadow/depth on inner edge
-      ctxRef.strokeStyle = 'rgba(116,86,44,0.35)';
-      ctxRef.lineWidth = Math.max(0.5, size * 0.03);
-      ctxRef.beginPath();
-      ctxRef.moveTo(innerBaseX, baseY);
-      ctxRef.quadraticCurveTo(innerMidX, innerMidY, tipX, tipY);
+
+      // Horn outline
+      ctxRef.strokeStyle = 'rgba(90,70,30,0.6)';
+      ctxRef.lineWidth = lw * 0.7;
       ctxRef.stroke();
-      
+
+      // Highlight along inner curve
+      ctxRef.strokeStyle = 'rgba(255,248,220,0.45)';
+      ctxRef.lineWidth = lw * 0.5;
+      ctxRef.beginPath();
+      ctxRef.moveTo(bx1 + dir * helmW * 0.04, by1 - helmH * 0.06);
+      ctxRef.bezierCurveTo(
+        ic1x + dir * helmW * 0.04, ic1y + helmH * 0.03,
+        ic2x + dir * helmW * 0.02, ic2y + helmH * 0.04,
+        tx, ty
+      );
+      ctxRef.stroke();
+
       ctxRef.restore();
     };
     drawHorn(-1);
     drawHorn(1);
 
-    ctxRef.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctxRef.lineWidth = Math.max(1.2, size * 0.06);
+    // --- Dome (silver helmet body) ---
+    ctxRef.fillStyle = 'rgba(194,201,210,0.98)';
+    ctxRef.strokeStyle = 'rgba(50,55,65,0.7)';
+    ctxRef.lineWidth = lw;
     ctxRef.beginPath();
-    ctxRef.moveTo(-helmW * 0.34, -helmH * 0.38);
-    ctxRef.quadraticCurveTo(0, -helmH * 0.62, helmW * 0.34, -helmH * 0.38);
+    ctxRef.moveTo(-helmW * 0.52, helmH * 0.16);
+    ctxRef.quadraticCurveTo(-helmW * 0.44, -helmH * 0.66, 0, -helmH * 0.84);
+    ctxRef.quadraticCurveTo(helmW * 0.44, -helmH * 0.66, helmW * 0.52, helmH * 0.16);
+    ctxRef.lineTo(helmW * 0.36, helmH * 0.42);
+    ctxRef.quadraticCurveTo(0, helmH * 0.62, -helmW * 0.36, helmH * 0.42);
+    ctxRef.closePath();
+    ctxRef.fill();
     ctxRef.stroke();
+
+    // Center ridge (vertical dark strip)
+    ctxRef.fillStyle = 'rgba(80,90,105,0.45)';
+    ctxRef.beginPath();
+    ctxRef.rect(-helmW * 0.06, -helmH * 0.76, helmW * 0.12, helmH * 1.3);
+    ctxRef.fill();
+
+    // Brow band (horizontal strip at bottom of dome)
+    ctxRef.fillStyle = 'rgba(220,225,230,0.85)';
+    ctxRef.beginPath();
+    ctxRef.moveTo(-helmW * 0.52, helmH * 0.1);
+    ctxRef.lineTo(helmW * 0.52, helmH * 0.1);
+    ctxRef.lineTo(helmW * 0.42, helmH * 0.32);
+    ctxRef.quadraticCurveTo(0, helmH * 0.48, -helmW * 0.42, helmH * 0.32);
+    ctxRef.closePath();
+    ctxRef.fill();
+    ctxRef.strokeStyle = 'rgba(50,55,65,0.5)';
+    ctxRef.lineWidth = lw * 0.6;
+    ctxRef.stroke();
+
+    // --- Mounting plates (riveted rectangles where horns attach) ---
+    const drawPlate = (dir) => {
+      const px = dir * helmW * 0.38;
+      const pw = helmW * 0.13;
+      const ph = helmH * 0.52;
+      const py = -helmH * 0.26;
+      ctxRef.fillStyle = 'rgba(180,185,195,0.9)';
+      ctxRef.strokeStyle = 'rgba(50,55,65,0.5)';
+      ctxRef.lineWidth = lw * 0.5;
+      ctxRef.fillRect(px - pw * 0.5, py, pw, ph);
+      ctxRef.strokeRect(px - pw * 0.5, py, pw, ph);
+      // Rivets
+      const rivetR = Math.max(1, size * 0.025);
+      ctxRef.fillStyle = 'rgba(90,95,105,0.7)';
+      for (let i = 0; i < 4; i++) {
+        const ry = py + ph * 0.15 + (ph * 0.7) * (i / 3);
+        ctxRef.beginPath();
+        ctxRef.arc(px, ry, rivetR, 0, Math.PI * 2);
+        ctxRef.fill();
+      }
+    };
+    drawPlate(-1);
+    drawPlate(1);
+
+    // Nose guard
+    ctxRef.fillStyle = 'rgba(190,195,205,0.9)';
+    ctxRef.strokeStyle = 'rgba(50,55,65,0.5)';
+    ctxRef.lineWidth = lw * 0.6;
+    ctxRef.beginPath();
+    ctxRef.moveTo(-helmW * 0.06, helmH * 0.38);
+    ctxRef.lineTo(helmW * 0.06, helmH * 0.38);
+    ctxRef.lineTo(helmW * 0.03, helmH * 0.72);
+    ctxRef.lineTo(0, helmH * 0.8);
+    ctxRef.lineTo(-helmW * 0.03, helmH * 0.72);
+    ctxRef.closePath();
+    ctxRef.fill();
+    ctxRef.stroke();
+
+    // Dome highlight arc
+    ctxRef.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctxRef.lineWidth = lw * 0.8;
+    ctxRef.beginPath();
+    ctxRef.moveTo(-helmW * 0.3, -helmH * 0.38);
+    ctxRef.quadraticCurveTo(0, -helmH * 0.62, helmW * 0.3, -helmH * 0.38);
+    ctxRef.stroke();
+
     ctxRef.restore();
   }
 }
