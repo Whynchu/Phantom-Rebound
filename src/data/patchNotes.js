@@ -1,5 +1,19 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.88',
+    label: 'HATS UI POLISH',
+    summary: [
+      'The hats flow is tighter and more readable now: the menu ghost fills its preview box better, the hats picker is a compact centered modal with mini previews, Patch Notes now links to contributors, and the Viking helm silhouette reads more sharply.'
+    ],
+    highlights: [
+      'The start-menu ghost preview is zoomed in to use more of the preview frame.',
+      'The Hats picker is now a small centered modal instead of a full-screen sheet.',
+      'Hat rows now include small hat renders next to each option name.',
+      'Patch Notes now includes a Contributors button listing current playtesters.',
+      'Viking helm horns now use a sharper triangular silhouette with a more upward outward angle.'
+    ]
+  },
+  {
     version: '1.16.87',
     label: 'HAT PREVIEW HOTFIX',
     summary: [

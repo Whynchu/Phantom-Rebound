@@ -9,11 +9,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Phantom Rebound">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="manifest" href="site.webmanifest?v=1.16.87">
-<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png?v=1.16.87">
-<link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=1.16.87">
+<link rel="manifest" href="site.webmanifest?v=1.16.88">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png?v=1.16.88">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=1.16.88">
 <script>
-window.__APP_BUILD__ = '1.16.87';
+window.__APP_BUILD__ = '1.16.88';
 (function () {
   const currentBuild = window.__APP_BUILD__;
   const updateFlagKey = 'phantom-rebound-update-available';
@@ -28,7 +28,7 @@ window.__APP_BUILD__ = '1.16.87';
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=1.16.87">
+<link rel="stylesheet" href="styles.css?v=1.16.88">
 </head>
 <body class="app-loading menu-chrome-visible">
 <div id="wrap">
@@ -64,15 +64,31 @@ window.__APP_BUILD__ = '1.16.87';
     </div>
     <div id="patch-notes-archive-note"></div>
     <div class="rule-line"></div>
+    <button class="btn btn-secondary btn-up-sub" id="btn-contributors-open" type="button">Contributors</button>
     <button class="btn btn-secondary btn-up-sub" id="btn-version-open" type="button">Version Check</button>
     <button class="btn btn-secondary btn-up-sub" id="btn-patch-notes-close" type="button">Back</button>
+  </div>
+
+  <div class="screen off" id="contributors-panel" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="contributors-title">
+    <div class="eyebrow">// Playtest Credits</div>
+    <div class="big-title settings-title" id="contributors-title">Contributors</div>
+    <div class="contributors-copy">Current relevant playtesters helping shape Phantom Rebound.</div>
+    <div class="rule-line"></div>
+    <div class="contributors-list">
+      <div class="contributors-item">CheezyCharlie</div>
+      <div class="contributors-item">Deff193</div>
+      <div class="contributors-item">JohnnyBillz</div>
+      <div class="contributors-item">Snowman</div>
+    </div>
+    <div class="rule-line"></div>
+    <button class="btn btn-secondary btn-up-sub" id="btn-contributors-close" type="button">Back</button>
   </div>
 
   <div class="screen off" id="version-panel" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="version-title">
     <div class="eyebrow">// Build Check</div>
     <div class="big-title version-title" id="version-title">Version Status</div>
     <div class="version-grid">
-      <div class="version-row"><span class="version-k">Current</span><span class="version-v" id="version-current">v1.16.87</span></div>
+      <div class="version-row"><span class="version-k">Current</span><span class="version-v" id="version-current">v1.16.88</span></div>
       <div class="version-row"><span class="version-k">Latest</span><span class="version-v" id="version-latest">Checking...</span></div>
       <div class="version-row"><span class="version-k">Status</span><span class="version-v" id="version-status">Checking...</span></div>
       <div class="version-row"><span class="version-k">Checked</span><span class="version-v" id="version-checked-at">-</span></div>
@@ -120,7 +136,7 @@ window.__APP_BUILD__ = '1.16.87';
     <div id="room-intro"><div id="room-intro-txt">READY?</div></div>
 
     <div class="screen" id="s-start">
-      <div class="eyebrow" id="version-tag">// prototype v1.16.87 - HAT PREVIEW HOTFIX</div>
+      <div class="eyebrow" id="version-tag">// prototype v1.16.88 - HATS UI POLISH</div>
       <div class="big-title">Phantom<span>Rebound</span></div>
       <div class="start-preview-row">
         <div class="start-preview-shell">
@@ -215,7 +231,7 @@ window.__APP_BUILD__ = '1.16.87';
   </div>
 </div>
 
-<script type="module" src="script.js?v=1.16.87"></script>
+<script type="module" src="script.js?v=1.16.88"></script>
 </body>
 </html>
 

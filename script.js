@@ -244,6 +244,9 @@ const patchNotesCurrent = document.getElementById('patch-notes-current');
 const patchNotesList = document.getElementById('patch-notes-list');
 const patchNotesArchiveNote = document.getElementById('patch-notes-archive-note');
 const patchNotesCloseBtn = document.getElementById('btn-patch-notes-close');
+const contributorsOpenBtn = document.getElementById('btn-contributors-open');
+const contributorsPanel = document.getElementById('contributors-panel');
+const contributorsCloseBtn = document.getElementById('btn-contributors-close');
 const settingsCloseBtn = document.getElementById('btn-settings-close');
 const hatsCloseBtn = document.getElementById('btn-hats-close');
 const settingsColorAssistButtons = document.getElementById('settings-color-assist-buttons');
@@ -469,6 +472,14 @@ function renderHatsPanel() {
     button.className = `hat-card btn-secondary${hat.key === activeHat ? ' active' : ''}`;
     button.setAttribute('aria-pressed', hat.key === activeHat ? 'true' : 'false');
 
+    const preview = document.createElement('canvas');
+    preview.className = 'hat-card-preview';
+    preview.width = 52;
+    preview.height = 52;
+
+    const body = document.createElement('div');
+    body.className = 'hat-card-body';
+
     const name = document.createElement('div');
     name.className = 'hat-card-name';
     name.textContent = hat.name;
@@ -481,11 +492,14 @@ function renderHatsPanel() {
     copy.className = 'hat-card-copy';
     copy.textContent = hat.description;
 
-    button.appendChild(name);
-    button.appendChild(tag);
-    button.appendChild(copy);
+    body.appendChild(name);
+    body.appendChild(tag);
+    body.appendChild(copy);
+    button.appendChild(preview);
+    button.appendChild(body);
     button.addEventListener('click', () => setPlayerHat(hat.key));
     hatsGrid.appendChild(button);
+    drawHatOptionPreview(preview, hat.key);
   }
 }
 
@@ -494,6 +508,7 @@ function setPatchNotesOpen(isOpen) {
     setVersionPanelOpen(false);
     setSettingsPanelOpen(false);
     setHatsPanelOpen(false);
+    setContributorsPanelOpen(false);
   }
   setPatchNotesVisibility(patchNotesPanel, isOpen);
 }
@@ -504,6 +519,7 @@ function setVersionPanelOpen(isOpen) {
     setPatchNotesOpen(false);
     setSettingsPanelOpen(false);
     setHatsPanelOpen(false);
+    setContributorsPanelOpen(false);
   }
   versionPanel.classList.toggle('off', !isOpen);
   versionPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
@@ -516,6 +532,7 @@ function setSettingsPanelOpen(isOpen) {
     setPatchNotesOpen(false);
     setVersionPanelOpen(false);
     setHatsPanelOpen(false);
+    setContributorsPanelOpen(false);
     renderSettingsPanel();
   }
   settingsPanel.classList.toggle('off', !isOpen);
@@ -528,10 +545,23 @@ function setHatsPanelOpen(isOpen) {
     setPatchNotesOpen(false);
     setVersionPanelOpen(false);
     setSettingsPanelOpen(false);
+    setContributorsPanelOpen(false);
     renderHatsPanel();
   }
   hatsPanel.classList.toggle('off', !isOpen);
   hatsPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+}
+
+function setContributorsPanelOpen(isOpen) {
+  if(!contributorsPanel) return;
+  if(isOpen) {
+    setPatchNotesOpen(false);
+    setVersionPanelOpen(false);
+    setSettingsPanelOpen(false);
+    setHatsPanelOpen(false);
+  }
+  contributorsPanel.classList.toggle('off', !isOpen);
+  contributorsPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
 }
 
 function setVersionStatusClass(element, mode) {
@@ -3453,14 +3483,13 @@ function drawGhostHatLayer(ctxRef, hatKey, size, bodyColor, ts) {
     const drawHorn = (direction = 1) => {
       ctxRef.save();
       ctxRef.scale(direction, 1);
-      ctxRef.translate(helmW * 0.46, -helmH * 0.08);
-      ctxRef.rotate(direction * 0.18);
+      ctxRef.translate(helmW * 0.44, -helmH * 0.12);
+      ctxRef.rotate(direction * 0.34);
       ctxRef.fillStyle = 'rgba(244,228,198,0.96)';
       ctxRef.beginPath();
-      ctxRef.moveTo(-hornW * 0.14, hornH * 0.16);
-      ctxRef.quadraticCurveTo(hornW * 0.16, -hornH * 0.12, hornW * 0.5, -hornH * 0.04);
-      ctxRef.quadraticCurveTo(hornW * 0.96, hornH * 0.2, hornW * 0.54, hornH * 0.58);
-      ctxRef.quadraticCurveTo(hornW * 0.1, hornH * 0.72, -hornW * 0.16, hornH * 0.42);
+      ctxRef.moveTo(-hornW * 0.12, hornH * 0.34);
+      ctxRef.lineTo(hornW * 0.98, -hornH * 0.12);
+      ctxRef.lineTo(hornW * 0.08, -hornH * 0.46);
       ctxRef.closePath();
       ctxRef.fill();
       ctxRef.strokeStyle = 'rgba(116,86,44,0.45)';
@@ -3652,8 +3681,8 @@ function drawStartGhostPreview(ts = performance.now()) {
   drawGhostSprite(startGhostPreviewCtx, ts, {
     playerState: {
       x: startGhostPreview.width / 2,
-      y: startGhostPreview.height / 2 + 18,
-      r: 9,
+      y: startGhostPreview.height / 2 + 24,
+      r: 12.5,
       vx: 0,
       distort: 0,
       invincible: 0,
@@ -3669,6 +3698,29 @@ function drawStartGhostPreview(ts = performance.now()) {
     hatKey: playerHat,
     idleStill: true,
   });
+}
+
+function drawHatOptionPreview(canvas, hatKey) {
+  const ctxRef = canvas?.getContext?.('2d');
+  if(!canvas || !ctxRef) return;
+  const width = canvas.width;
+  const height = canvas.height;
+  ctxRef.clearRect(0, 0, width, height);
+  ctxRef.save();
+  ctxRef.translate(width / 2, height / 2 + 9);
+  ctxRef.fillStyle = C.getRgba(C.ghost, 0.14);
+  ctxRef.beginPath();
+  ctxRef.arc(0, -2, 18, 0, Math.PI * 2);
+  ctxRef.fill();
+  ctxRef.fillStyle = C.getRgba(C.ghostBody, 0.95);
+  ctxRef.beginPath();
+  ctxRef.arc(0, -4.5, 8.5, Math.PI, 0);
+  ctxRef.lineTo(8.5, 4.5);
+  ctxRef.quadraticCurveTo(0, 11, -8.5, 4.5);
+  ctxRef.closePath();
+  ctxRef.fill();
+  drawGhostHatLayer(ctxRef, hatKey, 8.5, C.getRgba(C.ghostBody, 0.95), performance.now());
+  ctxRef.restore();
 }
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
@@ -3740,6 +3792,14 @@ bindPatchNotesControls({
   closeButton: hatsCloseBtn,
   panelEl: hatsPanel,
   onOpenChange: setHatsPanelOpen,
+  doc: document,
+});
+
+bindPatchNotesControls({
+  button: contributorsOpenBtn,
+  closeButton: contributorsCloseBtn,
+  panelEl: contributorsPanel,
+  onOpenChange: setContributorsPanelOpen,
   doc: document,
 });
 versionRefreshBtn?.addEventListener('click', () => {
