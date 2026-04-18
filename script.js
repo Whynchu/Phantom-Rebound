@@ -3484,22 +3484,36 @@ function drawGhostHatLayer(ctxRef, hatKey, size, bodyColor, ts) {
       ctxRef.save();
       const tipX = direction * helmW * 0.92;
       const tipY = -helmH * 0.52;
-      const innerBaseX = direction * helmW * 0.26;
-      const outerBaseX = direction * helmW * 0.5;
+      const innerBaseX = direction * helmW * 0.45;
+      const outerBaseX = direction * helmW * 0.65;
       const baseY = -helmH * 0.08;
-      const midX = direction * helmW * 0.65;
-      const midY = -helmH * 0.35;
+      
+      // Create inner edge curve (thicker side of horn)
+      const innerMidX = direction * helmW * 0.45;
+      const innerMidY = -helmH * 0.3;
+      
+      // Create outer edge curve (thinner side of horn, tapers more)
+      const outerMidX = direction * helmW * 0.7;
+      const outerMidY = -helmH * 0.25;
       
       ctxRef.fillStyle = 'rgba(244,228,198,0.96)';
       ctxRef.beginPath();
       ctxRef.moveTo(innerBaseX, baseY);
-      ctxRef.quadraticCurveTo(midX * 0.7, midY * 0.8, tipX, tipY);
-      ctxRef.quadraticCurveTo(midX * 1.2, midY * 0.6, outerBaseX, -helmH * 0.4);
+      // Inner edge curves to tip
+      ctxRef.quadraticCurveTo(innerMidX, innerMidY, tipX, tipY);
+      // Outer edge curves back to base (tapers more sharply)
+      ctxRef.quadraticCurveTo(outerMidX, outerMidY, outerBaseX, -helmH * 0.4);
       ctxRef.closePath();
       ctxRef.fill();
-      ctxRef.strokeStyle = 'rgba(116,86,44,0.45)';
-      ctxRef.lineWidth = Math.max(1.5, size * 0.08);
+      
+      // Add subtle shadow/depth on inner edge
+      ctxRef.strokeStyle = 'rgba(116,86,44,0.35)';
+      ctxRef.lineWidth = Math.max(0.5, size * 0.03);
+      ctxRef.beginPath();
+      ctxRef.moveTo(innerBaseX, baseY);
+      ctxRef.quadraticCurveTo(innerMidX, innerMidY, tipX, tipY);
       ctxRef.stroke();
+      
       ctxRef.restore();
     };
     drawHorn(-1);

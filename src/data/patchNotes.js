@@ -1,5 +1,16 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.93',
+    label: 'HORN TWEAK HOTFIX',
+    summary: [
+      'This quick hotfix ships the latest Viking helm horn adjustment so the silhouette reads more cleanly without changing the rest of the hats system.'
+    ],
+    highlights: [
+      'Included the latest Viking horn shape tweak.',
+      'No gameplay or menu-flow changes in this release.'
+    ]
+  },
+  {
     version: '1.16.92',
     label: 'HATS FOLLOW-UP',
     summary: [
