@@ -1,5 +1,16 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.94',
+    label: 'HORN HAT POLISH',
+    summary: [
+      'This release keeps refining the Viking helm silhouette so the horns read cleaner and stay simple against the ghost outline.'
+    ],
+    highlights: [
+      'Included the latest Viking horn geometry pass.',
+      'No gameplay changes in this release.'
+    ]
+  },
+  {
     version: '1.16.93',
     label: 'HORN TWEAK HOTFIX',
     summary: [

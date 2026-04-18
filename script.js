@@ -3484,16 +3484,16 @@ function drawGhostHatLayer(ctxRef, hatKey, size, bodyColor, ts) {
       ctxRef.save();
       const tipX = direction * helmW * 0.92;
       const tipY = -helmH * 0.52;
-      const innerBaseX = direction * helmW * 0.45;
-      const outerBaseX = direction * helmW * 0.65;
+      const innerBaseX = direction * helmW * 0.25;
+      const outerBaseX = direction * helmW * 0.75;
       const baseY = -helmH * 0.08;
       
       // Create inner edge curve (thicker side of horn)
-      const innerMidX = direction * helmW * 0.45;
+      const innerMidX = direction * helmW * 0.35;
       const innerMidY = -helmH * 0.3;
       
       // Create outer edge curve (thinner side of horn, tapers more)
-      const outerMidX = direction * helmW * 0.7;
+      const outerMidX = direction * helmW * 0.82;
       const outerMidY = -helmH * 0.25;
       
       ctxRef.fillStyle = 'rgba(244,228,198,0.96)';
