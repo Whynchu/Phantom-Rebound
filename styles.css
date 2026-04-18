@@ -211,6 +211,23 @@ body.compact-viewport #wrap {
   border: 2px solid currentColor;
   box-shadow: 0 0 10px rgba(255,255,255,0.12);
 }
+.settings-preview-body {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.settings-preview-swatch.phase .settings-preview-body {
+  inset: 10px;
+}
+.settings-preview-swatch.elite .settings-preview-body {
+  inset: 13px;
+}
+.settings-preview-swatch.bullet .settings-preview-body {
+  inset: 0;
+}
+.settings-preview-swatch.harvest-bullet .settings-preview-body {
+  display: none;
+}
 .settings-preview-core {
   position: absolute;
   inset: 6px;
@@ -220,7 +237,13 @@ body.compact-viewport #wrap {
 }
 .settings-preview-swatch.phase .settings-preview-core,
 .settings-preview-swatch.elite .settings-preview-core {
-  inset: 11px;
+  opacity: 0.4;
+}
+.settings-preview-swatch.phase .settings-preview-core {
+  inset: 13px;
+}
+.settings-preview-swatch.elite .settings-preview-core {
+  inset: 16px;
 }
 .settings-preview-swatch.triangle .settings-preview-core {
   inset: 7px;
@@ -242,10 +265,10 @@ body.compact-viewport #wrap {
   pointer-events: none;
 }
 .settings-preview-ring.ring-1 {
-  inset: 1px;
+  inset: 2px;
 }
 .settings-preview-ring.ring-2 {
-  inset: 5px;
+  inset: 7px;
 }
 .settings-preview-meta {
   min-width: 0;

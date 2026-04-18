@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.82',
+    label: 'SETTINGS RING PREVIEW FIX',
+    summary: [
+      'The settings preview now composes Phase and Omega as a smaller filled center plus visible ring layers inside one fixed buster-sized circle instead of collapsing the rings into the fill.'
+    ],
+    highlights: [
+      'Phase and Omega preview swatches now use a separate inner body element rather than a full-size solid fill.',
+      'The preview ring layers now occupy the rest of the same outer circle size, matching the intended read of center-plus-rings.',
+      'This fixes the missing-ring look in the settings menu without changing the actual gameplay sizing.'
+    ]
+  },
+  {
     version: '1.16.81',
     label: 'ICON + RING GEOMETRY',
     summary: [

@@ -394,9 +394,14 @@ function renderSettingsPanel() {
 
     const swatch = document.createElement('div');
     swatch.className = `settings-preview-swatch ${entry.kind}`;
-    swatch.style.background = entry.color;
+    swatch.style.background = (entry.kind === 'phase' || entry.kind === 'elite') ? 'transparent' : entry.color;
     swatch.style.boxShadow = `0 0 18px ${entry.glow}66`;
     swatch.style.color = entry.color;
+
+    const body = document.createElement('div');
+    body.className = 'settings-preview-body';
+    body.style.background = entry.color;
+    swatch.appendChild(body);
 
     const core = document.createElement('div');
     core.className = 'settings-preview-core';
