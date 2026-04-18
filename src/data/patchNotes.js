@@ -1,5 +1,17 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.83',
+    label: 'SCREENSHOT ICON UPDATE',
+    summary: [
+      'The Safari/Home Screen icon set now derives from a direct in-game screenshot instead of a reconstructed ghost illustration, with a light contrast pass to keep the background darker.'
+    ],
+    highlights: [
+      'Web-app icons now use `assets/icons/new_icon.jpg` as the source image.',
+      'The icon generator applies a mild tonal adjustment so the background drops darker while preserving the captured ghost.',
+      'The screenshot source is now intended to live alongside the generated icon outputs for future refreshes.'
+    ]
+  },
+  {
     version: '1.16.82',
     label: 'SETTINGS RING PREVIEW FIX',
     summary: [
