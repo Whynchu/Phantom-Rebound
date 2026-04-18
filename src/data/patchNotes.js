@@ -1,5 +1,20 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.98',
+    label: 'HEAVY ROUNDS & TEMPO',
+    summary: [
+      'Global game speed bumped from 1.45× to 1.55× for snappier feel.',
+      'Base fire rate raised from 0.5 to 0.8 SPS so every build starts with a solid cadence.',
+      'New boon: Heavy Rounds — trade fire rate for massive per-shot damage, enabling slow-and-heavy archetypes.'
+    ],
+    highlights: [
+      'GLOBAL_SPEED_LIFT 1.45 → 1.55 (player, bullets, enemies all faster).',
+      'SPS_LADDER base tier 0.5 → 0.8.',
+      'Heavy Rounds: -45% fire rate, +50% damage per tier (max 3). Stacks multiplicatively.',
+      'HUD and telemetry now show effective SPS when Heavy Rounds is active.',
+    ]
+  },
+  {
     version: '1.16.97',
     label: 'HORN FINAL TUNE',
     summary: [

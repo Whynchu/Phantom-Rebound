@@ -640,7 +640,7 @@ const AEGIS_NOVA_DAMAGE_FACTOR = 0.55;
 const VOLATILE_ORB_COOLDOWN = 8;
 const VOLATILE_ORB_SHARED_COOLDOWN = 1.0;
 const PHASE_DASH_DAMAGE_MULT = 0.05;
-const GLOBAL_SPEED_LIFT = 1.45;
+const GLOBAL_SPEED_LIFT = 1.55;
 const VAMPIRIC_HEAL_PER_KILL = 4;
 const VAMPIRIC_CHARGE_PER_KILL = 0.25;
 const VAMPIRIC_HEAL_CAP_BASE = 14;
@@ -875,11 +875,11 @@ function captureTelemetrySnapshot(roomNumber) {
     room: roomNumber,
     hp: roundTelemetryValue(hp),
     maxHp: roundTelemetryValue(maxHp),
-    sps: roundTelemetryValue(UPG.sps || 0),
+    sps: roundTelemetryValue((UPG.sps || 0) * (UPG.heavyRoundsFireMult || 1)),
     maxCharge: roundTelemetryValue(UPG.maxCharge || 0),
     currentCharge: roundTelemetryValue(charge || 0),
     requiredShotCount: getRequiredShotCount(UPG),
-    damageMult: roundTelemetryValue((UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1)),
+    damageMult: roundTelemetryValue((UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (UPG.heavyRoundsDamageMult || 1)),
     denseTier: UPG.denseTier || 0,
     denseDamageMult: roundTelemetryValue(UPG.denseDamageMult || 1),
     chargeCapTier: UPG.chargeCapTier || 0,
@@ -1625,7 +1625,7 @@ function firePlayer(tx,ty) {
   const lateBloomMods = getLateBloomMods(roomIndex || 0);
   // Escalation: per-kill damage in current room (max +40%)
   const escalationBonus = UPG.escalation ? 1 + Math.min((UPG.escalationKills || 0) * ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS) : 1;
-  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus;
+  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (UPG.heavyRoundsDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus;
   const lifeMs = PLAYER_SHOT_LIFE_MS * (UPG.shotLifeMult || 1);
   const now = performance.now();
   const overchargeBonus = (UPG.overchargeVent && charge >= UPG.maxCharge) ? 1.6 : 1;
@@ -2305,7 +2305,7 @@ function update(dt,ts){
 
   if(combatActive && charge >= 1 && isStill){
     fireT += dt;
-    const interval = 1 / (UPG.sps * 2);
+    const interval = 1 / (UPG.sps * 2 * (UPG.heavyRoundsFireMult || 1));
     if(fireT >= interval){
       fireT = fireT % interval;
       if(autoTarget) firePlayer(autoTarget.e.x,autoTarget.e.y);
@@ -3755,7 +3755,7 @@ function drawGhostSprite(ctxRef, ts, {
 
 // ── GHOST SPRITE ──────────────────────────────────────────────────────────────
 function drawGhost(ts){
-  const shotInterval = 1 / (UPG.sps * 2);
+  const shotInterval = 1 / (UPG.sps * 2 * (UPG.heavyRoundsFireMult || 1));
   drawGhostSprite(ctx, ts, {
     playerState: player,
     chargeValue: charge,
@@ -3829,7 +3829,7 @@ function hudUpdate(){
     score,
     charge,
     maxCharge: UPG.maxCharge,
-    sps: UPG.sps,
+    sps: UPG.sps * (UPG.heavyRoundsFireMult || 1),
     elements: {
       roomCounter: roomCounterEl,
       scoreText: scoreTextEl,

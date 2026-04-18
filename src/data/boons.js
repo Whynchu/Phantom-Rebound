@@ -1,4 +1,4 @@
-const SPS_LADDER = [0.5,1.2,2.2,3.8,6.0,8.8];
+const SPS_LADDER = [0.8,1.2,2.2,3.8,6.0,8.8];
 const MAX_SHIELD_TIER = 4;
 const TITAN_HP_PCT = [1.00, 0.50, 0.25, 0.10, 0.05];
 const TITAN_SLOW_PCT = 0.05;
@@ -108,7 +108,7 @@ function getFlatChargeGain(tier) {
 function getDefaultUpgrades() {
   const upg = {
     speedMult:        1,
-    sps:              0.5,
+    sps:              0.8,
     spsTier:          0,
     spreadTier:       0,
     spreadTierObtained: false,
@@ -210,6 +210,9 @@ function getDefaultUpgrades() {
     overload: false, overloadActive: false, overloadCooldown: 0,
     empBurst: false, empBurstUsed: false,
     voidWalker: false, voidZoneActive: false, voidZoneTimer: 0,
+    heavyRoundsTier: 0,
+    heavyRoundsDamageMult: 1,
+    heavyRoundsFireMult: 1,
     boonSelectionOrder: [],
   };
   syncChargeCapacity(upg);
@@ -257,6 +260,7 @@ const BOONS = [
   {name:'Orb Overcharge',tag:'OFFENSE',icon:'⚡⬆',desc:'Charged Orb shots scale much harder from current charge.',requires:upg=>upg.chargedOrbs,apply(upg){if(upg.orbOvercharge)return; upg.orbOvercharge=true;}},
   {name:'Orbital Focus',tag:'OFFENSE',icon:'🌐',desc:'Orbs hit harder and fire faster.',requires:upg=>upg.orbitSphereTier>0,apply(upg){if(upg.orbitalFocus)return; upg.orbitalFocus=true;}},
   {name:'Aegis Battery',tag:'OFFENSE',icon:'🔋',desc:'Ready shields boost returns; full set fires bolts.',requires:upg=>upg.shieldTier>0,apply(upg){if(upg.aegisBattery)return; upg.aegisBattery=true; upg.aegisBatteryTimer=0;}},
+  {name:'Heavy Rounds',tag:'OFFENSE',icon:'🔨',desc:'-45% fire rate, +50% damage. Max 3.',apply(upg){if(upg.heavyRoundsTier>=3)return; upg.heavyRoundsTier++; upg.heavyRoundsFireMult*=0.55; upg.heavyRoundsDamageMult*=1.50;}},
   {name:'Dense Core',tag:'OFFENSE',icon:'◈',desc:'Less max charge, more damage. Max 4.',apply(upg){if(upg.denseTier>=4)return; upg.denseTier++; upg.denseDamageMult=DENSE_CORE_DAMAGE_MULTS[Math.min(DENSE_CORE_DAMAGE_MULTS.length - 1, upg.denseTier - 1)]; syncChargeCapacity(upg);}},
   {name:'Echo Fire',tag:'OFFENSE',icon:'↺',desc:'Every 5th shot fires a free echo.',apply(upg){if(upg.echoFire)return; upg.echoFire=true;}},
   {name:'Split Shot',tag:'OFFENSE',icon:'⋔',desc:'Shots split on first wall bounce.',apply(upg){if(upg.splitShot||upg.bounceTier===0)return; upg.splitShot=true;},evolvesWith:['Ricochet'],evolvedVersion:{name:'Fracture',icon:'⋔+',desc:'Bounce splits into 3 and gains damage.',apply(upg){if(upg.splitShot||upg.bounceTier===0)return; upg.splitShot=true; upg.splitShotEvolved=true; upg.denseDamageMult=(upg.denseDamageMult||1)*1.2;}}},
@@ -427,7 +431,7 @@ function createHealBoon(upg) {
 
 function getActiveBoonEntries(upg) {
   const entries = [];
-  if(upg.spsTier > 0) entries.push({ icon:'⚡', name:'Rapid Fire', detail:`Tier ${upg.spsTier} - ${upg.sps.toFixed(1)} SPS` });
+  if(upg.spsTier > 0) entries.push({ icon:'⚡', name:'Rapid Fire', detail:`Tier ${upg.spsTier} - ${(upg.sps * (upg.heavyRoundsFireMult || 1)).toFixed(1)} SPS` });
   if(upg.ringShots > 0) entries.push({ icon:'◎', name:'Ring Blast', detail:`${upg.ringShots} radial shot${upg.ringShots === 1 ? '' : 's'}` });
   if(upg.dualShot > 0) entries.push({ icon:'↕', name:'Backshot', detail:'Rear shot enabled' });
   if(upg.snipePower > 0) entries.push({ icon:'🎯', name:'Snipe Shot', detail:`Tier ${upg.snipePower}` });
@@ -474,6 +478,7 @@ function getActiveBoonEntries(upg) {
   if(upg.aegisBattery) entries.push({ icon:'🔋', name:'Aegis Battery', detail:'Ready shields boost returns; full set fires bolts' });
   if(upg.orbitSphereTier > 0) entries.push({ icon:'🔮', name:'Orbit Spheres', detail:`${upg.orbitSphereTier} sphere${upg.orbitSphereTier === 1 ? '' : 's'}` });
   if(upg.denseTier > 0) entries.push({ icon:'◈', name:'Dense Core', detail:`Tier ${upg.denseTier} — ×${upg.denseDamageMult.toFixed(2)} dmg, cap: ${upg.maxCharge}` });
+  if(upg.heavyRoundsTier > 0) entries.push({ icon:'🔨', name:'Heavy Rounds', detail:`Tier ${upg.heavyRoundsTier} — ×${upg.heavyRoundsDamageMult.toFixed(2)} dmg, ${Math.round((1 - upg.heavyRoundsFireMult) * 100)}% slower` });
   if(upg.slipTier>0) entries.push({icon: upg.fluxState?'〜+':'〜', name: upg.fluxState?'Flux State':'Slipstream', detail:`+${upg.slipChargeGain.toFixed(2)} charge/near-miss`});
   if(upg.resonantAbsorb) entries.push({icon: upg.surgeHarvest?'≋+':'≋', name: upg.surgeHarvest?'Surge Harvest':'Resonant Absorb', detail:'Quick combos give bonus charge'});
   if(upg.chainMagnetTier>0) entries.push({icon:'⤥',name:'Chain Magnet',detail:`${(700+350*(upg.chainMagnetTier-1))}ms double pull`});
