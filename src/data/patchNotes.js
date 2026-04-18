@@ -1,5 +1,18 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.80',
+    label: 'WEB APP ICONS',
+    summary: [
+      'Added proper Home Screen / web-app icon metadata and a new ghost-on-dark icon set so Safari-installed builds stop falling back to the generic letter tile.'
+    ],
+    highlights: [
+      'Added Apple touch icon metadata and standalone web-app tags in the document head.',
+      'Added a site manifest with 192px and 512px app icons.',
+      'Added a new ghost-on-dark icon set for Safari Home Screen and browser favicon usage.',
+      'Icon URLs are cache-busted with the current build number so refreshed installs pick up the new assets more reliably.'
+    ]
+  },
+  {
     version: '1.16.79',
     label: 'RING ART HOTFIX',
     summary: [
