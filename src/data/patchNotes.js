@@ -1,5 +1,19 @@
 const PATCH_NOTES = [
   {
+    version: '1.16.90',
+    label: 'HATS CLEANUP PASS',
+    summary: [
+      'This follow-up pass cleans up the hats feature across desktop and menu presentation: the ghost preview keeps true proportions while zooming harder, the picker is tighter and more organized, the no-hat HP bar sits a bit higher, and the Viking helm reads more cleanly.'
+    ],
+    highlights: [
+      'The start preview now uses stronger uniform zoom without stretching the base ghost proportions.',
+      'Desktop menu spacing is tightened so the hats feature stops crowding the start layout.',
+      'The hats picker uses shorter copy, larger previews, and a cleaner compact modal treatment.',
+      'The no-hat HP bar is raised slightly to clear the ghost head better.',
+      'Viking helm horns now mirror outward more cleanly across the vertical axis.'
+    ]
+  },
+  {
     version: '1.16.89',
     label: 'HATS LAYOUT HOTFIX',
     summary: [

@@ -159,9 +159,9 @@ const PLAYER_COLOR_KEY = 'phantom-player-color';
 const COLOR_ASSIST_KEY = 'phantom-color-assist';
 const PLAYER_HAT_KEY = 'phantom-player-hat';
 const HAT_OPTIONS = [
-  { key: 'none', name: 'No Hat', tag: 'Default', description: 'The plain ghost silhouette with no vanity headwear.' },
-  { key: 'bunny', name: 'Bunny Ears', tag: 'Spring', description: 'Tall soft ears adapted from the old Easter ghost look.' },
-  { key: 'viking', name: 'Viking Helm', tag: 'Founders', description: 'A broad metal helm with side horns for a louder silhouette.' },
+  { key: 'none', name: 'No Hat', tag: 'Default', description: 'Plain ghost silhouette.' },
+  { key: 'bunny', name: 'Bunny Ears', tag: 'Spring', description: 'Soft tall ears.' },
+  { key: 'viking', name: 'Viking Helm', tag: 'Founders', description: 'Metal cap with mirrored horns.' },
 ];
 const storedColorAssist = readText(COLOR_ASSIST_KEY, 'off');
 setColorAssistMode(storedColorAssist);
@@ -3482,14 +3482,16 @@ function drawGhostHatLayer(ctxRef, hatKey, size, bodyColor, ts) {
 
     const drawHorn = (direction = 1) => {
       ctxRef.save();
-      ctxRef.scale(direction, 1);
-      ctxRef.translate(helmW * 0.44, -helmH * 0.12);
-      ctxRef.rotate(direction * 0.34);
+      const tipX = direction * helmW * 0.92;
+      const tipY = -helmH * 0.52;
+      const innerBaseX = direction * helmW * 0.26;
+      const outerBaseX = direction * helmW * 0.5;
+      const baseY = -helmH * 0.08;
       ctxRef.fillStyle = 'rgba(244,228,198,0.96)';
       ctxRef.beginPath();
-      ctxRef.moveTo(hornW * 0.12, hornH * 0.34);
-      ctxRef.lineTo(-hornW * 0.98, -hornH * 0.12);
-      ctxRef.lineTo(-hornW * 0.08, -hornH * 0.46);
+      ctxRef.moveTo(innerBaseX, baseY);
+      ctxRef.lineTo(tipX, tipY);
+      ctxRef.lineTo(outerBaseX, -helmH * 0.4);
       ctxRef.closePath();
       ctxRef.fill();
       ctxRef.strokeStyle = 'rgba(116,86,44,0.45)';
@@ -3514,7 +3516,7 @@ function getHatHeightMultiplier(hatKey) {
   switch(hatKey) {
     case 'bunny': return 1.5;
     case 'viking': return 0.9;
-    default: return 0;
+    default: return 0.16;
   }
 }
 
@@ -3679,13 +3681,13 @@ function drawStartGhostPreview(ts = performance.now()) {
   if(!startGhostPreview || !startGhostPreviewCtx) return;
   startGhostPreviewCtx.clearRect(0, 0, startGhostPreview.width, startGhostPreview.height);
   startGhostPreviewCtx.save();
-  startGhostPreviewCtx.translate(startGhostPreview.width / 2, startGhostPreview.height / 2 + 12);
-  startGhostPreviewCtx.scale(2, 2);
-  startGhostPreviewCtx.translate(-startGhostPreview.width / 2, -(startGhostPreview.height / 2 + 12));
+  startGhostPreviewCtx.translate(startGhostPreview.width / 2, startGhostPreview.height / 2 + 16);
+  startGhostPreviewCtx.scale(3.1, 3.1);
+  startGhostPreviewCtx.translate(-startGhostPreview.width / 2, -(startGhostPreview.height / 2 + 16));
   drawGhostSprite(startGhostPreviewCtx, ts, {
     playerState: {
       x: startGhostPreview.width / 2,
-      y: startGhostPreview.height / 2 + 12,
+      y: startGhostPreview.height / 2 + 16,
       r: 9,
       vx: 0,
       distort: 0,
