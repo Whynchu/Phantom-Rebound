@@ -610,7 +610,7 @@ const BASE_PLAYER_HP = 200;
 let gstate = 'start';
 let pauseStartedAt = 0;
 let player = {};
-let bullets = [], enemies = [], particles = [];
+let bullets = [], enemies = [], particles = [], dmgNumbers = [];
 let score=0, kills=0;
 let charge=0, fireT=0, stillTimer=0, prevStill=false;
 let hp=BASE_PLAYER_HP, maxHp=BASE_PLAYER_HP;
@@ -1151,6 +1151,8 @@ function startRoom(idx) {
   roomObstacles = createRoomObstacles(cv.width, cv.height);
   enemies = [];
   bullets = [];
+  dmgNumbers = [];
+  payloadCooldownMs = 0;
   // Boss room state
   currentRoomIsBoss = Boolean(def.isBossRoom);
   bossAlive = currentRoomIsBoss;
@@ -1177,15 +1179,48 @@ function startRoom(idx) {
   showRoomIntro(currentRoomIsBoss ? 'BOSS!' : 'READY?', false);
 }
 
-function triggerPayloadBlast(bullet, enemies) {
+function triggerPayloadBlast(bullet, enemies, ts) {
   if(!bullet?.hasPayload || !enemies || enemies.length === 0) return;
+  if(payloadCooldownMs > 0) return;
   const aoeRadius = getPayloadBlastRadius(UPG, bullet.r || 4.5);
   const impactDamage = bullet.dmg * 0.6;
-  for(const e of enemies){
+  let hitCount = 0;
+  for(let j = enemies.length - 1; j >= 0; j--){
+    const e = enemies[j];
     if(Math.hypot(e.x - bullet.x, e.y - bullet.y) < aoeRadius + e.r){
       e.hp -= impactDamage;
+      hitCount++;
+      spawnDmgNumber(e.x, e.y - e.r, impactDamage, '#ff6b35');
+      if(e.hp <= 0){
+        score += computeKillScore(e.pts, false);
+        kills++;
+        recordKill('payload');
+        sparks(e.x, e.y, e.col, e.isBoss ? 30 : 14, e.isBoss ? 160 : 95);
+        spawnGreyDrops(e.x, e.y, ts);
+        const killEffects = resolveEnemyKillEffects({
+          enemy: e, bullet, upgrades: UPG, hp, maxHp, ts,
+          vampiricHealPerKill: VAMPIRIC_HEAL_PER_KILL,
+          vampiricChargePerKill: VAMPIRIC_CHARGE_PER_KILL,
+        });
+        applyKillUpgradeState(UPG, killEffects.nextUpgradeState);
+        const killRewardActions = buildKillRewardActions({
+          killEffects, enemyX: e.x, enemyY: e.y,
+          playerX: player.x, playerY: player.y, ts, upgrades: UPG,
+          globalSpeedLift: GLOBAL_SPEED_LIFT, bloodPactHealCap: getBloodPactHealCap(),
+          random: Math.random,
+        });
+        for(const action of killRewardActions){
+          if(action.type === 'bossClear'){ bossAlive = false; bossClears += 1; healPlayer(action.healAmount, 'bossReward'); showBossDefeated(); }
+          else if(action.type === 'sustainHeal'){ applyKillSustainHeal(action.amount, action.source); }
+          else if(action.type === 'gainCharge'){ gainCharge(action.amount, action.source); }
+          else if(action.type === 'spawnGreyBullet'){ pushGreyBullet({ bullets, x:action.x, y:action.y, vx:action.vx, vy:action.vy, radius:action.radius, decayStart:action.decayStart }); }
+          else if(action.type === 'spawnSanguineBurst'){ spawnRadialOutputBurst({ bullets, x:action.x, y:action.y, count:action.count, speed:action.speed, radius:action.radius, bounceLeft:action.bounceLeft, pierceLeft:action.pierceLeft, homing:action.homing, crit:action.crit, dmg:action.dmg, expireAt:action.expireAt, extras:action.extras }); }
+        }
+        enemies.splice(j, 1);
+      }
     }
   }
+  if(hitCount > 0) payloadCooldownMs = 5000;
   burstPayloadExplosion(bullet.x, bullet.y, aoeRadius);
   sparks(bullet.x, bullet.y, '#ff6b35', 12 + Math.min(12, Math.round((aoeRadius - 80) / 6)), 80 + aoeRadius * 0.2);
 }
@@ -1716,6 +1751,8 @@ function firePlayer(tx,ty) {
 
 const MAX_PARTICLES = 600;
 const MAX_BULLETS = 400;
+const MAX_DMG_NUMBERS = 30;
+let payloadCooldownMs = 0;
 
 function sparks(x,y,col,n=6,spd=80) {
   const room = Math.min(n, MAX_PARTICLES - particles.length);
@@ -1788,6 +1825,12 @@ function burstPayloadExplosion(x, y, radius) {
       grow: Math.max(3.2, radius / 14) + Math.random() * Math.max(2, radius / 18),
     });
   }
+}
+
+function spawnDmgNumber(x, y, value, color = '#fff') {
+  if (dmgNumbers.length >= MAX_DMG_NUMBERS) dmgNumbers.shift();
+  const display = value >= 1 ? Math.round(value) : value.toFixed(1);
+  dmgNumbers.push({ x: x + (Math.random() - 0.5) * 10, y, text: String(display), color, life: 1 });
 }
 
 function showUpgrades() {
@@ -2188,7 +2231,8 @@ function init() {
   boonHistory=[]; pendingLegendary=null; legendaryOffered=false;
   runTelemetry = createRunTelemetry();
   currentRoomTelemetry = null;
-  bullets=[];enemies=[];particles=[];
+  bullets=[];enemies=[];particles=[];dmgNumbers=[];
+  payloadCooldownMs = 0;
   resetJoystickState(joy);
   resetUpgrades();
   syncRunChargeCapacity();
@@ -2753,11 +2797,10 @@ function update(dt,ts){
 
     if(shouldExpireOutputBullet(b, ts)){
       // Payload: explode on expiration, damaging enemies in AoE
-      triggerPayloadBlast(b, enemies);
+      triggerPayloadBlast(b, enemies, ts);
       bullets.splice(i,1);
       continue;
     }
-
     // Homing for output bullets
     if(b.state==='output'&&b.homing&&enemies.length>0){
       const tgt=enemies.reduce((bst,e)=>{const d=Math.hypot(e.x-b.x,e.y-b.y);return(!bst||d<bst.d)?{e,d}:bst;},null);
@@ -2844,7 +2887,7 @@ function update(dt,ts){
             b.decayStart = ts;
             sparks(b.x, b.y, C.ghost, 6, 50);
           } else {
-            triggerPayloadBlast(b, enemies);
+            triggerPayloadBlast(b, enemies, ts);
             bullets.splice(i,1);
             continue;
           }
@@ -3209,6 +3252,7 @@ function update(dt,ts){
           });
           e.hp = hitResolution.enemyHpAfterHit;
           sparks(b.x,b.y,b.crit?C.ghost:C.green,b.crit?8:5,b.crit?70:55);
+          spawnDmgNumber(e.x, e.y - e.r, hitResolution.damage, b.crit ? C.ghost : '#fff');
           // Blood Pact: piercing shots restore 1 HP per enemy hit
           if(hitResolution.shouldBloodPactHeal){
             applyKillSustainHeal(1, 'bloodPact');
@@ -3328,6 +3372,17 @@ function update(dt,ts){
     p.life-=p.decay*dt;
     if(p.life<=0)particles.splice(i,1);
   }
+
+  // ── Damage numbers
+  for(let i=dmgNumbers.length-1;i>=0;i--){
+    const d=dmgNumbers[i];
+    d.y -= 40*dt;
+    d.life -= 1.8*dt;
+    if(d.life<=0) dmgNumbers.splice(i,1);
+  }
+
+  // ── Payload cooldown
+  if(payloadCooldownMs > 0) payloadCooldownMs = Math.max(0, payloadCooldownMs - dt*1000);
 }
 
 // ── ROOM CLEAR FLASH ──────────────────────────────────────────────────────────
@@ -3496,6 +3551,21 @@ function draw(ts){
   }
 
   // Ghost player sprite
+  // Payload-ready ring indicator (drawn before ghost so ghost is on top)
+  if(UPG.payload && payloadCooldownMs <= 0){
+    const hex = getPlayerColorScheme().hex;
+    const rr = parseInt(hex.slice(1,3),16), gg = parseInt(hex.slice(3,5),16), bb = parseInt(hex.slice(5,7),16);
+    const compR = 255 - rr, compG = 255 - gg, compB = 255 - bb;
+    const pulse = 0.4 + 0.3 * Math.sin(ts * 0.006);
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = `rgb(${compR},${compG},${compB})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r + 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
   const show=player.invincible<=0||Math.floor(ts/90)%2===0;
   if(show){ drawGhost(ts); }
   if(show && playerAimHasTarget){
@@ -3604,6 +3674,17 @@ function draw(ts){
     ctx.stroke();
     ctx.restore();
   }
+
+  // Floating damage numbers
+  ctx.save();
+  ctx.font = 'bold 10px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'center';
+  for(const d of dmgNumbers){
+    ctx.globalAlpha = Math.max(0, d.life * 0.9);
+    ctx.fillStyle = d.color;
+    ctx.fillText(d.text, d.x, d.y);
+  }
+  ctx.restore();
 
   // Joystick anchor — tiny subtle dot where finger landed
   if(joy.active){
@@ -3905,24 +3986,24 @@ function drawGhostSprite(ctxRef, ts, {
   drawGhostHatLayer(ctxRef, hatKey, size, bodyColor, ts);
 
   ctxRef.fillStyle = '#080f0a';
-  ctxRef.beginPath(); ctxRef.arc(-5.5, -size * .25, 3, 0, Math.PI * 2); ctxRef.fill();
-  ctxRef.beginPath(); ctxRef.arc(5.5, -size * .25, 3, 0, Math.PI * 2); ctxRef.fill();
+  ctxRef.beginPath(); ctxRef.arc(-5.5, -size * .25 - 2, 3, 0, Math.PI * 2); ctxRef.fill();
+  ctxRef.beginPath(); ctxRef.arc(5.5, -size * .25 - 2, 3, 0, Math.PI * 2); ctxRef.fill();
   if(gameState === 'dying'){
     ctxRef.strokeStyle = 'rgba(12,20,16,0.85)';
     ctxRef.lineWidth = 1.5;
-    ctxRef.beginPath(); ctxRef.arc(-5.5, -size * .25, 1.5, 0, Math.PI * 2); ctxRef.stroke();
-    ctxRef.beginPath(); ctxRef.arc(5.5, -size * .25, 1.5, 0, Math.PI * 2); ctxRef.stroke();
-    ctxRef.beginPath(); ctxRef.arc(0, size * .08, 4.6, Math.PI + .25, Math.PI * 2 - .25); ctxRef.stroke();
+    ctxRef.beginPath(); ctxRef.arc(-5.5, -size * .25 - 2, 1.5, 0, Math.PI * 2); ctxRef.stroke();
+    ctxRef.beginPath(); ctxRef.arc(5.5, -size * .25 - 2, 1.5, 0, Math.PI * 2); ctxRef.stroke();
+    ctxRef.beginPath(); ctxRef.arc(0, size * .08 + 2, 4.6, Math.PI + .25, Math.PI * 2 - .25); ctxRef.stroke();
   } else {
     ctxRef.fillStyle = C.getRgba(C.green, 0.9);
-    ctxRef.beginPath(); ctxRef.arc(-4.5, -size * .3, 1.3, 0, Math.PI * 2); ctxRef.fill();
-    ctxRef.beginPath(); ctxRef.arc(4.5, -size * .3, 1.3, 0, Math.PI * 2); ctxRef.fill();
+    ctxRef.beginPath(); ctxRef.arc(-4.5, -size * .3 - 2, 1.3, 0, Math.PI * 2); ctxRef.fill();
+    ctxRef.beginPath(); ctxRef.arc(4.5, -size * .3 - 2, 1.3, 0, Math.PI * 2); ctxRef.fill();
   }
 
   if(chargeFrac > 0.3 && gameState !== 'dying'){
     ctxRef.strokeStyle = 'rgba(0,0,0,0.55)';
     ctxRef.lineWidth = 1.5;
-    ctxRef.beginPath(); ctxRef.arc(0, -size * .1, 4.5, .2, Math.PI - .2); ctxRef.stroke();
+    ctxRef.beginPath(); ctxRef.arc(0, -size * .1 + 2, 4.5, .2, Math.PI - .2); ctxRef.stroke();
   }
 
   const ringRadius = size + 8;

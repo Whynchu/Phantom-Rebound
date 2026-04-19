@@ -114,6 +114,7 @@ function spawnSplitOutputBullets({
       expireAt,
       extras: {
         hasSplit: true,
+        hasPayload: Boolean(sourceBullet.hasPayload),
         bloodPactHeals: sourceBullet.bloodPactHeals || 0,
         bloodPactHealCap: sourceBullet.bloodPactHealCap || fallbackBloodPactHealCap,
       },

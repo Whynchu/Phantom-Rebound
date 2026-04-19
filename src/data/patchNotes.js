@@ -1,5 +1,21 @@
 const PATCH_NOTES = [
   {
+    version: '1.17.2',
+    label: 'IMPACT FEEDBACK',
+    summary: [
+      'Damage numbers, payload overhaul with kill processing and cooldown, ghost face polish, and fracture payload bug fix.',
+      'Payload blasts are 3× larger, have a 5s cooldown, properly process kills, and glow when ready.'
+    ],
+    highlights: [
+      'Floating damage numbers pop up and fade above enemies when hit — white for normal, ghost color for crits, orange for payload.',
+      'Payload blast radius tripled (288 base, up to 576). Now has 5s cooldown that only triggers on hits.',
+      'Payload kills now properly award score, drops, kill effects, and rewards — previously only subtracted HP.',
+      'Payload-ready indicator: pulsing complementary-color ring around ghost when payload is off cooldown.',
+      'Fracture (Split Shot) bug fix: split bullets now properly inherit Payload status.',
+      'Ghost face tuned: eyes moved 2px higher, smile/frown moved 2px lower for better expression.',
+    ]
+  },
+  {
     version: '1.17.1',
     label: 'POWER DREAM',
     summary: [
