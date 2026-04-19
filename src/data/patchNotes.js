@@ -1,5 +1,21 @@
 const PATCH_NOTES = [
   {
+    version: '1.17.5',
+    label: 'SPRITE ICONS',
+    summary: [
+      'Replaced emoji icons with 1-bit pixel art sprites across all boons, legendaries, and UI panels.',
+      'Responsive layout improvements for non-PWA browsers. HUD pause button moved inline with room counter.'
+    ],
+    highlights: [
+      'All boon icons now use 1-bit pixel art sprites from the Sprites_Cropped icon set. Crisp pixelated rendering.',
+      'Icon system uses a centralized renderer with automatic emoji fallback for unmapped icons.',
+      'Boon selection cards, active boons panel, pause menu boons, and game-over loadout all use sprite icons.',
+      'Responsive UI: boon cards, titles, and spacing scale down in non-PWA browser mode to prevent clutter.',
+      'Upgrade screen now scrollable if content overflows viewport height.',
+      'Pause button moved inline with room counter — no longer disrupts top HUD grid sizing.',
+    ]
+  },
+  {
     version: '1.17.4',
     label: 'IMPACT FEEDBACK',
     summary: [

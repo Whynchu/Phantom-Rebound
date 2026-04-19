@@ -75,6 +75,7 @@ import {
   syncLeaderboardStatusBadge as syncLeaderboardStatusBadgeView,
 } from './src/ui/leaderboard.js';
 import { renderGameOverBoonsList, showLeaderboardBoonsPopup } from './src/ui/boonsPanel.js';
+import { iconHTML } from './src/ui/iconRenderer.js';
 import { renderPatchNotesPanel, setPatchNotesVisibility } from './src/ui/patchNotes.js';
 import { showGameOverScreen } from './src/ui/gameOver.js';
 import {
@@ -281,7 +282,7 @@ const wrap = document.getElementById('wrap');
 const topHud = document.getElementById('top-hud');
 const botHud = document.getElementById('bot-hud');
 const legend = document.getElementById('legend');
-const roomCounterEl = document.getElementById('room-counter');
+const roomCounterEl = document.getElementById('room-label');
 const scoreTextEl = document.getElementById('score-txt');
 const chargeFillEl = document.getElementById('charge-fill');
 const chargeBadgeEl = document.getElementById('charge-badge');
@@ -2066,7 +2067,7 @@ function renderPauseBoons() {
   if (!list) return;
   const entries = getActiveBoonEntries(UPG);
   list.innerHTML = entries.map(e =>
-    `<div class="up-active-row"><span class="up-active-icon">${e.icon}</span> ${e.label}</div>`
+    `<div class="up-active-row">${iconHTML(e.icon, 'up-active-icon')} ${e.label}</div>`
   ).join('');
 }
 

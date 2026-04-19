@@ -1,4 +1,5 @@
 import { pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon } from '../data/boons.js';
+import { iconHTML } from './iconRenderer.js';
 
 const BOON_FADE_MS = 180;
 
@@ -19,7 +20,7 @@ function renderActiveBoons(upg) {
     const row = document.createElement('div');
     row.className = 'up-active-item';
     row.innerHTML = `
-      <div class="up-active-icon">${entry.icon}</div>
+      ${iconHTML(entry.icon, 'up-active-icon')}
       <div class="up-active-copy">
         <div class="up-active-name">${entry.name}</div>
         <div class="up-active-detail">${entry.detail}</div>
@@ -75,7 +76,7 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
         card.className = 'up-card legendary';
         card.innerHTML = `
           <div class="up-legendary-eyebrow">✦ LEGENDARY ✦</div>
-          <div class="up-icon">${boon.icon}</div>
+          ${iconHTML(boon.icon)}
           <div class="up-name">${boon.name}</div>
           <div class="up-desc">${boon.desc}</div>
           <div class="up-tag" style="color:#fbbf24">LEGENDARY</div>`;
@@ -99,7 +100,7 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
       const tagColor = displayBoon.tag === 'OFFENSE' ? '#f87171' : displayBoon.tag === 'UTILITY' ? '#38bdf8' : '#4ade80';
       card.className = isEvolved ? 'up-card evolved' : 'up-card';
       card.innerHTML = `
-        <div class="up-icon">${displayBoon.icon}</div>
+        ${iconHTML(displayBoon.icon)}
         <div class="up-name">${displayBoon.name}</div>
         <div class="up-desc">${displayBoon.desc}</div>
         <div class="up-tag" style="color:${tagColor}">${displayBoon.tag}</div>`;
@@ -122,7 +123,7 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
   const healCard = document.createElement('div');
   healCard.className = `up-card heal-card heal-card-small${healBoon.disabled ? ' disabled' : ''}`;
   healCard.innerHTML = `
-    <div class="up-icon">${healBoon.icon}</div>
+    ${iconHTML(healBoon.icon)}
     <div class="up-name">${healBoon.name}</div>
     <div class="up-desc">${healBoon.desc}</div>
     <div class="up-tag" style="color:${healBoon.disabled ? '#707070' : '#f87171'}">${healBoon.disabled ? 'SPENT' : healBoon.tag}</div>`;
@@ -144,7 +145,7 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
       const avail = remainingRerolls > 0;
       rerollCard.className = `up-card reroll-card reroll-card-small${avail ? '' : ' disabled'}`;
       rerollCard.innerHTML = `
-        <div class="up-icon">🎲</div>
+        ${iconHTML('🎲')}
         <div class="up-name">Reroll</div>
         <div class="up-desc">${avail ? `${remainingRerolls} reroll${remainingRerolls === 1 ? '' : 's'} left` : 'None left — clear 3 rooms damageless to earn more'}</div>
         <div class="up-tag" style="color:${avail ? '#fbbf24' : '#707070'}">${avail ? 'FREE' : 'SPENT'}</div>`;

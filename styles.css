@@ -482,8 +482,7 @@ body.compact-viewport #wrap {
 #health-dots { display:none; }
 #score-txt { font-family:'Syne',sans-serif; font-weight:800; font-size:16px; color:var(--accent); }
 /* TOP HUD room counter */
-#room-counter { font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.18em; color:var(--muted); }
-#room-counter { grid-area: room; justify-self: start; }
+#room-counter { font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.18em; color:var(--muted); grid-area: room; justify-self: start; display:flex; align-items:center; gap:8px; }
 #score-txt { grid-area: score; justify-self: end; }
 #top-actions { grid-area: patch; justify-self: center; display:flex; gap:6px; align-items:center; }
 #top-hud-secondary {
@@ -797,6 +796,8 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
 #s-up {
   justify-content:flex-start;
   padding-top:18px;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
 }
 .up-room-hp {
   width:100%;
@@ -864,6 +865,14 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
 .up-active-icon {
   font-size:18px;
   line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  width:22px; height:22px; flex-shrink:0;
+}
+.up-active-icon img {
+  width:18px; height:18px;
+  image-rendering:pixelated;
+  filter:brightness(0) invert(1);
+}
 }
 .up-active-copy {
   flex:1;
@@ -911,10 +920,16 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
   gap:6px;
 }
 .heal-card-small .up-icon, .reroll-card-small .up-icon { font-size:22px; }
+.heal-card-small .up-icon img { width:20px; height:20px; }
 .heal-card-small .up-name, .reroll-card-small .up-name { font-size:11px; }
 .heal-card-small .up-desc, .reroll-card-small .up-desc { font-size:8px; line-height:1.35; }
 .heal-card-small .up-tag,  .reroll-card-small .up-tag  { font-size:6px; }
-.up-icon { font-size:26px; }
+.up-icon { font-size:26px; display:flex; align-items:center; justify-content:center; }
+.up-icon img {
+  width:26px; height:26px;
+  image-rendering:pixelated;
+  filter:brightness(0) invert(1);
+}
 .up-name { font-family:'Syne',sans-serif; font-weight:700; font-size:12px; color:#fff; letter-spacing:-.01em; line-height:1.2; }
 .up-desc { font-size:9px; color:var(--muted); line-height:1.45; }
 .up-tag  { font-size:7px; letter-spacing:.14em; text-transform:uppercase; margin-top:2px; }
@@ -1276,8 +1291,44 @@ body.tight-viewport #legend {
 }
 
 /* Pause button — hidden by default, shown via inline style during gameplay */
-#btn-pause { display:none; }
+#btn-pause { display:none; font-size:10px; padding:2px 6px; min-width:auto; line-height:1; }
 
 #pause-panel {
   z-index: 20;
+}
+
+/* ── Responsive: non-PWA browser chrome eats vertical space ── */
+@media (display-mode: browser) {
+  body.compact-viewport #s-up { padding-top: 10px; }
+  body.compact-viewport .up-card { padding: 12px 8px 10px; gap: 6px; }
+  body.compact-viewport .up-icon { font-size: 22px; }
+  body.compact-viewport .up-icon img { width: 22px; height: 22px; }
+  body.compact-viewport .up-name { font-size: 11px; }
+  body.compact-viewport .up-desc { font-size: 8px; }
+  body.compact-viewport .up-room-hp { padding: 5px 10px; }
+  body.compact-viewport #up-cards { gap: 8px; }
+  body.compact-viewport .up-cards-main { gap: 8px; }
+
+  body.tight-viewport #s-up { padding-top: 6px; }
+  body.tight-viewport .up-card { padding: 10px 6px 8px; gap: 4px; border-radius: 6px; }
+  body.tight-viewport .up-icon { font-size: 18px; }
+  body.tight-viewport .up-icon img { width: 18px; height: 18px; }
+  body.tight-viewport .up-name { font-size: 10px; }
+  body.tight-viewport .up-desc { font-size: 7px; }
+  body.tight-viewport .up-tag { font-size: 6px; }
+  body.tight-viewport .up-room-hp { padding: 4px 8px; font-size: 8px; }
+  body.tight-viewport #up-cards { gap: 6px; }
+  body.tight-viewport .up-cards-main { gap: 6px; }
+  body.tight-viewport .up-heal-row { gap: 6px; }
+  body.tight-viewport .heal-card-small, body.tight-viewport .reroll-card-small { padding: 8px 6px; gap: 4px; }
+
+  body.tight-viewport .screen { gap: 8px; padding: 12px 12px; }
+  body.tight-viewport .eyebrow { font-size: 7px; }
+  body.tight-viewport .big-title { font-size: 34px; }
+  body.tight-viewport #go-score { font-size: 42px; }
+}
+
+/* Standalone/PWA gets no extra scaling — already optimised */
+@media (display-mode: standalone) {
+  #s-up { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 }

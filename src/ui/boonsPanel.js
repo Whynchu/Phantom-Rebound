@@ -1,3 +1,5 @@
+import { iconHTML } from './iconRenderer.js';
+
 function renderBoonRows(container, entries, emptyText) {
   if(!container) return;
   container.innerHTML = '';
@@ -10,7 +12,7 @@ function renderBoonRows(container, entries, emptyText) {
   for(const entry of entries) {
     const row = doc.createElement('div');
     row.className = 'up-active-item';
-    row.innerHTML = `<div class="up-active-icon">${entry.icon}</div><div class="up-active-copy"><div class="up-active-name">${entry.name}</div><div class="up-active-detail">${entry.detail}</div></div>`;
+    row.innerHTML = `${iconHTML(entry.icon, 'up-active-icon')}<div class="up-active-copy"><div class="up-active-name">${entry.name}</div><div class="up-active-detail">${entry.detail}</div></div>`;
     container.appendChild(row);
   }
 }
