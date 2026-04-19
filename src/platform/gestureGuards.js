@@ -32,7 +32,12 @@ function bindGestureGuards({
     }
     return false;
   };
-  const isNativeTouchTarget = (target) => isEditableTarget(target) || isScrollableTarget(target);
+  const isInteractiveTarget = (target) => Boolean(
+    target
+    && typeof target.closest === 'function'
+    && target.closest('button, a, [role="button"], .up-card, .color-btn')
+  );
+  const isNativeTouchTarget = (target) => isEditableTarget(target) || isScrollableTarget(target) || isInteractiveTarget(target);
 
   const preventDefault = (event) => event.preventDefault();
   const preventSelectionOutsideInputs = (event) => {
