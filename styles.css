@@ -871,7 +871,7 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
 .up-active-icon img {
   width:18px; height:18px;
   image-rendering:pixelated;
-  filter:brightness(0) invert(1);
+  filter:invert(1);
 }
 }
 .up-active-copy {
@@ -928,7 +928,7 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
 .up-icon img {
   width:26px; height:26px;
   image-rendering:pixelated;
-  filter:brightness(0) invert(1);
+  filter:invert(1);
 }
 .up-name { font-family:'Syne',sans-serif; font-weight:700; font-size:12px; color:#fff; letter-spacing:-.01em; line-height:1.2; }
 .up-desc { font-size:9px; color:var(--muted); line-height:1.45; }

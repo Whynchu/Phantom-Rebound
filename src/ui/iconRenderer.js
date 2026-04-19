@@ -96,7 +96,7 @@ const ICON_MAP = {
   '☀️':   'Weather_Sun_Holy_Light_Rays_Summer_Season.png',
 
   // ── SPECIAL UI ──
-  '🎲':   'Arrows_Roundabout_Rotation_Circle_Reload_Refresh_Loop.png',
+  '🎲':   'Boardgames_Dice_Cube_D6_Six_Pips_Dots.png',
 
   // ── COLOR SCHEME ──
   '🟢':   'Tools_Crafting_Graphic_Design_Shapes_Circle_Filled.png',
