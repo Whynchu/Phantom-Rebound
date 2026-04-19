@@ -236,7 +236,7 @@ const BOONS = [
   {name:'Faster Bullets',tag:'OFFENSE',icon:'💨',desc:'Faster shots. Diminishing returns.',apply(upg){upg.fasterBulletsTier++;upg.shotSpd=getHyperbolicScale(upg.fasterBulletsTier);}},
   {name:'Critical Hit',tag:'OFFENSE',icon:'💥',desc:'+25% crit chance. Max 3.',apply(upg){upg.critTier=Math.min(3,upg.critTier+1);upg.critChance=Math.min(0.75,0.25*upg.critTier);}},
   {name:'Ricochet',tag:'UTILITY',icon:'↯',desc:'Shots bounce off walls.',apply(upg){upg.bounceTier=Math.max(1,upg.bounceTier);}},
-  {name:'Homing',tag:'UTILITY',icon:'🌀',desc:'Shots curve into enemies.',apply(upg){upg.homingTier=1;}},
+  {name:'Homing',tag:'UTILITY',icon:'🌀',desc:'Shots curve into enemies. Max 4.',apply(upg){upg.homingTier=Math.min(4,upg.homingTier+1);}},
   {name:'Pierce',tag:'UTILITY',icon:'→',desc:'+1 pierce per tier. Max 3.',apply(upg){upg.pierceTier=Math.min(3,upg.pierceTier+1);}},
   {name:'Quick Harvest',tag:'UTILITY',icon:'⬇',desc:'Grey absorbs grant more charge.',apply(upg){upg.absorbTier++;upg.absorbValue=1+0.40*getHyperbolicScale(upg.absorbTier);}},
   {name:'Decay Extension',tag:'UTILITY',icon:'⏳',desc:'+1s grey linger. Max +3s.',apply(upg){upg.decayBonus=Math.min(3000,upg.decayBonus+1000);}},
@@ -456,7 +456,7 @@ function getActiveBoonEntries(upg) {
   if(upg.fasterBulletsTier > 0) entries.push({ icon:'💨', name:'Faster Bullets', detail:`Tier ${upg.fasterBulletsTier}` });
   if(upg.critTier > 0) entries.push({ icon:'💥', name:'Critical Hit', detail:`${Math.round(upg.critChance * 100)}% crit chance` });
   if(upg.bounceTier > 0) entries.push({ icon:'↯', name:'Ricochet', detail:'Bullets bounce on walls' });
-  if(upg.homingTier > 0) entries.push({ icon:'🌀', name:'Homing', detail:'Shots curve into targets' });
+  if(upg.homingTier > 0) entries.push({ icon:'🌀', name:'Homing', detail:`Tier ${upg.homingTier} – shots curve into targets` });
   if(upg.pierceTier > 0) entries.push({ icon:'→', name:'Pierce', detail:`Tier ${upg.pierceTier}` });
   if(upg.absorbTier > 0) entries.push({ icon:'⬇', name:'Quick Harvest', detail:`+${Math.round((upg.absorbValue - 1) * 100)}% absorb value` });
   if(upg.decayBonus > 0) entries.push({ icon:'⏳', name:'Decay Extension', detail:`+${Math.round(upg.decayBonus / 1000)}s linger` });

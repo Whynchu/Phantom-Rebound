@@ -2806,10 +2806,12 @@ function update(dt,ts){
       const tgt=enemies.reduce((bst,e)=>{const d=Math.hypot(e.x-b.x,e.y-b.y);return(!bst||d<bst.d)?{e,d}:bst;},null);
       if(tgt){
         const dx=tgt.e.x-b.x,dy=tgt.e.y-b.y,d=Math.hypot(dx,dy);
-        b.vx+=(dx/d)*400*dt; b.vy+=(dy/d)*400*dt;
+        const homingSteer = 160 + 160 * (UPG.homingTier || 1);
+        b.vx+=(dx/d)*homingSteer*dt; b.vy+=(dy/d)*homingSteer*dt;
         const sp=Math.hypot(b.vx,b.vy);
         // Match the launch-speed basis so homing cannot silently nerf Faster Bullets/Snipe scaling.
-        const maxSp=230*GLOBAL_SPEED_LIFT*Math.min(2.0,UPG.shotSpd)*(1+UPG.snipePower*0.18)*1.2;
+        const homingSpeedMult = 1.2 + (UPG.homingTier || 1) * 0.05;
+        const maxSp=230*GLOBAL_SPEED_LIFT*Math.min(2.0,UPG.shotSpd)*(1+UPG.snipePower*0.18)*homingSpeedMult;
         if(sp>maxSp){b.vx=b.vx/sp*maxSp;b.vy=b.vy/sp*maxSp;}
       }
     }
