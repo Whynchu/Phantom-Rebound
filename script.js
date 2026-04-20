@@ -1671,7 +1671,7 @@ function firePlayer(tx,ty) {
   const spsFireRateScaling = Math.max(0.5, 1 - (UPG.spsTier || 0) * 0.04);
   // Sustained Fire bonus: +3% damage per consecutive shot, max +45%, decays 1s after last shot
   const sustainedFireBonus = Math.min(1.45, 1 + Math.min(UPG.sustainedFireShots || 0, 15) * 0.03);
-  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (UPG.heavyRoundsDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus * sustainedFireBonus * spsFireRateScaling;
+  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (UPG.heavyRoundsDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus * sustainedFireBonus * spsFireRateScaling * 10;
   const lifeMs = PLAYER_SHOT_LIFE_MS * (UPG.shotLifeMult || 1) * (UPG.phantomRebound ? 2.0 : 1.0);
   const now = performance.now();
   const overchargeBonus = (UPG.overchargeVent && charge >= UPG.maxCharge) ? 1.6 : 1;
@@ -1857,6 +1857,7 @@ function showUpgrades() {
       startRoom(roomIndex+1);
       gstate='playing'; lastT=performance.now(); raf=requestAnimationFrame(loop);
       btnPause.style.display = 'inline-flex';
+      btnPatchNotes.style.display = 'none';
     },
     onLegendaryReject: (leg) => {
       legendaryRejectedIds.add(leg.id);
@@ -1867,6 +1868,7 @@ function showUpgrades() {
       startRoom(roomIndex+1);
       gstate='playing'; lastT=performance.now(); raf=requestAnimationFrame(loop);
       btnPause.style.display = 'inline-flex';
+      btnPatchNotes.style.display = 'none';
     },
     onSelect: (boon) => {
       const state = { hp, maxHp };
@@ -1888,6 +1890,7 @@ function showUpgrades() {
       gstate='playing'; lastT=performance.now();
       raf=requestAnimationFrame(loop);
       btnPause.style.display = 'inline-flex';
+      btnPatchNotes.style.display = 'none';
     },
   });
 }
