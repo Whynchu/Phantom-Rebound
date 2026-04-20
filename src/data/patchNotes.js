@@ -1,5 +1,47 @@
 const PATCH_NOTES = [
   {
+    version: '1.17.8',
+    label: 'LEGENDARY REJECTION & SCALING',
+    summary: [
+      'Legendary boons now offer rejection with cooldown, player takes red damage numbers, and all damage scales 10× for better feel.',
+      'Reject unwanted legendaries and skip them for 2 rooms. Damage scaling makes player shots and enemy health proportional.'
+    ],
+    highlights: [
+      'Legendary boon cards now have Accept and Skip buttons. Rejecting a legendary skips it for 2 rooms, then offers a random available legendary.',
+      'Multiple legendary sequences now build a random pool instead of always offering the same one.',
+      'Player damage numbers: red (#ff6b6b) damage pops above the player when hit. Distinct from white enemy damage numbers.',
+      'Base damage scaling: player shots now do 10× damage, and all enemy HP scales 10× to match.',
+      'Enemy damage to player unchanged — stays balanced at 18 at room 0, scaling normally from there.',
+      'Recovery heal boon icon switched from emoji (♥) to 1-bit pixel art heart sprite.',
+    ]
+  },
+  {
+    version: '1.17.7',
+    label: 'SPRITE DETAIL FIX',
+    summary: [
+      'Fixed sprite icon rendering filter that was erasing internal details (like dice pips).',
+      'Removed brightness(0) from invert(1) so black details show as white, not disappearing.'
+    ],
+    highlights: [
+      'Sprite icons now use invert(1) instead of brightness(0) invert(1), preserving internal black/white details.',
+      'Dice reroll icon now shows visible pips instead of appearing as a white blob.',
+      'All sprite icons with internal detail lines now render crisply.',
+    ]
+  },
+  {
+    version: '1.17.6',
+    label: 'BUTTON RESPONSIVENESS FIX',
+    summary: [
+      'Fixed buttons requiring 2–3 taps to activate on touch devices.',
+      'Gesture guards were preventing click synthesis on interactive elements.'
+    ],
+    highlights: [
+      'Gesture guard now excludes interactive elements (button, a, [role=button], .up-card, .color-btn) from double-tap prevention.',
+      'Buttons now fire on first tap instead of requiring repeated presses.',
+      'Touch responsiveness improved across all menus and boon selection.',
+    ]
+  },
+  {
     version: '1.17.5',
     label: 'SPRITE ICONS',
     summary: [
