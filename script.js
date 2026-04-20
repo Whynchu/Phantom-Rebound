@@ -684,6 +684,8 @@ let _volatileOrbGlobalCooldown = 0;
 let boonHistory = [];
 let pendingLegendary = null;
 let legendaryOffered = false;
+let legendaryRejectedIds = new Set(); // Track rejected legendary boons
+let legendaryRoomsSinceRejection = new Map(); // Track rooms since rejection for cooldown
 
 // Room system
 let roomIndex = 0;
@@ -1848,8 +1850,18 @@ function showUpgrades() {
     pendingLegendary: (!legendaryOffered && pendingLegendary) ? pendingLegendary : null,
     onLegendaryAccept: (leg) => {
       const lState={hp,maxHp}; leg.apply(UPG,lState); hp=lState.hp; maxHp=lState.maxHp;
-      legendaryOffered=true; pendingLegendary=null;
+      legendaryOffered=true; pendingLegendary=null; legendaryRejectedIds.delete(leg.id);
       syncRunChargeCapacity(); boonHistory.push(leg.name);
+      document.getElementById('s-up').classList.add('off');
+      startRoom(roomIndex+1);
+      gstate='playing'; lastT=performance.now(); raf=requestAnimationFrame(loop);
+      btnPause.style.display = 'inline-flex';
+    },
+    onLegendaryReject: (leg) => {
+      legendaryRejectedIds.add(leg.id);
+      legendaryRoomsSinceRejection.set(leg.id, roomIndex);
+      pendingLegendary = null;
+      boonHistory.push('Reject-' + leg.name);
       document.getElementById('s-up').classList.add('off');
       startRoom(roomIndex+1);
       gstate='playing'; lastT=performance.now(); raf=requestAnimationFrame(loop);
@@ -1867,7 +1879,7 @@ function showUpgrades() {
       // Track boon selection for leaderboard
       UPG.boonSelectionOrder.push(evolvedBoon.name);
       if(!legendaryOffered){
-        const leg = checkLegendarySequences(boonHistory, UPG);
+        const leg = checkLegendarySequences(boonHistory, UPG, legendaryRejectedIds, legendaryRoomsSinceRejection, roomIndex);
         if(leg) pendingLegendary=leg;
       }
       document.getElementById('s-up').classList.add('off');
@@ -2230,6 +2242,7 @@ function init() {
   _colossusShockwaveCd = runtimeTimers.colossusShockwaveCd;
   _orbFireTimers=[]; _orbCooldown=[];
   boonHistory=[]; pendingLegendary=null; legendaryOffered=false;
+  legendaryRejectedIds=new Set(); legendaryRoomsSinceRejection=new Map(); // Reset rejection tracking on new run
   runTelemetry = createRunTelemetry();
   currentRoomTelemetry = null;
   bullets=[];enemies=[];particles=[];dmgNumbers=[];
@@ -3126,6 +3139,7 @@ function update(dt,ts){
         sparks(player.x, player.y, getThreatPalette().advanced.hex, 16, 200);
         hp = dangerHit.nextHp;
         recordPlayerDamage(dangerHit.damage, 'projectile');
+        spawnDmgNumber(player.x, player.y, dangerHit.damage, '#ff6b6b'); // Red damage number on player
         player.distort = dangerHit.distortSeconds;
         tookDamageThisRoom = true;
         if(dangerHit.shouldGainHitCharge) gainCharge(UPG.hitChargeGain, 'hitReward');
@@ -3173,6 +3187,7 @@ function update(dt,ts){
       if(dangerHit.kind === 'direct-hit'){
         hp = dangerHit.nextHp;
         recordPlayerDamage(dangerHit.damage, 'projectile');
+        spawnDmgNumber(player.x, player.y, dangerHit.damage, '#ff6b6b'); // Red damage number on player
         player.invincible = dangerHit.invincibleSeconds;
         player.distort = dangerHit.distortSeconds;
         tookDamageThisRoom = true;

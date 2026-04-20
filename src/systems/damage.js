@@ -18,7 +18,7 @@ function computeProjectileHitDamage({
   const tierOver = Math.max(0, room - 29);
   const dmgScale = (1 + Math.log(room + 1) * 0.24) * (tierOver > 0 ? 1 + tierOver * 0.04 : 1);
   const rawDamage = Math.ceil(18 * dmgScale * getProjectileDamageCurve(room));
-  const finalDamage = rawDamage * bossDamageMultiplier * damageTakenMultiplier * lateBloomDamageTakenMultiplier * multiplier;
+  const finalDamage = rawDamage * bossDamageMultiplier * damageTakenMultiplier * lateBloomDamageTakenMultiplier * multiplier * 10; // 10x damage scale
   return Math.max(1, Math.ceil(finalDamage));
 }
 

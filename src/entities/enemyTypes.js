@@ -131,8 +131,8 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
   const effectiveFireRate = def.fRate >= 9000 ? def.fRate : Math.max(480, def.fRate * fireRateMult * (isElite ? 0.92 : 1) / (isBoss ? bossScale : 1));
 
   const hpVal = isBoss
-    ? Math.max(1, Math.round(def.hp * hpMult * 5 * bossScale))
-    : Math.max(1, Math.round(def.hp * hpMult * getLateThreatHpMultiplier(type, roomIndex) * (isElite ? 1.3 : 1)));
+    ? Math.max(1, Math.round(def.hp * hpMult * 5 * bossScale * 10)) // 10x HP scale
+    : Math.max(1, Math.round(def.hp * hpMult * getLateThreatHpMultiplier(type, roomIndex) * (isElite ? 1.3 : 1) * 10)); // 10x HP scale
 
   return {
     ...def,

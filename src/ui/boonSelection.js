@@ -79,8 +79,16 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
           ${iconHTML(boon.icon)}
           <div class="up-name">${boon.name}</div>
           <div class="up-desc">${boon.desc}</div>
-          <div class="up-tag" style="color:#fbbf24">LEGENDARY</div>`;
-        card.onclick = () => {
+          <div class="up-tag" style="color:#fbbf24">LEGENDARY</div>
+          <div style="display:flex; gap:6px; margin-top:8px; font-size:11px;">
+            <button class="up-btn" onclick="this.closest('.legendary').querySelector('.btn-accept').click()">Accept</button>
+            <button class="up-btn btn-accept" style="display:none;"></button>
+            <button class="up-btn" onclick="this.closest('.legendary').querySelector('.btn-reject').click()" style="opacity:0.7;">Skip</button>
+            <button class="up-btn btn-reject" style="display:none;"></button>
+          </div>`;
+        const btnAccept = card.querySelector('.btn-accept');
+        const btnReject = card.querySelector('.btn-reject');
+        btnAccept.onclick = () => {
           if(panel.classList.contains('screen-leaving')) return;
           panel.classList.add('screen-leaving');
           window.setTimeout(() => {
@@ -88,6 +96,16 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
             panel.classList.remove('screen-entering', 'screen-leaving');
             cardsContainer.innerHTML = '';
             onLegendaryAccept(boon);
+          }, BOON_FADE_MS);
+        };
+        btnReject.onclick = () => {
+          if(panel.classList.contains('screen-leaving')) return;
+          panel.classList.add('screen-leaving');
+          window.setTimeout(() => {
+            panel.classList.add('off');
+            panel.classList.remove('screen-entering', 'screen-leaving');
+            cardsContainer.innerHTML = '';
+            if(onLegendaryReject) onLegendaryReject(boon);
           }, BOON_FADE_MS);
         };
         mainRow.appendChild(card);

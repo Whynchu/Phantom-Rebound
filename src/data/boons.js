@@ -407,12 +407,18 @@ const LEGENDARY_SEQUENCES = [
   },
 ];
 
-function checkLegendarySequences(history, upg) {
+function checkLegendarySequences(history, upg, rejectedIds = new Set(), roomsSinceReject = new Map(), currentRoom = 0) {
+  const available = [];
   for(const seq of LEGENDARY_SEQUENCES){
     if(upg[seq.id]) continue; // already have it
-    if(seq.check(history)) return seq.boon;
+    if(rejectedIds.has(seq.id)) {
+      const rejectedAtRoom = roomsSinceReject.get(seq.id) || 0;
+      if(currentRoom - rejectedAtRoom < 2) continue; // skip if within 2-room cooldown
+    }
+    if(seq.check(history)) available.push(seq.boon);
   }
-  return null;
+  // Return random legendary from available pool, or null if none available
+  return available.length > 0 ? available[Math.floor(Math.random() * available.length)] : null;
 }
 
 function weightedPickBoon(pool, upg) {
@@ -431,7 +437,7 @@ function createHealBoon(upg) {
   return {
     name: 'Recover',
     tag: 'HEAL',
-    icon: '♥',
+    icon: '◉', // Use sprite heart icon instead of emoji
     disabled: healSpent,
     desc: healSpent
       ? 'Recover is spent for this run.'
