@@ -3849,7 +3849,7 @@ function drawGhostHatLayer(ctxRef, hatKey, size, bodyColor, ts) {
     return;
   }
   if(hatKey === 'cat') {
-    const earH  = size * 0.82;
+    const earH  = size * 0.60;
     const yBase = -size * 1.17;
 
     const drawCatEar = (dir) => {
