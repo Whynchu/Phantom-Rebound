@@ -2078,6 +2078,7 @@ function resumeGame() {
   pausePanel.classList.add('off');
   pausePanel.setAttribute('aria-hidden', 'true');
   pauseBoonsPanel.classList.add('off');
+  document.getElementById('pause-confirm-panel')?.classList.add('off');
   btnPause.style.display = 'inline-flex';
   if (gstate === 'playing') {
     lastT = performance.now();
@@ -2100,27 +2101,56 @@ document.getElementById('btn-pause-boons').addEventListener('click', () => {
   renderPauseBoons();
   pauseBoonsPanel.classList.remove('off');
 });
+
+// In-game confirmation dialog (replaces OS confirm())
+const pauseConfirmPanel = document.getElementById('pause-confirm-panel');
+const pauseConfirmMsg = document.getElementById('pause-confirm-msg');
+const btnConfirmYes = document.getElementById('btn-pause-confirm-yes');
+const btnConfirmNo = document.getElementById('btn-pause-confirm-no');
+let pendingConfirmAction = null;
+
+function showPauseConfirm(message, onConfirm) {
+  pauseConfirmMsg.textContent = message;
+  pendingConfirmAction = onConfirm;
+  pauseBoonsPanel.classList.add('off');
+  pauseConfirmPanel.classList.remove('off');
+}
+
+btnConfirmYes.addEventListener('click', () => {
+  pauseConfirmPanel.classList.add('off');
+  if (pendingConfirmAction) pendingConfirmAction();
+  pendingConfirmAction = null;
+});
+btnConfirmNo.addEventListener('click', () => {
+  pauseConfirmPanel.classList.add('off');
+  pendingConfirmAction = null;
+});
+
 document.getElementById('btn-pause-restart').addEventListener('click', () => {
-  if (!confirm('Restart this run? Progress will be lost.')) return;
-  clearSavedRun();
-  resumeGame();
-  gstate = 'start';
-  cancelAnimationFrame(raf);
-  pausePanel.classList.add('off');
-  document.getElementById('s-start').classList.remove('off');
-  btnPatchNotes.style.display = 'inline-flex';
-  btnPause.style.display = 'none';
+  showPauseConfirm('Restart this run?', () => {
+    clearSavedRun();
+    resumeGame();
+    gstate = 'start';
+    cancelAnimationFrame(raf);
+    pausePanel.classList.add('off');
+    setMenuChromeVisible(true);
+    document.getElementById('s-start').classList.remove('off');
+    btnPatchNotes.style.display = 'inline-flex';
+    btnPause.style.display = 'none';
+  });
 });
 document.getElementById('btn-pause-main-menu').addEventListener('click', () => {
-  if (!confirm('Return to main menu? Progress will be lost.')) return;
-  clearSavedRun();
-  resumeGame();
-  gstate = 'start';
-  cancelAnimationFrame(raf);
-  pausePanel.classList.add('off');
-  document.getElementById('s-start').classList.remove('off');
-  btnPatchNotes.style.display = 'inline-flex';
-  btnPause.style.display = 'none';
+  showPauseConfirm('Return to main menu?', () => {
+    clearSavedRun();
+    resumeGame();
+    gstate = 'start';
+    cancelAnimationFrame(raf);
+    pausePanel.classList.add('off');
+    setMenuChromeVisible(true);
+    document.getElementById('s-start').classList.remove('off');
+    btnPatchNotes.style.display = 'inline-flex';
+    btnPause.style.display = 'none';
+  });
 });
 document.getElementById('btn-pause-lb').addEventListener('click', () => {
   // Show leaderboard overlay; when closed it reveals the still-paused game
@@ -2136,7 +2166,7 @@ document.getElementById('btn-pause-lb').addEventListener('click', () => {
 });
 document.getElementById('btn-pause-patch-notes').addEventListener('click', () => {
   pausePanel.classList.add('off');
-  setPatchNotesVisibility(true);
+  setPatchNotesOpen(true);
 });
 
 // Keyboard shortcut: Escape to toggle pause
