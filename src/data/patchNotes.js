@@ -1,5 +1,15 @@
 const PATCH_NOTES = [
   {
+    version: '1.18.8',
+    label: 'CAT EARS FIX',
+    summary: [
+      'Cat ears reshaped — wider, shorter, and angled outward so they sit properly on top of the ghost\'s head.',
+    ],
+    highlights: [
+      'Cat ears cosmetic updated: wider base, reduced height, tips now angle outward matching the reference style.',
+    ]
+  },
+  {
     version: '1.18.7',
     label: 'CAT EARS',
     summary: [
