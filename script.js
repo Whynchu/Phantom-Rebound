@@ -4182,7 +4182,7 @@ function drawGhostSprite(ctxRef, ts, {
   if(chargeFrac > 0.3 && gameState !== 'dying'){
     ctxRef.strokeStyle = 'rgba(0,0,0,0.55)';
     ctxRef.lineWidth = 1.5;
-    ctxRef.beginPath(); ctxRef.arc(0, -size * .1, 4.5, .2, Math.PI - .2); ctxRef.stroke();
+    ctxRef.beginPath(); ctxRef.arc(0, -size * .15, 4.5, .65, Math.PI - .65); ctxRef.stroke();
   }
 
   const ringRadius = size + 8;

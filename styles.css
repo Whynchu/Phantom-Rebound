@@ -78,6 +78,9 @@ body.keyboard-open::before {
   position: relative;
   width: min(400px, calc(100vw - 16px));
   max-width: 400px;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 6px;

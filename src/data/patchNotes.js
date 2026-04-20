@@ -1,6 +1,15 @@
 const PATCH_NOTES = [
   {
-    version: '1.19.7',
+      version: '1.19.8',
+      label: 'NEW ICON & SMILE FIX',
+      summary: ['New Phantom Rebound icon. Ghost smile subtler. PC scrollbar fixed.'],
+      highlights: [
+        'New app icon: Phantom_rebound_icon.png applied to favicon, home screen, and PWA manifest.',
+        'Ghost smile: shallower curve and shifted up slightly for a cleaner look.',
+        'PC browser: game now fits the screen without a vertical scrollbar.',
+      ]
+    },
+    {
     label: 'PATCH NOTES & MENU FIX',
     summary: ['Pause button now correctly reverts to patch notes button when returning to main menu.'],
     highlights: [
