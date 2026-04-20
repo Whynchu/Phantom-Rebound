@@ -43,6 +43,7 @@ function bindSessionFlow({
   initRun,
   beginLoop,
   setGameState,
+  onMainMenu,
 } = {}) {
   startButton && (startButton.onclick = () => {
     setPlayerName?.(startInput?.value || '', { syncInputs: true });
@@ -71,6 +72,7 @@ function bindSessionFlow({
     setMenuChromeVisible?.(true);
     startScreen?.classList.remove('off');
     setGameState?.('start');
+    onMainMenu?.();
   });
 }
 

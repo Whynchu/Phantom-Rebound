@@ -4441,6 +4441,10 @@ bindSessionFlow({
   setGameState: (nextState) => {
     gstate = nextState;
   },
+  onMainMenu: () => {
+    btnPatchNotes.style.display = 'inline-flex';
+    btnPause.style.display = 'none';
+  },
 });
 
 bindBoonsPanelControls({

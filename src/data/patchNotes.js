@@ -1,5 +1,40 @@
 const PATCH_NOTES = [
   {
+    version: '1.19.7',
+    label: 'PATCH NOTES & MENU FIX',
+    summary: ['Pause button now correctly reverts to patch notes button when returning to main menu.'],
+    highlights: [
+      'Bug fix: returning to main menu from game over screen now properly restores the Patch Notes button.',
+    ]
+  },
+  {
+    version: '1.19.6',
+    label: 'BOSS BALANCE',
+    summary: ['Boss rooms have more escorts. Phase dash now deals 25% damage. Cat ears widened.'],
+    highlights: [
+      'Boss room 10: +1 escort (now 2). Boss room 20: +2 escorts (now 4). Boss room 40: +3 escorts (now 5).',
+      'Boss escort respawn time increased to 9 seconds for early boss rooms (was 7s).',
+      'Phase dash damage multiplier increased from 5% to 25% — risky dashes now sting.',
+      'Cat ears cosmetic: base widened for a more natural cat shape.',
+      'Damage numbers now fan out horizontally when multiple stack at the same position.',
+    ]
+  },
+  {
+    version: '1.19.5',
+    label: 'CAT EARS HEIGHT FIX',
+    summary: ['Cat ears shortened by ~27%.'],
+    highlights: ['Cat ears: reduced height for better proportions.']
+  },
+  {
+    version: '1.19.4',
+    label: 'CAT EARS & DOUBLE-SHOT FIX',
+    summary: ['Cat ears reworked. Double-shot accumulation bug fixed.'],
+    highlights: [
+      'Cat ears: redrawn with straight inner edge and gently curved outer edge.',
+      'Double-shot fix: auto-fire timer (fireT) now caps at one interval while moving — prevents unintended double-fire on stopping.',
+    ]
+  },
+  {
     version: '1.19.3',
     label: 'HP BAR FIX',
     summary: ['HP bar repositioned above shot ring. Cat ears redrawn as clean outward-angled triangles.'],
