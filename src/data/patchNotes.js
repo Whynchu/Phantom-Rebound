@@ -1,5 +1,32 @@
 const PATCH_NOTES = [
   {
+    version: '1.18.7',
+    label: 'CAT EARS',
+    summary: [
+      'Meow. Cat Ears are now available in the hat selector.',
+    ],
+    highlights: [
+      'New hat — Cat Ears 🐱. Pointed ears with a pink inner fill, styled to match the ghost\'s body color. Find them in the cosmetics menu.',
+    ]
+  },
+  {
+    version: '1.18.6',
+    label: 'ORB POWER SURGE',
+    summary: [
+      'Orbs hit 10× harder. Orbit-sphere contact and Charged Orb shots were missed by the 1.18.5 enemy-HP rebalance. Both now match the rest of your arsenal.',
+      'New boon Orb Strike (🔮⚔) stacks up to 4× for +25% orb damage per pick, and every extra Orbit Sphere adds +10% orb damage. Damage numbers and source-based coloring on all orb hits.'
+    ],
+    highlights: [
+      'Orbs hit 10× harder. Orbit-sphere contact and Charged Orb shots were missed by the 1.18.5 enemy-HP rebalance. Both now match the rest of your arsenal.',
+      'New boon — Orb Strike (🔮⚔). Stacks up to 4× for +25% orb damage per pick. Requires at least one Orbit Sphere.',
+      'Every extra Orbit Sphere adds a bonus +10% orb damage, so investing in orbs ramps instead of stalling.',
+      'Damage numbers now show on orb hits, and every floater is colored by its source — your shots paint with your player color, enemy hits flash their bullet\'s color over you.',
+      'Shockwave now paints an expanding ring in your color on each full-charge release, and the Colossus legendary response gets its own violet ring.',
+      'Continue Run fixed — resuming a run now drops you straight into the next room instead of re-opening a boon selection you already made.',
+      'Minor: a few polish/readability tweaks.',
+    ]
+  },
+  {
     version: '1.17.8',
     label: 'LEGENDARY REJECTION & SCALING',
     summary: [

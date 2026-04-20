@@ -162,6 +162,7 @@ const PLAYER_HAT_KEY = 'phantom-player-hat';
 const HAT_OPTIONS = [
   { key: 'none', name: 'No Hat', tag: 'Default', description: '' },
   { key: 'bunny', name: 'Bunny Ears', tag: 'Spring', description: '' },
+  { key: 'cat', name: 'Cat Ears', tag: 'Spring', description: '' },
   { key: 'viking', name: 'Viking Helm', tag: 'Founders', description: '' },
 ];
 const storedColorAssist = readText(COLOR_ASSIST_KEY, 'off');
@@ -614,7 +615,7 @@ const BASE_PLAYER_HP = 200;
 let gstate = 'start';
 let pauseStartedAt = 0;
 let player = {};
-let bullets = [], enemies = [], particles = [], dmgNumbers = [];
+let bullets = [], enemies = [], particles = [], dmgNumbers = [], shockwaves = [];
 let score=0, kills=0;
 let charge=0, fireT=0, stillTimer=0, prevStill=false;
 let hp=BASE_PLAYER_HP, maxHp=BASE_PLAYER_HP;
@@ -1158,6 +1159,7 @@ function startRoom(idx) {
   enemies = [];
   bullets = [];
   dmgNumbers = [];
+  shockwaves = [];
   payloadCooldownMs = 0;
   // Boss room state
   currentRoomIsBoss = Boolean(def.isBossRoom);
@@ -1196,7 +1198,7 @@ function triggerPayloadBlast(bullet, enemies, ts) {
     if(Math.hypot(e.x - bullet.x, e.y - bullet.y) < aoeRadius + e.r){
       e.hp -= impactDamage;
       hitCount++;
-      spawnDmgNumber(e.x, e.y - e.r, impactDamage, '#ff6b35');
+      spawnDmgNumber(e.x, e.y - e.r, impactDamage, getPlayerColorScheme().hex);
       if(e.hp <= 0){
         score += computeKillScore(e.pts, false);
         kills++;
@@ -1601,7 +1603,7 @@ function drawBulletSprite(b, ts) {
 }
 
 const VOLLEY_TOTAL_DAMAGE_MULTS = [1.00, 1.75, 2.40, 2.95, 3.40, 3.75, 4.00];
-const ORBITAL_FOCUS_CONTACT_BONUS = 1.5;
+const ORBITAL_FOCUS_CONTACT_BONUS = 15;
 const ORBITAL_FOCUS_CHARGED_ORB_DAMAGE_MULT = 1.6;
 const ORBITAL_FOCUS_CHARGED_ORB_INTERVAL_MULT = 0.65;
 const ORB_TWIN_TOTAL_DAMAGE_MULT = 1.6;
@@ -1726,6 +1728,7 @@ function firePlayer(tx,ty) {
       }
     }
     sparks(player.x, player.y, '#ffaa00', 20, 250);
+    shockwaves.push({ x: player.x, y: player.y, r: 10, maxR: 220, life: 1, color: getPlayerColorScheme().hex });
   }
   
   if(UPG.echoFire){
@@ -1855,6 +1858,8 @@ function showUpgrades() {
       legendaryOffered=true; pendingLegendary=null; legendaryRejectedIds.delete(leg.id);
       syncRunChargeCapacity(); boonHistory.push(leg.name);
       document.getElementById('s-up').classList.add('off');
+      UPG._boonAppliedForRoom = roomIndex + 1;
+      saveRunState();
       startRoom(roomIndex+1);
       gstate='playing'; lastT=performance.now(); raf=requestAnimationFrame(loop);
       btnPause.style.display = 'inline-flex';
@@ -1887,6 +1892,8 @@ function showUpgrades() {
         if(leg) pendingLegendary=leg;
       }
       document.getElementById('s-up').classList.add('off');
+      UPG._boonAppliedForRoom = roomIndex + 1;
+      saveRunState();
       startRoom(roomIndex+1);
       gstate='playing'; lastT=performance.now();
       raf=requestAnimationFrame(loop);
@@ -2192,6 +2199,7 @@ function saveRunState() {
     bossClears,
     runTelemetry: { ...runTelemetry, roomHistory: [...(runTelemetry.roomHistory || [])] },
     savedAt: Date.now(),
+    boonAppliedForRoom: (UPG._boonAppliedForRoom || -1),
   };
   // Strip any function values from UPG (safety)
   delete state.UPG._pendingLegendary;
@@ -2231,11 +2239,12 @@ function restoreRun(saved) {
   }
   // Mark as continued run
   UPG._continued = true;
+  UPG._boonAppliedForRoom = saved.boonAppliedForRoom ?? -1;
   // Re-sync derived state
   syncRunChargeCapacity();
   syncPlayerScale();
   player = createInitialPlayerState(cv.width, cv.height);
-  bullets = []; enemies = []; particles = [];
+  bullets = []; enemies = []; particles = []; shockwaves = [];
   _orbFireTimers = []; _orbCooldown = [];
   resetJoystickState(joy);
   fireT = 0; stillTimer = 0; prevStill = false;
@@ -2291,7 +2300,7 @@ function init() {
   legendaryRejectedIds=new Set(); legendaryRoomsSinceRejection=new Map(); // Reset rejection tracking on new run
   runTelemetry = createRunTelemetry();
   currentRoomTelemetry = null;
-  bullets=[];enemies=[];particles=[];dmgNumbers=[];
+  bullets=[];enemies=[];particles=[];dmgNumbers=[];shockwaves=[];
   payloadCooldownMs = 0;
   resetJoystickState(joy);
   resetUpgrades();
@@ -2677,6 +2686,7 @@ function update(dt,ts){
               ts,
             });
             sparks(player.x,player.y,getThreatPalette().advanced.hex,14,120);
+            shockwaves.push({ x: player.x, y: player.y, r: 10, maxR: 180, life: 1, color: '#a78bfa' });
           }
           if(rusherAftermath.shouldApplyLifelineState){
             UPG.lifelineTriggerCount = rusherAftermath.nextLifelineTriggerCount;
@@ -2711,6 +2721,7 @@ function update(dt,ts){
       if(UPG.orbitSphereTier > 0){
         // Sync arrays
         syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
+        const orbDamageBonus = (1 + 0.25 * (UPG.orbDamageTier || 0)) * (1 + 0.10 * Math.max(0, UPG.orbitSphereTier - 1));
         const orbitContact = applyOrbitSphereContact(e, {
           orbCooldown: _orbCooldown,
           orbitSphereTier: UPG.orbitSphereTier,
@@ -2723,12 +2734,14 @@ function update(dt,ts){
           orbitalFocus: UPG.orbitalFocus,
           chargeRatio: getChargeRatio(),
           orbSphereRadius: getOrbVisualRadius(),
-          baseDamage: 2,
+          baseDamage: 20,
           focusDamageBonus: ORBITAL_FOCUS_CONTACT_BONUS,
           focusChargeScale: 1.5,
+          orbDamageBonus,
         });
         if(orbitContact.hit){
           sparks(orbitContact.slotX, orbitContact.slotY, C.green, 4, 45);
+          spawnDmgNumber(orbitContact.slotX, orbitContact.slotY - getOrbVisualRadius(), orbitContact.damage, getPlayerColorScheme().hex);
         }
         if(orbitContact.killed){
           const orbitKillEffects = resolveOrbitKillEffects({
@@ -2768,6 +2781,7 @@ function update(dt,ts){
     syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
     for(let si=0;si<UPG.orbitSphereTier;si++){
       const orbFireInterval = CHARGED_ORB_FIRE_INTERVAL_MS * (UPG.orbitalFocus ? ORBITAL_FOCUS_CHARGED_ORB_INTERVAL_MULT : 1);
+      const orbDamageBonus = (1 + 0.25 * (UPG.orbDamageTier || 0)) * (1 + 0.10 * Math.max(0, UPG.orbitSphereTier - 1));
       const orbVolley = buildChargedOrbVolleyForSlot({
         slotIndex: si,
         timerMs: _orbFireTimers[si] || 0,
@@ -2796,6 +2810,7 @@ function update(dt,ts){
         shotSpeed: 220 * GLOBAL_SPEED_LIFT,
         now: performance.now(),
         bloodPactHealCap: getBloodPactHealCap(),
+        orbDamageBonus,
       });
       _orbFireTimers[si] = orbVolley.nextTimerMs;
       if(!orbVolley.fired) continue;
@@ -3186,7 +3201,7 @@ function update(dt,ts){
         sparks(player.x, player.y, getThreatPalette().advanced.hex, 16, 200);
         hp = dangerHit.nextHp;
         recordPlayerDamage(dangerHit.damage, 'projectile');
-        spawnDmgNumber(player.x, player.y, dangerHit.damage, '#ff6b6b'); // Red damage number on player
+        spawnDmgNumber(player.x, player.y, dangerHit.damage, b.col || getThreatPalette().danger.hex);
         player.distort = dangerHit.distortSeconds;
         tookDamageThisRoom = true;
         if(dangerHit.shouldGainHitCharge) gainCharge(UPG.hitChargeGain, 'hitReward');
@@ -3234,7 +3249,7 @@ function update(dt,ts){
       if(dangerHit.kind === 'direct-hit'){
         hp = dangerHit.nextHp;
         recordPlayerDamage(dangerHit.damage, 'projectile');
-        spawnDmgNumber(player.x, player.y, dangerHit.damage, '#ff6b6b'); // Red damage number on player
+        spawnDmgNumber(player.x, player.y, dangerHit.damage, b.col || getThreatPalette().danger.hex);
         player.invincible = dangerHit.invincibleSeconds;
         player.distort = dangerHit.distortSeconds;
         tookDamageThisRoom = true;
@@ -3318,7 +3333,7 @@ function update(dt,ts){
           });
           e.hp = hitResolution.enemyHpAfterHit;
           sparks(b.x,b.y,b.crit?C.ghost:C.green,b.crit?8:5,b.crit?70:55);
-          spawnDmgNumber(e.x, e.y - e.r, hitResolution.damage, b.crit ? C.ghost : '#fff');
+          spawnDmgNumber(e.x, e.y - e.r, hitResolution.damage, b.crit ? C.ghost : getPlayerColorScheme().hex);
           // Blood Pact: piercing shots restore 1 HP per enemy hit
           if(hitResolution.shouldBloodPactHeal){
             applyKillSustainHeal(1, 'bloodPact');
@@ -3445,6 +3460,14 @@ function update(dt,ts){
     d.y -= 40*dt;
     d.life -= 1.8*dt;
     if(d.life<=0) dmgNumbers.splice(i,1);
+  }
+
+  // ── Shockwaves
+  for(let i=shockwaves.length-1;i>=0;i--){
+    const s = shockwaves[i];
+    s.r += (s.maxR - s.r) * Math.min(1, dt * 4.5);
+    s.life -= dt * 1.4;
+    if(s.life <= 0 || s.r >= s.maxR - 0.5) shockwaves.splice(i,1);
   }
 
   // ── Payload cooldown
@@ -3741,6 +3764,21 @@ function draw(ts){
     ctx.restore();
   }
 
+  // Shockwaves
+  ctx.save();
+  for(const s of shockwaves){
+    const alpha = Math.max(0, s.life);
+    ctx.globalAlpha = alpha * 0.75;
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = s.color;
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
   // Floating damage numbers
   ctx.save();
   ctx.font = 'bold 10px "IBM Plex Mono", monospace';
@@ -3808,6 +3846,58 @@ function drawGhostHatLayer(ctxRef, hatKey, size, bodyColor, ts) {
     ctxRef.restore();
     return;
   }
+  if(hatKey === 'cat') {
+    const earH   = size * 1.1;   // how tall the ear is
+    const earW   = size * 0.52;  // how wide the base
+    const yBase  = -size * 0.82; // where the ear root sits (top of head)
+
+    const drawCatEar = (dir) => {
+      // dir: -1 = left ear, +1 = right ear
+      const bx  = dir * size * 0.42; // inner base x
+      const bx2 = dir * (size * 0.42 + earW); // outer base x
+      const by  = yBase;
+      const tipX = dir * (size * 0.42 + earW * 0.28);
+      const tipY = yBase - earH;
+
+      ctxRef.save();
+
+      // Outer ear shape — filled with bodyColor, outline
+      ctxRef.beginPath();
+      ctxRef.moveTo(bx, by);
+      ctxRef.quadraticCurveTo(tipX - dir * earW * 0.1, tipY + earH * 0.1, tipX, tipY);
+      ctxRef.quadraticCurveTo(tipX + dir * earW * 0.15, tipY + earH * 0.18, bx2, by);
+      ctxRef.closePath();
+      ctxRef.fillStyle = bodyColor;
+      ctxRef.fill();
+      ctxRef.strokeStyle = 'rgba(40,34,40,0.55)';
+      ctxRef.lineWidth = Math.max(1.2, size * 0.07);
+      ctxRef.stroke();
+
+      // Inner ear — smaller triangle, pink fill, slightly inset
+      const inset = earW * 0.18;
+      const ibx  = bx  + dir * inset;
+      const ibx2 = bx2 - dir * inset;
+      const iby  = by - earH * 0.18;
+      const itipX = tipX;
+      const itipY = tipY + earH * 0.28;
+      ctxRef.beginPath();
+      ctxRef.moveTo(ibx, iby);
+      ctxRef.lineTo(itipX, itipY);
+      ctxRef.lineTo(ibx2, iby);
+      ctxRef.closePath();
+      ctxRef.fillStyle = 'rgba(255,170,195,0.60)';
+      ctxRef.fill();
+
+      ctxRef.restore();
+    };
+
+    ctxRef.save();
+    drawCatEar(-1);
+    drawCatEar(1);
+    ctxRef.restore();
+    return;
+  }
+
   if(hatKey === 'viking') {
     const bob = Math.sin(ts * 0.0028) * size * 0.04;
     ctxRef.save();
@@ -3958,6 +4048,7 @@ function drawGhostHatLayer(ctxRef, hatKey, size, bodyColor, ts) {
 function getHatHeightMultiplier(hatKey) {
   switch(hatKey) {
     case 'bunny': return 1.5;
+    case 'cat': return 1.1;
     case 'viking': return 0.9;
     default: return 0.16;
   }
@@ -4370,8 +4461,17 @@ if (savedRun && continueRunBtn) {
     continueRunBtn.classList.add('off');
     startScreen.classList.add('off');
     setMenuChromeVisible(false);
-    // Go straight to upgrade screen for the restored room
-    showUpgrades();
+    // Go straight to room if boon already applied; else show upgrade screen
+    if ((savedRun.boonAppliedForRoom ?? -1) === (savedRun.roomIndex || 0)) {
+      startRoom(roomIndex);
+      gstate = 'playing';
+      lastT = performance.now();
+      raf = requestAnimationFrame(loop);
+      btnPause.style.display = 'inline-flex';
+      if (typeof btnPatchNotes !== 'undefined' && btnPatchNotes) btnPatchNotes.style.display = 'none';
+    } else {
+      showUpgrades();
+    }
   });
 }
 

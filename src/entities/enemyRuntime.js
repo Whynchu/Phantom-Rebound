@@ -533,9 +533,10 @@ function applyOrbitSphereContact(enemy, {
   orbitalFocus = false,
   chargeRatio = 0,
   orbSphereRadius = 5,
-  baseDamage = 2,
-  focusDamageBonus = 1.5,
+  baseDamage = 20,
+  focusDamageBonus = 15,
   focusChargeScale = 1.5,
+  orbDamageBonus = 1,
 } = {}) {
   if(orbitSphereTier <= 0) return { hit: false, killed: false };
   if(!enemy.orbitHitAt) enemy.orbitHitAt = {};
@@ -556,13 +557,14 @@ function applyOrbitSphereContact(enemy, {
     if(Math.hypot(enemy.x - orbitSlot.x, enemy.y - orbitSlot.y) >= enemy.r + orbSphereRadius + 1) continue;
 
     enemy.orbitHitAt[si] = ts;
-    const damage = baseDamage + (orbitalFocus ? focusDamageBonus + chargeRatio * focusChargeScale : 0);
+    const damage = (baseDamage + (orbitalFocus ? focusDamageBonus + chargeRatio * focusChargeScale : 0)) * orbDamageBonus;
     enemy.hp -= damage;
     return {
       hit: true,
       killed: enemy.hp <= 0,
       slotX: orbitSlot.x,
       slotY: orbitSlot.y,
+      damage,
     };
   }
 

@@ -133,6 +133,7 @@ function getDefaultUpgrades() {
     regenTick:        0,
     shieldTier:       0,
     orbitSphereTier:  0,
+    orbDamageTier:    0,
     biggerBulletsTier: 0,
     fasterBulletsTier: 0,
     speedTier:        0,
@@ -269,6 +270,7 @@ const BOONS = [
   {name:'Orb Pierce',tag:'OFFENSE',icon:'⚡→',desc:'Charged Orb shots pierce 1 extra enemy.',requires:upg=>upg.chargedOrbs,apply(upg){if(upg.orbPierce)return; upg.orbPierce=true;}},
   {name:'Orb Overcharge',tag:'OFFENSE',icon:'⚡⬆',desc:'Charged Orb shots scale much harder from current charge.',requires:upg=>upg.chargedOrbs,apply(upg){if(upg.orbOvercharge)return; upg.orbOvercharge=true;}},
   {name:'Orbital Focus',tag:'OFFENSE',icon:'🌐',desc:'Orbs hit harder and fire faster.',requires:upg=>upg.orbitSphereTier>0,apply(upg){if(upg.orbitalFocus)return; upg.orbitalFocus=true;}},
+  {name:'Orb Strike',tag:'OFFENSE',icon:'🔮⚔',desc:'+25% orb damage. Max 4.',requires:upg=>upg.orbitSphereTier>0&&(upg.orbDamageTier||0)<4,apply(upg){upg.orbDamageTier=Math.min(4,(upg.orbDamageTier||0)+1);}},
   {name:'Aegis Battery',tag:'OFFENSE',icon:'🔋',desc:'Ready shields boost returns; full set fires bolts.',requires:upg=>upg.shieldTier>0,apply(upg){if(upg.aegisBattery)return; upg.aegisBattery=true; upg.aegisBatteryTimer=0;}},
   {name:'Heavy Rounds',tag:'OFFENSE',icon:'🔨',desc:'-45% fire rate, +50% damage. Max 3.',apply(upg){if(upg.heavyRoundsTier>=3)return; upg.heavyRoundsTier++; upg.heavyRoundsFireMult*=0.55; upg.heavyRoundsDamageMult*=1.50;}},
   {name:'Dense Core',tag:'OFFENSE',icon:'◈',desc:'Less max charge, more damage. Max 4.',apply(upg){if(upg.denseTier>=4)return; upg.denseTier++; upg.denseDamageMult=DENSE_CORE_DAMAGE_MULTS[Math.min(DENSE_CORE_DAMAGE_MULTS.length - 1, upg.denseTier - 1)]; syncChargeCapacity(upg);}},
@@ -326,7 +328,7 @@ function getBoonWeight(boon, upg) {
   if(boon.name === 'Twin Lance') return 1 / (1 + upg.forwardShotTier * 1.35);
   // Build-bias: boost modifier boons when the player already owns the base
   const SHIELD_MODS = new Set(['Tempered Shield','Mirror Shield','Shield Burst','Aegis Nova','Barrier Pulse','Swift Ward','Aegis Battery']);
-  const ORB_MODS    = new Set(['Volatile Orbs','Charged Orbs','Absorb Orbs','Orb Twin','Orb Pierce','Orb Overcharge','Orbital Focus','Massive Orbs','Wide Orbit']);
+  const ORB_MODS    = new Set(['Volatile Orbs','Charged Orbs','Absorb Orbs','Orb Twin','Orb Pierce','Orb Overcharge','Orbital Focus','Orb Strike','Massive Orbs','Wide Orbit']);
   const BOUNCE_MODS = new Set(['Split Shot','Fracture']);
   const PIERCE_MODS = new Set(['Volatile Rounds','Chain Reaction']);
   if(boon.name === 'Payload Bloom' && upg.payload) return 3;
@@ -550,6 +552,7 @@ function getActiveBoonEntries(upg) {
   if(upg.orbPierce) entries.push({icon:'⚡→',name:'Orb Pierce',detail:'Orb shots pierce 1 enemy'});
   if(upg.orbOvercharge) entries.push({icon:'⚡⬆',name:'Orb Overcharge',detail:'Orb shots scale harder from charge'});
   if(upg.orbitalFocus) entries.push({icon:'🌐',name:'Orbital Focus',detail:'Orbs scale from charge, faster orb fire'});
+  if((upg.orbDamageTier||0) > 0) entries.push({icon:'🔮⚔',name:'Orb Strike',detail:`+${25*upg.orbDamageTier}% orb damage`});
   if((upg.orbSizeMult||1) > 1) entries.push({icon:'🔮+',name:'Massive Orbs',detail:`×${(upg.orbSizeMult||1).toFixed(2)} orb size`});
   if((upg.orbitRadiusBonus||0) > 0) entries.push({icon:'🔮↔',name:'Wide Orbit',detail:`+${upg.orbitRadiusBonus}px orbit distance`});
   if((upg.mobileChargeRate||0.10) > 0.10) entries.push({icon:'🎯+',name:'Steady Aim',detail:`${Math.round((upg.mobileChargeRate||0.10)*100)}% mobile charge rate`});

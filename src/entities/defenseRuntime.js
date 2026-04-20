@@ -199,6 +199,7 @@ function buildChargedOrbVolleyForSlot({
   shotSpeed = 220,
   now,
   bloodPactHealCap = 0,
+  orbDamageBonus = 1,
 } = {}) {
   if((orbCooldown?.[slotIndex] || 0) > 0) {
     return { nextTimerMs: timerMs, fired: false, chargeSpent: 0, shotSpecs: [] };
@@ -234,10 +235,11 @@ function buildChargedOrbVolleyForSlot({
     return { nextTimerMs: 0, fired: false, chargeSpent: 0, shotSpecs: [] };
   }
 
-  let totalDamage = 1.4;
+  let totalDamage = 14;
   if(orbitalFocus) totalDamage *= focusDamageMult * (1 + chargeRatio * focusChargeScale);
   if(orbOvercharge) totalDamage *= 1 + chargeRatio * overchargeDamageMult;
   if(orbTwin) totalDamage *= twinDamageMult;
+  totalDamage *= orbDamageBonus;
   const perShotDamage = totalDamage / shotsAvailable;
 
   const shotSpecs = shotAngles.slice(0, shotsAvailable).map((angle) => ({
