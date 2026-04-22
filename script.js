@@ -79,6 +79,7 @@ import { renderPatchNotesPanel } from './src/ui/patchNotes.js';
 import { createPanelManager } from './src/ui/panelManager.js';
 import { showGameOverScreen } from './src/ui/gameOver.js';
 import { bullets, enemies, shockwaves, spawnQueue, scoreBreakdown, resetScoreBreakdown } from './src/core/gameState.js';
+import { runBoonHook } from './src/systems/boonHooks.js';
 import {
   bindPatchNotesControls,
   bindLeaderboardControls,
@@ -2358,11 +2359,7 @@ function update(dt,ts){
       roomPhase='clear';
       roomClearTimer=0;
       bullets.length=0; clearParticles();
-      if(UPG.regenTick>0) healPlayer(UPG.regenTick, 'roomRegen');
-      // Escalation: reset kill count for next room
-      if(UPG.escalation) UPG.escalationKills = 0;
-      // EMP Burst: reset for next room
-      if(UPG.empBurst) UPG.empBurstUsed = false;
+      runBoonHook('onRoomClear', { UPG, healPlayer });
       finalizeCurrentRoomTelemetry('clear');
       applyRoomClearProgression();
       showRoomClear();
@@ -2378,12 +2375,7 @@ function update(dt,ts){
       roomClearTimer=0;
       // Clear all projectiles immediately
       bullets.length=0; clearParticles();
-      // Room clear regen
-      if(UPG.regenTick>0) healPlayer(UPG.regenTick, 'roomRegen');
-      // Escalation: reset kill count for next room
-      if(UPG.escalation) UPG.escalationKills = 0;
-      // EMP Burst: reset for next room
-      if(UPG.empBurst) UPG.empBurstUsed = false;
+      runBoonHook('onRoomClear', { UPG, healPlayer });
       finalizeCurrentRoomTelemetry('clear');
       applyRoomClearProgression();
       showRoomClear();

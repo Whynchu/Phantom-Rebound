@@ -153,6 +153,7 @@ import {
 import { bindGestureGuards } from '../src/platform/gestureGuards.js';
 import { setPlayerColor, getPlayerColor, getPlayerColorScheme } from '../src/data/colorScheme.js';
 import { BOONS, getDefaultUpgrades } from '../src/data/boons.js';
+import { registerBoonHook, runBoonHook, getBoonHookCount } from '../src/systems/boonHooks.js';
 
 const pendingTests = [];
 
@@ -2660,6 +2661,53 @@ test('pause/resume dt accumulator skips paused time window', () => {
   // No pause overlap: 1300-1250 = 50ms
   const dt4 = calculateEffectiveDt(1300, 1250, 800, 1200);
   assert.equal(dt4, 50, 'Should count only post-pause time');
+});
+
+test('boon hook registry fires built-in onRoomClear effects and user callbacks', () => {
+  const baselineCount = getBoonHookCount('onRoomClear');
+  assert.ok(baselineCount >= 3, 'expected at least the three built-in onRoomClear hooks');
+
+  const heals = [];
+  const healPlayer = (amount, source) => heals.push({ amount, source });
+
+  const UPG = {
+    regenTick: 5,
+    escalation: true,
+    escalationKills: 17,
+    empBurst: true,
+    empBurstUsed: true,
+  };
+  runBoonHook('onRoomClear', { UPG, healPlayer });
+
+  assert.deepEqual(heals, [{ amount: 5, source: 'roomRegen' }]);
+  assert.equal(UPG.escalationKills, 0);
+  assert.equal(UPG.empBurstUsed, false);
+
+  const UPG2 = { regenTick: 0, escalation: false, empBurst: false };
+  const heals2 = [];
+  runBoonHook('onRoomClear', { UPG: UPG2, healPlayer: (a, s) => heals2.push([a, s]) });
+  assert.deepEqual(heals2, []);
+
+  let custom = 0;
+  registerBoonHook('onRoomClear', () => { custom += 1; });
+  runBoonHook('onRoomClear', { UPG: {}, healPlayer: () => {} });
+  assert.equal(custom, 1);
+
+  runBoonHook('nonexistent', {});
+});
+
+test('boon hook registry swallows callback errors without breaking siblings', () => {
+  let afterRan = false;
+  registerBoonHook('testCrash', () => { throw new Error('boom'); });
+  registerBoonHook('testCrash', () => { afterRan = true; });
+  const errSpy = console.error;
+  console.error = () => {};
+  try {
+    runBoonHook('testCrash', {});
+  } finally {
+    console.error = errSpy;
+  }
+  assert.equal(afterRan, true);
 });
 
 await Promise.all(pendingTests);

@@ -1,5 +1,14 @@
 const PATCH_NOTES = [
   {
+      version: '1.19.23',
+      label: 'BOON HOOK REGISTRY',
+      summary: ['Internal refactor — no gameplay changes.'],
+      highlights: [
+        'Introduced a lightweight boon hook registry in src/systems/boonHooks.js so boon effects can register tick/room-clear/kill/fire/damage callbacks instead of being hand-gated inside script.js.',
+        'Migrated the regen-on-clear, escalation reset, and EMP-burst reset effects onto the onRoomClear hook as the pilot pattern. Behavior is identical; the two duplicated room-clear blocks collapse into a single hook fire.',
+      ]
+    },
+    {
       version: '1.19.22',
       label: 'LEADERBOARD TIME DISPLAY',
       summary: ['Remote leaderboard rows now show run time.'],
