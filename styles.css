@@ -1137,18 +1137,30 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
   text-shadow:0 0 22px rgba(var(--accent-rgb),0.35);
 }
 
-/* Desktop: kill the main-menu scrollbar. #s-start gets overflow:auto via
- * .menu-chrome-visible rule at line 603 for mobile where content may exceed
- * the allotted flex space, but on desktop there's plenty of vertical room
- * and the scrollbar is cosmetic noise. Belt-and-braces: also enforce hidden
- * on html/body in case any browser extension or Edge quirk overrides the
- * global rule at line 39. */
+/* Desktop main menu: let the panel expand to fit its content instead of being
+ * trapped inside #wrap's canvas-driven height. The main #cv is not used on
+ * the main menu (there's a dedicated #start-ghost-preview inside #s-start),
+ * so we hide it, lift #wrap's 100vh cap, and make #s-start participate in
+ * normal flow so its content drives the layout. No scrollbar, no clipping.
+ * Belt-and-braces: keep html/body overflow:hidden so a rogue browser extension
+ * or Edge quirk can't bring the outer scrollbar back. */
 @media screen and (min-width: 1024px) {
   html, body {
     overflow: hidden !important;
   }
+  body.menu-chrome-visible:not(.compact-viewport) #cv {
+    display: none;
+  }
+  body.menu-chrome-visible:not(.compact-viewport) #wrap {
+    max-height: none;
+    overflow: visible;
+  }
   body.menu-chrome-visible:not(.compact-viewport) #s-start {
-    overflow: hidden;
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    overflow: visible;
   }
 }
 

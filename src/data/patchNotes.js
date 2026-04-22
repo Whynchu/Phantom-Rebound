@@ -1,5 +1,14 @@
 const PATCH_NOTES = [
   {
+      version: '1.19.14',
+      label: 'LEADERBOARD BUTTON FIX',
+      summary: ['Desktop main menu now expands to fit content — no more clipped Leaderboard button, no scrollbar.'],
+      highlights: [
+        'Desktop: on the main menu, the start panel now sizes to its own content instead of being trapped inside a fixed-height wrap. The Leaderboard button is always visible, and there is no scrollbar either. Hides the unused background canvas on the main menu so the layout can breathe.',
+        'No changes to gameplay, mobile, or iPhone.',
+      ]
+    },
+    {
       version: '1.19.13',
       label: 'ANDROID WEBAPK FIX',
       summary: ['Fix Android "Unsafe app blocked" warning for installed web app users.'],
