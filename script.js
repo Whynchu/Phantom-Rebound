@@ -98,6 +98,27 @@ import {
 import { HAT_OPTIONS, getHatHeightMultiplier } from './src/data/hats.js';
 import { drawGhostHatLayer } from './src/ui/drawing/hatRenderer.js';
 import {
+  STORAGE_KEYS,
+  MAX_PARTICLES,
+  MAX_BULLETS,
+  MAX_DMG_NUMBERS,
+  SHIELD_HALF_W,
+  SHIELD_HALF_H,
+  WINDUP_MS_DRAW,
+} from './src/data/constants.js';
+import {
+  particles,
+  clearParticles,
+  spawnSparks,
+  spawnBlueDissipateBurst,
+  spawnPayloadExplosion,
+} from './src/systems/particles.js';
+import {
+  dmgNumbers,
+  clearDmgNumbers,
+  spawnDmgNumber,
+} from './src/systems/damageNumbers.js';
+import {
   revealAppShell as revealAppShellView,
   syncColorDrivenCopy as syncColorDrivenCopyView,
   setMenuChromeVisible as setMenuChromeVisibleView,
@@ -158,9 +179,9 @@ import {
   advanceClearPhase,
 } from './src/core/roomRuntime.js';
 
-const PLAYER_COLOR_KEY = 'phantom-player-color';
-const COLOR_ASSIST_KEY = 'phantom-color-assist';
-const PLAYER_HAT_KEY = 'phantom-player-hat';
+const PLAYER_COLOR_KEY = STORAGE_KEYS.playerColor;
+const COLOR_ASSIST_KEY = STORAGE_KEYS.colorAssist;
+const PLAYER_HAT_KEY = STORAGE_KEYS.playerHat;
 const storedColorAssist = readText(COLOR_ASSIST_KEY, 'off');
 setColorAssistMode(storedColorAssist);
 const storedPlayerColor = readText(PLAYER_COLOR_KEY, 'green');
@@ -214,9 +235,9 @@ window.addEventListener('phantom:color-assist-change', (event) => {
 
 const cv  = document.getElementById('cv');
 const ctx = cv.getContext('2d');
-const LB_KEY = 'phantom-rebound-leaderboard-v1';
-const NAME_KEY = 'phantom-rebound-runner-name';
-const LEGACY_RUN_RECOVERY_KEY = 'phantom-rebound-run-recovery-v1';
+const LB_KEY = STORAGE_KEYS.leaderboard;
+const NAME_KEY = STORAGE_KEYS.runnerName;
+const LEGACY_RUN_RECOVERY_KEY = STORAGE_KEYS.legacyRunRecovery;
 
 const nameInputStart = document.getElementById('name-input-start');
 const nameInputGo = document.getElementById('name-input-go');
@@ -260,7 +281,7 @@ const versionCheckedAtEl = document.getElementById('version-checked-at');
 const versionRefreshBtn = document.getElementById('btn-version-refresh');
 const versionCloseBtn = document.getElementById('btn-version-close');
 const versionUpdateBtn = document.getElementById('btn-version-update');
-const UPDATE_AVAILABLE_KEY = 'phantom-rebound-update-available';
+const UPDATE_AVAILABLE_KEY = STORAGE_KEYS.updateAvailable;
 let latestAvailableVersion = null;
 const roomClearEl = document.getElementById('room-clear');
 const roomClearTextEl = document.getElementById('room-clear-txt');
@@ -611,7 +632,7 @@ const BASE_PLAYER_HP = 200;
 let gstate = 'start';
 let pauseStartedAt = 0;
 let player = {};
-let bullets = [], enemies = [], particles = [], dmgNumbers = [], shockwaves = [];
+let bullets = [], enemies = [], shockwaves = [];
 let score=0, kills=0;
 let charge=0, fireT=0, stillTimer=0, prevStill=false;
 let hp=BASE_PLAYER_HP, maxHp=BASE_PLAYER_HP;
@@ -619,8 +640,7 @@ let playerAimAngle = -Math.PI * 0.5;
 let playerAimHasTarget = false;
 const joy = createJoystickState();
 const GAME_OVER_ANIM_MS = 850;
-const SHIELD_HALF_W = 9;
-const SHIELD_HALF_H = 4.5;
+
 const STALL_SPAWN_COOLDOWN_MS = 2600;
 const SHIELD_ORBIT_R    = 35;   // orbital radius of shield orbs from player center (px)
 const SHIELD_COOLDOWN   = 4.5;  // seconds a shield is inactive after absorbing a bullet (baseline; reduced by Swift Ward)
@@ -1118,7 +1138,7 @@ function beginWaveIntro(nextWaveIndex) {
   roomPhase = 'intro';
   roomIntroTimer = 0;
   bullets = [];
-  particles = [];
+  clearParticles();
   player.x = cv.width / 2;
   player.y = cv.height / 2;
   player.vx = 0;
@@ -1154,7 +1174,7 @@ function startRoom(idx) {
   roomObstacles = createRoomObstacles(cv.width, cv.height);
   enemies = [];
   bullets = [];
-  dmgNumbers = [];
+  clearDmgNumbers();
   shockwaves = [];
   payloadCooldownMs = 0;
   // Boss room state
@@ -1754,17 +1774,13 @@ function firePlayer(tx,ty) {
   }
 }
 
-const MAX_PARTICLES = 600;
-const MAX_BULLETS = 400;
-const MAX_DMG_NUMBERS = 30;
 let payloadCooldownMs = 0;
 
-function sparks(x,y,col,n=6,spd=80) {
-  const room = Math.min(n, MAX_PARTICLES - particles.length);
-  for(let i=0;i<room;i++){
-    const a=Math.random()*Math.PI*2,s=spd*(.4+Math.random()*.6);
-    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,col,life:1,decay:1.6+Math.random()});
-  }
+const sparks = spawnSparks;
+const burstPayloadExplosion = spawnPayloadExplosion;
+function burstBlueDissipate(x, y) {
+  const threat = getThreatPalette();
+  spawnBlueDissipateBurst(x, y, (a) => C.getRgba(threat.danger.light, a));
 }
 
 function spawnGreyDrops(x,y,ts,count=getEnemyGreyDropCount()) {
@@ -1776,85 +1792,6 @@ function spawnGreyDrops(x,y,ts,count=getEnemyGreyDropCount()) {
     count,
     maxBullets: MAX_BULLETS,
   });
-}
-function burstBlueDissipate(x, y) {
-  const threat = getThreatPalette();
-  const room = Math.min(12, MAX_PARTICLES - particles.length);
-  for(let i=0;i<room;i++){
-    const a = Math.random() * Math.PI * 2;
-    const s = 45 + Math.random() * 70;
-    particles.push({
-      x,
-      y,
-      vx: Math.cos(a) * s,
-      vy: Math.sin(a) * s,
-      col: C.getRgba(threat.danger.light, 0.35 + Math.random() * 0.4),
-      life: 0.9 + Math.random() * 0.35,
-      decay: 2.2 + Math.random() * 0.9,
-      grow: 0.8 + Math.random() * 1.2,
-    });
-  }
-}
-
-function burstPayloadExplosion(x, y, radius) {
-  const outerBurstCount = Math.min(28, Math.max(12, Math.round(radius / 8)));
-  const outerBurstRoom = Math.min(outerBurstCount, MAX_PARTICLES - particles.length);
-  for(let i = 0; i < outerBurstRoom; i++){
-    const angle = Math.random() * Math.PI * 2;
-    const speed = radius * (0.55 + Math.random() * 0.4);
-    particles.push({
-      x,
-      y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      col: Math.random() < 0.35 ? 'rgba(255,246,220,0.82)' : 'rgba(255,122,56,0.78)',
-      life: 0.7 + Math.random() * 0.28,
-      decay: 2.0 + Math.random() * 0.7,
-      grow: Math.max(2.4, radius / 18) + Math.random() * Math.max(1.5, radius / 22),
-    });
-  }
-
-  const coreBurstCount = Math.min(16, Math.max(8, Math.round(radius / 16)));
-  const coreBurstRoom = Math.min(coreBurstCount, MAX_PARTICLES - particles.length);
-  for(let i = 0; i < coreBurstRoom; i++){
-    const angle = Math.random() * Math.PI * 2;
-    const speed = radius * (0.14 + Math.random() * 0.16);
-    particles.push({
-      x,
-      y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      col: Math.random() < 0.5 ? 'rgba(255,230,170,0.88)' : 'rgba(255,160,84,0.84)',
-      life: 0.5 + Math.random() * 0.2,
-      decay: 2.6 + Math.random() * 0.8,
-      grow: Math.max(3.2, radius / 14) + Math.random() * Math.max(2, radius / 18),
-    });
-  }
-}
-
-function spawnDmgNumber(x, y, value, color = '#fff') {
-  if (dmgNumbers.length >= MAX_DMG_NUMBERS) dmgNumbers.shift();
-  const display = value >= 1 ? Math.round(value) : value.toFixed(1);
-  let nx = x + (Math.random() - 0.5) * 10;
-  let ny = y;
-  // nudge horizontally to avoid stacking with nearby live numbers
-  const PROX = 18;
-  let bumped = true;
-  let dir = 1;
-  let step = 0;
-  while (bumped) {
-    bumped = false;
-    for (const d of dmgNumbers) {
-      if (Math.abs(d.x - nx) < PROX && Math.abs(d.y - ny) < PROX) {
-        step++;
-        nx = x + dir * PROX * step;
-        dir *= -1;
-        bumped = true;
-        break;
-      }
-    }
-  }
-  dmgNumbers.push({ x: nx, y: ny, text: String(display), color, life: 1 });
 }
 
 function showUpgrades() {
@@ -2200,7 +2137,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── RUN PERSISTENCE ────────────────────────────────────────────────────────────
-const SAVED_RUN_KEY = 'phantom-saved-run';
+const SAVED_RUN_KEY = STORAGE_KEYS.savedRun;
 
 function saveRunState() {
   const state = {
@@ -2259,7 +2196,7 @@ function restoreRun(saved) {
   syncRunChargeCapacity();
   syncPlayerScale();
   player = createInitialPlayerState(cv.width, cv.height);
-  bullets = []; enemies = []; particles = []; shockwaves = [];
+  bullets = []; enemies = []; clearParticles(); shockwaves = [];
   _orbFireTimers = []; _orbCooldown = [];
   resetJoystickState(joy);
   fireT = 0; stillTimer = 0; prevStill = false;
@@ -2315,7 +2252,7 @@ function init() {
   legendaryRejectedIds=new Set(); legendaryRoomsSinceRejection=new Map(); // Reset rejection tracking on new run
   runTelemetry = createRunTelemetry();
   currentRoomTelemetry = null;
-  bullets=[];enemies=[];particles=[];dmgNumbers=[];shockwaves=[];
+  bullets=[];enemies=[];clearParticles();clearDmgNumbers();shockwaves=[];
   payloadCooldownMs = 0;
   resetJoystickState(joy);
   resetUpgrades();
@@ -2498,7 +2435,7 @@ function update(dt,ts){
     if(postSpawningPhase === 'clear'){
       roomPhase='clear';
       roomClearTimer=0;
-      bullets=[]; particles=[];
+      bullets=[]; clearParticles();
       if(UPG.regenTick>0) healPlayer(UPG.regenTick, 'roomRegen');
       // Escalation: reset kill count for next room
       if(UPG.escalation) UPG.escalationKills = 0;
@@ -2518,7 +2455,7 @@ function update(dt,ts){
       roomPhase='clear';
       roomClearTimer=0;
       // Clear all projectiles immediately
-      bullets=[]; particles=[];
+      bullets=[]; clearParticles();
       // Room clear regen
       if(UPG.regenTick>0) healPlayer(UPG.regenTick, 'roomRegen');
       // Escalation: reset kill count for next room
@@ -3576,7 +3513,6 @@ function draw(ts){
   }
 
   // Enemies
-  const WINDUP_MS_DRAW = 520;
   for(const e of enemies){
     ctx.save();
 

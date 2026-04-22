@@ -1,5 +1,16 @@
 const PATCH_NOTES = [
   {
+      version: '1.19.10',
+      label: 'PARTICLES & NUMBERS REFACTOR',
+      summary: ['Desktop scrollbar squashed. Damage number spacing tightened. More code cleanup.'],
+      highlights: [
+        'Desktop main menu: final fix for the stubborn vertical scrollbar (canvas was stealing layout height).',
+        'Damage numbers: horizontal spread now accounts for text width so adjacent numbers sit just one character apart instead of far apart.',
+        'Refactor: particles and damage numbers moved to dedicated modules (src/systems/particles.js, src/systems/damageNumbers.js).',
+        'Refactor: shared constants (storage keys, particle/bullet caps) consolidated in src/data/constants.js.',
+      ]
+    },
+    {
       version: '1.19.9',
       label: 'HAT EXTRACTION (REFACTOR)',
       summary: ['Behind-the-scenes cleanup: hat system moved to its own module.'],
