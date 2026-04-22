@@ -75,7 +75,8 @@ import {
 } from './src/ui/leaderboard.js';
 import { renderGameOverBoonsList, showLeaderboardBoonsPopup } from './src/ui/boonsPanel.js';
 import { iconHTML } from './src/ui/iconRenderer.js';
-import { renderPatchNotesPanel, setPatchNotesVisibility } from './src/ui/patchNotes.js';
+import { renderPatchNotesPanel } from './src/ui/patchNotes.js';
+import { createPanelManager } from './src/ui/panelManager.js';
 import { showGameOverScreen } from './src/ui/gameOver.js';
 import {
   bindPatchNotesControls,
@@ -549,73 +550,37 @@ function renderHatsPanel() {
   }
 }
 
-function setPatchNotesOpen(isOpen) {
-  if(isOpen) {
-    setVersionPanelOpen(false);
-    setSettingsPanelOpen(false);
-    setHatsPanelOpen(false);
-    setContributorsPanelOpen(false);
-    pauseBoonsPanel.classList.add('off'); // Close pause boons panel if open
-    if(!_patchNotesRendered) {
-      // Lazy-load on first open. Show panel immediately; populate when ready.
-      renderPatchNotes();
-    }
-  } else if(gstate === 'paused') {
-    pausePanel.classList.remove('off'); // Restore pause panel if we're still paused
-  }
-  setPatchNotesVisibility(patchNotesPanel, isOpen);
-}
+const panelManager = createPanelManager({
+  panels: {
+    patchNotes: {
+      el: patchNotesPanel,
+      renderOnOpen: () => { if(!_patchNotesRendered) renderPatchNotes(); },
+      beforeOpen: () => { pauseBoonsPanel?.classList.add('off'); },
+      beforeClose: () => { if(gstate === 'paused') pausePanel?.classList.remove('off'); },
+    },
+    version: {
+      el: versionPanel,
+      afterOpen: () => { refreshVersionStatus(); },
+    },
+    settings: {
+      el: settingsPanel,
+      renderOnOpen: () => { renderSettingsPanel(); },
+    },
+    hats: {
+      el: hatsPanel,
+      renderOnOpen: () => { renderHatsPanel(); },
+    },
+    contributors: {
+      el: contributorsPanel,
+    },
+  },
+});
 
-function setVersionPanelOpen(isOpen) {
-  if(!versionPanel) return;
-  if(isOpen) {
-    setPatchNotesOpen(false);
-    setSettingsPanelOpen(false);
-    setHatsPanelOpen(false);
-    setContributorsPanelOpen(false);
-  }
-  versionPanel.classList.toggle('off', !isOpen);
-  versionPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-  if(isOpen) refreshVersionStatus();
-}
-
-function setSettingsPanelOpen(isOpen) {
-  if(!settingsPanel) return;
-  if(isOpen) {
-    setPatchNotesOpen(false);
-    setVersionPanelOpen(false);
-    setHatsPanelOpen(false);
-    setContributorsPanelOpen(false);
-    renderSettingsPanel();
-  }
-  settingsPanel.classList.toggle('off', !isOpen);
-  settingsPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-}
-
-function setHatsPanelOpen(isOpen) {
-  if(!hatsPanel) return;
-  if(isOpen) {
-    setPatchNotesOpen(false);
-    setVersionPanelOpen(false);
-    setSettingsPanelOpen(false);
-    setContributorsPanelOpen(false);
-    renderHatsPanel();
-  }
-  hatsPanel.classList.toggle('off', !isOpen);
-  hatsPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-}
-
-function setContributorsPanelOpen(isOpen) {
-  if(!contributorsPanel) return;
-  if(isOpen) {
-    setPatchNotesOpen(false);
-    setVersionPanelOpen(false);
-    setSettingsPanelOpen(false);
-    setHatsPanelOpen(false);
-  }
-  contributorsPanel.classList.toggle('off', !isOpen);
-  contributorsPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-}
+function setPatchNotesOpen(isOpen) { panelManager.setOpen('patchNotes', isOpen); }
+function setVersionPanelOpen(isOpen) { panelManager.setOpen('version', isOpen); }
+function setSettingsPanelOpen(isOpen) { panelManager.setOpen('settings', isOpen); }
+function setHatsPanelOpen(isOpen) { panelManager.setOpen('hats', isOpen); }
+function setContributorsPanelOpen(isOpen) { panelManager.setOpen('contributors', isOpen); }
 
 function setVersionStatusClass(element, mode) {
   if(!element) return;
