@@ -1192,16 +1192,7 @@ function startRoom(idx) {
   _killSustainHealedThisRoom = 0;
   _orbFireTimers = []; _orbCooldown = [];
   _volatileOrbGlobalCooldown = 0;
-  UPG.predatorKillStreak = 0; UPG.predatorKillStreakTime = 0;
-  if(UPG.mirrorTide){
-    UPG.mirrorTideRoomUses = 0;
-    UPG.mirrorTideCooldown = 0;
-  }
-  if(UPG.phaseDash){
-    UPG.phaseDashRoomUses = 0;
-    UPG.phaseDashCooldown = 0;
-    UPG.isDashing = false;
-  }
+  runBoonHook('onRoomStart', { UPG });
   roomIndex = idx;
   bossClears = 0;
   roomPurpleShooterAssigned = false;

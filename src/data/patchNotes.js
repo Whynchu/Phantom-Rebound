@@ -1,5 +1,14 @@
 const PATCH_NOTES = [
   {
+      version: '1.19.25',
+      label: 'BOON HOOKS: ROOM START',
+      summary: ['Internal refactor — boon registry phase wraps up.'],
+      highlights: [
+        'Migrated room-start boon inits (predator kill streak reset, mirror tide + phase dash seeding) onto a new onRoomStart hook.',
+        'That closes the clean batch of boon-hook migrations: room-start/room-clear/per-frame tick/pause-adjust are now pluggable. Remaining UPG.* references live inside the fire, hit, and damage paths where the local context makes hook indirection higher cost than reward.',
+      ]
+    },
+    {
       version: '1.19.24',
       label: 'BOON HOOKS: TICK + PAUSE',
       summary: ['Internal refactor — no gameplay changes.'],

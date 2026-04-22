@@ -127,4 +127,31 @@ registerBoonHook('onPauseAdjust', (ctx) => {
   if (UPG.aegisBatteryTimer) UPG.aegisBatteryTimer += pauseDuration;
 });
 
+// ── Room-start inits. Context: { UPG }.
+// Seed/reset boon state that should begin fresh each room.
+
+registerBoonHook('onRoomStart', (ctx) => {
+  const { UPG } = ctx;
+  if (!UPG) return;
+  UPG.predatorKillStreak = 0;
+  UPG.predatorKillStreakTime = 0;
+});
+
+registerBoonHook('onRoomStart', (ctx) => {
+  const { UPG } = ctx;
+  if (UPG && UPG.mirrorTide) {
+    UPG.mirrorTideRoomUses = 0;
+    UPG.mirrorTideCooldown = 0;
+  }
+});
+
+registerBoonHook('onRoomStart', (ctx) => {
+  const { UPG } = ctx;
+  if (UPG && UPG.phaseDash) {
+    UPG.phaseDashRoomUses = 0;
+    UPG.phaseDashCooldown = 0;
+    UPG.isDashing = false;
+  }
+});
+
 export { registerBoonHook, runBoonHook, clearBoonHooks, getBoonHookCount };

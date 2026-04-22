@@ -2762,6 +2762,40 @@ test('boon hook registry onPauseAdjust shifts absolute boon timers forward', () 
   assert.equal(UPG2.predatorKillStreakTime, undefined);
 });
 
+test('boon hook registry onRoomStart seeds predator/mirrorTide/phaseDash state', () => {
+  const UPG = {
+    predatorKillStreak: 7,
+    predatorKillStreakTime: 9999,
+    mirrorTide: true,
+    mirrorTideRoomUses: 3,
+    mirrorTideCooldown: 1000,
+    phaseDash: true,
+    phaseDashRoomUses: 2,
+    phaseDashCooldown: 500,
+    isDashing: true,
+  };
+  runBoonHook('onRoomStart', { UPG });
+  assert.equal(UPG.predatorKillStreak, 0);
+  assert.equal(UPG.predatorKillStreakTime, 0);
+  assert.equal(UPG.mirrorTideRoomUses, 0);
+  assert.equal(UPG.mirrorTideCooldown, 0);
+  assert.equal(UPG.phaseDashRoomUses, 0);
+  assert.equal(UPG.phaseDashCooldown, 0);
+  assert.equal(UPG.isDashing, false);
+
+  // Inactive boons don't get their state touched (except the unconditional predator reset)
+  const UPG2 = {
+    predatorKillStreak: 1,
+    mirrorTide: false, mirrorTideRoomUses: 5,
+    phaseDash: false, phaseDashRoomUses: 5, isDashing: true,
+  };
+  runBoonHook('onRoomStart', { UPG: UPG2 });
+  assert.equal(UPG2.predatorKillStreak, 0);
+  assert.equal(UPG2.mirrorTideRoomUses, 5);
+  assert.equal(UPG2.phaseDashRoomUses, 5);
+  assert.equal(UPG2.isDashing, true);
+});
+
 await Promise.all(pendingTests);
 
 if (process.exitCode && process.exitCode !== 0) {
