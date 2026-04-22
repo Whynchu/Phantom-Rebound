@@ -226,19 +226,50 @@ test('computeKillScore returns base pts regardless of crit flag', () => {
   assert.equal(computeKillScore(null), 0);
 });
 
-test('computeRoomClearBonuses scales by depth and awards for pace/flawless/boss', () => {
-  const fast = computeRoomClearBonuses({ room: 10, clearMs: 8000, damageless: true, boss: false });
-  assert.equal(fast.clear, 45);
-  assert.equal(fast.pace, 88);
-  assert.equal(fast.flawless, 45);
+test('computeRoomClearBonuses: continuous pace curve + HP efficiency', () => {
+  const ctx = { maxHp: 100 };
+
+  const fast = computeRoomClearBonuses({ room: 10, clearMs: 8000, hpLost: 0, damageless: true, boss: false }, ctx);
+  assert.equal(fast.clear, 47);             // 15*1.8 + 20
+  assert.equal(fast.pace, 98);              // (600/11)*1.8
+  assert.equal(fast.efficiency, 0);         // no damage taken → flawless track
+  assert.equal(fast.flawless, 65);          // 25*1.8 + 20
   assert.equal(fast.boss, 0);
 
-  const slowHit = computeRoomClearBonuses({ room: 10, clearMs: 45000, damageless: false, boss: false });
-  assert.equal(slowHit.pace, 0);
-  assert.equal(slowHit.flawless, 0);
+  const chipDmg = computeRoomClearBonuses({ room: 10, clearMs: 15000, hpLost: 10, damageless: false, boss: false }, ctx);
+  assert.equal(chipDmg.efficiency, 58);     // 0.9 * (30*1.8 + 10) → 0.9 * 64
+  assert.equal(chipDmg.flawless, 0);
+  assert.ok(chipDmg.pace < fast.pace);      // slower clear = lower pace, continuously
 
-  const bossRoom = computeRoomClearBonuses({ room: 10, clearMs: 25000, damageless: false, boss: true });
-  assert.equal(bossRoom.boss, 280);
+  const slowBigHit = computeRoomClearBonuses({ room: 10, clearMs: 45000, hpLost: 80, damageless: false, boss: false }, ctx);
+  assert.ok(slowBigHit.pace > 0);           // never hits zero — every second counts
+  assert.ok(slowBigHit.efficiency < chipDmg.efficiency);
+
+  const boss = computeRoomClearBonuses({ room: 10, clearMs: 25000, hpLost: 0, damageless: true, boss: true }, ctx);
+  assert.equal(boss.boss, 410);             // 200*1.8 + 50
+});
+
+test('computeRoomClearBonuses: density/clutch/accuracy/dodge extras', () => {
+  const ctx = { maxHp: 100 };
+
+  // Density: 20 kills / 10 sec = 2 kps * 10 * 1.8 = 36
+  const dense = computeRoomClearBonuses({ room: 10, clearMs: 10000, hpLost: 0, damageless: true, kills: 20 }, ctx);
+  assert.equal(dense.density, 36);
+
+  // Clutch: hpEnd 20 / 100 = 20% (<=25%) + hpLost>0 → round(60 * 1.8) = 108
+  const clutch = computeRoomClearBonuses({ room: 10, clearMs: 10000, hpLost: 80, hpEnd: 20, damageless: false }, ctx);
+  assert.equal(clutch.clutch, 108);
+  // No clutch when flawless
+  const noClutch = computeRoomClearBonuses({ room: 10, clearMs: 10000, hpLost: 0, hpEnd: 100, damageless: true }, ctx);
+  assert.equal(noClutch.clutch, 0);
+
+  // Accuracy: 10 kills / 20 shots = 0.5 * (40*1.8 + 10) = 0.5 * 82 = 41
+  const acc = computeRoomClearBonuses({ room: 10, clearMs: 10000, hpLost: 0, kills: 10, shotsFired: 20 }, ctx);
+  assert.equal(acc.accuracy, 41);
+
+  // Dodge: 5 near-misses * (4 + 3) * 1.8 = 5 * 7 * 1.8 = 63
+  const dodge = computeRoomClearBonuses({ room: 10, clearMs: 10000, nearMisses: 5 }, ctx);
+  assert.equal(dodge.dodge, 63);
 });
 
 test('computeFiveRoomCheckpointBonus returns expected value for clean block', () => {

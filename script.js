@@ -633,7 +633,7 @@ let bullets = [], enemies = [], shockwaves = [];
 let score=0, kills=0;
 let scoreBreakdown = makeScoreBreakdown();
 function makeScoreBreakdown() {
-  return { kills: 0, roomClear: 0, pace: 0, flawless: 0, boss: 0, streak: 0 };
+  return { kills: 0, roomClear: 0, pace: 0, efficiency: 0, flawless: 0, boss: 0, streak: 0, density: 0, clutch: 0, accuracy: 0, dodge: 0, overkill: 0 };
 }
 function awardKillPoints(pts) {
   const base = Number(pts) || 0;
@@ -641,6 +641,19 @@ function awardKillPoints(pts) {
   score += base;
   scoreBreakdown.kills += base;
   return base;
+}
+function awardOverkillFromEnemy(e) {
+  if (!e) return 0;
+  const overkillHp = Math.max(0, -(Number(e.hp) || 0));
+  if (overkillHp <= 0) return 0;
+  const cap = Math.max(1, (Number(e.maxHp) || 1) * 0.5);
+  const eff = Math.min(overkillHp, cap);
+  const pts = Math.round(eff * 0.25);
+  if (!pts) return 0;
+  score += pts;
+  scoreBreakdown.overkill += pts;
+  if (currentRoomTelemetry) currentRoomTelemetry.overkillDamage = (currentRoomTelemetry.overkillDamage || 0) + eff;
+  return pts;
 }
 function awardScore(amount, category) {
   const n = Number(amount) || 0;
@@ -788,11 +801,16 @@ function awardFiveRoomScoreBonus() {
 }
 
 function awardRoomClearBonuses(room) {
-  const bonuses = computeRoomClearBonuses(room);
+  const bonuses = computeRoomClearBonuses(room, { maxHp });
   awardScore(bonuses.clear, 'roomClear');
   awardScore(bonuses.pace, 'pace');
+  awardScore(bonuses.efficiency, 'efficiency');
   awardScore(bonuses.flawless, 'flawless');
   awardScore(bonuses.boss, 'boss');
+  awardScore(bonuses.density, 'density');
+  awardScore(bonuses.clutch, 'clutch');
+  awardScore(bonuses.accuracy, 'accuracy');
+  awardScore(bonuses.dodge, 'dodge');
 }
 
 function applyRoomClearProgression() {
@@ -1245,6 +1263,7 @@ function triggerPayloadBlast(bullet, enemies, ts) {
         awardKillPoints(e.pts);
         kills++;
         recordKill('payload');
+        awardOverkillFromEnemy(e);
         sparks(e.x, e.y, e.col, e.isBoss ? 30 : 14, e.isBoss ? 160 : 95);
         spawnGreyDrops(e.x, e.y, ts);
         const killEffects = resolveEnemyKillEffects({
@@ -1624,6 +1643,7 @@ function firePlayer(tx,ty) {
     now,
   });
   volleySpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
+  if(currentRoomTelemetry) currentRoomTelemetry.shotsFired = (currentRoomTelemetry.shotsFired || 0) + volleySpecs.length;
   charge=Math.max(0,charge-chargeSpent);
   recordShotSpend(chargeSpent);
   sparks(player.x,player.y,C.green,4 + Math.min(6, availableShots + Math.floor((chargeSpent - availableShots) / Math.max(1, availableShots))),55);
@@ -1667,6 +1687,7 @@ function firePlayer(tx,ty) {
         random: () => 1,
       });
       echoSpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
+      if(currentRoomTelemetry) currentRoomTelemetry.shotsFired = (currentRoomTelemetry.shotsFired || 0) + echoSpecs.length;
     }
   }
 }
@@ -2612,6 +2633,7 @@ function update(dt,ts){
           scoreBreakdown.kills += orbitKillEffects.scoreDelta;
           kills += orbitKillEffects.killsDelta;
           recordKill('orbit');
+          awardOverkillFromEnemy(e);
           sparks(e.x,e.y,e.col,14,95);
           spawnGreyDrops(e.x,e.y,ts);
           if(orbitKillEffects.shouldGrantFinalFormCharge){
@@ -2787,6 +2809,14 @@ function update(dt,ts){
       if(b.y-b.r<M){b.y=M+b.r;b.vy=Math.abs(b.vy);bounced=true;}
       if(b.y+b.r>H-M){b.y=H-M-b.r;b.vy=-Math.abs(b.vy);bounced=true;}
       if(resolveBulletObstacleCollision(b)) bounced = true;
+    }
+
+    if(b.state==='danger' && !b.nearMissed && currentRoomTelemetry && player.invincible <= 0){
+      const nmDist = Math.hypot(b.x - player.x, b.y - player.y);
+      if(nmDist < player.r * 2.75 + b.r && nmDist > player.r + b.r){
+        b.nearMissed = true;
+        currentRoomTelemetry.nearMisses = (currentRoomTelemetry.nearMisses || 0) + 1;
+      }
     }
 
     if(bounced){
@@ -3202,6 +3232,7 @@ function update(dt,ts){
             awardKillPoints(e.pts);
             kills++;
             recordKill('output');
+            awardOverkillFromEnemy(e);
             sparks(e.x,e.y,e.col, e.isBoss ? 30 : 14, e.isBoss ? 160 : 95);
             // Death bullets scatter as grey
             spawnGreyDrops(e.x,e.y,ts);

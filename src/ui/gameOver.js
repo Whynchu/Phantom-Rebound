@@ -22,12 +22,18 @@ function renderScoreBreakdown(el, breakdown, stats) {
   el.innerHTML = '';
   const rows = [];
   if (breakdown) {
-    if (breakdown.kills)     rows.push(['Kill points',    breakdown.kills]);
-    if (breakdown.roomClear) rows.push(['Room clears',    breakdown.roomClear]);
-    if (breakdown.pace)      rows.push(['Pace bonus',     breakdown.pace]);
-    if (breakdown.flawless)  rows.push(['Flawless rooms', breakdown.flawless]);
-    if (breakdown.boss)      rows.push(['Boss takedowns', breakdown.boss]);
-    if (breakdown.streak)    rows.push(['Streak bonus',   breakdown.streak]);
+    if (breakdown.kills)      rows.push(['Kill points',    breakdown.kills]);
+    if (breakdown.overkill)   rows.push(['Overkill',       breakdown.overkill]);
+    if (breakdown.roomClear)  rows.push(['Room clears',    breakdown.roomClear]);
+    if (breakdown.pace)       rows.push(['Pace bonus',     breakdown.pace]);
+    if (breakdown.efficiency) rows.push(['HP efficiency',  breakdown.efficiency]);
+    if (breakdown.flawless)   rows.push(['Flawless rooms', breakdown.flawless]);
+    if (breakdown.clutch)     rows.push(['Clutch rooms',   breakdown.clutch]);
+    if (breakdown.density)    rows.push(['Combat density', breakdown.density]);
+    if (breakdown.accuracy)   rows.push(['Accuracy',       breakdown.accuracy]);
+    if (breakdown.dodge)      rows.push(['Dodge bonus',    breakdown.dodge]);
+    if (breakdown.boss)       rows.push(['Boss takedowns', breakdown.boss]);
+    if (breakdown.streak)     rows.push(['Streak bonus',   breakdown.streak]);
   }
   for (const [label, value] of rows) {
     const row = document.createElement('div');

@@ -1,5 +1,18 @@
 const PATCH_NOTES = [
   {
+      version: '1.19.17',
+      label: 'DYNAMIC SCORING',
+      summary: ['Score now reacts to every second and every playstyle.'],
+      highlights: [
+        'Continuous pace curve: every second shaved off a room now adds score (no more 30s all-or-nothing cutoff). Deep rooms multiply all bonuses via a per-room depth scale.',
+        'HP efficiency: partial damage is now rewarded based on % HP kept — flawless still pays the most, but chip damage no longer zeroes you out.',
+        'Clutch: finishing a room at ≤25% HP after taking a hit awards a sizeable bonus for risky comebacks.',
+        'Combat density: kills-per-second rewards AOE / sweep builds; overkill damage (damage dealt past an enemy\'s HP) awards a small per-kill bonus for burst builds.',
+        'Accuracy: kills / shots fired rewards precise builds. Dodge bonus: counts near-misses from enemy projectiles for evasion-focused runs.',
+        'End-of-run breakdown now lists all categories so you can see exactly where your score came from.',
+      ]
+    },
+    {
       version: '1.19.16',
       label: 'SCORING REWORK',
       summary: ['Score now rewards how you played, not just what you crit.'],
