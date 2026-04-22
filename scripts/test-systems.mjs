@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createPanelManager } from '../src/ui/panelManager.js';
 import {
   getKillSustainCapForRoom,
   applyKillSustainHeal,
@@ -2435,6 +2436,83 @@ test('applyDamagelessRoomProgression handles streak and reset behavior', () => {
   assert.equal(capped.damagelessRooms, 0);
   assert.equal(capped.boonRerolls, 3);
   assert.equal(capped.awardedReroll, true);
+});
+
+test('createPanelManager opens one panel at a time and runs lifecycle hooks', () => {
+  function makeEl() {
+    const classes = new Set(['off']);
+    const attrs = new Map();
+    return {
+      classList: {
+        add: (c) => classes.add(c),
+        remove: (c) => classes.delete(c),
+        toggle: (c, on) => { if (on) classes.add(c); else classes.delete(c); },
+        contains: (c) => classes.has(c),
+      },
+      setAttribute: (k, v) => { attrs.set(k, v); },
+      getAttribute: (k) => attrs.get(k),
+      _classes: classes,
+      _attrs: attrs,
+    };
+  }
+
+  const events = [];
+  const a = makeEl();
+  const b = makeEl();
+  const c = makeEl();
+  const mgr = createPanelManager({
+    panels: {
+      alpha: {
+        el: a,
+        beforeOpen: () => events.push('a:beforeOpen'),
+        renderOnOpen: () => events.push('a:render'),
+        afterOpen: () => events.push('a:afterOpen'),
+        beforeClose: () => events.push('a:beforeClose'),
+      },
+      beta: {
+        el: b,
+        afterOpen: () => events.push('b:afterOpen'),
+      },
+      gamma: { el: c },
+    },
+  });
+
+  mgr.setOpen('alpha', true);
+  assert.equal(a._classes.has('off'), false);
+  assert.equal(a.getAttribute('aria-hidden'), 'false');
+  assert.deepEqual(events, ['a:beforeOpen', 'a:render', 'a:afterOpen']);
+
+  // Opening beta should close alpha (fires alpha:beforeClose)
+  events.length = 0;
+  mgr.setOpen('beta', true);
+  assert.equal(a._classes.has('off'), true);
+  assert.equal(a.getAttribute('aria-hidden'), 'true');
+  assert.equal(b._classes.has('off'), false);
+  assert.deepEqual(events, ['a:beforeClose', 'b:afterOpen']);
+
+  // Explicit close
+  events.length = 0;
+  mgr.setOpen('beta', false);
+  assert.equal(b._classes.has('off'), true);
+
+  // Unknown id is a no-op
+  mgr.setOpen('missing', true);
+});
+
+test('createPanelManager customToggle replaces default class/attr handling', () => {
+  const calls = [];
+  const el = { classList: { toggle: () => { calls.push('default-toggle'); }, contains: () => false }, setAttribute: () => { calls.push('default-attr'); } };
+  const mgr = createPanelManager({
+    panels: {
+      only: {
+        el,
+        customToggle: (isOpen) => calls.push(`custom:${isOpen}`),
+      },
+    },
+  });
+  mgr.setOpen('only', true);
+  mgr.setOpen('only', false);
+  assert.deepEqual(calls, ['custom:true', 'custom:false']);
 });
 
 await Promise.all(pendingTests);
