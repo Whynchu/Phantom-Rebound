@@ -23,9 +23,11 @@ function renderScoreBreakdown(el, breakdown, stats) {
   const rows = [];
   if (breakdown) {
     if (breakdown.kills)     rows.push(['Kill points',    breakdown.kills]);
-    if (breakdown.crits)     rows.push(['Critical bonus', breakdown.crits]);
-    if (breakdown.orbits)    rows.push(['Orbit strikes',  breakdown.orbits]);
-    if (breakdown.roomBonus) rows.push(['Room bonuses',   breakdown.roomBonus]);
+    if (breakdown.roomClear) rows.push(['Room clears',    breakdown.roomClear]);
+    if (breakdown.pace)      rows.push(['Pace bonus',     breakdown.pace]);
+    if (breakdown.flawless)  rows.push(['Flawless rooms', breakdown.flawless]);
+    if (breakdown.boss)      rows.push(['Boss takedowns', breakdown.boss]);
+    if (breakdown.streak)    rows.push(['Streak bonus',   breakdown.streak]);
   }
   for (const [label, value] of rows) {
     const row = document.createElement('div');

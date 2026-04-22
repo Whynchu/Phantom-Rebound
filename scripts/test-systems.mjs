@@ -6,6 +6,7 @@ import {
 } from '../src/systems/sustain.js';
 import {
   computeKillScore,
+  computeRoomClearBonuses,
   computeFiveRoomCheckpointBonus,
 } from '../src/systems/scoring.js';
 import { computeProjectileHitDamage } from '../src/systems/damage.js';
@@ -219,9 +220,25 @@ test('applyKillSustainHeal enforces remaining room cap', () => {
   assert.equal(second.healedThisRoom, 14);
 });
 
-test('computeKillScore doubles crit kills only', () => {
-  assert.equal(computeKillScore(120, false), 120);
-  assert.equal(computeKillScore(120, true), 240);
+test('computeKillScore returns base pts regardless of crit flag', () => {
+  assert.equal(computeKillScore(120), 120);
+  assert.equal(computeKillScore(0), 0);
+  assert.equal(computeKillScore(null), 0);
+});
+
+test('computeRoomClearBonuses scales by depth and awards for pace/flawless/boss', () => {
+  const fast = computeRoomClearBonuses({ room: 10, clearMs: 8000, damageless: true, boss: false });
+  assert.equal(fast.clear, 45);
+  assert.equal(fast.pace, 88);
+  assert.equal(fast.flawless, 45);
+  assert.equal(fast.boss, 0);
+
+  const slowHit = computeRoomClearBonuses({ room: 10, clearMs: 45000, damageless: false, boss: false });
+  assert.equal(slowHit.pace, 0);
+  assert.equal(slowHit.flawless, 0);
+
+  const bossRoom = computeRoomClearBonuses({ room: 10, clearMs: 25000, damageless: false, boss: true });
+  assert.equal(bossRoom.boss, 280);
 });
 
 test('computeFiveRoomCheckpointBonus returns expected value for clean block', () => {

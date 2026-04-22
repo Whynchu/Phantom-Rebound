@@ -136,7 +136,7 @@ import {
   getKillSustainCapForRoom as getKillSustainCapForRoomValue,
   applyKillSustainHeal as applyKillSustainHealValue,
 } from './src/systems/sustain.js';
-import { computeKillScore, computeFiveRoomCheckpointBonus } from './src/systems/scoring.js';
+import { computeKillScore, computeRoomClearBonuses, computeFiveRoomCheckpointBonus } from './src/systems/scoring.js';
 import { applyDamagelessRoomProgression as applyDamagelessRoomProgressionValue } from './src/systems/progression.js';
 import { computeProjectileHitDamage } from './src/systems/damage.js';
 import {
@@ -633,15 +633,14 @@ let bullets = [], enemies = [], shockwaves = [];
 let score=0, kills=0;
 let scoreBreakdown = makeScoreBreakdown();
 function makeScoreBreakdown() {
-  return { kills: 0, crits: 0, orbits: 0, roomBonus: 0 };
+  return { kills: 0, roomClear: 0, pace: 0, flawless: 0, boss: 0, streak: 0 };
 }
-function awardKillPoints(pts, isCrit) {
+function awardKillPoints(pts) {
   const base = Number(pts) || 0;
-  const total = base * (isCrit ? 2 : 1);
-  score += total;
+  if (!base) return 0;
+  score += base;
   scoreBreakdown.kills += base;
-  if (isCrit) scoreBreakdown.crits += base;
-  return total;
+  return base;
 }
 function awardScore(amount, category) {
   const n = Number(amount) || 0;
@@ -785,7 +784,15 @@ function applyKillSustainHeal(amount, source) {
 
 function awardFiveRoomScoreBonus() {
   if(!runTelemetry) return;
-  awardScore(computeFiveRoomCheckpointBonus(runTelemetry.rooms), 'roomBonus');
+  awardScore(computeFiveRoomCheckpointBonus(runTelemetry.rooms), 'streak');
+}
+
+function awardRoomClearBonuses(room) {
+  const bonuses = computeRoomClearBonuses(room);
+  awardScore(bonuses.clear, 'roomClear');
+  awardScore(bonuses.pace, 'pace');
+  awardScore(bonuses.flawless, 'flawless');
+  awardScore(bonuses.boss, 'boss');
 }
 
 function applyRoomClearProgression() {
@@ -961,7 +968,10 @@ function finalizeCurrentRoomTelemetry(endState, clearMs = roomTimer) {
   currentRoomTelemetry.hpEnd = roundTelemetryValue(hp);
   currentRoomTelemetry.damageless = currentRoomTelemetry.damageless && !tookDamageThisRoom;
   runTelemetry.rooms.push(currentRoomTelemetry);
-  if(endState === 'clear') awardFiveRoomScoreBonus();
+  if(endState === 'clear') {
+    awardRoomClearBonuses(currentRoomTelemetry);
+    awardFiveRoomScoreBonus();
+  }
   currentRoomTelemetry = null;
 }
 
@@ -1232,7 +1242,7 @@ function triggerPayloadBlast(bullet, enemies, ts) {
       hitCount++;
       spawnDmgNumber(e.x, e.y - e.r, impactDamage, getPlayerColorScheme().hex);
       if(e.hp <= 0){
-        awardKillPoints(e.pts, false);
+        awardKillPoints(e.pts);
         kills++;
         recordKill('payload');
         sparks(e.x, e.y, e.col, e.isBoss ? 30 : 14, e.isBoss ? 160 : 95);
@@ -2599,7 +2609,7 @@ function update(dt,ts){
             finalFormChargeGain: 0.5,
           });
           score += orbitKillEffects.scoreDelta;
-          scoreBreakdown.orbits += orbitKillEffects.scoreDelta;
+          scoreBreakdown.kills += orbitKillEffects.scoreDelta;
           kills += orbitKillEffects.killsDelta;
           recordKill('orbit');
           sparks(e.x,e.y,e.col,14,95);
@@ -3189,7 +3199,7 @@ function update(dt,ts){
             b.bloodPactHeals = hitResolution.nextBloodPactHeals;
           }
           if(e.hp<=0){
-            awardKillPoints(e.pts, b.crit);
+            awardKillPoints(e.pts);
             kills++;
             recordKill('output');
             sparks(e.x,e.y,e.col, e.isBoss ? 30 : 14, e.isBoss ? 160 : 95);

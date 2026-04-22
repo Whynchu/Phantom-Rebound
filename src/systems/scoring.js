@@ -1,6 +1,25 @@
-function computeKillScore(points, isCrit = false) {
-  const base = Number(points) || 0;
-  return base * (isCrit ? 2 : 1);
+function computeKillScore(points) {
+  return Number(points) || 0;
+}
+
+function computeRoomClearBonuses(room) {
+  if (!room) return { clear: 0, pace: 0, flawless: 0, boss: 0 };
+  const roomNumber = Number(room.room) || 0;
+  const clearMs = Number(room.clearMs) || 0;
+  const clearSec = clearMs / 1000;
+
+  const clear = 15 + roomNumber * 3;
+
+  let pace = 0;
+  if (clearSec > 0 && clearSec < 30) {
+    pace = Math.min(90, Math.round((30 - clearSec) * 4));
+  }
+
+  const flawless = room.damageless ? (25 + roomNumber * 2) : 0;
+
+  const boss = room.boss ? (200 + roomNumber * 8) : 0;
+
+  return { clear, pace, flawless, boss };
 }
 
 function computeFiveRoomCheckpointBonus(rooms) {
@@ -24,4 +43,4 @@ function computeFiveRoomCheckpointBonus(rooms) {
   return Math.round(baseBonus * paceMultiplier * avoidanceMultiplier + consistencyBonus);
 }
 
-export { computeKillScore, computeFiveRoomCheckpointBonus };
+export { computeKillScore, computeRoomClearBonuses, computeFiveRoomCheckpointBonus };

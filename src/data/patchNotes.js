@@ -1,5 +1,16 @@
 const PATCH_NOTES = [
   {
+      version: '1.19.16',
+      label: 'SCORING REWORK',
+      summary: ['Score now rewards how you played, not just what you crit.'],
+      highlights: [
+        'Crits no longer double your score. Critical hits still do bonus damage — they just stop inflating the leaderboard.',
+        'New score sources awarded every cleared room: Room clears (scales with depth), Pace bonus (faster than 30s), Flawless rooms (no damage taken), Boss takedowns.',
+        'Existing 5-room streak checkpoint is now labeled "Streak bonus" on the Game Over screen for clarity.',
+        'Leaderboard context: scores from 1.19.16+ include these new bonuses, so expect per-run totals to read a bit higher than pre-patch runs.',
+      ]
+    },
+    {
       version: '1.19.15',
       label: 'RUN SCORE BREAKDOWN',
       summary: ['End-of-run screen now shows where your score came from.'],
