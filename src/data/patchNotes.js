@@ -1,5 +1,13 @@
 const PATCH_NOTES = [
   {
+      version: '1.19.21',
+      label: 'SCORE BREAKDOWN ENCAPSULATION',
+      summary: ['Internal refactor — no gameplay changes.'],
+      highlights: [
+        'Moved the score breakdown object (kills, pace, flawless, clutch, and friends) into src/core/gameState.js alongside the entity arrays. One more chunk of global state now lives in a dedicated module.',
+      ]
+    },
+    {
       version: '1.19.20',
       label: 'LEADERBOARD DURATION',
       summary: ['Run length is now recorded alongside scores.'],

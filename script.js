@@ -78,7 +78,7 @@ import { iconHTML } from './src/ui/iconRenderer.js';
 import { renderPatchNotesPanel } from './src/ui/patchNotes.js';
 import { createPanelManager } from './src/ui/panelManager.js';
 import { showGameOverScreen } from './src/ui/gameOver.js';
-import { bullets, enemies, shockwaves, spawnQueue } from './src/core/gameState.js';
+import { bullets, enemies, shockwaves, spawnQueue, scoreBreakdown, resetScoreBreakdown } from './src/core/gameState.js';
 import {
   bindPatchNotesControls,
   bindLeaderboardControls,
@@ -631,10 +631,6 @@ let gstate = 'start';
 let pauseStartedAt = 0;
 let player = {};
 let score=0, kills=0;
-let scoreBreakdown = makeScoreBreakdown();
-function makeScoreBreakdown() {
-  return { kills: 0, roomClear: 0, pace: 0, efficiency: 0, flawless: 0, boss: 0, streak: 0, density: 0, clutch: 0, accuracy: 0, dodge: 0, overkill: 0 };
-}
 function awardKillPoints(pts) {
   const base = Number(pts) || 0;
   if (!base) return 0;
@@ -2146,7 +2142,7 @@ function init() {
   clearSavedRun();
   if (continueRunBtn) continueRunBtn.classList.add('off');
   score = runMetrics.score; kills = runMetrics.kills;
-  scoreBreakdown = makeScoreBreakdown();
+  resetScoreBreakdown();
   charge = runMetrics.charge; fireT = runMetrics.fireT; stillTimer = runMetrics.stillTimer; prevStill = runMetrics.prevStill;
   hp = runMetrics.hp; maxHp = runMetrics.maxHp;
   runElapsedMs = runMetrics.runElapsedMs;
