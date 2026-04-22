@@ -1,5 +1,14 @@
 const PATCH_NOTES = [
   {
+      version: '1.19.9',
+      label: 'HAT EXTRACTION (REFACTOR)',
+      summary: ['Behind-the-scenes cleanup: hat system moved to its own module.'],
+      highlights: [
+        'Refactor: hat data now lives in src/data/hats.js and rendering in src/ui/drawing/hatRenderer.js.',
+        'No gameplay or visual changes — pure code tidying to make new cosmetics faster to add.',
+      ]
+    },
+    {
       version: '1.19.8',
       label: 'NEW ICON & SMILE FIX',
       summary: ['New Phantom Rebound icon. Ghost smile subtler. PC scrollbar fixed.'],
