@@ -1,3 +1,29 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// script.js — monolithic game module (4500+ lines). Agents: read agents.md first.
+//
+// FILE MAP (grep these dividers — `// ── SECTION ──`):
+//   ~373   PLAYER UPGRADES    UPG object, boon tier registry, resetUpgrades
+//   ~629   STATE              player/bullets/enemies/room state, input refs, run vars
+//   ~1178  buildRoom          spawn queue composition, boss setup (hook: onRoomStart)
+//   ~1518  drawBulletSprite   per-bullet rendering (not yet extracted)
+//   ~1580  fire()             bullet spawn + overload/shockwave/echoFire activation
+//   ~1910  PAUSE / RESUME     pause overlay, offsetAbsoluteTimestamps (hook: onPauseAdjust)
+//   ~2044  RUN PERSISTENCE    serialize / continueRun (legacy recovery intentionally disabled)
+//   ~2173  MAIN LOOP          requestAnimationFrame loop
+//   ~2185  finalizeRoomClearState, update()
+//            in-update sub-sections (grep `// ── ` inside update):
+//            Player movement · Shields · Room state machine · Auto-fire ·
+//            Enemies · Charged Orbs · Bullets · Particles · Damage numbers ·
+//            Shockwaves · Payload cooldown
+//   ~3329  ROOM CLEAR FLASH   screen flash + room-clear transition (hook: onRoomClear)
+//   ~3357  DRAW               render pass: background, entities, HUD overlays
+//   ~3657  GHOST SPRITE       ghost rendering delegates to src/ui/drawing/ghostRenderer.js
+//   ~3725  HUD                score/HP/charge/kill-streak HUD elements
+//
+// Line numbers drift; grep the divider text instead of relying on them.
+// Before editing large sections, prefer extracting to src/ (see agents.md).
+// ═══════════════════════════════════════════════════════════════════════════════
+
 import { C, ROOM_SCRIPTS, BOSS_ROOMS, DECAY_BASE, M, VERSION } from './src/data/gameData.js';
 import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, getPayloadBlastRadius, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';

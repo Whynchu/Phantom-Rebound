@@ -1,4 +1,4 @@
-const VERSION = { num: '1.19.26', label: 'ROOM CLEAR DEDUPE + JANITOR' };
+const VERSION = { num: '1.19.27', label: 'AGENT FRIENDLINESS' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;
