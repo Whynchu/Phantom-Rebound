@@ -1927,11 +1927,7 @@ function offsetAbsoluteTimestamps(pauseDuration) {
     if (b.expireAt) b.expireAt += pauseDuration;
     if (b.decayStart) b.decayStart += pauseDuration;
   }
-  if (UPG.predatorKillStreakTime) UPG.predatorKillStreakTime += pauseDuration;
-  if (UPG.bloodRushTimer) UPG.bloodRushTimer += pauseDuration;
-  if (UPG.voidZoneTimer) UPG.voidZoneTimer += pauseDuration;
-  if (UPG.sustainedFireLastShotTime) UPG.sustainedFireLastShotTime += pauseDuration;
-  if (UPG.aegisBatteryTimer) UPG.aegisBatteryTimer += pauseDuration;
+  runBoonHook('onPauseAdjust', { UPG, pauseDuration });
 }
 
 let prePauseState = null;
@@ -2288,20 +2284,7 @@ function update(dt,ts){
   if(_chainMagnetTimer>0) _chainMagnetTimer-=dt*1000;
   if(_slipCooldown>0) _slipCooldown-=dt*1000;
   if(UPG.colossus && _colossusShockwaveCd>0) _colossusShockwaveCd-=dt;
-  if(UPG.shockwave && UPG.shockwaveCooldown > 0) UPG.shockwaveCooldown -= dt*1000;
-  if(UPG.refraction && UPG.refractionCooldown > 0) UPG.refractionCooldown -= dt*1000;
-  if(UPG.mirrorTide && UPG.mirrorTideCooldown > 0) UPG.mirrorTideCooldown -= dt*1000;
-  if(UPG.overload && UPG.overloadCooldown > 0) UPG.overloadCooldown -= dt*1000;
-  if(UPG.phaseDash && UPG.phaseDashCooldown > 0) UPG.phaseDashCooldown -= dt*1000;
-  if(UPG.voidWalker && UPG.voidZoneTimer && ts > UPG.voidZoneTimer) UPG.voidZoneActive = false;
-  // Predator's Instinct: decay kill streak if window expires
-  if(UPG.predatorInstinct && UPG.predatorKillStreakTime > 0 && ts > UPG.predatorKillStreakTime){
-    UPG.predatorKillStreak = 0;
-  }
-  // Blood Rush: decay stacks after 3s
-  if(UPG.bloodRush && UPG.bloodRushTimer > 0 && ts > UPG.bloodRushTimer){
-    UPG.bloodRushStacks = 0;
-  }
+  runBoonHook('onTick', { UPG, dt, ts });
   // Volatile Orb cooldowns — per-orb recharge plus a brief shared detonation lockout
   if(_volatileOrbGlobalCooldown > 0) _volatileOrbGlobalCooldown = Math.max(0, _volatileOrbGlobalCooldown - dt);
   for(let si=0;si<_orbCooldown.length;si++){

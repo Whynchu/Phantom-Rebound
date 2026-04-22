@@ -2710,6 +2710,58 @@ test('boon hook registry swallows callback errors without breaking siblings', ()
   assert.equal(afterRan, true);
 });
 
+test('boon hook registry onTick decrements UPG cooldowns and decays streaks', () => {
+  const UPG = {
+    shockwave: true, shockwaveCooldown: 500,
+    refraction: true, refractionCooldown: 300,
+    mirrorTide: true, mirrorTideCooldown: 200,
+    overload: true, overloadCooldown: 400,
+    phaseDash: true, phaseDashCooldown: 600,
+    voidWalker: true, voidZoneTimer: 100, voidZoneActive: true,
+    predatorInstinct: true, predatorKillStreakTime: 50, predatorKillStreak: 5,
+    bloodRush: true, bloodRushTimer: 50, bloodRushStacks: 3,
+  };
+  runBoonHook('onTick', { UPG, dt: 0.1, ts: 1000 }); // ts > expiry for timer-based ones
+  assert.equal(UPG.shockwaveCooldown, 400);
+  assert.equal(UPG.refractionCooldown, 200);
+  assert.equal(UPG.mirrorTideCooldown, 100);
+  assert.equal(UPG.overloadCooldown, 300);
+  assert.equal(UPG.phaseDashCooldown, 500);
+  assert.equal(UPG.voidZoneActive, false);
+  assert.equal(UPG.predatorKillStreak, 0);
+  assert.equal(UPG.bloodRushStacks, 0);
+
+  // Inactive boons: cooldowns frozen, streaks retained
+  const UPG2 = {
+    shockwave: false, shockwaveCooldown: 500,
+    predatorInstinct: false, predatorKillStreakTime: 50, predatorKillStreak: 5,
+  };
+  runBoonHook('onTick', { UPG: UPG2, dt: 0.1, ts: 1000 });
+  assert.equal(UPG2.shockwaveCooldown, 500);
+  assert.equal(UPG2.predatorKillStreak, 5);
+});
+
+test('boon hook registry onPauseAdjust shifts absolute boon timers forward', () => {
+  const UPG = {
+    predatorKillStreakTime: 1000,
+    bloodRushTimer: 2000,
+    voidZoneTimer: 3000,
+    sustainedFireLastShotTime: 4000,
+    aegisBatteryTimer: 5000,
+  };
+  runBoonHook('onPauseAdjust', { UPG, pauseDuration: 500 });
+  assert.equal(UPG.predatorKillStreakTime, 1500);
+  assert.equal(UPG.bloodRushTimer, 2500);
+  assert.equal(UPG.voidZoneTimer, 3500);
+  assert.equal(UPG.sustainedFireLastShotTime, 4500);
+  assert.equal(UPG.aegisBatteryTimer, 5500);
+
+  // Unset timers stay falsy
+  const UPG2 = {};
+  runBoonHook('onPauseAdjust', { UPG: UPG2, pauseDuration: 500 });
+  assert.equal(UPG2.predatorKillStreakTime, undefined);
+});
+
 await Promise.all(pendingTests);
 
 if (process.exitCode && process.exitCode !== 0) {

@@ -65,4 +65,66 @@ registerBoonHook('onRoomClear', (ctx) => {
   if (UPG && UPG.empBurst) UPG.empBurstUsed = false;
 });
 
+// ── Per-frame cooldown ticks. Context: { UPG, dt, ts }.
+// Each hook decrements its own UPG.*Cooldown timer when the boon is active.
+
+registerBoonHook('onTick', (ctx) => {
+  const { UPG, dt } = ctx;
+  if (UPG && UPG.shockwave && UPG.shockwaveCooldown > 0) UPG.shockwaveCooldown -= dt * 1000;
+});
+
+registerBoonHook('onTick', (ctx) => {
+  const { UPG, dt } = ctx;
+  if (UPG && UPG.refraction && UPG.refractionCooldown > 0) UPG.refractionCooldown -= dt * 1000;
+});
+
+registerBoonHook('onTick', (ctx) => {
+  const { UPG, dt } = ctx;
+  if (UPG && UPG.mirrorTide && UPG.mirrorTideCooldown > 0) UPG.mirrorTideCooldown -= dt * 1000;
+});
+
+registerBoonHook('onTick', (ctx) => {
+  const { UPG, dt } = ctx;
+  if (UPG && UPG.overload && UPG.overloadCooldown > 0) UPG.overloadCooldown -= dt * 1000;
+});
+
+registerBoonHook('onTick', (ctx) => {
+  const { UPG, dt } = ctx;
+  if (UPG && UPG.phaseDash && UPG.phaseDashCooldown > 0) UPG.phaseDashCooldown -= dt * 1000;
+});
+
+registerBoonHook('onTick', (ctx) => {
+  const { UPG, ts } = ctx;
+  if (UPG && UPG.voidWalker && UPG.voidZoneTimer && ts > UPG.voidZoneTimer) {
+    UPG.voidZoneActive = false;
+  }
+});
+
+registerBoonHook('onTick', (ctx) => {
+  const { UPG, ts } = ctx;
+  if (UPG && UPG.predatorInstinct && UPG.predatorKillStreakTime > 0 && ts > UPG.predatorKillStreakTime) {
+    UPG.predatorKillStreak = 0;
+  }
+});
+
+registerBoonHook('onTick', (ctx) => {
+  const { UPG, ts } = ctx;
+  if (UPG && UPG.bloodRush && UPG.bloodRushTimer > 0 && ts > UPG.bloodRushTimer) {
+    UPG.bloodRushStacks = 0;
+  }
+});
+
+// ── Pause-time timer adjustments. Context: { UPG, pauseDuration }.
+// Shift absolute-timestamp-based boon timers forward so they don't expire during pause.
+
+registerBoonHook('onPauseAdjust', (ctx) => {
+  const { UPG, pauseDuration } = ctx;
+  if (!UPG) return;
+  if (UPG.predatorKillStreakTime) UPG.predatorKillStreakTime += pauseDuration;
+  if (UPG.bloodRushTimer) UPG.bloodRushTimer += pauseDuration;
+  if (UPG.voidZoneTimer) UPG.voidZoneTimer += pauseDuration;
+  if (UPG.sustainedFireLastShotTime) UPG.sustainedFireLastShotTime += pauseDuration;
+  if (UPG.aegisBatteryTimer) UPG.aegisBatteryTimer += pauseDuration;
+});
+
 export { registerBoonHook, runBoonHook, clearBoonHooks, getBoonHookCount };

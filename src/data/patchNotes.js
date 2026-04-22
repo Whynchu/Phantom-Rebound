@@ -1,5 +1,14 @@
 const PATCH_NOTES = [
   {
+      version: '1.19.24',
+      label: 'BOON HOOKS: TICK + PAUSE',
+      summary: ['Internal refactor — no gameplay changes.'],
+      highlights: [
+        'Migrated per-frame cooldown ticks (shockwave, refraction, mirror tide, overload, phase dash, void walker, predator instinct, blood rush) onto the onTick boon hook. Main loop now fires a single runBoonHook(\'onTick\') instead of eight inline UPG.* gates.',
+        'Migrated pause-time timer adjustments (predator/blood rush/void zone/sustained fire/aegis) onto a new onPauseAdjust hook, so when pause shifts absolute timestamps forward, each boon owns its own set of timers.',
+      ]
+    },
+    {
       version: '1.19.23',
       label: 'BOON HOOK REGISTRY',
       summary: ['Internal refactor — no gameplay changes.'],
