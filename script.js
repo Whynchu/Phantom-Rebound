@@ -127,6 +127,8 @@ import {
   bindNameInputs,
   bindSessionFlow,
 } from './src/ui/sessionFlow.js';
+import { bindCoopLobby } from './src/ui/coopLobby.js';
+import { supabaseTransportFactory } from './src/net/coopTransportSupabase.js';
 import {
   showRoomClearOverlay,
   showBossDefeatedOverlay,
@@ -3600,6 +3602,19 @@ bindBoonsPanelControls({
   toggleButton: goBoonsBtn,
   panelEl: goBoonsPanel,
   closeButton: goBoonsCloseBtn,
+});
+
+bindCoopLobby({
+  coopButton: document.getElementById('btn-coop'),
+  lobbyScreen: document.getElementById('s-coop-lobby'),
+  startScreen,
+  getPlayerName: () => playerName,
+  getPlayerColor: () => null,
+  setMenuChromeVisible,
+  transportFactory: supabaseTransportFactory,
+  onReady: ({ seed, partnerIdentity, role, code }) => {
+    console.log('[coop] lobby ready', { seed, role, code, partner: partnerIdentity?.name });
+  },
 });
 
 const lbBoonsPopup = document.getElementById('lb-boons-popup');
