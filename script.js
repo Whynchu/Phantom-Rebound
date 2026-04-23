@@ -206,6 +206,12 @@ import {
   resolvePostHitAftermath,
 } from './src/systems/dangerHit.js';
 import { createInitialPlayerState, createInitialRunMetrics, createInitialRuntimeTimers } from './src/core/runState.js';
+import {
+  createPlayerSlot,
+  playerSlots,
+  resetPlayerSlots,
+  registerPlayerSlot,
+} from './src/core/playerSlot.js';
 import { createRunTelemetryController } from './src/systems/runTelemetryController.js';
 import {
   getRoomDef as getRoomDefValue,
@@ -812,6 +818,51 @@ let reinforceTimer = 0;
 let currentRoomIsBoss = false;
 let currentRoomMaxOnScreen = 99;
 let currentBossDamageMultiplier = 1;
+
+// ── PLAYER SLOT 0 BRIDGE (Phase C2a) ─────────────────────────────────────────
+// Slot 0 = host. For solo play and pre-C2b callsites, everything still reads
+// the legacy singletons (`player`, `UPG`, `score`, `_slipCooldown`, ...). The
+// slot exposes LIVE getters/setters so future slot-aware code can route
+// through `slot.metrics.score` etc. without forcing a big-bang refactor.
+// When C2b migrates callsites slot-by-slot, this bridge keeps solo working.
+const slot0Metrics = Object.freeze({
+  get score() { return score; }, set score(v) { score = v; },
+  get kills() { return kills; }, set kills(v) { kills = v; },
+  get charge() { return charge; }, set charge(v) { charge = v; },
+  get fireT() { return fireT; }, set fireT(v) { fireT = v; },
+  get stillTimer() { return stillTimer; }, set stillTimer(v) { stillTimer = v; },
+  get prevStill() { return prevStill; }, set prevStill(v) { prevStill = v; },
+  get hp() { return hp; }, set hp(v) { hp = v; },
+  get maxHp() { return maxHp; }, set maxHp(v) { maxHp = v; },
+});
+const slot0Timers = Object.freeze({
+  get barrierPulseTimer() { return _barrierPulseTimer; }, set barrierPulseTimer(v) { _barrierPulseTimer = v; },
+  get slipCooldown() { return _slipCooldown; }, set slipCooldown(v) { _slipCooldown = v; },
+  get absorbComboCount() { return _absorbComboCount; }, set absorbComboCount(v) { _absorbComboCount = v; },
+  get absorbComboTimer() { return _absorbComboTimer; }, set absorbComboTimer(v) { _absorbComboTimer = v; },
+  get chainMagnetTimer() { return _chainMagnetTimer; }, set chainMagnetTimer(v) { _chainMagnetTimer = v; },
+  get echoCounter() { return _echoCounter; }, set echoCounter(v) { _echoCounter = v; },
+  get vampiricRestoresThisRoom() { return _vampiricRestoresThisRoom; }, set vampiricRestoresThisRoom(v) { _vampiricRestoresThisRoom = v; },
+  get killSustainHealedThisRoom() { return _killSustainHealedThisRoom; }, set killSustainHealedThisRoom(v) { _killSustainHealedThisRoom = v; },
+  get colossusShockwaveCd() { return _colossusShockwaveCd; }, set colossusShockwaveCd(v) { _colossusShockwaveCd = v; },
+  get volatileOrbGlobalCooldown() { return _volatileOrbGlobalCooldown; }, set volatileOrbGlobalCooldown(v) { _volatileOrbGlobalCooldown = v; },
+});
+const slot0Aim = Object.freeze({
+  get angle() { return playerAimAngle; }, set angle(v) { playerAimAngle = v; },
+  get hasTarget() { return playerAimHasTarget; }, set hasTarget(v) { playerAimHasTarget = v; },
+});
+function installPlayerSlot0() {
+  resetPlayerSlots();
+  registerPlayerSlot(createPlayerSlot({
+    id: 0,
+    getBody: () => player,
+    getUpg: () => UPG,
+    metrics: slot0Metrics,
+    timers: slot0Timers,
+    aim: slot0Aim,
+    input: null, // wired in C2c when debug coopdebug introduces slot 1
+  }));
+}
 
 const telemetryController = createRunTelemetryController({
   getHp: () => hp,
@@ -1820,6 +1871,7 @@ function restoreRun(saved) {
   syncRunChargeCapacity();
   syncPlayerScale();
   player = createInitialPlayerState(cv.width, cv.height);
+  installPlayerSlot0();
   bullets.length = 0; enemies.length = 0; clearParticles(); shockwaves.length = 0;
   _orbFireTimers = []; _orbCooldown = [];
   resetJoystickState(joy);
@@ -1875,6 +1927,7 @@ function init() {
   playerAimAngle = -Math.PI * 0.5;
   playerAimHasTarget = false;
   player = createInitialPlayerState(cv.width, cv.height);
+  installPlayerSlot0();
   _barrierPulseTimer = runtimeTimers.barrierPulseTimer;
   _slipCooldown = runtimeTimers.slipCooldown;
   _absorbComboCount = runtimeTimers.absorbComboCount;
