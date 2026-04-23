@@ -65,8 +65,13 @@ function createSupabaseTransport() {
         let settled = false;
         channel.subscribe((status, err) => {
           if (settled) {
-            if (status === 'CHANNEL_ERROR' || status === 'CLOSED' || status === 'TIMED_OUT') {
-              onError?.(err || new Error(`channel ${channelName} status ${status}`));
+            // Post-subscribe: CLOSED and TIMED_OUT are recoverable
+            // (mobile tab backgrounded, brief network blip). supabase-js
+            // auto-reconnects the underlying socket — don't tear down
+            // the session. Only CHANNEL_ERROR indicates a permanent
+            // transport failure.
+            if (status === 'CHANNEL_ERROR') {
+              onError?.(err || new Error(`channel ${channelName} CHANNEL_ERROR`));
             }
             return;
           }

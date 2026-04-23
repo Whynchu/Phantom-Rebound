@@ -202,14 +202,43 @@ function bindCoopLobby({
     startSession('guest', raw);
   });
 
-  $('#coop-copy-share')?.addEventListener('click', () => {
+  $('#coop-copy-share')?.addEventListener('click', async () => {
     const shareEl = $('#coop-waiting-share');
+    const codeEl = $('#coop-waiting-code');
     if (!shareEl?.value) return;
+    const shareUrl = shareEl.value;
+    const code = codeEl?.textContent?.trim() || '';
+    const btn = $('#coop-copy-share');
+    const prev = btn?.textContent;
+
+    // Prefer native share sheet on mobile — keeps us in the browser's
+    // share UI rather than fully context-switching to another app,
+    // which on mobile often suspends the tab and drops the WebSocket.
+    const payload = {
+      title: 'Phantom Rebound Co-op',
+      text: `Join my Phantom Rebound co-op run — room ${code}`,
+      url: shareUrl,
+    };
+    const canShare = typeof navigator !== 'undefined'
+      && typeof navigator.share === 'function'
+      && (!navigator.canShare || navigator.canShare(payload));
+    if (canShare) {
+      try {
+        await navigator.share(payload);
+        if (btn) {
+          btn.textContent = 'Shared!';
+          setTimeout(() => { btn.textContent = prev; }, 1200);
+        }
+        return;
+      } catch (err) {
+        // User cancelled or share failed — fall through to clipboard.
+        if (err?.name === 'AbortError') return;
+      }
+    }
+
     try {
-      navigator.clipboard?.writeText(shareEl.value);
-      const btn = $('#coop-copy-share');
+      await navigator.clipboard?.writeText(shareUrl);
       if (btn) {
-        const prev = btn.textContent;
         btn.textContent = 'Copied!';
         setTimeout(() => { btn.textContent = prev; }, 1200);
       }
