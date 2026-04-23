@@ -56,6 +56,7 @@ function buildPlayerVolleySpecs({
   getPierceLeft = () => 0,
   getBloodPactHealCap = () => 0,
   now,
+  ownerId = 0,
   random = () => simRng.next(),
 } = {}) {
   const volleySpecs = [];
@@ -78,6 +79,7 @@ function buildPlayerVolleySpecs({
       crit,
       dmg: baseDamage * overchargeBonus * overloadBonus * (shot.isSpreadExtra ? (upg.spreadShotDamageMult || 1) : 1),
       expireAt: now + lifeMs,
+      ownerId,
       extras: {
         isRing: shot.isRing || false,
         hasPayload: Boolean(upg.payload),

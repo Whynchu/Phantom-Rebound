@@ -1064,7 +1064,7 @@ function startRoom(idx) {
   _killSustainHealedThisRoom = 0;
   _orbFireTimers = []; _orbCooldown = [];
   _volatileOrbGlobalCooldown = 0;
-  runBoonHook('onRoomStart', { UPG });
+  runBoonHook('onRoomStart', { UPG, slot: playerSlots[0] || null });
   roomIndex = idx;
   bossClears = 0;
   roomPurpleShooterAssigned = false;
@@ -1435,7 +1435,8 @@ function getPlayerShotChargeReserve(isStill, enemyCount = enemies.length) {
   return Math.max(1, getRequiredShotCount(UPG));
 }
 
-function firePlayer(tx,ty) {
+function firePlayer(slot, tx, ty) {
+  const ownerId = slot ? slot.id : 0;
   if(charge < 1) return;
   const aimDx = tx - player.x;
   const aimDy = ty - player.y;
@@ -1501,6 +1502,7 @@ function firePlayer(tx,ty) {
     getPierceLeft: (shot) => UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),
     getBloodPactHealCap,
     now,
+    ownerId,
   });
   volleySpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
   const shotsVolleyRoom = telemetryController.getCurrentRoom();
@@ -1545,6 +1547,7 @@ function firePlayer(tx,ty) {
         getPierceLeft: (shot) => UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),
         getBloodPactHealCap,
         now: eNow,
+        ownerId,
         random: () => 1,
       });
       echoSpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
@@ -1987,7 +1990,7 @@ function finalizeRoomClearState(){
   roomClearTimer = 0;
   bullets.length = 0;
   clearParticles();
-  runBoonHook('onRoomClear', { UPG, healPlayer });
+  runBoonHook('onRoomClear', { UPG, healPlayer, slot: playerSlots[0] || null });
   finalizeCurrentRoomTelemetry('clear');
   applyRoomClearProgression();
   showRoomClear();
@@ -2085,7 +2088,7 @@ function update(dt,ts){
   if(_chainMagnetTimer>0) _chainMagnetTimer-=dt*1000;
   if(_slipCooldown>0) _slipCooldown-=dt*1000;
   if(UPG.colossus && _colossusShockwaveCd>0) _colossusShockwaveCd-=dt;
-  runBoonHook('onTick', { UPG, dt, ts });
+  runBoonHook('onTick', { UPG, dt, ts, slot: playerSlots[0] || null });
   // Volatile Orb cooldowns — per-orb recharge plus a brief shared detonation lockout
   if(_volatileOrbGlobalCooldown > 0) _volatileOrbGlobalCooldown = Math.max(0, _volatileOrbGlobalCooldown - dt);
   for(let si=0;si<_orbCooldown.length;si++){
@@ -2244,7 +2247,7 @@ function update(dt,ts){
     if(fireT >= interval && isStill){
       fireT = fireT % interval;
       if(autoTarget) {
-        firePlayer(autoTarget.e.x,autoTarget.e.y);
+        firePlayer(playerSlots[0] || null, autoTarget.e.x,autoTarget.e.y);
         UPG.sustainedFireShots = (UPG.sustainedFireShots || 0) + 1;
         UPG.sustainedFireLastShotTime = simNowMs;
       }

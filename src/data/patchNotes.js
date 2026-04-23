@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.6',
+      label: 'COOP PHASE C2B: OWNERID + SLOT FIRE',
+      summary: ['Internal refactor: player output bullets now carry an ownerId attribution field, and firePlayer / boon hooks accept an explicit slot. Invisible to solo players.'],
+      highlights: [
+        'createOutputBullet, pushOutputBullet, spawnRadialOutputBurst, and spawnSplitOutputBullets now plumb ownerId (default 0) as a first-class field. Split bullets inherit their source bullet\'s owner.',
+        'buildPlayerVolleySpecs accepts an ownerId param so every shot in a volley is stamped with the shooter\'s slot id. Echo-fire replays reuse the same ownerId as the parent volley.',
+        'firePlayer signature changed from firePlayer(tx, ty) to firePlayer(slot, tx, ty). Main-loop call site now passes playerSlots[0]. Attribution-only for now — player bullets still never collide with players.',
+        'Boon hooks (onRoomStart / onRoomClear / onTick) now receive the shooter slot in their context object. Existing hook implementations ignore it; future per-slot hooks can route off it.',
+        'New scripts/test-player-ownership.mjs: 8 contract tests covering createOutputBullet, pushOutputBullet, buildPlayerVolleySpecs, spawnRadialOutputBurst, spawnSplitOutputBullets ownerId propagation. 105 tests total across 5 suites.',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.5',
       label: 'COOP PHASE C2A: PLAYER SLOTS',
       summary: ['Internal refactor: new player-slot bundle abstraction lays the groundwork for a second in-world player. Invisible to solo players.'],

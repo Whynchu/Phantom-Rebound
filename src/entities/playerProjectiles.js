@@ -12,6 +12,7 @@ function createOutputBullet({
   crit = false,
   dmg = 1,
   expireAt,
+  ownerId = 0,
   extras = {},
 } = {}) {
   return {
@@ -28,6 +29,7 @@ function createOutputBullet({
     crit,
     dmg,
     expireAt,
+    ownerId,
     hitIds: new Set(),
     ...extras,
   };
@@ -114,6 +116,7 @@ function spawnSplitOutputBullets({
       crit: sourceBullet.crit,
       dmg: sourceBullet.dmg * damageFactor,
       expireAt,
+      ownerId: sourceBullet.ownerId || 0,
       extras: {
         hasSplit: true,
         hasPayload: Boolean(sourceBullet.hasPayload),
@@ -137,6 +140,7 @@ function spawnRadialOutputBurst({
   crit = false,
   dmg,
   expireAt,
+  ownerId = 0,
   extras = {},
 } = {}) {
   const total = Math.max(1, Math.floor(count || 1));
@@ -155,6 +159,7 @@ function spawnRadialOutputBurst({
       crit,
       dmg,
       expireAt,
+      ownerId,
       extras,
     });
   }
