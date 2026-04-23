@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.3',
+      label: 'COOP PHASE C1A: SIM CLOCK',
+      summary: ['Internal refactor: simulation now runs on its own clock, decoupled from the browser wall clock. Invisible to solo players; required groundwork for lockstep co-op.'],
+      highlights: [
+        'New simNowMs module-scope sim clock in script.js — advances by accumulated dt inside the main loop, freezes during pause naturally.',
+        'All sim-critical timers (projectile expireAt/decayStart, death animation, volley cadence, shield burst / mirror tide / reflection / shockwave / volatile burst spawn times, sustained-fire streak, void-zone window, orbit/shield rotation visuals) now read simNowMs — not performance.now().',
+        'Pause controller no longer shifts bullet expireAt / decayStart on resume. With the sim clock frozen during pause, timestamps are already correct on resume (no more timer-offset drift bugs).',
+        'Render-only timers (menu ghost preview pulse, damage-number jitter, HUD reads, leaderboard timestamps) stay on wall-clock as intended.',
+        'Determinism replay + lobby + systems suites (89 tests) all green.',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.2',
       label: 'COOP LOBBY: MOBILE SHARE',
       summary: ['Mobile UX fix: sharing a co-op room no longer drops the host when they leave the tab to message a friend.'],

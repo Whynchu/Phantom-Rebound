@@ -743,6 +743,14 @@ let lbPeriod = 'daily';
 let lbScope = 'everyone';
 const lbSync = createLeaderboardSyncState();
 let raf=0, lastT=0;
+// Simulation clock — advances by accumulated dt inside the main loop.
+// All SIM-CRITICAL timers (projectile expireAt, decay windows, death
+// sequence, boon durations, cooldowns, kill-streak deadlines) read
+// this, NOT performance.now(). Keeps sim advancement independent of
+// wall-clock, which is what lockstep co-op will rely on. During pause
+// the loop is cancelled so simNowMs naturally freezes, which means
+// bullet timers don't need any offset-shifting on resume.
+let simNowMs = 0;
 let startGhostPreviewRaf = 0;
 let gameOverShown = false;
 let boonRerolls = 1;
@@ -1399,7 +1407,7 @@ function firePlayer(tx,ty) {
   const sustainedFireBonus = Math.min(1.45, 1 + Math.min(UPG.sustainedFireShots || 0, 15) * 0.03);
   const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (UPG.heavyRoundsDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus * sustainedFireBonus * spsFireRateScaling * 10;
   const lifeMs = PLAYER_SHOT_LIFE_MS * (UPG.shotLifeMult || 1) * (UPG.phantomRebound ? 2.0 : 1.0);
-  const now = performance.now();
+  const now = simNowMs;
   const overchargeBonus = (UPG.overchargeVent && charge >= UPG.maxCharge) ? 1.6 : 1;
   const volleyTotalDamageMult = getVolleyTotalDamageMultiplier(availableShots);
   const volleyPerBulletDamageMult = volleyTotalDamageMult / availableShots;
@@ -1459,7 +1467,7 @@ function firePlayer(tx,ty) {
     _echoCounter++;
     if(_echoCounter>=5){
       _echoCounter=0;
-      const eNow=performance.now();
+      const eNow=simNowMs;
       const echoSpecs = buildPlayerVolleySpecs({
         shots: angs,
         availableShots,
@@ -1816,7 +1824,7 @@ function gameOver(){
   clearSavedRun();
   finalizeCurrentRoomTelemetry('death');
   gstate='dying';
-  player.deadAt = performance.now();
+  player.deadAt = simNowMs;
   player.popAt = player.deadAt + GAME_OVER_ANIM_MS * 0.72;
   player.deadPulse = 0;
   player.deadPop = false;
@@ -1886,7 +1894,8 @@ function loop(ts){
   if(gstate!=='playing' && gstate!=='dying') return;
   try {
     const dt=Math.min((ts-lastT)/1000,.05); lastT=ts;
-    update(dt,ts); draw(ts); hudUpdate();
+    simNowMs += dt * 1000;
+    update(dt, simNowMs); draw(simNowMs); hudUpdate();
     raf=requestAnimationFrame(loop);
   } catch(error) {
     handleGameLoopCrash(error);
@@ -2158,14 +2167,14 @@ function update(dt,ts){
       if(autoTarget) {
         firePlayer(autoTarget.e.x,autoTarget.e.y);
         UPG.sustainedFireShots = (UPG.sustainedFireShots || 0) + 1;
-        UPG.sustainedFireLastShotTime = performance.now();
+        UPG.sustainedFireLastShotTime = simNowMs;
       }
     }
   }
 
   // Decay sustained fire when not actively firing (always checked)
   {
-    const now = performance.now();
+    const now = simNowMs;
     if((UPG.sustainedFireLastShotTime || 0) > 0 && now - UPG.sustainedFireLastShotTime > 1000) {
       UPG.sustainedFireShots = 0;
       UPG.sustainedFireBonus = 1;
@@ -2224,7 +2233,7 @@ function update(dt,ts){
             playerX: player.x,
             playerY: player.y,
             shotSpeed: 220 * GLOBAL_SPEED_LIFT,
-            now: performance.now(),
+            now: simNowMs,
             bloodPactHealCap: getBloodPactHealCap(),
           });
           if(rusherAftermath.triggerColossusShockwave){
@@ -2361,7 +2370,7 @@ function update(dt,ts){
         focusChargeScale: 0.8,
         overchargeDamageMult: ORB_OVERCHARGE_DAMAGE_MULT,
         shotSpeed: 220 * GLOBAL_SPEED_LIFT,
-        now: performance.now(),
+        now: simNowMs,
         bloodPactHealCap: getBloodPactHealCap(),
         orbDamageBonus,
       });
@@ -2400,7 +2409,7 @@ function update(dt,ts){
         denseDamageMult: UPG.denseDamageMult || 1,
         readyShieldCount,
         shotSpeed: 210 * GLOBAL_SPEED_LIFT,
-        now: performance.now(),
+        now: simNowMs,
       });
       if(boltSpec){
         pushOutputBullet({
@@ -2512,7 +2521,7 @@ function update(dt,ts){
           splitShotEvolved: UPG.splitShotEvolved,
         });
         if(outputBounce.kind === 'split'){
-          const splitNow=performance.now();
+          const splitNow=simNowMs;
           spawnSplitOutputBullets({
             bullets,
             sourceBullet: b,
@@ -2564,7 +2573,7 @@ function update(dt,ts){
           UPG.refractionCount = (UPG.refractionCount || 0) + 1;
           if(UPG.refractionCount <= 4){
             const angle = Math.atan2(player.y - b.y, player.x - b.x);
-            const rNow = performance.now();
+            const rNow = simNowMs;
             pushOutputBullet({
               bullets,
               x: b.x,
@@ -2685,7 +2694,7 @@ function update(dt,ts){
                 aegisTitan: UPG.aegisTitan,
                 mirrorShieldDamageFactor: MIRROR_SHIELD_DAMAGE_FACTOR,
                 aegisBatteryDamageMult: getAegisBatteryDamageMult(),
-                now: performance.now(),
+                now: simNowMs,
                 playerShotLifeMs: PLAYER_SHOT_LIFE_MS,
                 shotLifeMult: UPG.shotLifeMult || 1,
               });
@@ -2709,7 +2718,7 @@ function update(dt,ts){
                 denseDamageMult: UPG.denseDamageMult || 1,
                 aegisNovaDamageFactor: AEGIS_NOVA_DAMAGE_FACTOR,
                 aegisBatteryDamageMult: getAegisBatteryDamageMult(),
-                now: performance.now(),
+                now: simNowMs,
                 playerShotLifeMs: PLAYER_SHOT_LIFE_MS,
                 shotLifeMult: UPG.shotLifeMult || 1,
               });
@@ -2792,7 +2801,7 @@ function update(dt,ts){
         if (mirrorRoom) mirrorRoom.safety.mirrorTideProcs += 1;
         UPG.mirrorTideRoomUses = dangerHit.nextMirrorTideRoomUses;
         UPG.mirrorTideCooldown = dangerHit.nextMirrorTideCooldown;
-        const mNow = performance.now();
+        const mNow = simNowMs;
         pushOutputBullet({
           bullets,
           x: player.x,
@@ -2842,7 +2851,7 @@ function update(dt,ts){
           playerX: player.x,
           playerY: player.y,
           shotSpeed: 220 * GLOBAL_SPEED_LIFT,
-          now: performance.now(),
+          now: simNowMs,
           bloodPactHealCap: getBloodPactHealCap(),
         });
         if(directHitAftermath.triggerColossusShockwave){
@@ -2987,7 +2996,7 @@ function update(dt,ts){
           if(hitResolution.piercesAfterHit){
             b.pierceLeft = hitResolution.nextPierceLeft;
             if(hitResolution.shouldTriggerVolatile){
-              const vNow=performance.now();
+              const vNow=simNowMs;
               spawnRadialOutputBurst({
                 bullets,
                 x: b.x,
@@ -3247,7 +3256,7 @@ function draw(ts){
     const total=player.shields.length;
     for(let si=0;si<total;si++){
       const s=player.shields[si];
-      const sAngle=Math.PI*2/total*si+ts*SHIELD_ROTATION_SPD;
+      const sAngle=Math.PI*2/total*si+simNowMs*SHIELD_ROTATION_SPD;
       const sx=player.x+Math.cos(sAngle)*SHIELD_ORBIT_R;
       const sy=player.y+Math.sin(sAngle)*SHIELD_ORBIT_R;
       const shieldFacing = sAngle + Math.PI * 0.5;
@@ -3285,7 +3294,7 @@ function draw(ts){
     const orbVis = getOrbVisualRadius();
     const orbInner = 2 * (UPG.orbSizeMult || 1);
     for(let si=0;si<UPG.orbitSphereTier;si++){
-      const sAngle=Math.PI*2/UPG.orbitSphereTier*si+ts*ORBIT_ROTATION_SPD;
+      const sAngle=Math.PI*2/UPG.orbitSphereTier*si+simNowMs*ORBIT_ROTATION_SPD;
       const sx=player.x+Math.cos(sAngle)*orbR;
       const sy=player.y+Math.sin(sAngle)*orbR;
       if(_orbCooldown[si]>0){
@@ -3315,9 +3324,9 @@ function draw(ts){
   }
 
   // VOID WALKER void zone indicator
-  if(UPG.voidWalker && UPG.voidZoneActive && UPG.voidZoneTimer > ts){
+  if(UPG.voidWalker && UPG.voidZoneActive && UPG.voidZoneTimer > simNowMs){
     ctx.save();
-    const frac = Math.max(0, (UPG.voidZoneTimer - ts) / 2000);
+    const frac = Math.max(0, (UPG.voidZoneTimer - simNowMs) / 2000);
     ctx.globalAlpha = 0.35 * frac;
     ctx.fillStyle = '#8b5cf6';
     ctx.beginPath();

@@ -33,14 +33,17 @@ export function createPauseController({
   const btnConfirmNo = doc.getElementById('btn-pause-confirm-no');
 
   let prePauseState = null;
-  let pauseStartedAt = 0;
   let pendingConfirmAction = null;
 
+  // Sim-clock note (Phase C1a): simNowMs is advanced only inside the
+  // game loop. When cancelLoop() runs on pause, simNowMs freezes, so
+  // bullet expireAt/decayStart (sim-clock values) are naturally
+  // correct on resume without any offset shifting. Boon onPauseAdjust
+  // hooks are still invoked with pauseDuration=0 so any future hooks
+  // that react to pauses keep working.
+
   function offsetAbsoluteTimestamps(pauseDuration) {
-    for (const b of bullets) {
-      if (b.expireAt) b.expireAt += pauseDuration;
-      if (b.decayStart) b.decayStart += pauseDuration;
-    }
+    // Left as no-op for bullet timers: simNowMs freezes during pause.
     runBoonHook('onPauseAdjust', { UPG: getUpg(), pauseDuration });
   }
 
@@ -49,7 +52,6 @@ export function createPauseController({
     if (gstate !== 'playing' && gstate !== 'upgrade') return;
     prePauseState = gstate;
     setGameState('paused');
-    pauseStartedAt = performance.now();
     cancelLoop();
     pausePanel.classList.remove('off');
     pausePanel.setAttribute('aria-hidden', 'false');
@@ -58,8 +60,7 @@ export function createPauseController({
 
   function resumeGame() {
     if (getGameState() !== 'paused') return;
-    const pauseDuration = performance.now() - pauseStartedAt;
-    offsetAbsoluteTimestamps(pauseDuration);
+    offsetAbsoluteTimestamps(0);
     const next = prePauseState || 'playing';
     setGameState(next);
     pausePanel.classList.add('off');
