@@ -751,6 +751,17 @@ let raf=0, lastT=0;
 // the loop is cancelled so simNowMs naturally freezes, which means
 // bullet timers don't need any offset-shifting on resume.
 let simNowMs = 0;
+// Fixed-step accumulator (Phase C1b). Sim runs at a deterministic
+// 60 Hz cadence regardless of display refresh rate. On fast displays
+// we may run 0-1 sim steps per rAF; on slow displays we catch up by
+// running multiple steps, bounded by MAX_SIM_STEPS_PER_FRAME to avoid
+// spiral-of-death on background-throttled tabs. Remaining accumulator
+// is discarded when we hit the cap — the next frame starts fresh.
+const SIM_STEP_MS = 1000 / 60;
+const SIM_STEP_SEC = SIM_STEP_MS / 1000;
+const MAX_SIM_STEPS_PER_FRAME = 5;
+const MAX_FRAME_DT_MS = 250;
+let simAccumulatorMs = 0;
 let startGhostPreviewRaf = 0;
 let gameOverShown = false;
 let boonRerolls = 1;
@@ -1531,7 +1542,7 @@ function showUpgrades() {
       UPG._boonAppliedForRoom = roomIndex + 1;
       saveRunState();
       startRoom(roomIndex+1);
-      gstate='playing'; lastT=performance.now(); raf=requestAnimationFrame(loop);
+      gstate='playing'; lastT=performance.now(); simAccumulatorMs=0; raf=requestAnimationFrame(loop);
       btnPause.style.display = 'inline-flex';
       btnPatchNotes.style.display = 'none';
     },
@@ -1542,7 +1553,7 @@ function showUpgrades() {
       boonHistory.push('Reject-' + leg.name);
       document.getElementById('s-up').classList.add('off');
       startRoom(roomIndex+1);
-      gstate='playing'; lastT=performance.now(); raf=requestAnimationFrame(loop);
+      gstate='playing'; lastT=performance.now(); simAccumulatorMs=0; raf=requestAnimationFrame(loop);
       btnPause.style.display = 'inline-flex';
       btnPatchNotes.style.display = 'none';
     },
@@ -1565,7 +1576,7 @@ function showUpgrades() {
       UPG._boonAppliedForRoom = roomIndex + 1;
       saveRunState();
       startRoom(roomIndex+1);
-      gstate='playing'; lastT=performance.now();
+      gstate='playing'; lastT=performance.now(); simAccumulatorMs=0;
       raf=requestAnimationFrame(loop);
       btnPause.style.display = 'inline-flex';
       btnPatchNotes.style.display = 'none';
@@ -1734,7 +1745,7 @@ const pauseControls = createPauseController({
   getUpg: () => UPG,
   cancelLoop: () => cancelAnimationFrame(raf),
   restartLoop: () => {
-    lastT = performance.now();
+    lastT=performance.now(); simAccumulatorMs=0;
     raf = requestAnimationFrame(loop);
   },
   clearSavedRun: () => clearSavedRun(),
@@ -1893,9 +1904,24 @@ function init() {
 function loop(ts){
   if(gstate!=='playing' && gstate!=='dying') return;
   try {
-    const dt=Math.min((ts-lastT)/1000,.05); lastT=ts;
-    simNowMs += dt * 1000;
-    update(dt, simNowMs); draw(simNowMs); hudUpdate();
+    const frameMs = Math.min(ts - lastT, MAX_FRAME_DT_MS);
+    lastT = ts;
+    simAccumulatorMs += frameMs;
+    let steps = 0;
+    while (simAccumulatorMs >= SIM_STEP_MS && steps < MAX_SIM_STEPS_PER_FRAME) {
+      simNowMs += SIM_STEP_MS;
+      update(SIM_STEP_SEC, simNowMs);
+      simAccumulatorMs -= SIM_STEP_MS;
+      steps++;
+    }
+    if (steps >= MAX_SIM_STEPS_PER_FRAME) {
+      // Hit the catch-up cap — drop any further backlog so we don't
+      // fall further behind on the next frame. This sacrifices a few
+      // ms of sim time during heavy stalls (tab switch, GC pause) to
+      // keep the loop responsive.
+      simAccumulatorMs = 0;
+    }
+    draw(simNowMs); hudUpdate();
     raf=requestAnimationFrame(loop);
   } catch(error) {
     handleGameLoopCrash(error);
@@ -3595,7 +3621,7 @@ bindSessionFlow({
   leaderboardScreen: lbScreen,
   initRun: init,
   beginLoop: () => {
-    lastT = performance.now();
+    lastT=performance.now(); simAccumulatorMs=0;
     raf = requestAnimationFrame(loop);
   },
   setGameState: (nextState) => {
@@ -3664,7 +3690,7 @@ if (savedRun && continueRunBtn) {
     if ((savedRun.boonAppliedForRoom ?? -1) === (savedRun.roomIndex || 0)) {
       startRoom(roomIndex);
       gstate = 'playing';
-      lastT = performance.now();
+      lastT=performance.now(); simAccumulatorMs=0;
       raf = requestAnimationFrame(loop);
       btnPause.style.display = 'inline-flex';
       if (typeof btnPatchNotes !== 'undefined' && btnPatchNotes) btnPatchNotes.style.display = 'none';
