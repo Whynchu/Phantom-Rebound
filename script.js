@@ -1064,7 +1064,7 @@ function triggerPayloadBlast(bullet, enemies, ts) {
           killEffects, enemyX: e.x, enemyY: e.y,
           playerX: player.x, playerY: player.y, ts, upgrades: UPG,
           globalSpeedLift: GLOBAL_SPEED_LIFT, bloodPactHealCap: getBloodPactHealCap(),
-          random: Math.random,
+          random: () => simRng.next(),
         });
         for(const action of killRewardActions){
           if(action.type === 'bossClear'){ bossAlive = false; bossClears += 1; healPlayer(action.healAmount, 'bossReward'); showBossDefeated(); }
@@ -1111,9 +1111,9 @@ function spawnEnemy(type, isBoss = false, bossScale = 1) {
 
 function pickFallbackShooterType() {
   if(roomIndex < 2) return 'chaser';
-  if(roomIndex < 5) return Math.random() < 0.7 ? 'chaser' : 'sniper';
+  if(roomIndex < 5) return simRng.next() < 0.7 ? 'chaser' : 'sniper';
   const pool = ['chaser', 'sniper', 'disruptor', 'zoner'];
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pool[Math.floor(simRng.next() * pool.length)];
 }
 
 function ensureShooterPressure() {
@@ -1282,8 +1282,8 @@ function spawnEliteBullet(ex, ey, angle, speed, stageOverride, extras = {}) {
 
 // Elite triangle shots use the same staged palette, just scaled up.
 function spawnEliteTriangleBullet(ex, ey) {
-  const a = Math.atan2(player.y - ey, player.x - ex) + (Math.random() - 0.5) * 0.18;
-  const spd = (145 + Math.random() * 40) * bulletSpeedScale();
+  const a = Math.atan2(player.y - ey, player.x - ex) + (simRng.next() - 0.5) * 0.18;
+  const spd = (145 + simRng.next() * 40) * bulletSpeedScale();
   spawnEliteBullet(ex, ey, a, spd, 1, { r: 7 });
 }
 
@@ -2254,7 +2254,7 @@ function update(dt,ts){
             player,
             bulletSpeedScale,
             obstacles: roomObstacles,
-            random: Math.random,
+            random: () => simRng.next(),
             canEnemyUsePurpleShots: (enemy) => canEnemyUsePurpleShots(enemy, roomIndex),
             spawnZoner: (idx, total) => spawnZB(e.x, e.y, idx, total),
             spawnEliteZoner: (idx, total, stage) => spawnEliteZB(e.x, e.y, idx, total, stage),
@@ -2932,7 +2932,7 @@ function update(dt,ts){
               upgrades: UPG,
               globalSpeedLift: GLOBAL_SPEED_LIFT,
               bloodPactHealCap: getBloodPactHealCap(),
-              random: Math.random,
+              random: () => simRng.next(),
             });
             for(const action of killRewardActions){
               if(action.type === 'bossClear'){

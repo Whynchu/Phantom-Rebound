@@ -1,3 +1,5 @@
+import { simRng } from '../systems/seededRng.js';
+
 function createLaneOffsets(count, spacing) {
   return Array.from({ length: count }, (_, idx) => (idx - (count - 1) / 2) * spacing);
 }
@@ -54,7 +56,7 @@ function buildPlayerVolleySpecs({
   getPierceLeft = () => 0,
   getBloodPactHealCap = () => 0,
   now,
-  random = Math.random,
+  random = () => simRng.next(),
 } = {}) {
   const volleySpecs = [];
   const selectedShots = shots.slice(0, availableShots);

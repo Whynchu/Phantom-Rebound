@@ -1,3 +1,5 @@
+import { simRng } from '../systems/seededRng.js';
+
 function clampEnemyToArena(enemy, width, height, margin) {
   enemy.x = Math.max(margin + enemy.r, Math.min(width - margin - enemy.r, enemy.x));
   enemy.y = Math.max(margin + enemy.r, Math.min(height - margin - enemy.r, enemy.y));
@@ -459,7 +461,7 @@ function fireEnemyBurst(enemy, {
   player,
   bulletSpeedScale,
   obstacles = [],
-  random = Math.random,
+  random = () => simRng.next(),
   canEnemyUsePurpleShots = () => false,
   spawnZoner,
   spawnEliteZoner,

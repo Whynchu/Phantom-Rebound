@@ -1,3 +1,5 @@
+import { simRng } from '../systems/seededRng.js';
+
 function createOutputBullet({
   x,
   y,
@@ -69,7 +71,7 @@ function spawnGreyDrops({
   ts,
   count,
   maxBullets,
-  random = Math.random,
+  random = () => simRng.next(),
 } = {}) {
   const dropCount = Math.max(1, Math.floor(count));
   const room = Math.min(dropCount, maxBullets - bullets.length);

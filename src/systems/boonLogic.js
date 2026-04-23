@@ -6,6 +6,7 @@ import {
   ESCALATION_KILL_PCT,
   ESCALATION_MAX_BONUS,
 } from '../data/boonConstants.js';
+import { simRng } from './seededRng.js';
 import { BOONS, LEGENDARY_SEQUENCES } from '../data/boonDefinitions.js';
 import {
   getKineticChargeMultiplier,
@@ -68,12 +69,12 @@ function checkLegendarySequences(history, upg, rejectedIds = new Set(), roomsSin
     if(seq.check(history)) available.push(seq.boon);
   }
   // Return random legendary from available pool, or null if none available
-  return available.length > 0 ? available[Math.floor(Math.random() * available.length)] : null;
+  return available.length > 0 ? available[Math.floor(simRng.next() * available.length)] : null;
 }
 
 function weightedPickBoon(pool, upg) {
   const totalWeight = pool.reduce((sum, boon) => sum + getBoonWeight(boon, upg), 0);
-  let roll = Math.random() * totalWeight;
+  let roll = simRng.next() * totalWeight;
   for(const boon of pool) {
     roll -= getBoonWeight(boon, upg);
     if(roll <= 0) return boon;
@@ -211,9 +212,9 @@ function getActiveBoonEntries(upg) {
 function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
   const available = BOONS.filter((boon) => boonHasEffect(boon, upg, hp, maxHp));
   const byTag = {
-    OFFENSE: available.filter((boon) => boon.tag === 'OFFENSE').sort(() => Math.random() - 0.5),
-    UTILITY: available.filter((boon) => boon.tag === 'UTILITY').sort(() => Math.random() - 0.5),
-    SURVIVE: available.filter((boon) => boon.tag === 'SURVIVE').sort(() => Math.random() - 0.5),
+    OFFENSE: available.filter((boon) => boon.tag === 'OFFENSE').sort(() => simRng.next() - 0.5),
+    UTILITY: available.filter((boon) => boon.tag === 'UTILITY').sort(() => simRng.next() - 0.5),
+    SURVIVE: available.filter((boon) => boon.tag === 'SURVIVE').sort(() => simRng.next() - 0.5),
   };
   const picks = [];
   for(const tag of ['OFFENSE', 'UTILITY', 'SURVIVE']) {
@@ -226,7 +227,7 @@ function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
   if(picks.length < choiceCount) {
     const remaining = [...available]
       .filter((boon) => !picks.includes(boon))
-      .sort(() => Math.random() - 0.5);
+      .sort(() => simRng.next() - 0.5);
     while(picks.length < choiceCount && remaining.length > 0) picks.push(remaining.shift());
   }
   return picks;

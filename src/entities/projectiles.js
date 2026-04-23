@@ -1,3 +1,5 @@
+import { simRng } from '../systems/seededRng.js';
+
 function getEliteBulletStagePalette({ getThreatPalette, getRgba }) {
   const threat = getThreatPalette();
   return [
@@ -67,7 +69,7 @@ function spawnAimedEnemyBullet({
   radius = 4.5,
   extras = {},
   onSpawn = () => {},
-  random = Math.random,
+  random = () => simRng.next(),
 }) {
   const baseAngle = angleOverride === null ? Math.atan2(player.y - y, player.x - x) : angleOverride;
   const angle = baseAngle + (random() - 0.5) * spread;

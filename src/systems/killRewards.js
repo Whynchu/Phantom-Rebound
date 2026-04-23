@@ -1,3 +1,5 @@
+import { simRng } from './seededRng.js';
+
 function resolveEnemyKillEffects({
   enemy,
   bullet,
@@ -85,7 +87,7 @@ function buildKillRewardActions({
   upgrades,
   globalSpeedLift = 1,
   bloodPactHealCap = 0,
-  random = Math.random,
+  random = () => simRng.next(),
 } = {}) {
   const actions = [];
   if(killEffects.bossCleared) {
