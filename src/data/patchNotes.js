@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.0',
+      label: 'COOP PHASE A: SEEDED SIM',
+      summary: ['Foundation for online co-op: simulation now runs on a seeded PRNG so two clients with the same seed walk identical sim paths.'],
+      highlights: [
+        'New src/systems/seededRng.js — mulberry32 PRNG with reseed/fork/pick helpers, singleton simRng used across all sim modules.',
+        'Migrated 28 Math.random call sites to simRng: enemy spawns, projectile jitter, boon rolls, kill-reward drops, spawn weighting, legendary picks, shuffles.',
+        'Runs accept ?seed=N (int or string) URL param — same seed replays the same enemy waves, boon choices, and spawn layouts.',
+        'Cosmetic randomness (particles, damage-number jitter) intentionally stays on Math.random.',
+        'New determinism replay harness (scripts/test-determinism.mjs) with 11 tests including a compound 50-room replay byte-identical across runs.',
+        'Shipping to Experimental repo only; no gameplay change vs v1.19.32 for live players.',
+      ]
+    },
+  {
       version: '1.19.32',
       label: 'PATCH NOTES HOTFIX',
       summary: ['Hotfix: re-declare module-level pausePanel/pauseBoonsPanel refs in script.js.'],

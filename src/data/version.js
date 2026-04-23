@@ -1,4 +1,4 @@
-const VERSION = { num: '1.19.32', label: 'PATCH NOTES HOTFIX' };
+const VERSION = { num: '1.20.0', label: 'COOP PHASE A: SEEDED SIM' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;
