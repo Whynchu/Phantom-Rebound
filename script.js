@@ -112,6 +112,7 @@ import { iconHTML } from './src/ui/iconRenderer.js';
 import { renderPatchNotesPanel } from './src/ui/patchNotes.js';
 import { createPanelManager } from './src/ui/panelManager.js';
 import { createPauseController } from './src/ui/pauseController.js';
+import { simRng, parseSeedParam } from './src/systems/seededRng.js';
 import { showGameOverScreen } from './src/ui/gameOver.js';
 import { bullets, enemies, shockwaves, spawnQueue, scoreBreakdown, resetScoreBreakdown } from './src/core/gameState.js';
 import { runBoonHook } from './src/systems/boonHooks.js';
@@ -1825,6 +1826,18 @@ function init() {
   const runtimeTimers = createInitialRuntimeTimers();
   clearLegacyRunRecovery();
   clearSavedRun();
+  // Seed the simulation RNG. ?seed=N URL param (int or string) pins the
+  // run for deterministic replay; otherwise a time-based seed is used.
+  // See docs/coop-multiplayer-plan.md §2 — this is the foundation for
+  // co-op lockstep.
+  const urlSeed = (typeof window !== 'undefined' && window.location)
+    ? parseSeedParam(new URLSearchParams(window.location.search).get('seed'))
+    : null;
+  const runSeed = urlSeed != null ? urlSeed : ((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0) || 1;
+  simRng.reseed(runSeed);
+  if (urlSeed != null) {
+    try { console.info('[seed] run pinned to seed', runSeed); } catch (_) {}
+  }
   if (continueRunBtn) continueRunBtn.classList.add('off');
   score = runMetrics.score; kills = runMetrics.kills;
   resetScoreBreakdown();

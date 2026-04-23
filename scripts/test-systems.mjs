@@ -123,6 +123,7 @@ import {
   createRoomTelemetry,
   buildRunTelemetryPayload,
 } from '../src/systems/telemetry.js';
+import { createSeededRng, simRng, parseSeedParam, seedFromString } from '../src/systems/seededRng.js';
 import { applyDamagelessRoomProgression } from '../src/systems/progression.js';
 import { orderBoonsForDisplay } from '../src/ui/boonsPanel.js';
 import { buildPatchNoteCardHtml } from '../src/ui/patchNotes.js';
@@ -179,6 +180,85 @@ function test(name, fn) {
     process.exitCode = 1;
   }
 }
+
+test('seededRng produces identical sequences from identical seeds', () => {
+  const a = createSeededRng(12345);
+  const b = createSeededRng(12345);
+  for (let i = 0; i < 100; i++) {
+    assert.equal(a.next(), b.next(), `divergence at step ${i}`);
+  }
+});
+
+test('seededRng diverges for different seeds', () => {
+  const a = createSeededRng(1);
+  const b = createSeededRng(2);
+  // Over 10 draws, at least one value must differ.
+  let diverged = false;
+  for (let i = 0; i < 10; i++) {
+    if (a.next() !== b.next()) { diverged = true; break; }
+  }
+  assert.ok(diverged, 'different seeds should produce different streams');
+});
+
+test('seededRng.reseed restarts the stream', () => {
+  const rng = createSeededRng(42);
+  const first = [rng.next(), rng.next(), rng.next()];
+  rng.reseed(42);
+  const second = [rng.next(), rng.next(), rng.next()];
+  assert.deepEqual(first, second);
+});
+
+test('seededRng.range and .int cover expected bounds', () => {
+  const rng = createSeededRng(7);
+  for (let i = 0; i < 500; i++) {
+    const r = rng.range(10, 20);
+    assert.ok(r >= 10 && r < 20, `range out of bounds: ${r}`);
+    const n = rng.int(3, 5);
+    assert.ok(n >= 3 && n <= 5 && Number.isInteger(n), `int out of bounds: ${n}`);
+  }
+});
+
+test('seededRng.pick selects from array deterministically', () => {
+  const a = createSeededRng(99);
+  const b = createSeededRng(99);
+  const arr = ['red', 'green', 'blue', 'yellow'];
+  for (let i = 0; i < 20; i++) {
+    assert.equal(a.pick(arr), b.pick(arr));
+  }
+  assert.equal(createSeededRng(1).pick([]), undefined);
+});
+
+test('seededRng.fork produces independent but deterministic substreams', () => {
+  const parentA = createSeededRng(555);
+  const parentB = createSeededRng(555);
+  const forkA = parentA.fork();
+  const forkB = parentB.fork();
+  for (let i = 0; i < 30; i++) {
+    assert.equal(forkA.next(), forkB.next());
+  }
+  // Parent and fork are not the same stream.
+  assert.notEqual(parentA.next(), forkA.next());
+});
+
+test('parseSeedParam accepts ints, strings, and rejects empty', () => {
+  assert.equal(parseSeedParam(null), null);
+  assert.equal(parseSeedParam(''), null);
+  assert.equal(parseSeedParam('   '), null);
+  assert.equal(parseSeedParam('12345'), 12345);
+  assert.equal(parseSeedParam('-5'), (-5 >>> 0));
+  // Any non-empty non-numeric string must yield a stable hash.
+  assert.equal(parseSeedParam('hello'), seedFromString('hello'));
+  assert.equal(parseSeedParam('hello'), parseSeedParam('hello'));
+  assert.notEqual(parseSeedParam('hello'), parseSeedParam('world'));
+});
+
+test('simRng singleton is reseedable and shared across imports', () => {
+  simRng.reseed(1000);
+  const a = [simRng.next(), simRng.next(), simRng.next()];
+  simRng.reseed(1000);
+  const b = [simRng.next(), simRng.next(), simRng.next()];
+  assert.deepEqual(a, b);
+});
 
 test('kill sustain cap scales by room and respects max', () => {
   const config = { baseHealCap: 14, perRoomHealCap: 0.22, maxHealCap: 34 };
