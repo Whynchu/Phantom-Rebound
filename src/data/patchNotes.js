@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.23',
+      label: 'COOP PHASE D3: GUEST INPUT UPLINK',
+      summary: ['Guest browsers now stream their local input frames to the host over the coop gameplay channel. Host ingests into a ring buffer, ready for slot-1 sim to drain in D4. Solo and ?coopdebug=1 untouched.'],
+      highlights: [
+        'Wired createCoopInputSync into script.js. On init(), after slot 0 installs, installCoopInputUplink(armedCoop) spins up an instance bound to the active session. Teardown in gameOver / endCoopDemoRun disposes the sync and unsubscribes from onGameplay.',
+        'Guest path in update() now calls coopInputSync.sampleFrame(simTick) after the guest-gate clock advance. Frames are quantized (int8 dx/dy, uint8 t, still bit) and batched in groups of 4 → ~15 msg/s at 60 Hz, well under Supabase\'s 20 msg/s hard cap.',
+        'New module-level simTick counter increments once per fixed-step update() call. Acts as the authoritative clientTick tag on guest input frames and (later in D4) the host\'s snapshot sim-tick.',
+        'Host side: session.onGameplay listener forwards {kind:\'input\'} payloads into inputSync.ingest(), which lands them in a sorted ring buffer. Out-of-order frames sort, duplicate ticks drop first-write-wins, non-input kinds ignored.',
+        'scripts/test-coop-input-uplink.mjs: 12 new assertions covering batch flush, explicit flush, quantization, host ingest, out-of-order sort, duplicate drop, teardown cleanup, sendGameplay throw isolation, and end-to-end loopback.',
+        '18 test suites green. Determinism 11/11 byte-identical (the uplink only installs when role === host/guest; solo and COOP_DEBUG never touch it).',
+        'Next up (Phase D4a): snapshot schema + sequencing. Host starts broadcasting authoritative state (slots, bullets, enemies, room phase) so guests can render again and D5 prediction has a baseline to reconcile against.',
+      ]
+    },
+  {
       version: '1.20.22',
       label: 'COOP PHASE D2: HOST-AUTHORITATIVE SIM',
       summary: ['Guest browsers now skip the local simulation entirely; the host peer is the authority for enemies/bullets/scoring/room progression. Solo and ?coopdebug=1 keep the full sim, byte-identical.'],

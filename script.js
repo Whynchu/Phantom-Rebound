@@ -139,6 +139,7 @@ import {
   isCoopGuest,
 } from './src/net/coopRunConfig.js';
 import { getLocalSlot } from './src/net/onlineSlotRuntime.js';
+import { createCoopInputSync } from './src/net/coopInputSync.js';
 import {
   showRoomClearOverlay,
   showBossDefeatedOverlay,
@@ -790,6 +791,19 @@ let raf=0, lastT=0;
 // the loop is cancelled so simNowMs naturally freezes, which means
 // bullet timers don't need any offset-shifting on resume.
 let simNowMs = 0;
+// Phase D3: monotonic sim-tick counter. Increments once per fixed-step
+// `update()` call. Used as the authoritative clientTick on guest input
+// frames and (later in D4) as the host's snapshot sim-tick tag. Reset
+// to 0 on every init()/restoreRun() so tick 0 always aligns with the
+// run's first sim step.
+let simTick = 0;
+// Phase D3: coop input uplink handles. Guest: flushes quantized frames
+// to host at batchSize intervals. Host: ingests guest frames into a
+// ring buffer (consumed by slot-1 sim in D4). `null` in solo and
+// COOP_DEBUG (role='local'). Teardown via dispose + unsubscribe on
+// gameover / new run.
+let coopInputSync = null;
+let coopInputUnsubscribe = null;
 // Fixed-step accumulator (Phase C1b). Sim runs at a deterministic
 // 60 Hz cadence regardless of display refresh rate. On fast displays
 // we may run 0-1 sim steps per rAF; on slow displays we catch up by
@@ -948,6 +962,64 @@ function installGuestDebugSlot() {
   }));
   try { console.info('[coopdebug] guest slot 1 spawned. Arrow keys to move.'); } catch (_) {}
 }
+
+// ── PHASE D3: GUEST→HOST INPUT UPLINK ────────────────────────────────────────
+// Wires `createCoopInputSync` to the active coop session. Idempotent: safe to
+// call multiple times (tears down any prior instance first). Bails cleanly
+// for solo, COOP_DEBUG same-device (role='local'), and coop runs without a
+// live session (should not happen in practice; guarded for tests).
+//
+// Host: registers an onGameplay listener that forwards {kind:'input'} payloads
+//       into the ring buffer. Slot-1 sim in D4 will drain the buffer.
+// Guest: starts batching local input frames each sim tick via sampleFrame,
+//        flushing to host over session.sendGameplay. Guest's sampleFrame call
+//        lives in update() — see `isCoopGuest` branch. Uses the same
+//        createHostInputAdapter(joy) instance slot 0 uses, because on guest
+//        the joystick IS the player-1 input.
+function teardownCoopInputUplink() {
+  if (coopInputUnsubscribe) {
+    try { coopInputUnsubscribe(); } catch (_) {}
+    coopInputUnsubscribe = null;
+  }
+  if (coopInputSync) {
+    try { coopInputSync.dispose(); } catch (_) {}
+    coopInputSync = null;
+  }
+}
+
+function installCoopInputUplink(armedCoop) {
+  teardownCoopInputUplink();
+  if (!armedCoop) return;
+  const role = armedCoop.role;
+  if (role !== 'host' && role !== 'guest') return; // 'local' (COOP_DEBUG) and anything else: skip
+  const session = armedCoop.session;
+  if (!session || typeof session.sendGameplay !== 'function' || typeof session.onGameplay !== 'function') {
+    try { console.warn('[coop] input uplink: missing session transport, skipping'); } catch (_) {}
+    return;
+  }
+  // On host, localSlotIndex=0 (host owns slot 0) and we never sampleFrame;
+  // we only ingest. On guest, localSlotIndex=1 — the frames we send describe
+  // slot 1's input as owned by this peer.
+  const localSlotIndex = role === 'host' ? 0 : 1;
+  coopInputSync = createCoopInputSync({
+    sendGameplay: (msg) => session.sendGameplay(msg),
+    localAdapter: createHostInputAdapter(joy),
+    localSlotIndex,
+    batchSize: 4,
+  });
+  // Ingest any gameplay payload that is an input frame from the peer.
+  // Host sees kind:'input' with slot=1 from guest; guest would see kind:'input'
+  // with slot=0 from host (D3 scope: host never sends input — but ingesting it
+  // harmlessly keeps the channel symmetric for future use).
+  coopInputUnsubscribe = session.onGameplay((payload) => {
+    if (!payload || payload.kind !== 'input') return;
+    try { coopInputSync && coopInputSync.ingest(payload); } catch (err) {
+      try { console.warn('[coop] input ingest error', err); } catch (_) {}
+    }
+  });
+  try { console.info('[coop] input uplink installed role=' + role + ' slot=' + localSlotIndex); } catch (_) {}
+}
+
 
 // Called from the main update() right after slot 0's movement block. Slot 0
 // is already driven by the legacy joystick block for bit-identity; this only
@@ -2255,6 +2327,7 @@ function endCoopDemoRun() {
     renderBoons: renderGameOverBoons,
   });
   try { clearCoopRun(); } catch (_) {}
+  teardownCoopInputUplink();
 }
 
 function gameOver(){
@@ -2271,6 +2344,7 @@ function gameOver(){
   // C3a-pre-1: disarm coop run flag so subsequent solo starts aren't treated
   // as coop. pushLeaderboardEntry above already consulted isCoopRun().
   try { clearCoopRun(); } catch (_) {}
+  teardownCoopInputUplink();
 }
 
 function init() {
@@ -2352,6 +2426,13 @@ function init() {
   hudUpdate();
   btnPause.style.display = 'inline-flex';
   btnPatchNotes.style.display = 'none';
+  // Phase D3: install coop input uplink after run state is live.
+  // armedCoop was consumed at the top of init() and used only for seeding.
+  // The session reference is preserved on the consumed record so we can
+  // re-install here. No-op for solo runs. simTick reset to 0 so guest's
+  // first frame tags clientTick=0.
+  simTick = 0;
+  installCoopInputUplink(armedCoop);
 }
 
 // ── MAIN LOOP ─────────────────────────────────────────────────────────────────
@@ -2364,6 +2445,7 @@ function loop(ts){
     let steps = 0;
     while (simAccumulatorMs >= SIM_STEP_MS && steps < MAX_SIM_STEPS_PER_FRAME) {
       simNowMs += SIM_STEP_MS;
+      simTick++;
       update(SIM_STEP_SEC, simNowMs);
       simAccumulatorMs -= SIM_STEP_MS;
       steps++;
@@ -2438,6 +2520,14 @@ function update(dt,ts){
     runElapsedMs += dt * 1000;
     simNowMs += dt * 1000;
     prevStill = true;
+    // Phase D3: guest samples local input once per sim tick and batches
+    // quantized frames to the host. sampleFrame auto-flushes when the
+    // batch hits size 4 (~15 msg/s at 60 Hz, well under Supabase's
+    // 20 msg/s cap). Errors inside sendGameplay are logged and do not
+    // interrupt the guest's render loop.
+    try { coopInputSync && coopInputSync.sampleFrame(simTick); } catch (err) {
+      try { console.warn('[coop] sampleFrame error', err); } catch (_) {}
+    }
     return;
   }
 

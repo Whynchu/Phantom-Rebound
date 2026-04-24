@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.22', label: 'COOP PHASE D2: HOST-AUTHORITATIVE SIM' };
+const VERSION = { num: '1.20.23', label: 'D3 GUEST INPUT UPLINK' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;
