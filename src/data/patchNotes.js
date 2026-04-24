@@ -2,6 +2,21 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.17',
+      label: 'COOP PHASE C3A-CORE-3: LOCKSTEP GATE',
+      summary: ['Internal scaffolding: two-counter lockstep gate (sendTick / executeTick) prevents sim divergence when network latency is non-zero. ?coopdebug=1 only.'],
+      highlights: [
+        'New src/net/coopLockstep.js: sampleLocalThrough/canExecuteTick/consumeTick. Sim only advances when BOTH slots\' quantized frames for that tick are buffered locally.',
+        'Owns a local ring buffer mirrored from inputSync.sampleFrame — both peers read their own input through the same quantize→dequantize pipe so sim floats stay byte-identical across machines.',
+        'stallReason diagnostics (localMissing / remoteMissing / nonMonotonic / null) give the future lockstep driver a clean signal for "pause sim" vs "catch up".',
+        'Solo/COOP_DEBUG path: expectRemote=false gate depends only on local availability → no regression to existing single-device play.',
+        'Invariants enforced by tests: executeTick ≤ sendTick always, consumeTick monotonically +1, non-monotonic consume throws, sampleLocalThrough idempotent past sendTick.',
+        'Minor: inputSync.sampleFrame now returns the quantized frame (back-compat — previous callers ignore the return value).',
+        'New scripts/test-coop-lockstep.mjs: 42 contract tests. 295 tests across 16 suites. Determinism byte-identical.',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.16',
       label: 'COOP PHASE C3A-CORE-2: INPUT SYNC',
       summary: ['Internal scaffolding: new coopInputSync batches local input at 15 msg/s (4 frames/batch, 60 Hz sim) and fans out remote frames via a ring buffer. Foundation for lockstep tick gate (C3a-core-3). ?coopdebug=1 only.'],

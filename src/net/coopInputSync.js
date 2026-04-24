@@ -61,6 +61,7 @@ function createCoopInputSync({
       const batch = pendingBatch.splice(0, pendingBatch.length);
       doFlush(batch);
     }
+    return frame;
   }
 
   function flush() {
