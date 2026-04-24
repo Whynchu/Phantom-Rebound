@@ -57,6 +57,7 @@ import {
   spawnSplitOutputBullets,
   spawnRadialOutputBurst,
 } from './src/entities/playerProjectiles.js';
+import { resetBulletIds } from './src/entities/bulletIds.js';
 import {
   createLaneOffsets as createLaneOffsetsValue,
   buildPlayerShotPlan,
@@ -2297,6 +2298,7 @@ function restoreRun(saved) {
   player = createInitialPlayerState(WORLD_W, WORLD_H);
   installPlayerSlot0();
   bullets.length = 0; enemies.length = 0; clearParticles(); shockwaves.length = 0;
+  resetBulletIds();
   _orbFireTimers = []; _orbCooldown = [];
   resetJoystickState(joy);
   fireT = 0; stillTimer = 0; prevStill = false;
@@ -2398,6 +2400,7 @@ function init() {
   tookDamageThisRoom = runMetrics.tookDamageThisRoom;
   lastStallSpawnAt = runMetrics.lastStallSpawnAt;
   enemyIdSeq = runMetrics.enemyIdSeq;
+  resetBulletIds();
   bossClears = runMetrics.bossClears;
   playerAimAngle = -Math.PI * 0.5;
   playerAimHasTarget = false;

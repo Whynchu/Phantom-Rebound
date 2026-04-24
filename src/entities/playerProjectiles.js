@@ -1,4 +1,5 @@
 import { simRng } from '../systems/seededRng.js';
+import { nextHostBulletId } from './bulletIds.js';
 
 function createOutputBullet({
   x,
@@ -16,6 +17,7 @@ function createOutputBullet({
   extras = {},
 } = {}) {
   return {
+    id: nextHostBulletId(),
     x,
     y,
     vx,
@@ -52,6 +54,7 @@ function pushGreyBullet({
   extras = {},
 } = {}) {
   const bullet = {
+    id: nextHostBulletId(),
     x,
     y,
     vx,

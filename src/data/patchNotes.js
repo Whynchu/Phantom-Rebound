@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.25',
+      label: 'COOP PHASE D4B: BULLET IDS',
+      summary: ['Every bullet now gets a stable unique id at spawn time. Sets up snapshot correlation in D4 and prediction reconciliation in D6. Determinism canary byte-identical.'],
+      highlights: [
+        'New src/entities/bulletIds.js: nextHostBulletId() (positive uint32, 1-based), nextGuestBulletId() (negative int32), resetBulletIds() called on run init + restore. Sign bit distinguishes authoritative (positive) from guest-predicted (negative) bullets.',
+        'Wired id allocation into all 4 spawn helper sites: projectiles.js (spawnEnemyBullet, spawnEliteBullet) and playerProjectiles.js (createOutputBullet/pushOutputBullet, pushGreyBullet). Every bullet push gets `id: nextHostBulletId()` as the first property.',
+        'resetBulletIds() called from init() (line ~2401) and restoreRun() (after bullets.length=0) so both fresh runs and continues start IDs at 1 — critical for determinism canary byte-identity.',
+        'scripts/test-bullet-ids.mjs: 12 assertions covering monotonic allocation, host/guest counter independence, reset behavior, ID classification helpers, all 4 spawn-site wiring, mixed-enemy+player uniqueness, spawn-order preservation, and post-reset byte-identical reproducibility.',
+        'Wraparound guard: if hostCounter overflows back to 0, skip to 1 (uint32 reserves 0 as "unassigned"). Belt-and-braces — at 10 bullets/s this would take ~13 years to hit.',
+        '20 test suites green. Determinism 11/11 byte-identical (IDs mirror spawn order; fresh run always produces same id sequence).',
+        'Next up (Phase D4): host broadcasts snapshots at 10-15 Hz using the D4a schema + D4b IDs. Guests receive them and begin applying (render-only in D4; prediction + reconciliation land in D5/D6).',
+      ]
+    },
+  {
       version: '1.20.24',
       label: 'COOP PHASE D4A: SNAPSHOT SCHEMA',
       summary: ['Defined the wire format host will use to broadcast authoritative state. Pure data module with encode/decode/validation — no script.js wiring yet; that lands in D4.'],

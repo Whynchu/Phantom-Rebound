@@ -1,4 +1,5 @@
 import { simRng } from '../systems/seededRng.js';
+import { nextHostBulletId } from './bulletIds.js';
 
 function getEliteBulletStagePalette({ getThreatPalette, getRgba }) {
   const threat = getThreatPalette();
@@ -43,6 +44,7 @@ function spawnEnemyBullet({
   onSpawn = () => {},
 }) {
   bullets.push({
+    id: nextHostBulletId(),
     x,
     y,
     vx: Math.cos(angle) * speed,
@@ -153,6 +155,7 @@ function spawnEliteBullet({
   getRgba,
 }) {
   const bullet = {
+    id: nextHostBulletId(),
     x,
     y,
     vx: Math.cos(angle) * speed,
