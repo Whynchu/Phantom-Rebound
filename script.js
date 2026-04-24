@@ -898,7 +898,10 @@ function installGuestDebugSlot() {
   bindGuestKeys();
   const body = createInitialPlayerState(cv.width, cv.height);
   body.x = Math.min(cv.width - 24, body.x + 60);
-  body.invincible = Number.POSITIVE_INFINITY; // slot 1 takes no damage in C2c
+  body.invincible = 1.5; // brief spawn-in invuln; drops after that so C2d-1b damage applies
+  body.distort = 0;
+  body.spawnX = body.x;
+  body.spawnY = body.y;
   const upg = getDefaultUpgrades();
   const metrics = { score: 0, kills: 0, charge: 0, fireT: 0, stillTimer: 0, prevStill: false, hp: BASE_PLAYER_HP, maxHp: BASE_PLAYER_HP };
   const timers = {
@@ -933,6 +936,84 @@ function updateGuestSlotMovement(dt, W, H) {
     body.x = Math.max(M + body.r, Math.min(W - M - body.r, body.x + body.vx * dt));
     body.y = Math.max(M + body.r, Math.min(H - M - body.r, body.y + body.vy * dt));
     resolveEntityObstacleCollisions(body);
+  }
+}
+
+// C2d-1b — tick invulnerability/distort timers on guest slot bodies. Host's
+// `player.invincible -= dt` block covers slot 0. Without this, guests would
+// retain their spawn invuln forever and remain undamageable.
+function tickGuestSlotTimers(dt) {
+  for (let i = 1; i < playerSlots.length; i++) {
+    const slot = playerSlots[i];
+    if (!slot) continue;
+    const body = slot.body;
+    if (!body) continue;
+    if (body.invincible > 0) body.invincible -= dt;
+    if (body.distort > 0) body.distort -= dt;
+  }
+}
+
+// C2d-1b — simple contact-damage path for guest slots (slot 1+). Slot 0 still
+// uses the legacy rusher-contact + aftermath block because it owns the UPG
+// boons (lifeline/colossus/blood-pact). Guests have fresh-default UPG so no
+// boons fire — keep the path minimal: hp drop, spark, invuln/distort timers,
+// respawn-on-death (dev-harness only; coopdebug is for testing, not ship).
+function applyContactDamageToGuestSlot(slot, damage) {
+  const body = slot.body;
+  const nextHp = Math.max(0, (slot.metrics.hp || 0) - damage);
+  slot.metrics.hp = nextHp;
+  body.invincible = getPostHitInvulnSeconds('contact');
+  body.distort = 0.35;
+  spawnDmgNumber(body.x, body.y, damage, C.danger);
+  sparks(body.x, body.y, C.danger, 10, 90);
+  if (nextHp <= 0) respawnGuestSlot(slot);
+}
+
+function applyDangerDamageToGuestSlot(slot, damage, color) {
+  const body = slot.body;
+  const nextHp = Math.max(0, (slot.metrics.hp || 0) - damage);
+  slot.metrics.hp = nextHp;
+  body.invincible = getPostHitInvulnSeconds('projectile');
+  body.distort = 0.3;
+  spawnDmgNumber(body.x, body.y, damage, color || C.danger);
+  sparks(body.x, body.y, C.danger, 8, 70);
+  if (nextHp <= 0) respawnGuestSlot(slot);
+}
+
+function respawnGuestSlot(slot) {
+  const body = slot.body;
+  if (typeof body.spawnX === 'number') body.x = body.spawnX;
+  if (typeof body.spawnY === 'number') body.y = body.spawnY;
+  body.vx = 0; body.vy = 0;
+  body.invincible = 2.0;
+  body.distort = 0;
+  slot.metrics.hp = slot.metrics.maxHp || BASE_PLAYER_HP;
+  sparks(body.x, body.y, '#6ad1ff', 18, 180);
+}
+
+// C2d-1b — second pass over danger bullets to hit guest slots. Runs after the
+// host's main danger-bullet loop (which already splices any bullet that hit
+// slot 0). Any bullet that survived that pass and now overlaps a guest is
+// consumed here.
+function processGuestDangerBulletHits(ts) {
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    if (!b || b.state !== 'danger') continue;
+    for (let si = 1; si < playerSlots.length; si++) {
+      const slot = playerSlots[si];
+      if (!slot) continue;
+      const body = slot.body;
+      if (!body || (slot.metrics.hp || 0) <= 0) continue;
+      if (body.invincible > 0) continue;
+      const dx = b.x - body.x;
+      const dy = b.y - body.y;
+      const rr = b.r + body.r;
+      if (dx * dx + dy * dy <= rr * rr) {
+        applyDangerDamageToGuestSlot(slot, getProjectileHitDamage(), b.col || getThreatPalette().danger.hex);
+        bullets.splice(i, 1);
+        break;
+      }
+    }
   }
 }
 
@@ -2208,6 +2289,7 @@ function update(dt,ts){
   if(player.invincible>0)player.invincible-=dt;
   if(player.distort>0)player.distort-=dt;
   updateGuestSlotMovement(dt, W, H);
+  tickGuestSlotTimers(dt);
 
   // ── Shields — sync count to tier, tick cooldowns
   while(player.shields.length < UPG.shieldTier) player.shields.push({cooldown:0, hardened: !!UPG.shieldTempered, mirrorCooldown:-9999});
@@ -2426,14 +2508,18 @@ function update(dt,ts){
       });
       resolveEntityObstacleCollisions(e);
       if(combatStep.kind === 'siphon'){
-        // Slot 1 charge-drain is deferred to C2d-1b (per-slot metrics pipeline).
-        // For now only host (slot 0) charge is drained.
-        if(combatStep.shouldDrainCharge && targetIsHost){charge=Math.max(0,charge-2.8*dt);sparks(player.x,player.y,C.siphon,1,35);}
+        // C2d-1b — drain target slot's charge (bridge-backed for slot 0,
+        // own metric for guests). Siphon visual anchors on the target body.
+        if(combatStep.shouldDrainCharge){
+          const newCharge = Math.max(0, (targetSlot?.metrics.charge || 0) - 2.8*dt);
+          if(targetSlot) targetSlot.metrics.charge = newCharge;
+          sparks(targetBody.x, targetBody.y, C.siphon, 1, 35);
+        }
       } else if(combatStep.kind === 'rusher'){
-        // Contact damage plumbing still mutates host globals only — guarded
-        // by targetIsHost. Slot 1 is invincible in C2c so rusher-vs-slot-1
-        // silently no-ops until C2d-1b wires per-slot damage.
-        if(targetIsHost && combatStep.distanceToPlayer<player.r+e.r+2 && player.invincible<=0){
+        // C2d-1b — route contact damage through the target slot. Host retains
+        // the full UPG aftermath path; guests use the simplified helper.
+        if(combatStep.distanceToPlayer<targetBody.r+e.r+2 && targetBody.invincible<=0){
+          if(targetIsHost){
           const rusherHit = resolveRusherContactHit({
             hp,
             upgrades: UPG,
@@ -2478,6 +2564,10 @@ function update(dt,ts){
             }
           } else if(rusherAftermath.shouldGameOver) {
             gameOver(); return;
+          }
+          } else {
+            // C2d-1b — guest rusher contact: simple damage + respawn-on-death.
+            applyContactDamageToGuestSlot(targetSlot, 18);
           }
         }
       } else {
@@ -3241,6 +3331,9 @@ function update(dt,ts){
       if(shouldRemoveBulletOutOfBounds(b, W, H)){bullets.splice(i,1);continue;}
     }
   }
+
+  // C2d-1b — guest slots take damage from surviving danger bullets.
+  if (playerSlots.length > 1) processGuestDangerBulletHits(ts);
 
   // ── Particles
   for(let i=particles.length-1;i>=0;i--){

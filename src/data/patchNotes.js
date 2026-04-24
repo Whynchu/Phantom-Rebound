@@ -2,6 +2,21 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.9',
+      label: 'COOP PHASE C2D-1B: PER-SLOT DAMAGE',
+      summary: ['Internal scaffolding: guest slot 1 now takes real damage from enemies in ?coopdebug=1. Invisible to solo players.'],
+      highlights: [
+        'Guest slot 1 drops the permanent invincibility it had in C2c — now spawns with 1.5s of invuln, then is damageable.',
+        'New tickGuestSlotTimers(dt) decays invincible/distort on guest slot bodies each frame (host is covered by the existing player.invincible decay).',
+        'New applyContactDamageToGuestSlot / applyDangerDamageToGuestSlot / respawnGuestSlot helpers: drop hp on slot.metrics, flash invuln + distort, spawn damage number, on lethal hit respawn at spawnX/spawnY with full HP + 2s invuln (dev-harness only; coopdebug is not a product feature).',
+        'Rusher contact damage now routes through the target slot: host retains the full UPG aftermath (lifeline/colossus/blood-pact), guests use the simplified helper. Siphon charge-drain now drains whichever slot is being targeted (bridge-backed for slot 0, own metric for guests).',
+        'New processGuestDangerBulletHits(ts) runs after the main danger-bullet loop: any danger bullet that survived the host pass and now overlaps a guest slot is consumed and deals direct projectile damage. Output bullets are correctly ignored.',
+        'New scripts/test-slot-damage.mjs: 11 contract tests (contact/danger hp drop, invuln flag, distort flag, lethal-triggers-respawn, invincible-blocks-hit, nearest-slot-only, output-ignored). 132 tests total across 8 suites.',
+        'Determinism preserved: solo path has no guest slots → processGuestDangerBulletHits is skipped, all helpers unreachable. 50-room compound replay test still byte-identical. Playwright smoke clean for both solo and ?coopdebug=1.',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.8',
       label: 'COOP PHASE C2D-1A: ENEMY TARGETING',
       summary: ['Internal scaffolding: enemies now pick the nearest living player slot each tick instead of hard-coding slot 0. Invisible to solo players.'],
