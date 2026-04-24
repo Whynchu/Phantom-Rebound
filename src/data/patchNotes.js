@@ -2,6 +2,21 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.13',
+      label: 'COOP PHASE C3A-PRE-1: ISCOOPRUN FLAG',
+      summary: ['Internal scaffolding: real coop-run lifecycle flag + seed bootstrap. Foundation for online lockstep. ?coopdebug=1 only.'],
+      highlights: [
+        'New src/net/coopRunConfig.js: armPendingCoopRun/consumePendingCoopRun/isCoopRun/clearCoopRun — one-shot armed config consumed exactly once at init().',
+        'init() seed precedence rewritten: armed-coop seed > URL ?seed= > time. COOP_DEBUG auto-arms a local-role config (URL ?seed= still wins for local replays).',
+        'C2f gates re-keyed from raw COOP_DEBUG check to isCoopRun() — future online runs will gate identically without flag-sprawl.',
+        'gameOver() now calls clearCoopRun() after pushLeaderboardEntry so a fresh solo run after a coop session is fully clean.',
+        'Continue Run button guard widened: hidden under any of ?coopdebug=1 / ?coop=1 / ?room=<code>.',
+        'New scripts/test-coop-run-config.mjs: 22 contract tests (arm/peek/consume/clear, one-shot, seed coercion, validation). 189 tests across 12 suites.',
+        'Determinism byte-identical. Playwright smoke clean; new "[seed] coop run seed <n> role local" console log confirms the wire.',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.12',
       label: 'COOP PHASE C2F: COOP GATING',
       summary: ['Internal scaffolding: save/continue/leaderboard are now solo-only. Coop (?coopdebug=1) runs don\'t persist and don\'t submit scores. ?coopdebug=1 only.'],

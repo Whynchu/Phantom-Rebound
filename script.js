@@ -130,6 +130,12 @@ import {
 import { bindCoopLobby } from './src/ui/coopLobby.js';
 import { supabaseTransportFactory } from './src/net/coopTransportSupabase.js';
 import {
+  armPendingCoopRun,
+  consumePendingCoopRun,
+  clearCoopRun,
+  isCoopRun,
+} from './src/net/coopRunConfig.js';
+import {
   showRoomClearOverlay,
   showBossDefeatedOverlay,
   showRoomIntroOverlay,
@@ -2044,9 +2050,9 @@ async function refreshLeaderboardView() {
 }
 
 function pushLeaderboardEntry() {
-  // C2f — coop runs don't submit to the solo leaderboard (separate scoring +
-  // one player per device means the local score doesn't represent a solo run).
-  if (COOP_DEBUG) {
+  // C2f — coop runs don't submit to the solo leaderboard.
+  // C3a-pre-1: key off isCoopRun() (unified gate for COOP_DEBUG + online).
+  if (isCoopRun()) {
     clearLegacyRunRecovery();
     return;
   }
@@ -2145,10 +2151,10 @@ const showPauseConfirm = pauseControls.showPauseConfirm;
 const SAVED_RUN_KEY = STORAGE_KEYS.savedRun;
 
 function saveRunState() {
-  // C2f — coop runs don't persist. The remote peer's state isn't captured here
-  // and "Continue Run" is solo-only. Skip to avoid leaving stale/misleading
-  // saves behind after a coop session.
-  if (COOP_DEBUG) return;
+  // C2f — coop runs don't persist (save path assumes solo globals only).
+  // C3a-pre-1: key off isCoopRun() so both COOP_DEBUG and real online trip
+  // the same gate.
+  if (isCoopRun()) return;
   const state = {
     UPG: { ...UPG },
     score, kills, hp, maxHp, charge,
@@ -2229,6 +2235,9 @@ function gameOver(){
   player.deadPulse = 0;
   player.deadPop = false;
   pushLeaderboardEntry();
+  // C3a-pre-1: disarm coop run flag so subsequent solo starts aren't treated
+  // as coop. pushLeaderboardEntry above already consulted isCoopRun().
+  try { clearCoopRun(); } catch (_) {}
 }
 
 function init() {
@@ -2236,18 +2245,40 @@ function init() {
   const runtimeTimers = createInitialRuntimeTimers();
   clearLegacyRunRecovery();
   clearSavedRun();
-  // Seed the simulation RNG. ?seed=N URL param (int or string) pins the
-  // run for deterministic replay; otherwise a time-based seed is used.
-  // See docs/coop-multiplayer-plan.md §2 — this is the foundation for
-  // co-op lockstep.
+  // If COOP_DEBUG is set and no real-online coop is armed, arm a local-role
+  // coop run so the same C2f gates (save/continue/leaderboard) and future
+  // lockstep plumbing treat the same-device harness identically to online.
+  // The seed still comes from URL/time below — this is a local-only arm
+  // that real online coop would replace via `armPendingCoopRun` from the
+  // lobby onReady path.
+  if (COOP_DEBUG) {
+    const debugSeed = ((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0) || 1;
+    try { armPendingCoopRun({ role: 'local', seed: debugSeed, code: null, session: null }); } catch (_) {}
+  }
+  // Seed the simulation RNG.
+  // Precedence (highest first):
+  //   1. Armed coop run seed (online lobby handshake, or COOP_DEBUG same-device)
+  //   2. ?seed=N URL param (deterministic replay pin)
+  //   3. Time-based seed (solo default)
+  // See docs/coop-multiplayer-plan.md §2 and src/net/coopRunConfig.js.
+  const armedCoop = consumePendingCoopRun();
   const urlSeed = (typeof window !== 'undefined' && window.location)
     ? parseSeedParam(new URLSearchParams(window.location.search).get('seed'))
     : null;
-  const runSeed = urlSeed != null ? urlSeed : ((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0) || 1;
-  simRng.reseed(runSeed);
-  if (urlSeed != null) {
+  let runSeed;
+  if (armedCoop) {
+    // URL seed still wins for coop debug (local arm) so `?seed=N&coopdebug=1`
+    // can pin replays. Real online coop won't have URL seed contention
+    // because join-room flow is UI-driven, not URL-driven.
+    runSeed = (armedCoop.role === 'local' && urlSeed != null) ? urlSeed : armedCoop.seed;
+    try { console.info('[seed] coop run seed', runSeed, 'role', armedCoop.role); } catch (_) {}
+  } else if (urlSeed != null) {
+    runSeed = urlSeed;
     try { console.info('[seed] run pinned to seed', runSeed); } catch (_) {}
+  } else {
+    runSeed = ((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0) || 1;
   }
+  simRng.reseed(runSeed);
   if (continueRunBtn) continueRunBtn.classList.add('off');
   score = runMetrics.score; kills = runMetrics.kills;
   resetScoreBreakdown();
@@ -4092,9 +4123,18 @@ function showLbBoonsPopup(runnerName, boons, boonOrder = '') {
 loadLeaderboard();
 clearLegacyRunRecovery();
 
-// Continue Run — show button if saved run exists (solo only; C2f gates coop).
+// Continue Run — show button if saved run exists (solo only).
+// C3a-pre-1: hide if URL indicates a coop session will be opened
+// (?coopdebug=1, ?coop=1, or ?room=<code>). isCoopRun() can't be checked here
+// because the run isn't armed yet at page-load time.
 const continueRunBtn = document.getElementById('btn-continue-run');
-const savedRun = COOP_DEBUG ? null : loadSavedRun();
+const _urlWillOpenCoop = (typeof window !== 'undefined' && window.location)
+  ? (() => {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('coopdebug') === '1' || p.get('coop') === '1' || p.has('room');
+    })()
+  : false;
+const savedRun = _urlWillOpenCoop ? null : loadSavedRun();
 if (savedRun && continueRunBtn) {
   continueRunBtn.classList.remove('off');
   continueRunBtn.textContent = `Continue Run (Room ${(savedRun.roomIndex || 0) + 1})`;
