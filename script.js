@@ -146,6 +146,7 @@ import {
   isNewerSnapshot,
 } from './src/net/coopSnapshot.js';
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
+import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
 import {
   showRoomClearOverlay,
   showBossDefeatedOverlay,
@@ -233,6 +234,7 @@ import {
 import {
   createHostInputAdapter,
   createArrowKeysInputAdapter,
+  createRemoteInputAdapter,
 } from './src/core/inputAdapters.js';
 import { createRunTelemetryController } from './src/systems/runTelemetryController.js';
 import {
@@ -823,6 +825,12 @@ let currentRunId = null;
 // from it (D5 wires interpolation/prediction). Reset on runId change.
 let latestRemoteSnapshot = null;
 let latestRemoteSnapshotSeq = null;
+// Phase D4.5: host-side processor that tracks the highest sim-tick for
+// which the host has actually consumed a remote-input frame (for slot 1).
+// `null` outside online host runs. Powers `lastProcessedInputSeq[1]` on
+// snapshots and trims the remote-input ring buffer to bound memory.
+let hostRemoteInputProcessor = null;
+let onlineHostSlot1Installed = false;
 // Fixed-step accumulator (Phase C1b). Sim runs at a deterministic
 // 60 Hz cadence regardless of display refresh rate. On fast displays
 // we may run 0-1 sim steps per rAF; on slow displays we catch up by
@@ -1011,6 +1019,15 @@ function teardownCoopInputUplink() {
   coopSnapshotSequencer = null;
   latestRemoteSnapshot = null;
   latestRemoteSnapshotSeq = null;
+  // Phase D4.5: tear down host-side slot 1 + processor.
+  hostRemoteInputProcessor = null;
+  if (onlineHostSlot1Installed) {
+    // Slot 1 was installed by us (online host). Remove it. Slot 0 is left
+    // intact — installPlayerSlot0 owns its lifecycle. We just delete the
+    // index-1 entry so playerSlots no longer iterates a dead body.
+    try { delete playerSlots[1]; } catch (_) {}
+    onlineHostSlot1Installed = false;
+  }
 }
 
 // Phase D4: deterministic-ish unique run identifier. Used as the snapshot
@@ -1051,6 +1068,11 @@ function installCoopInputUplink(armedCoop) {
   // input batch (~7.5 msg/s) this stays under Supabase's 20 msg/s budget
   // with comfortable headroom.
   if (role === 'host') {
+    // Phase D4.5: spin up slot 1 driven by the remote-input ring buffer +
+    // a processor that tracks consumed ticks. Must come BEFORE the broadcaster
+    // is built so the snapshot's lastProcessedInputSeq[1] reads from a real
+    // processor on the very first emit.
+    installOnlineCoopHostSlot1(coopInputSync.getRemoteRingBuffer());
     coopSnapshotSequencer = createSnapshotSequencer();
     coopSnapshotBroadcaster = createSnapshotBroadcaster({
       sendGameplay: (msg) => session.sendGameplay(msg),
@@ -1168,10 +1190,56 @@ function collectHostSnapshotState() {
     score: score | 0,
     elapsedMs: runElapsedMs | 0,
     // Slot 0 is host-owned; we've consumed all our own input up to simTick.
-    // Slot 1 ack lands in D4.5 once the host actually drains remoteInputBuffer
-    // to drive slot 1's sim. Until then, send null per the no-ack sentinel.
-    lastProcessedInputSeq: { 0: simTick | 0, 1: null },
+    // Slot 1 ack comes from hostRemoteInputProcessor — null until we've
+    // actually consumed a remote-input frame (D4.5). Per rubber-duck #3
+    // this MUST be a consumed tick, not "newest received".
+    lastProcessedInputSeq: {
+      0: simTick | 0,
+      1: hostRemoteInputProcessor ? hostRemoteInputProcessor.getLastProcessedTick() : null,
+    },
   };
+}
+
+// Phase D4.5: install online host slot 1 — its body, metrics, timers, aim,
+// and a remote-input adapter that reads from the coop input ring buffer.
+// Mirrors the COOP_DEBUG installGuestDebugSlot setup (so it benefits from
+// the existing slot-1 movement / contact-damage / respawn paths) but
+// substitutes a remote-input adapter for the local arrow-keys adapter.
+//
+// Idempotent: if a slot 1 is already registered (e.g. COOP_DEBUG path or a
+// prior install) we leave it alone. Real online runs never coexist with
+// COOP_DEBUG so this branch is conservative.
+function installOnlineCoopHostSlot1(remoteRing) {
+  if (!remoteRing) return;
+  if (playerSlots[1]) return; // already installed (COOP_DEBUG or re-entry)
+  const body = createInitialPlayerState(WORLD_W, WORLD_H);
+  body.x = Math.min(WORLD_W - 24, body.x + 60);
+  body.invincible = 1.5;
+  body.distort = 0;
+  body.spawnX = body.x;
+  body.spawnY = body.y;
+  const upg = getDefaultUpgrades();
+  const metrics = { score: 0, kills: 0, charge: 0, fireT: 0, stillTimer: 0, prevStill: false, hp: BASE_PLAYER_HP, maxHp: BASE_PLAYER_HP };
+  const timers = {
+    barrierPulseTimer: 0, slipCooldown: 0, absorbComboCount: 0, absorbComboTimer: 0,
+    chainMagnetTimer: 0, echoCounter: 0, vampiricRestoresThisRoom: 0,
+    killSustainHealedThisRoom: 0, colossusShockwaveCd: 0, volatileOrbGlobalCooldown: 0,
+  };
+  const aim = { angle: -Math.PI * 0.5, hasTarget: false };
+  registerPlayerSlot(createPlayerSlot({
+    id: 1,
+    getBody: () => body,
+    getUpg: () => upg,
+    metrics, timers, aim,
+    input: createRemoteInputAdapter(remoteRing, { getCurrentTick: () => simTick }),
+  }));
+  hostRemoteInputProcessor = createHostRemoteInputProcessor({
+    remoteRing,
+    retainTicks: 60, // ~1s of replay history for D6 reconciliation
+    logger: (msg, err) => { try { console.warn('[coop] ' + msg, err || ''); } catch (_) {} },
+  });
+  onlineHostSlot1Installed = true;
+  try { console.info('[coop] online host slot 1 installed (remote-input adapter)'); } catch (_) {}
 }
 
 
@@ -2605,6 +2673,15 @@ function loop(ts){
       simNowMs += SIM_STEP_MS;
       simTick++;
       update(SIM_STEP_SEC, simNowMs);
+      // Phase D4.5: after update() finishes, ack the remote input frame
+      // for this sim tick (if any). MUST come before broadcaster.tick so
+      // the snapshot's lastProcessedInputSeq[1] reflects the just-consumed
+      // tick rather than lagging by one cadence period.
+      if (hostRemoteInputProcessor) {
+        try { hostRemoteInputProcessor.tick(simTick); } catch (err) {
+          try { console.warn('[coop] remote input processor error', err); } catch (_) {}
+        }
+      }
       // Phase D4: host emits a snapshot every ticksPerSnapshot sim ticks.
       // No-op on guest/solo. Tick-cadence (not ms) so behavior is
       // deterministic and resilient to rAF jitter / tab unfreeze bursts.

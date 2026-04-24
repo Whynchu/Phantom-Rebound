@@ -2,6 +2,23 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.28',
+      label: 'COOP PHASE D4.5: HOST DRIVES ONLINE SLOT 1',
+      summary: ['Host now actually consumes guest input frames to drive slot 1 in the authoritative sim. lastProcessedInputSeq[1] is no longer a placeholder — it reflects the highest sim-tick where the host applied a real remote-input frame, ready for D6 reconciliation. Determinism canary byte-identical (online host code path is gated; offline runs untouched).'],
+      highlights: [
+        'New src/net/hostRemoteInputProcessor.js: tracks the highest sim-tick for which the host has CONSUMED a remote-input frame (not "received" — that distinction was rubber-duck finding #3 on the D4 plan). Per-tick, peeks the ring; if a frame exists, advances lastProcessedTick and trims the buffer to retainTicks (default 60 = ~1s history for D6 replay).',
+        'Online host slot 1 now spawned in installCoopInputUplink (host branch) via createRemoteInputAdapter(remoteRing, { getCurrentTick: () => simTick }). Body, metrics, timers, aim mirror the COOP_DEBUG installGuestDebugSlot setup so the existing slot-1 movement / contact-damage / respawn paths work unchanged.',
+        'collectHostSnapshotState (the broadcaster getState callback) now reads lastProcessedInputSeq[1] from hostRemoteInputProcessor.getLastProcessedTick(). Stays null until the first frame is applied, then advances every tick a guest frame is consumed.',
+        'Loop wiring: hostRemoteInputProcessor.tick(simTick) runs INSIDE the fixed-step accumulator, immediately AFTER update() and BEFORE coopSnapshotBroadcaster.tick(). Order matters — the snapshot must reflect the just-consumed tick rather than lagging by a cadence period.',
+        'teardownCoopInputUplink also tears down the slot 1 entry (delete playerSlots[1]) and resets the processor handle so a fresh init() / restoreRun() starts clean. Slot 0 lifecycle is left to installPlayerSlot0 — we only own what we installed.',
+        'Idempotent install: if playerSlots[1] is already registered (COOP_DEBUG path or a re-entry) we skip — real online runs never coexist with COOP_DEBUG, but the guard is conservative belt-and-braces.',
+        'New scripts/test-host-remote-input-processor.mjs (12 tests): construction guards, lastProcessedTick null start, missing-frame leaves value unchanged, frame-present advances, monotonic-ish behavior across gaps, non-finite/negative simTick rejection, retainTicks=N trim arithmetic, retainTicks=0 evicts the just-processed frame, cutoff<0 skipped at run start, reset, integration over 121 ticks.',
+        'All 22 test suites green (270+ assertions). Determinism 11/11 byte-identical — slot-1 install is gated behind isCoopHost (online); solo and COOP_DEBUG paths are untouched.',
+        'D6 reconciliation can now use lastProcessedInputSeq[1] to safely trim guest replay buffers without dropping un-applied input.',
+        'Next up (Phase D5): guest renders from snapshots — interpolation between two consecutive snapshots, plus client-side prediction for slot-1 movement so guest input feels responsive.',
+      ]
+    },
+  {
       version: '1.20.27',
       label: 'COOP PHASE D4: HOST SNAPSHOT BROADCAST',
       summary: ['Host now emits a full state snapshot every 6 sim ticks (~10 Hz). Each snapshot is tagged with a runId/epoch so stale packets from a disposed run can never contaminate the next one. Guests receive and store the latest snapshot but do not yet render from it — D5 wires prediction + interpolation. Determinism canary byte-identical.'],
