@@ -128,20 +128,43 @@ function indexById(list) {
   return map;
 }
 
-function applySlot(snapSlot, prevSnapSlot, slot, alpha) {
+function applySlot(snapSlot, prevSnapSlot, slot, alpha, opts) {
   if (!slot) return;
+  const skipBody = !!(opts && opts.skipBody);
+  // D5d — re-anchor on lifecycle discontinuities even when the slot is
+  // predicted: first snapshot for this slot (no prev) and alive-edge
+  // transitions (death / respawn). Without this, a predicted body would
+  // never see authoritative respawn/death teleports.
+  const prevAlive = prevSnapSlot ? (prevSnapSlot.alive ? 1 : 0) : null;
+  const currAlive = snapSlot.alive ? 1 : 0;
+  const aliveEdge = prevAlive !== null && prevAlive !== currAlive;
+  const forceAnchor = !prevSnapSlot || aliveEdge;
+  const writeBody = !skipBody || forceAnchor;
   const body = (typeof slot.getBody === 'function') ? slot.getBody() : (slot.body || null);
+  if (body && writeBody) {
+    if (skipBody && forceAnchor) {
+      // Snap to curr and zero local velocity so a stale predicted vx/vy
+      // doesn't keep drifting after death / respawn re-anchor.
+      body.x = snapSlot.x;
+      body.y = snapSlot.y;
+      body.vx = 0;
+      body.vy = 0;
+    } else {
+      const px = prevSnapSlot ? prevSnapSlot.x : snapSlot.x;
+      const py = prevSnapSlot ? prevSnapSlot.y : snapSlot.y;
+      const pvx = prevSnapSlot ? (prevSnapSlot.vx || 0) : (snapSlot.vx || 0);
+      const pvy = prevSnapSlot ? (prevSnapSlot.vy || 0) : (snapSlot.vy || 0);
+      body.x = lerp(px, snapSlot.x, alpha);
+      body.y = lerp(py, snapSlot.y, alpha);
+      body.vx = lerp(pvx, snapSlot.vx || 0, alpha);
+      body.vy = lerp(pvy, snapSlot.vy || 0, alpha);
+    }
+  }
   if (body) {
-    const px = prevSnapSlot ? prevSnapSlot.x : snapSlot.x;
-    const py = prevSnapSlot ? prevSnapSlot.y : snapSlot.y;
-    const pvx = prevSnapSlot ? (prevSnapSlot.vx || 0) : (snapSlot.vx || 0);
-    const pvy = prevSnapSlot ? (prevSnapSlot.vy || 0) : (snapSlot.vy || 0);
-    body.x = lerp(px, snapSlot.x, alpha);
-    body.y = lerp(py, snapSlot.y, alpha);
-    body.vx = lerp(pvx, snapSlot.vx || 0, alpha);
-    body.vy = lerp(pvy, snapSlot.vy || 0, alpha);
     // Discrete: take from curr (timers tick at sim rate; lerping would
-    // re-introduce sub-tick fractions and confuse the renderer).
+    // re-introduce sub-tick fractions and confuse the renderer). Always
+    // applied, even when body position is owned by local prediction —
+    // these flags gate the prediction loop (don't move while dead).
     body.invincible = snapSlot.invulnT || 0;
     if (!snapSlot.alive) {
       if ((body.deadAt ?? 0) === 0) body.deadAt = 1;
@@ -171,6 +194,12 @@ export function createSnapshotApplier({
   enemyTypeDefs = {},
   resolveColors = null,
   renderDelayMs = 100,
+  // D5d — id of the slot whose body x/y/vx/vy is owned by local prediction.
+  // When set, applySlot skips continuous body writes for that slot and only
+  // re-anchors on lifecycle discontinuities (first snapshot, alive-edge).
+  // Aim, hp, charge, invulnT, alive flag, maxHp, maxCharge are still applied
+  // from snapshot every frame — host remains authoritative on those.
+  predictedSlotId = null,
 } = {}) {
   // Buffer: prev/curr each hold { snapshot, recvAtMs }. Newest applied
   // snapshot is `curr`; the one just before it is `prev`. Older snapshots
@@ -313,7 +342,9 @@ export function createSnapshotApplier({
         if (!cs) continue;
         const slotTarget = slotsById[cs.id];
         if (!slotTarget) continue;
-        applySlot(cs, prevSlotsById.get(cs.id | 0) || null, slotTarget, alpha);
+        applySlot(cs, prevSlotsById.get(cs.id | 0) || null, slotTarget, alpha, {
+          skipBody: predictedSlotId !== null && (cs.id | 0) === (predictedSlotId | 0),
+        });
       }
 
       const room = currSnap.room || { index: 0, phase: 'intro', clearTimer: 0 };

@@ -1109,6 +1109,12 @@ function installCoopInputUplink(armedCoop) {
     // don't thrash the entity arrays at 60 Hz against a 10 Hz feed.
     guestSnapshotApplier = createSnapshotApplier({
       enemyTypeDefs: ENEMY_TYPES,
+      // Phase D5d — guest's own slot 1 is locally predicted. The applier
+      // skips continuous body x/y/vx/vy writes for slot id 1 so the
+      // prediction step (updateOnlineGuestPrediction) owns movement;
+      // applier still re-anchors on first snapshot, death, respawn, and
+      // runId reset, and still applies aim/hp/charge/invulnT every frame.
+      predictedSlotId: 1,
       resolveColors: (type) => {
         try {
           const def = getEnemyDefinition(type);
@@ -1362,13 +1368,46 @@ function installOnlineCoopGuestSlot1() {
     getBody: () => body,
     getUpg: () => upg,
     metrics, timers, aim,
-    // No input adapter on guest's own slot 1 — D5d will wire local
-    // prediction directly off the joystick. For D5b the body is purely
-    // a render target driven by snapshot.slots[1] from the host.
-    input: null,
+    input: createHostInputAdapter(joy),
   }));
   onlineGuestSlot1Installed = true;
   try { console.info('[coop] online guest slot 1 installed (placeholder body)'); } catch (_) {}
+}
+
+
+// Phase D5d — Local prediction for the guest's own slot 1 body. Reads the
+// joystick adapter installed on the slot and applies movement directly to
+// the body each frame. Aim, hp, charge, deadAt, and invincible flag still
+// flow from snapshot via the applier (predictedSlotId:1 skips body writes
+// only). The applier re-anchors body on first snapshot, death, respawn,
+// and runId reset, so prediction never permanently diverges through
+// authoritative discontinuities.
+//
+// Movement constants mirror updateGuestSlotMovement so the predicted feel
+// matches what the host's authoritative sim is producing for slot 1.
+// Solo / host / COOP_DEBUG never call this — gated on
+// onlineGuestSlot1Installed in the caller.
+function updateOnlineGuestPrediction(dt) {
+  const slot = playerSlots[1];
+  if (!slot) return;
+  const body = slot.body;
+  if (!body) return;
+  // Halt local sim while the snapshot says we're dead. Zero velocity so
+  // the renderer doesn't show post-mortem drift; the applier re-anchors
+  // on respawn (dead→alive edge) before prediction resumes.
+  if ((body.deadAt | 0) !== 0) {
+    body.vx = 0;
+    body.vy = 0;
+    return;
+  }
+  if (!slot.input || typeof slot.input.moveVector !== 'function') return;
+  const { dx, dy, t, active } = slot.input.moveVector();
+  const SPD = 165 * GLOBAL_SPEED_LIFT;
+  if (active) { body.vx = dx * SPD * t; body.vy = dy * SPD * t; }
+  else { body.vx = 0; body.vy = 0; }
+  body.x = Math.max(M + body.r, Math.min(WORLD_W - M - body.r, body.x + body.vx * dt));
+  body.y = Math.max(M + body.r, Math.min(WORLD_H - M - body.r, body.y + body.vy * dt));
+  resolveEntityObstacleCollisions(body);
 }
 
 
@@ -2940,6 +2979,15 @@ function update(dt,ts){
     // interrupt the guest's render loop.
     try { coopInputSync && coopInputSync.sampleFrame(simTick); } catch (err) {
       try { console.warn('[coop] sampleFrame error', err); } catch (_) {}
+    }
+    // Phase D5d — predict slot 1 movement locally for instant input
+    // response. Applier (predictedSlotId:1) won't clobber body x/y/vx/vy
+    // continuously, but will still re-anchor on death/respawn/runId reset.
+    // Aim, hp, charge, invulnT continue to come from snapshot.
+    if (onlineGuestSlot1Installed) {
+      try { updateOnlineGuestPrediction(dt); } catch (err) {
+        try { console.warn('[coop] guest prediction error', err); } catch (_) {}
+      }
     }
     return;
   }

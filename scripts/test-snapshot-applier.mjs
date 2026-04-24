@@ -355,5 +355,117 @@ function snap(overrides = {}) {
   ok('discrete: charge from curr (80, not 40)', t.slotsById[0].metrics.charge === 80);
 }
 
+// 20. predictedSlotId: continuous body writes are skipped for the predicted
+//     slot; aim, hp, charge, invulnT come from snapshot. Other slots
+//     interpolate as normal.
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100, predictedSlotId: 1 });
+  const t = freshTarget();
+  // First snapshot — anchor (no prev). Predicted slot still gets initial
+  // body write so the placeholder body lands somewhere sensible.
+  ap.apply(snap({ snapshotSeq: 1 }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ok('predict: first snap anchors slot 1 body', t.slotsById[1].body.x === 300 && t.slotsById[1].body.y === 400);
+  // Now simulate local prediction moving the body.
+  t.slotsById[1].body.x = 999;
+  t.slotsById[1].body.y = 888;
+  // Second snapshot, alive unchanged — applier should NOT overwrite slot 1
+  // body, but SHOULD update slot 0 (not predicted) and aim/hp/charge.
+  ap.apply(snap({
+    snapshotSeq: 2,
+    slots: [
+      { id: 0, x: 150, y: 250, vx: 5, vy: 6, hp: 5, maxHp: 5, charge: 25, maxCharge: 100, aimAngle: 0.5, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 350, y: 450, vx: 7, vy: 8, hp: 2, maxHp: 5, charge: 90, maxCharge: 100, aimAngle: 2.0, invulnT: 0.4, shieldT: 0, stillTimer: 0, alive: true },
+    ],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 200 });
+  ok('predict: slot 1 body x preserved (999, not 350)', t.slotsById[1].body.x === 999);
+  ok('predict: slot 1 body y preserved (888, not 450)', t.slotsById[1].body.y === 888);
+  ok('predict: slot 1 hp from curr (2)', t.slotsById[1].metrics.hp === 2);
+  ok('predict: slot 1 charge from curr (90)', t.slotsById[1].metrics.charge === 90);
+  ok('predict: slot 1 invincible from curr (0.4)', t.slotsById[1].body.invincible === 0.4);
+  ok('predict: slot 1 aim updated from snapshot', near(t.slotsById[1].aim.angle, 2.0));
+  // Slot 0 (not predicted) should be lerped — snap-to-curr at alpha=1 here.
+  ok('predict: slot 0 (non-predicted) body x lerped', t.slotsById[0].body.x === 150);
+}
+
+// 21. predictedSlotId: alive→dead edge re-anchors body and zeroes velocity.
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100, predictedSlotId: 1 });
+  const t = freshTarget();
+  ap.apply(snap({ snapshotSeq: 1 }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  // Local prediction moves body and gives it velocity.
+  t.slotsById[1].body.x = 700;
+  t.slotsById[1].body.y = 600;
+  t.slotsById[1].body.vx = 50;
+  t.slotsById[1].body.vy = -25;
+  ap.apply(snap({
+    snapshotSeq: 2,
+    slots: [
+      { id: 0, x: 100, y: 200, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 25, maxCharge: 100, aimAngle: 0.5, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 320, y: 420, vx: 0, vy: 0, hp: 0, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 1.5, invulnT: 0, shieldT: 0, stillTimer: 0, alive: false },
+    ],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 200 });
+  ok('predict: alive→dead re-anchors body to curr', t.slotsById[1].body.x === 320 && t.slotsById[1].body.y === 420);
+  ok('predict: alive→dead zeroes vx/vy', t.slotsById[1].body.vx === 0 && t.slotsById[1].body.vy === 0);
+  ok('predict: alive→dead sets deadAt', t.slotsById[1].body.deadAt === 1);
+}
+
+// 22. predictedSlotId: dead→alive edge re-anchors body (respawn).
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100, predictedSlotId: 1 });
+  const t = freshTarget();
+  ap.apply(snap({
+    snapshotSeq: 1,
+    slots: [
+      { id: 0, x: 100, y: 200, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 300, y: 400, vx: 0, vy: 0, hp: 0, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: false },
+    ],
+  }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  // Stale predicted body somewhere weird.
+  t.slotsById[1].body.x = 50;
+  t.slotsById[1].body.y = 50;
+  t.slotsById[1].body.vx = 30;
+  ap.apply(snap({
+    snapshotSeq: 2,
+    slots: [
+      { id: 0, x: 100, y: 200, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 250, y: 350, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0.5, shieldT: 0, stillTimer: 0, alive: true },
+    ],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 200 });
+  ok('predict: dead→alive (respawn) re-anchors body', t.slotsById[1].body.x === 250 && t.slotsById[1].body.y === 350);
+  ok('predict: dead→alive zeroes velocity', t.slotsById[1].body.vx === 0 && t.slotsById[1].body.vy === 0);
+  ok('predict: respawn clears deadAt', t.slotsById[1].body.deadAt === 0);
+}
+
+// 23. predictedSlotId: runId reset re-anchors (prev cleared, next snap = first).
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100, predictedSlotId: 1 });
+  const t = freshTarget();
+  ap.apply(snap({ snapshotSeq: 1 }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ap.apply(snap({ snapshotSeq: 2 }), t, { snapshotRecvAtMs: 100, renderTimeMs: 200 });
+  // Local prediction owns body.
+  t.slotsById[1].body.x = 999;
+  t.slotsById[1].body.y = 888;
+  // New runId — buffer reset, next call is "first snapshot" again.
+  ap.apply(snap({ runId: 'run-2', snapshotSeq: 1 }), t, { snapshotRecvAtMs: 200, renderTimeMs: 300 });
+  ok('predict: runId reset re-anchors slot 1 body', t.slotsById[1].body.x === 300 && t.slotsById[1].body.y === 400);
+}
+
+// 24. predictedSlotId=null (default): all slots interpolate normally.
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
+  const t = freshTarget();
+  ap.apply(snap({ snapshotSeq: 1 }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  // Pretend something moved slot 1 body locally — applier should clobber.
+  t.slotsById[1].body.x = 999;
+  ap.apply(snap({
+    snapshotSeq: 2,
+    slots: [
+      { id: 0, x: 100, y: 200, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 25, maxCharge: 100, aimAngle: 0.5, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 350, y: 400, vx: 0, vy: 0, hp: 4, maxHp: 5, charge: 60, maxCharge: 100, aimAngle: 1.5, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+    ],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 200 });
+  ok('default: slot 1 body x clobbered by snapshot', t.slotsById[1].body.x === 350);
+}
+
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail === 0 ? 0 : 1);

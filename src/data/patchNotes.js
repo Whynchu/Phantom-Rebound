@@ -2,6 +2,22 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.33',
+      label: 'COOP PHASE D5d: LOCAL PREDICTION (GUEST SLOT 1)',
+      summary: ['Guest now feels their own movement instantly. Joystick input drives the local slot 1 body each frame; the snapshot applier skips writing slot 1\'s body x/y/vx/vy continuously, but still re-anchors on death, respawn, runId reset, and first snapshot. Aim, hp, charge, invulnT, and alive flag remain host-authoritative. Determinism canary 11/11.'],
+      highlights: [
+        'Snapshot applier accepts a new factory option `predictedSlotId`. When set, applySlot skips body x/y/vx/vy writes for that slot id during normal interpolation — the prediction loop owns body movement. Aim angle is still applied from snapshot every frame (with 100ms interpolation lag), so auto-targeting matches host-authoritative bullets without divergence.',
+        'Re-anchor on lifecycle discontinuities: even with prediction enabled, the applier writes the body authoritatively when (a) it\'s the first snapshot for that slot, (b) the alive flag toggles (death or respawn), or (c) the runId changes. Death + respawn anchors zero local vx/vy so stale predicted velocity can\'t keep drifting after the lifecycle event.',
+        'Discrete fields (hp, charge, maxCharge, maxHp, invulnT, deadAt, alive) are still applied from snapshot every frame regardless of skipBody — the prediction loop reads body.deadAt to halt movement when host says we\'re dead.',
+        'New `updateOnlineGuestPrediction(dt)` runs in the isCoopGuest branch of update(). Reads slot1.input.moveVector() (HostInputAdapter on the local joystick), applies movement at 165 * GLOBAL_SPEED_LIFT (matching host-side guest movement), clamps to world bounds, and resolves obstacle collisions via the shared resolveEntityObstacleCollisions helper.',
+        'Guest\'s slot 1 install (`installOnlineCoopGuestSlot1`) now mounts `createHostInputAdapter(joy)` on `slot.input` (was null in D5b/c). Same adapter the input-uplink already uses to send frames to the host — predicted state and uplink stay perfectly in sync without sampling the joystick twice.',
+        'Bullets still come from snapshots and are authored against host-authoritative slot 1 position. Until reconciliation lands (D5e/f), guest may see their own shots emerge slightly offset from the predicted body when local prediction has drifted from server truth. This is cosmetic — gameplay impact comes from prediction-feel, which is what D5d delivers.',
+        '5 new applier test scenarios (8 new assertions): predicted slot body preserved, aim+hp+charge still update, alive→dead re-anchor + zero velocity, dead→alive (respawn) re-anchor, runId reset re-anchor, and predictedSlotId=null leaves all slots interpolating normally.',
+        'Test state: 23 suites green (382+ assertions). Determinism canary 11/11 byte-identical (gated to solo/host/COOP_DEBUG paths — guest prediction never runs in those).',
+        'Next up (Phase D5e): bullet/aim prediction or input acknowledgement-based reconciliation — closing the loop so predicted state corrects to authoritative state without visible snap-back.',
+      ]
+    },
+  {
       version: '1.20.32',
       label: 'COOP PHASE D5c: INTERPOLATION BUFFER + UPSERT-BY-ID',
       summary: ['Guest now renders smooth motion. The applier holds a 2-snapshot buffer (prev + curr) and lerps entity positions at `renderTimeMs - renderDelayMs` (default 100 ms). Upsert-by-id replaces wipe-and-rebuild — entities only despawn when missing from the latest snapshot. Solo / host / COOP_DEBUG remain byte-identical (applier null). Determinism canary 11/11.'],
