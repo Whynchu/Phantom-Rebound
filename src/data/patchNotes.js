@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.21',
+      label: 'COOP PHASE D0B: PER-SLOT FIRE',
+      summary: ['firePlayer now reads/writes through the passed-in slot instead of module globals. Host and guest share the same full-featured fire path (boons, shockwave, echo, overload, volleys). Solo byte-identical via slot 0 getter/setter bridges.'],
+      highlights: [
+        'firePlayer(slot, tx, ty) fully slot-driven: every `charge`/`player`/`UPG`/`_echoCounter`/`playerAimAngle` access replaced with slot.metrics/body/upg/timers/aim. Slot 0 is still wired to the legacy globals through Object.freeze getter/setter bridges installed in C2a, so solo play is byte-identical (determinism 11/11).',
+        'Removed the simplified `fireGuestSlot` shim (Phase C2d-2). updateGuestFire now calls firePlayer directly, so guest slots get the full boon stack once their UPG state is networked in (D4+).',
+        'echoCounter migrated from module-level `_echoCounter` to per-slot `slot.timers.echoCounter`. Slot 0 bridge keeps the legacy var in sync; guest slots now get independent echo state.',
+        'Unblocks Phase D5 (guest prediction) and D6 (reconciliation): replaying inputs for slot N will no longer corrupt slot 0\'s charge/aim/echo.',
+        'Rewrote scripts/test-guest-fire.mjs to drop the deleted fireGuestSlot port-tests and keep the updateGuestFire charge-gate tests (still distinct from host mobile-charge path).',
+        '17 test suites green. Determinism byte-identical. Browser smoke (solo + ?coopdebug=1) clean, no console errors. Experimental repo only; live repo unchanged.',
+        'Next up (Phase D2): host-authoritative sim flag → guest skips sim, applies snapshots instead.',
+      ]
+    },
+  {
       version: '1.20.20',
       label: 'COOP PHASE D0A: WORLD-SPACE DECOUPLED',
       summary: ['Simulation now runs in a dedicated WORLD coordinate space, independent from each device\'s canvas pixels. Foundation for host+guest sharing an identical arena regardless of screen size. Solo and ?coopdebug=1 paths byte-identical.'],

@@ -1023,33 +1023,11 @@ function respawnGuestSlot(slot) {
 // simpler than host's firePlayer(): build charge while still, find nearest
 // enemy, fire a single default bullet stamped with ownerId=slot.id.
 // Host firing remains the legacy path for bit-identity in solo.
-function fireGuestSlot(slot, tx, ty) {
-  if ((slot.metrics.charge || 0) < 1) return;
-  const body = slot.body;
-  const upg = slot.upg;
-  const angle = Math.atan2(ty - body.y, tx - body.x);
-  slot.aim.angle = angle;
-  slot.aim.hasTarget = true;
-  const speed = 230 * GLOBAL_SPEED_LIFT * (upg.shotSpd || 1);
-  const radius = 4.5 * (upg.shotSize || 1);
-  const damage = 10; // baseline from firePlayer (see script.js damage chain)
-  slot.metrics.charge = Math.max(0, slot.metrics.charge - 1);
-  pushOutputBullet({
-    bullets,
-    x: body.x,
-    y: body.y,
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed,
-    radius,
-    bounceLeft: 0,
-    pierceLeft: 0,
-    homing: false,
-    crit: false,
-    dmg: damage,
-    expireAt: simNowMs + PLAYER_SHOT_LIFE_MS,
-    ownerId: slot.id,
-  });
-}
+// Phase D0b: removed the simplified `fireGuestSlot` helper. Guest slots now
+// fire through the same slot-driven `firePlayer` path as the host, so boon
+// effects (shockwave, echo, overload, volleys, ...) apply uniformly once
+// guest UPG state is networked in. Solo is byte-identical because slot 0's
+// metrics/timers/aim are live getter/setter bridges onto the legacy globals.
 
 function updateGuestFire(dt, combatActive) {
   if (!combatActive) return;
@@ -1079,7 +1057,7 @@ function updateGuestFire(dt, combatActive) {
     if (!isStill) slot.metrics.fireT = Math.min(slot.metrics.fireT, interval);
     if (slot.metrics.fireT >= interval && isStill) {
       slot.metrics.fireT = slot.metrics.fireT % interval;
-      fireGuestSlot(slot, target.e.x, target.e.y);
+      firePlayer(slot, target.e.x, target.e.y);
     }
   }
 }
@@ -1738,42 +1716,48 @@ function getPlayerShotChargeReserve(isStill, enemyCount = enemies.length) {
 }
 
 function firePlayer(slot, tx, ty) {
-  const ownerId = slot ? slot.id : 0;
-  if(charge < 1) return;
-  const aimDx = tx - player.x;
-  const aimDy = ty - player.y;
-  if(Math.abs(aimDx) > 0.001 || Math.abs(aimDy) > 0.001){
-    playerAimAngle = Math.atan2(aimDy, aimDx);
-    playerAimHasTarget = true;
+  if (!slot) return;
+  const body = slot.body;
+  const upg = slot.upg;
+  const metrics = slot.metrics;
+  const timers = slot.timers;
+  const aim = slot.aim;
+  const ownerId = slot.id;
+  if ((metrics.charge || 0) < 1) return;
+  const aimDx = tx - body.x;
+  const aimDy = ty - body.y;
+  if (Math.abs(aimDx) > 0.001 || Math.abs(aimDy) > 0.001) {
+    aim.angle = Math.atan2(aimDy, aimDx);
+    aim.hasTarget = true;
   }
   const angs = buildPlayerShotPlan({
     tx,
     ty,
-    player,
-    upg: UPG,
+    player: body,
+    upg,
   });
 
-  const availableShots = Math.min(Math.floor(charge), angs.length);
-  if(availableShots <= 0) return;
+  const availableShots = Math.min(Math.floor(metrics.charge), angs.length);
+  if (availableShots <= 0) return;
 
-  const snipeScale = 1 + UPG.snipePower * 0.18;
-  const bspd = 230 * GLOBAL_SPEED_LIFT * Math.min(2.0, UPG.shotSpd) * snipeScale;
-  const baseRadius = 4.5 * Math.min(2.5, UPG.shotSize) * (1 + UPG.snipePower * 0.15);
+  const snipeScale = 1 + upg.snipePower * 0.18;
+  const bspd = 230 * GLOBAL_SPEED_LIFT * Math.min(2.0, upg.shotSpd) * snipeScale;
+  const baseRadius = 4.5 * Math.min(2.5, upg.shotSize) * (1 + upg.snipePower * 0.15);
   // Predator's Instinct: apply kill streak damage multiplier (25% per kill, max +125%)
-  const predatorBonus = UPG.predatorInstinct && UPG.predatorKillStreak >= 2 ? 1 + Math.min(UPG.predatorKillStreak * 0.25, 1.25) : 1;
+  const predatorBonus = upg.predatorInstinct && upg.predatorKillStreak >= 2 ? 1 + Math.min(upg.predatorKillStreak * 0.25, 1.25) : 1;
   // Dense Core desperation bonus: extra damage at critical charge (1 cap)
-  const denseDesperationBonus = (UPG.denseTier > 0 && UPG.maxCharge === 1) ? DENSE_DESPERATION_BONUS : 1;
+  const denseDesperationBonus = (upg.denseTier > 0 && upg.maxCharge === 1) ? DENSE_DESPERATION_BONUS : 1;
   const lateBloomMods = getLateBloomMods(roomIndex || 0);
   // Escalation: per-kill damage in current room (max +40%)
-  const escalationBonus = UPG.escalation ? 1 + Math.min((UPG.escalationKills || 0) * ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS) : 1;
+  const escalationBonus = upg.escalation ? 1 + Math.min((upg.escalationKills || 0) * ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS) : 1;
   // Fire-rate scaling penalty: -4% damage per SPS tier so speed builds trade individual power for volume
-  const spsFireRateScaling = Math.max(0.5, 1 - (UPG.spsTier || 0) * 0.04);
+  const spsFireRateScaling = Math.max(0.5, 1 - (upg.spsTier || 0) * 0.04);
   // Sustained Fire bonus: +3% damage per consecutive shot, max +45%, decays 1s after last shot
-  const sustainedFireBonus = Math.min(1.45, 1 + Math.min(UPG.sustainedFireShots || 0, 15) * 0.03);
-  const baseDmg = (1 + UPG.snipePower * 0.35) * (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (UPG.heavyRoundsDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus * sustainedFireBonus * spsFireRateScaling * 10;
-  const lifeMs = PLAYER_SHOT_LIFE_MS * (UPG.shotLifeMult || 1) * (UPG.phantomRebound ? 2.0 : 1.0);
+  const sustainedFireBonus = Math.min(1.45, 1 + Math.min(upg.sustainedFireShots || 0, 15) * 0.03);
+  const baseDmg = (1 + upg.snipePower * 0.35) * (upg.playerDamageMult || 1) * (upg.denseDamageMult || 1) * (upg.heavyRoundsDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus * sustainedFireBonus * spsFireRateScaling * 10;
+  const lifeMs = PLAYER_SHOT_LIFE_MS * (upg.shotLifeMult || 1) * (upg.phantomRebound ? 2.0 : 1.0);
   const now = simNowMs;
-  const overchargeBonus = (UPG.overchargeVent && charge >= UPG.maxCharge) ? 1.6 : 1;
+  const overchargeBonus = (upg.overchargeVent && metrics.charge >= upg.maxCharge) ? 1.6 : 1;
   const volleyTotalDamageMult = getVolleyTotalDamageMultiplier(availableShots);
   const volleyPerBulletDamageMult = volleyTotalDamageMult / availableShots;
   
@@ -1781,19 +1765,19 @@ function firePlayer(slot, tx, ty) {
   let overloadBonus = 1;
   let overloadSizeScale = 1;
   let chargeSpent = availableShots;
-  if(UPG.overload && UPG.overloadActive && charge >= UPG.maxCharge){
-    chargeSpent = Math.max(availableShots, Math.floor(charge));
+  if (upg.overload && upg.overloadActive && metrics.charge >= upg.maxCharge) {
+    chargeSpent = Math.max(availableShots, Math.floor(metrics.charge));
     overloadBonus = chargeSpent / availableShots;
     overloadSizeScale = getOverloadSizeScale(chargeSpent);
-    UPG.overloadActive = false;
-    UPG.overloadCooldown = 3000;
+    upg.overloadActive = false;
+    upg.overloadCooldown = 3000;
   }
 
   const volleySpecs = buildPlayerVolleySpecs({
     shots: angs,
     availableShots,
-    player,
-    upg: UPG,
+    player: body,
+    upg,
     bulletSpeed: bspd,
     baseRadius,
     baseDamage: baseDmg * volleyPerBulletDamageMult,
@@ -1801,7 +1785,7 @@ function firePlayer(slot, tx, ty) {
     overchargeBonus,
     overloadBonus,
     overloadSizeScale,
-    getPierceLeft: (shot) => UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),
+    getPierceLeft: (shot) => upg.pierceTier + ((shot.isRing && upg.corona) ? 1 : 0),
     getBloodPactHealCap,
     now,
     ownerId,
@@ -1809,36 +1793,36 @@ function firePlayer(slot, tx, ty) {
   volleySpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
   const shotsVolleyRoom = telemetryController.getCurrentRoom();
   if (shotsVolleyRoom) shotsVolleyRoom.shotsFired = (shotsVolleyRoom.shotsFired || 0) + volleySpecs.length;
-  charge=Math.max(0,charge-chargeSpent);
+  metrics.charge = Math.max(0, metrics.charge - chargeSpent);
   recordShotSpend(chargeSpent);
-  sparks(player.x,player.y,C.green,4 + Math.min(6, availableShots + Math.floor((chargeSpent - availableShots) / Math.max(1, availableShots))),55);
+  sparks(body.x, body.y, C.green, 4 + Math.min(6, availableShots + Math.floor((chargeSpent - availableShots) / Math.max(1, availableShots))), 55);
   
   // Shockwave: fire a radial push on full-charge fire
-  if(UPG.shockwave && availableShots === Math.floor(UPG.maxCharge) && UPG.shockwaveCooldown <= 0){
-    UPG.shockwaveCooldown = 2250;
-    for(const e of enemies){
-      const dx = e.x - player.x;
-      const dy = e.y - player.y;
+  if (upg.shockwave && availableShots === Math.floor(upg.maxCharge) && upg.shockwaveCooldown <= 0) {
+    upg.shockwaveCooldown = 2250;
+    for (const e of enemies) {
+      const dx = e.x - body.x;
+      const dy = e.y - body.y;
       const dist = Math.hypot(dx, dy);
-      if(dist > 0){
+      if (dist > 0) {
         e.vx = (dx / dist) * 300;
         e.vy = (dy / dist) * 300;
       }
     }
-    sparks(player.x, player.y, '#ffaa00', 20, 250);
-    shockwaves.push({ x: player.x, y: player.y, r: 10, maxR: 220, life: 1, color: getPlayerColorScheme().hex });
+    sparks(body.x, body.y, '#ffaa00', 20, 250);
+    shockwaves.push({ x: body.x, y: body.y, r: 10, maxR: 220, life: 1, color: getPlayerColorScheme().hex });
   }
   
-  if(UPG.echoFire){
-    _echoCounter++;
-    if(_echoCounter>=5){
-      _echoCounter=0;
-      const eNow=simNowMs;
+  if (upg.echoFire) {
+    const nextEcho = (timers && typeof timers.echoCounter === 'number') ? timers.echoCounter + 1 : 1;
+    if (nextEcho >= 5) {
+      if (timers) timers.echoCounter = 0;
+      const eNow = simNowMs;
       const echoSpecs = buildPlayerVolleySpecs({
         shots: angs,
         availableShots,
-        player,
-        upg: { ...UPG, critChance: 0 },
+        player: body,
+        upg: { ...upg, critChance: 0 },
         bulletSpeed: bspd,
         baseRadius,
         baseDamage: baseDmg * volleyPerBulletDamageMult,
@@ -1846,7 +1830,7 @@ function firePlayer(slot, tx, ty) {
         overchargeBonus: 1,
         overloadBonus: 1,
         overloadSizeScale: 1,
-        getPierceLeft: (shot) => UPG.pierceTier + ((shot.isRing && UPG.corona) ? 1 : 0),
+        getPierceLeft: (shot) => upg.pierceTier + ((shot.isRing && upg.corona) ? 1 : 0),
         getBloodPactHealCap,
         now: eNow,
         ownerId,
@@ -1855,6 +1839,8 @@ function firePlayer(slot, tx, ty) {
       echoSpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
       const shotsEchoRoom = telemetryController.getCurrentRoom();
       if (shotsEchoRoom) shotsEchoRoom.shotsFired = (shotsEchoRoom.shotsFired || 0) + echoSpecs.length;
+    } else if (timers) {
+      timers.echoCounter = nextEcho;
     }
   }
 }

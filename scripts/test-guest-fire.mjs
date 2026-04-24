@@ -1,9 +1,15 @@
-// Phase C2d-2 — guest-fire contract tests.
+// Phase C2d-2 + D0b — guest-fire contract tests.
 //
-// Algorithm-level tests for the helpers installed in script.js:
-// - fireGuestSlot(slot, tx, ty): consumes charge, spawns one output bullet,
-//   stamps ownerId=slot.id, updates aim.
-// - updateGuestFire(dt) charge-buildup logic and interval fire gating.
+// Algorithm-level tests for updateGuestFire's charge-buildup + interval
+// gating in script.js.
+//
+// NOTE (D0b, 2026-04-24): the standalone `fireGuestSlot` helper was removed.
+// Guest slots now fire through the same slot-driven `firePlayer` path as the
+// host, so actual bullet-spawn behavior is covered by the broader host-fire
+// integration in script.js + tests/test-systems.mjs. These tests continue to
+// cover the `updateGuestFire` tick loop (charge build while still, fire-rate
+// gate, move-cancels-charge), which is distinct from the host mobile-charge
+// path and therefore worth exercising on its own.
 
 let pass = 0, fail = 0;
 function assert(name, cond, detail = '') {
@@ -23,29 +29,6 @@ function makeSlot({ id = 1, charge = 1, maxCharge = 1, sps = 0.8, shotSpd = 1, s
   };
 }
 
-// Port of fireGuestSlot (no module deps).
-function fireGuestSlot(slot, tx, ty, bullets, globalSpeedLift = 1.55, shotLifeMs = 1100, now = 0) {
-  if ((slot.metrics.charge || 0) < 1) return null;
-  const body = slot.body;
-  const upg = slot.upg;
-  const angle = Math.atan2(ty - body.y, tx - body.x);
-  slot.aim.angle = angle;
-  slot.aim.hasTarget = true;
-  const speed = 230 * globalSpeedLift * (upg.shotSpd || 1);
-  const radius = 4.5 * (upg.shotSize || 1);
-  const damage = 10;
-  slot.metrics.charge = Math.max(0, slot.metrics.charge - 1);
-  const b = {
-    x: body.x, y: body.y,
-    vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-    state: 'output', r: radius,
-    dmg: damage, ownerId: slot.id,
-    expireAt: now + shotLifeMs,
-  };
-  bullets.push(b);
-  return b;
-}
-
 // Port of updateGuestFire charge+gate logic (enemy-picking handled by caller).
 function tickGuestFireCore(slot, dt, isStill, hasEnemy) {
   const upg = slot.upg;
@@ -60,33 +43,6 @@ function tickGuestFireCore(slot, dt, isStill, hasEnemy) {
     return { fired: true };
   }
   return { fired: false };
-}
-
-// --- fireGuestSlot tests ---
-{
-  const slot = makeSlot({ charge: 1 });
-  const bullets = [];
-  const b = fireGuestSlot(slot, 200, 100, bullets);
-  assert('fires one bullet at charge=1', bullets.length === 1);
-  assert('stamps ownerId=slot.id', b.ownerId === 1);
-  assert('consumes exactly 1 charge', slot.metrics.charge === 0);
-  assert('spawns at body position', b.x === 100 && b.y === 100);
-  assert('aim angle points at target', approx(slot.aim.angle, 0));
-  assert('aim.hasTarget true after fire', slot.aim.hasTarget === true);
-  assert('bullet velocity positive x (target to right)', b.vx > 0 && approx(b.vy, 0, 1e-9));
-  assert('bullet damage = 10', b.dmg === 10);
-}
-{
-  const slot = makeSlot({ charge: 0.4 });
-  const bullets = [];
-  const b = fireGuestSlot(slot, 200, 100, bullets);
-  assert('does not fire at charge<1', b === null && bullets.length === 0 && slot.metrics.charge === 0.4);
-}
-{
-  const slot = makeSlot({ id: 2, charge: 1 });
-  const bullets = [];
-  const b = fireGuestSlot(slot, 100, 200, bullets);
-  assert('ownerId stamps whichever slot fired (2)', b.ownerId === 2);
 }
 
 // --- tick core tests ---
