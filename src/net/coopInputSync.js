@@ -5,7 +5,8 @@
 // populates a ring buffer.
 //
 // Supabase realtime hard cap: 20 events/s. Sim runs at 60 Hz. Default
-// batchSize=4 → ~15 messages/s, well within the cap.
+// batchSize=8 → ~7.5 messages/s. Combined with the 10 Hz host snapshot
+// broadcaster (D4) that gives ~17.5 msg/s with headroom for retries/pings.
 //
 // Quantization note:
 //   dx/dy: Math.round(v * 127)  →  int8 range [-127, 127]
@@ -18,7 +19,7 @@ function createCoopInputSync({
   sendGameplay,
   localAdapter,
   localSlotIndex,
-  batchSize = 4,
+  batchSize = 8,
   logger = null,
 } = {}) {
   if (typeof sendGameplay !== 'function') throw new Error('createCoopInputSync: sendGameplay required');
@@ -45,12 +46,18 @@ function createCoopInputSync({
   function doFlush(frames) {
     if (frames.length === 0) return;
     const msg = { kind: 'input', slot: localSlotIndex, frames };
+    // sendGameplay is async; sync try/catch only handles synchronous throws.
+    // Wrap the result in Promise.resolve to also catch async rejections.
+    let result;
     try {
-      sendGameplay(msg);
-      sentCount++;
+      result = sendGameplay(msg);
     } catch (err) {
-      logger?.('coopInputSync: sendGameplay error', err);
+      logger?.('coopInputSync: sendGameplay sync error', err);
+      return;
     }
+    Promise.resolve(result)
+      .then(() => { sentCount++; })
+      .catch((err) => { logger?.('coopInputSync: sendGameplay async error', err); });
   }
 
   function sampleFrame(tick) {

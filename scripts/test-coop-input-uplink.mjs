@@ -12,22 +12,47 @@
 import { createCoopInputSync } from '../src/net/coopInputSync.js';
 
 let passed = 0, failed = 0;
+const pendingAsync = [];
 function test(name, fn) {
-  try { fn(); console.log('  ✓ ' + name); passed++; }
-  catch (err) { console.error('  ✗ ' + name + ' — ' + err.message); failed++; }
+  try {
+    const r = fn();
+    if (r && typeof r.then === 'function') {
+      pendingAsync.push(r.then(() => { console.log('  ✓ ' + name); passed++; })
+        .catch((err) => { console.error('  ✗ ' + name + ' — ' + err.message); failed++; }));
+    } else {
+      console.log('  ✓ ' + name); passed++;
+    }
+  } catch (err) { console.error('  ✗ ' + name + ' — ' + err.message); failed++; }
 }
 function assert(cond, msg) { if (!cond) throw new Error(msg || 'assertion failed'); }
 function assertEq(a, b, msg) { if (a !== b) throw new Error((msg || 'eq') + ': expected ' + JSON.stringify(b) + ' got ' + JSON.stringify(a)); }
 
+// Mock session matches the real coopSession contract:
+//   - sendGameplay is async
+//   - onGameplay listeners receive { payload, from, ts } envelopes (NOT raw payload)
 function createMockSession() {
   const sentPayloads = [];
   const gameplayListeners = new Set();
+  let tsCounter = 0;
   return {
     sentPayloads,
-    sendGameplay(msg) { sentPayloads.push(msg); },
+    async sendGameplay(msg) { sentPayloads.push(msg); },
     onGameplay(fn) { gameplayListeners.add(fn); return () => gameplayListeners.delete(fn); },
-    simulateIncoming(msg) { for (const fn of gameplayListeners) fn(msg); },
+    // simulateIncoming wraps the raw payload exactly the way coopSession does.
+    simulateIncoming(payload, from = 'peer') {
+      const env = { payload, from, ts: ++tsCounter };
+      for (const fn of gameplayListeners) fn(env);
+    },
     listenerCount() { return gameplayListeners.size; },
+  };
+}
+
+// Helper that mirrors the script.js D3-fix unwrap pattern.
+function unwrapToInputIngest(sync) {
+  return (ev) => {
+    const payload = ev && ev.payload;
+    if (!payload || payload.kind !== 'input') return;
+    sync.ingest(payload);
   };
 }
 
@@ -116,7 +141,7 @@ test('host: ingest populates ring buffer from input payload', () => {
     localSlotIndex: 0,
     batchSize: 4,
   });
-  const unsub = sess.onGameplay((p) => { if (p.kind === 'input') sync.ingest(p); });
+  const unsub = sess.onGameplay(unwrapToInputIngest(sync));
   sess.simulateIncoming({
     kind: 'input',
     slot: 1,
@@ -140,9 +165,24 @@ test('host: ignores non-input gameplay payloads', () => {
     localSlotIndex: 0,
     batchSize: 4,
   });
-  sess.onGameplay((p) => { if (p.kind === 'input') sync.ingest(p); });
+  sess.onGameplay(unwrapToInputIngest(sync));
   sess.simulateIncoming({ kind: 'snapshot', snapshotSeq: 1 });
   sess.simulateIncoming({ kind: 'ping', t: Date.now() });
+  assertEq(sync.getRemoteRingBuffer().size(), 0);
+});
+
+test('host: ignores envelopes whose payload is missing or non-object', () => {
+  const sess = createMockSession();
+  const sync = createCoopInputSync({
+    sendGameplay: sess.sendGameplay,
+    localAdapter: createStubJoyAdapter({ dx: 0, dy: 0, t: 0, active: false }),
+    localSlotIndex: 0,
+    batchSize: 4,
+  });
+  sess.onGameplay(unwrapToInputIngest(sync));
+  // Real coopSession should never deliver these, but the unwrap must be defensive.
+  sess.simulateIncoming(null);
+  sess.simulateIncoming(undefined);
   assertEq(sync.getRemoteRingBuffer().size(), 0);
 });
 
@@ -154,7 +194,7 @@ test('host: out-of-order frames land sorted ascending', () => {
     localSlotIndex: 0,
     batchSize: 4,
   });
-  sess.onGameplay((p) => sync.ingest(p));
+  sess.onGameplay(unwrapToInputIngest(sync));
   sess.simulateIncoming({
     kind: 'input',
     slot: 1,
@@ -177,7 +217,7 @@ test('host: duplicate tick is dropped by ring buffer', () => {
     localSlotIndex: 0,
     batchSize: 4,
   });
-  sess.onGameplay((p) => sync.ingest(p));
+  sess.onGameplay(unwrapToInputIngest(sync));
   sess.simulateIncoming({ kind: 'input', slot: 1, frames: [{ tick: 5, dx: 10, dy: 0, t: 100, still: 0 }] });
   sess.simulateIncoming({ kind: 'input', slot: 1, frames: [{ tick: 5, dx: 99, dy: 99, t: 200, still: 0 }] });
   const buf = sync.getRemoteRingBuffer();
@@ -210,7 +250,7 @@ test('teardown: unsubscribe stops delivering to ingest', () => {
     localSlotIndex: 0,
     batchSize: 4,
   });
-  const unsub = sess.onGameplay((p) => sync.ingest(p));
+  const unsub = sess.onGameplay(unwrapToInputIngest(sync));
   sess.simulateIncoming({ kind: 'input', slot: 1, frames: [{ tick: 1, dx: 0, dy: 0, t: 0, still: 1 }] });
   assertEq(sync.getRemoteRingBuffer().size(), 1);
   unsub();
@@ -219,7 +259,7 @@ test('teardown: unsubscribe stops delivering to ingest', () => {
   assertEq(sync.getRemoteRingBuffer().size(), 1, 'frame after unsub does not land');
 });
 
-test('sendGameplay throw is caught; does not abort sampleFrame', () => {
+test('sendGameplay sync throw is caught; does not abort sampleFrame', () => {
   const sync = createCoopInputSync({
     sendGameplay: () => { throw new Error('transport down'); },
     localAdapter: createStubJoyAdapter({ dx: 0, dy: 0, t: 0, active: false }),
@@ -232,6 +272,42 @@ test('sendGameplay throw is caught; does not abort sampleFrame', () => {
   // stats reflect the send attempt did not increment sent counter
   const stats = sync.getStats();
   assertEq(stats.sent, 0, 'failed send not counted');
+});
+
+test('sendGameplay async rejection does not produce unhandled rejection', async () => {
+  // Track any unhandled rejection during this test.
+  let unhandled = null;
+  const onUnhandled = (err) => { unhandled = err; };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const sync = createCoopInputSync({
+      sendGameplay: async () => { throw new Error('async transport fail'); },
+      localAdapter: createStubJoyAdapter({ dx: 0, dy: 0, t: 0, active: false }),
+      localSlotIndex: 1,
+      batchSize: 1,
+    });
+    sync.sampleFrame(0);
+    // Yield two microtask ticks so the rejection has time to surface.
+    await Promise.resolve();
+    await Promise.resolve();
+    assertEq(sync.getStats().sent, 0, 'async failure not counted as sent');
+    assert(unhandled === null, 'no unhandled promise rejection');
+  } finally {
+    process.removeListener('unhandledRejection', onUnhandled);
+  }
+});
+
+test('sendGameplay async success increments sent counter', async () => {
+  const sync = createCoopInputSync({
+    sendGameplay: async () => { /* resolve */ },
+    localAdapter: createStubJoyAdapter({ dx: 0, dy: 0, t: 0, active: false }),
+    localSlotIndex: 1,
+    batchSize: 1,
+  });
+  sync.sampleFrame(0);
+  await Promise.resolve();
+  await Promise.resolve();
+  assertEq(sync.getStats().sent, 1, 'async resolve increments sent');
 });
 
 test('end-to-end: guest→session→host round trip with batching', () => {
@@ -250,7 +326,7 @@ test('end-to-end: guest→session→host round trip with batching', () => {
     localSlotIndex: 0,
     batchSize: 4,
   });
-  sess.onGameplay((p) => { if (p.kind === 'input') host.ingest(p); });
+  sess.onGameplay(unwrapToInputIngest(host));
 
   // Guest plays 8 ticks → 2 batched sends
   for (let t = 0; t < 8; t++) guest.sampleFrame(t);
@@ -265,6 +341,7 @@ test('end-to-end: guest→session→host round trip with batching', () => {
   assertEq(hostBuf.newestTick(), 7);
 });
 
+await Promise.all(pendingAsync);
 console.log();
 console.log(passed + ' passed, ' + failed + ' failed');
 if (failed > 0) process.exit(1);

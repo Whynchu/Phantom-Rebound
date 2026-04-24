@@ -2,6 +2,21 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.26',
+      label: 'COOP PHASE D3-FIX: TRANSPORT CONTRACT + ASYNC SEND',
+      summary: ['Pre-D4 hotfix. Rubber-duck found that D3 was silently broken on the real Supabase transport: the onGameplay handler treated its arg as the raw payload, but coopSession actually delivers {payload,from,ts} envelopes — every guest input frame was being dropped. Also tightened async sendGameplay error handling.'],
+      highlights: [
+        'script.js: onGameplay handler in installCoopInputUplink now unwraps `ev.payload` before kind-checking. Previously `payload.kind` was always undefined → every input dropped → host never saw guest movement.',
+        'src/net/coopInputSync.js: sendGameplay error handling now covers both sync throws AND async rejections via Promise.resolve(result).then(() => sentCount++).catch(logger). Previously async rejections produced unhandled-promise warnings and a wrongly-incremented sent counter.',
+        'Default batchSize bumped 4 → 8 frames (~7.5 msg/s instead of ~15 msg/s). Combined with the upcoming 10 Hz host snapshot broadcaster (D4) keeps the channel at ~17.5 msg/s with safe headroom under the Supabase 20 msg/s cap for retries/pings/boon picks.',
+        'scripts/test-coop-input-uplink.mjs: mock session now matches real coopSession contract (envelope wrapping in simulateIncoming, async sendGameplay). Added unwrapToInputIngest helper that mirrors the script.js fix. New tests: defensive null/undefined envelope handling, async-rejection-not-unhandled, async-resolve-increments-sent.',
+        'scripts/test-coop-input-sync.mjs: stats.sent assertion converted to async-aware (await microtasks before checking) since increments now fire on Promise resolution.',
+        'Both test suites now expose async-test capability via Promise tracking in their harnesses.',
+        'All 20 test suites green. Determinism 11/11 byte-identical (no sim path touched).',
+        'Next up (Phase D4): tick-cadence snapshot broadcaster — every 6 sim ticks → 10 Hz, with runId/epoch in the envelope so stale post-dispose sends are harmless across runs.',
+      ]
+    },
+  {
       version: '1.20.25',
       label: 'COOP PHASE D4B: BULLET IDS',
       summary: ['Every bullet now gets a stable unique id at spawn time. Sets up snapshot correlation in D4 and prediction reconciliation in D6. Determinism canary byte-identical.'],

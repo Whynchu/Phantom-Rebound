@@ -1006,13 +1006,14 @@ function installCoopInputUplink(armedCoop) {
     sendGameplay: (msg) => session.sendGameplay(msg),
     localAdapter: createHostInputAdapter(joy),
     localSlotIndex,
-    batchSize: 4,
+    batchSize: 8,
   });
   // Ingest any gameplay payload that is an input frame from the peer.
-  // Host sees kind:'input' with slot=1 from guest; guest would see kind:'input'
-  // with slot=0 from host (D3 scope: host never sends input — but ingesting it
-  // harmlessly keeps the channel symmetric for future use).
-  coopInputUnsubscribe = session.onGameplay((payload) => {
+  // coopSession.onGameplay delivers { payload, from, ts } envelopes — we must
+  // unwrap before checking kind. (Pre-D3-fix bug: handler treated `ev` as the
+  // raw payload, so every input frame was silently dropped.)
+  coopInputUnsubscribe = session.onGameplay((ev) => {
+    const payload = ev && ev.payload;
     if (!payload || payload.kind !== 'input') return;
     try { coopInputSync && coopInputSync.ingest(payload); } catch (err) {
       try { console.warn('[coop] input ingest error', err); } catch (_) {}

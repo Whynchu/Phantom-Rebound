@@ -9,12 +9,18 @@ import { createRemoteInputAdapter } from '../src/core/inputAdapters.js';
 
 let pass = 0;
 let fail = 0;
+const pendingAsync = [];
 
 function test(name, fn) {
   try {
-    fn();
-    console.log(`PASS ${name}`);
-    pass++;
+    const r = fn();
+    if (r && typeof r.then === 'function') {
+      pendingAsync.push(r.then(() => { console.log(`PASS ${name}`); pass++; })
+        .catch((err) => { console.log(`FAIL ${name} — ${err.message}`); fail++; }));
+    } else {
+      console.log(`PASS ${name}`);
+      pass++;
+    }
   } catch (err) {
     console.log(`FAIL ${name} — ${err.message}`);
     fail++;
@@ -190,7 +196,7 @@ test('inputSync: frames preserve tick monotonicity in outbound message', () => {
   assert.deepEqual(ticks, [10, 11, 12, 13]);
 });
 
-test('inputSync: consecutive batches increment stats.sent', () => {
+test('inputSync: consecutive batches increment stats.sent', async () => {
   const sent = [];
   const sync = createCoopInputSync({
     sendGameplay: (msg) => sent.push(msg),
@@ -199,6 +205,8 @@ test('inputSync: consecutive batches increment stats.sent', () => {
     batchSize: 2,
   });
   for (let i = 0; i < 6; i++) sync.sampleFrame(i);
+  // sendGameplay is treated as async — sent counter increments on Promise.resolve.
+  await Promise.resolve(); await Promise.resolve();
   assert.equal(sync.getStats().sent, 3);
   assert.equal(sent.length, 3);
 });
@@ -362,5 +370,6 @@ test('remote adapter: kind is "remote"', () => {
 
 // ---------------------------------------------------------------------------
 
+await Promise.all(pendingAsync);
 console.log(`\nCoop-input-sync suite: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
