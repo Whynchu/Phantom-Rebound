@@ -147,17 +147,23 @@ function encodeBullet(src, idx) {
 
 function encodeEnemy(src, idx) {
   if (!src || typeof src !== 'object') throw new Error('snapshot: enemies[' + idx + '] missing');
+  const hp = num(src.hp ?? 0, 'enemies[' + idx + '].hp');
   return {
     id: u32(src.id, 'enemies[' + idx + '].id'),
     x: num(src.x, 'enemies[' + idx + '].x'),
     y: num(src.y, 'enemies[' + idx + '].y'),
     vx: num(src.vx ?? 0, 'enemies[' + idx + '].vx'),
     vy: num(src.vy ?? 0, 'enemies[' + idx + '].vy'),
-    hp: num(src.hp ?? 0, 'enemies[' + idx + '].hp'),
+    hp,
+    // D5b: maxHp is needed on the wire so guests can render the enemy
+    // HP bar correctly. Without it, applier-side defaults (maxHp=hp on
+    // first sight) would be wiped on every wipe-and-rebuild and the bar
+    // would only flicker on the frame an enemy first takes damage.
+    maxHp: num(src.maxHp ?? hp, 'enemies[' + idx + '].maxHp'),
     r: num(src.r ?? 12, 'enemies[' + idx + '].r'),
     type: String(src.type ?? 'e'),
-    // D4.6: runtime enemies use fT (cooldown counter, ms) and fRate (period,
-    // ms). Older drafts of this schema named these fireT/windup, but no
+    // D4.6: runtime field names (fT cooldown counter ms, fRate period ms).
+    // Older drafts of this schema named these fireT/windup, but no
     // matching runtime fields existed — guests would have rendered ghosts
     // with broken fire-tells. Use the runtime field names directly.
     fT: num(src.fT ?? 0, 'enemies[' + idx + '].fT'),

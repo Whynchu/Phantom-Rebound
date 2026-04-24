@@ -26,7 +26,7 @@
 
 import { C, ROOM_SCRIPTS, BOSS_ROOMS, DECAY_BASE, M, VERSION } from './src/data/gameData.js';
 import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, getPayloadBlastRadius, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
-import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots } from './src/entities/enemyTypes.js';
+import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots, getEnemyDefinition } from './src/entities/enemyTypes.js';
 import {
   resolveEnemySeparation,
   stepEnemyCombatState,
@@ -144,7 +144,9 @@ import { createCoopInputSync } from './src/net/coopInputSync.js';
 import {
   createSnapshotSequencer,
   isNewerSnapshot,
+  decodeSnapshot,
 } from './src/net/coopSnapshot.js';
+import { createSnapshotApplier } from './src/net/snapshotApplier.js';
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
 import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
 import {
@@ -831,6 +833,9 @@ let latestRemoteSnapshotSeq = null;
 // snapshots and trims the remote-input ring buffer to bound memory.
 let hostRemoteInputProcessor = null;
 let onlineHostSlot1Installed = false;
+// Phase D5b — guest-side snapshot applier + slot 1 install.
+let guestSnapshotApplier = null;
+let onlineGuestSlot1Installed = false;
 // Fixed-step accumulator (Phase C1b). Sim runs at a deterministic
 // 60 Hz cadence regardless of display refresh rate. On fast displays
 // we may run 0-1 sim steps per rAF; on slow displays we catch up by
@@ -1028,6 +1033,12 @@ function teardownCoopInputUplink() {
     try { delete playerSlots[1]; } catch (_) {}
     onlineHostSlot1Installed = false;
   }
+  // Phase D5b: tear down guest-side slot 1 + applier.
+  guestSnapshotApplier = null;
+  if (onlineGuestSlot1Installed) {
+    try { delete playerSlots[1]; } catch (_) {}
+    onlineGuestSlot1Installed = false;
+  }
 }
 
 // Phase D4: deterministic-ish unique run identifier. Used as the snapshot
@@ -1084,6 +1095,25 @@ function installCoopInputUplink(armedCoop) {
     });
     try { console.info('[coop] snapshot broadcaster armed runId=' + currentRunId); } catch (_) {}
   }
+  if (role === 'guest') {
+    // Phase D5b: guest installs its OWN slot 1 (placeholder body) so D5a's
+    // local-render-slot retargeting has a real target, and so the snapshot
+    // applier has somewhere to land the host's view of slot 1's position.
+    installOnlineCoopGuestSlot1();
+    // Build a snapshot applier with a palette-aware color resolver. Each
+    // applier instance keeps its own seq/runId memory so duplicate snapshots
+    // don't thrash the entity arrays at 60 Hz against a 10 Hz feed.
+    guestSnapshotApplier = createSnapshotApplier({
+      enemyTypeDefs: ENEMY_TYPES,
+      resolveColors: (type) => {
+        try {
+          const def = getEnemyDefinition(type);
+          return { col: def && def.col, glowCol: def && def.glowCol };
+        } catch (_) { return null; }
+      },
+    });
+    try { console.info('[coop] guest snapshot applier armed'); } catch (_) {}
+  }
   // Ingest any gameplay payload that is an input frame from the peer.
   // coopSession.onGameplay delivers { payload, from, ts } envelopes — we must
   // unwrap before checking kind. (Pre-D3-fix bug: handler treated `ev` as the
@@ -1098,22 +1128,29 @@ function installCoopInputUplink(armedCoop) {
       return;
     }
     if (payload.kind === 'snapshot' && role === 'guest') {
-      // Phase D4: guest receives but does not yet render from snapshots.
-      // D5 will hook these up to interpolation/prediction.
+      // Phase D5b: validate via decodeSnapshot before storing. Malformed
+      // packets are dropped (decoder throws on bad scalars) so they can't
+      // wedge the applier mid-frame. Decode is idempotent / pure.
+      let decoded;
+      try {
+        decoded = decodeSnapshot(payload);
+      } catch (err) {
+        try { console.warn('[coop] dropped malformed snapshot', err && err.message); } catch (_) {}
+        return;
+      }
       // Epoch gate: if the packet is from a different run (e.g. host
       // restarted, late arrival from a disposed broadcaster), drop our
       // tracker so we don't compare seqs across runs.
-      const incomingRunId = payload.runId;
-      if (latestRemoteSnapshot && latestRemoteSnapshot.runId !== incomingRunId) {
+      if (latestRemoteSnapshot && latestRemoteSnapshot.runId !== decoded.runId) {
         latestRemoteSnapshot = null;
         latestRemoteSnapshotSeq = null;
       }
       // Newest-wins on snapshotSeq. isNewerSnapshot handles the wrap edge case.
-      if (latestRemoteSnapshotSeq != null && !isNewerSnapshot(payload.snapshotSeq, latestRemoteSnapshotSeq)) {
+      if (latestRemoteSnapshotSeq != null && !isNewerSnapshot(decoded.snapshotSeq, latestRemoteSnapshotSeq)) {
         return;
       }
-      latestRemoteSnapshot = payload;
-      latestRemoteSnapshotSeq = payload.snapshotSeq;
+      latestRemoteSnapshot = decoded;
+      latestRemoteSnapshotSeq = decoded.snapshotSeq;
       return;
     }
   });
@@ -1211,6 +1248,7 @@ function collectHostSnapshotState() {
       vx: e.vx ?? 0,
       vy: e.vy ?? 0,
       hp: e.hp ?? 0,
+      maxHp: e.maxHp ?? e.hp ?? 0,
       r: e.r ?? 12,
       type: e.type || 'e',
       // D4.6: runtime field names (fT cooldown counter ms, fRate period ms).
@@ -1282,6 +1320,46 @@ function installOnlineCoopHostSlot1(remoteRing) {
   });
   onlineHostSlot1Installed = true;
   try { console.info('[coop] online host slot 1 installed (remote-input adapter)'); } catch (_) {}
+}
+
+// Phase D5b: install online guest slot 1 — the LOCAL guest's own player body
+// on a guest peer. D5a's getLocalRenderSlot()/HUD code targets slot index 1
+// for guest role, so a body has to exist for drawGhost/hudUpdate to read.
+// For D5b the body is a placeholder; positions are pulled from the host's
+// snapshot via the applier (snapshot.slots[1] → playerSlots[1].body). D5d
+// will replace the snapshot-driven position with locally-predicted state.
+//
+// Idempotent: skips install if a slot 1 already exists (defensive — online
+// guest never coexists with COOP_DEBUG, and onlineGuestSlot1Installed gates
+// teardown).
+function installOnlineCoopGuestSlot1() {
+  if (playerSlots[1]) return;
+  const body = createInitialPlayerState(WORLD_W, WORLD_H);
+  body.x = Math.min(WORLD_W - 24, body.x + 60);
+  body.invincible = 1.5;
+  body.distort = 0;
+  body.spawnX = body.x;
+  body.spawnY = body.y;
+  const upg = getDefaultUpgrades();
+  const metrics = { score: 0, kills: 0, charge: 0, fireT: 0, stillTimer: 0, prevStill: false, hp: BASE_PLAYER_HP, maxHp: BASE_PLAYER_HP };
+  const timers = {
+    barrierPulseTimer: 0, slipCooldown: 0, absorbComboCount: 0, absorbComboTimer: 0,
+    chainMagnetTimer: 0, echoCounter: 0, vampiricRestoresThisRoom: 0,
+    killSustainHealedThisRoom: 0, colossusShockwaveCd: 0, volatileOrbGlobalCooldown: 0,
+  };
+  const aim = { angle: -Math.PI * 0.5, hasTarget: false };
+  registerPlayerSlot(createPlayerSlot({
+    id: 1,
+    getBody: () => body,
+    getUpg: () => upg,
+    metrics, timers, aim,
+    // No input adapter on guest's own slot 1 — D5d will wire local
+    // prediction directly off the joystick. For D5b the body is purely
+    // a render target driven by snapshot.slots[1] from the host.
+    input: null,
+  }));
+  onlineGuestSlot1Installed = true;
+  try { console.info('[coop] online guest slot 1 installed (placeholder body)'); } catch (_) {}
 }
 
 
@@ -2751,6 +2829,34 @@ function loop(ts){
       // ms of sim time during heavy stalls (tab switch, GC pause) to
       // keep the loop responsive.
       simAccumulatorMs = 0;
+    }
+    // Phase D5b: guest applies the latest remote snapshot once per frame
+    // (only when it's actually NEWER than the last applied — applier
+    // memoizes seq/runId internally). Solo / host: no-op (applier is null).
+    // Order: AFTER sim ticks (host's update path is a no-op on guest), and
+    // BEFORE draw, so this frame's render reflects the host's authoritative
+    // state. Per-frame is fine; D5c will revisit cadence for interpolation.
+    if (guestSnapshotApplier && latestRemoteSnapshot) {
+      try {
+        const result = guestSnapshotApplier.apply(latestRemoteSnapshot, {
+          enemies,
+          bullets,
+          slotsById: { 0: playerSlots[0] || null, 1: playerSlots[1] || null },
+        });
+        if (result && result.applied) {
+          // Guest mirrors host room phase + score so HUD reads stay in sync.
+          // Intentionally NOT writing runElapsedMs (advanced locally on
+          // guest in update()'s isCoopGuest branch — overwriting here at
+          // ~10 Hz would cause stutter/jump-back between snapshots).
+          if (result.room) {
+            roomIndex = result.room.index;
+            roomPhase = result.room.phase;
+          }
+          if (Number.isFinite(result.score)) score = result.score;
+        }
+      } catch (err) {
+        try { console.warn('[coop] snapshot apply error', err); } catch (_) {}
+      }
     }
     draw(simNowMs); hudUpdate();
     raf=requestAnimationFrame(loop);

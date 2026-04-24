@@ -164,5 +164,5 @@ function canEnemyUsePurpleShots(enemy) {
   return Boolean(enemy.forcePurpleShots);
 }
 
-export { ENEMY_TYPES, PURPLE_BULLET_ROOM_THRESHOLD, createEnemy, canEnemyUsePurpleShots };
+export { ENEMY_TYPES, PURPLE_BULLET_ROOM_THRESHOLD, createEnemy, canEnemyUsePurpleShots, getEnemyDefinition };
 

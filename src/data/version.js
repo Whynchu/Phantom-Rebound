@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.30', label: 'D5a RENDER/HUD TO LOCAL SLOT' };
+const VERSION = { num: '1.20.31', label: 'D5b SNAP-TO-LATEST APPLIER' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

@@ -2,6 +2,27 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.31',
+      label: 'COOP PHASE D5b: SNAP-TO-LATEST SNAPSHOT APPLIER',
+      summary: ['Guest now actually sees the world. The snapshot applier ingests host broadcasts, validates them via decodeSnapshot, and writes enemy / bullet / slot state into the local arrays so guest renders the host\'s authoritative state. Solo / host / COOP_DEBUG remain byte-identical (applier is null on those code paths). Determinism canary 11/11.'],
+      highlights: [
+        'New module src/net/snapshotApplier.js — pure factory createSnapshotApplier({ enemyTypeDefs, resolveColors }) returns an object with .apply(snapshot, target). No transport, no DOM, no globals. Wipes-and-rebuilds enemies/bullets per applied snapshot (D5c will replace with upsert + interpolation).',
+        'Decode-on-ingress: incoming snapshot payloads now run through decodeSnapshot before being stored. Malformed packets (NaN positions, missing required scalars, wrong kind) are dropped with a console.warn instead of wedging the applier mid-frame.',
+        'Sequence memory: each applier instance remembers the last (runId, snapshotSeq) it actually applied. The 60 Hz frame loop hits .apply every frame, but the 10 Hz snapshot feed means 5 of every 6 calls would be duplicates — the applier no-ops on same-or-older seq so the entity arrays only thrash when there is genuinely new data. Run-id mismatch resets the tracker (host restarted).',
+        'Slot match by id, not array index: snapshot.slots[i].id (0=host, 1=guest in wire format) is the source of truth. Sparse slot arrays from the host (e.g. host omits a downed slot) no longer scramble assignment.',
+        'Wire schema extended: maxHp added to encodeEnemy. Without it, every wipe-rebuild would have collapsed maxHp to current hp, causing the enemy HP bar to flicker only on damage frames. coopSnapshot test count: 24/24.',
+        'Guest slot 1 install: new installOnlineCoopGuestSlot1() seats a placeholder body for the local guest player so D5a\'s getLocalRenderSlot() has a real target. Body is a placeholder for now; positions snap to host\'s view of slot 1 each frame. D5d replaces snapshot-driven position with locally-predicted state.',
+        'Color resolver: applier accepts a resolveColors(type, def) callback. script.js wires it through getEnemyDefinition() which already runs resolveEnemyColor against the local palette — host and guest can therefore have different cosmetic palettes without breaking either.',
+        'runElapsedMs intentionally NOT overwritten on guest from snapshots (rubber-duck D5b finding). Guest advances its own run timer locally; overwriting at ~10 Hz would cause stutter / jump-back between snapshots. roomIndex / roomPhase / score ARE mirrored from snapshot — they are game-wide singletons, not per-frame timers.',
+        'Loop integration: applier hook runs once per frame AFTER fixed-step sim ticks (no-op on guest because guest update() early-returns) and BEFORE draw(simNowMs). Solo/host: applier is null, hook skipped.',
+        'Known limitation: isBoss is not on the wire. Guest derives visuals from ENEMY_TYPES[type] only, so boss HP-bar and \"★ BOSS\" label may render incorrectly on guest until a follow-up adds the flag. Acceptable D5b scope.',
+        'New test suite scripts/test-snapshot-applier.mjs (50 tests): basic apply, wipe-and-rebuild, empty snapshot, slot-match-by-id, seq-skip, runId reset, unknown enemy type fallback, maxHp safe defaulting, bullet field round-trip, missing slot resilience, reset() behavior, null-arg guards.',
+        'Rubber-duck critique adopted: (a) full hydrate of static-per-type enemy flags from ENEMY_TYPES, (b) lastAppliedSeq tracker to avoid 60 Hz re-application, (c) runElapsedMs stays local, (d) match slots by id, (e) decode/validate at ingress, (f) maxHp on wire.',
+        'Test state: 22 suites green (323+ assertions). Determinism 11/11 byte-identical.',
+        'Next up (Phase D5c): interpolation buffer — render guest entities ~50–75 ms behind latest snapshot for smooth motion; upsert-by-id instead of wipe-and-rebuild.',
+      ]
+    },
+  {
       version: '1.20.30',
       label: 'COOP PHASE D5a: RENDER/HUD TO LOCAL SLOT',
       summary: ['Ghost sprite and HUD now read from the local render slot (whichever slot represents this browser) instead of hardcoded slot 0. Solo / host / COOP_DEBUG → byte-identical (local slot is slot 0, whose metrics/upg bridge to the legacy globals). Online guest will now correctly bind its own ghost + charge bar + sps to slot 1 once D5b installs the guest body.'],
