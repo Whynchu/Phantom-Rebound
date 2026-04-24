@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.7',
+      label: 'COOP PHASE C2C: SECOND PLAYER (DEV)',
+      summary: ['Internal scaffolding: a second player slot can now render and move behind a dev-only URL flag. Invisible to solo players; never exposed in the UI.'],
+      highlights: [
+        'New src/core/inputAdapters.js: createHostInputAdapter(joy) + createArrowKeysInputAdapter(keyState) + createNullInputAdapter(). Each exposes a uniform moveVector() / isStill() contract so the update loop can drive any slot identically regardless of input source.',
+        'Slot 0 now ships with createHostInputAdapter(joy) wired in at installPlayerSlot0() — no behavior change, just removing the temporary null input.',
+        'Dev-only ?coopdebug=1 URL flag spawns playerSlots[1]: its own body/UPG/metrics/timers/aim (not bridged), spawn-offset to the right, invincible, controlled by arrow keys. A thin updateGuestSlotMovement(dt, W, H) helper runs after the slot-0 movement block so slot 0 determinism is bit-identical.',
+        'drawGuestSlots(ts) renders each guest ghost after the host with a blue marker ring for visual distinction. Dev-only scaffolding — deleted when real online co-op ships.',
+        'New scripts/test-input-adapters.mjs: 8 contract tests for host / arrow-keys / null adapters (deadzone, saturation, diagonal normalization, opposing-key cancel). 113 tests total across 6 suites.',
+        'This is online-only co-op\'s testing harness — it lets multi-slot rendering, movement, and (soon) enemy targeting be validated without spinning up the Supabase transport. NOT a couch-co-op product feature.',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.6',
       label: 'COOP PHASE C2B: OWNERID + SLOT FIRE',
       summary: ['Internal refactor: player output bullets now carry an ownerId attribution field, and firePlayer / boon hooks accept an explicit slot. Invisible to solo players.'],

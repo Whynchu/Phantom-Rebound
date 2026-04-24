@@ -212,6 +212,10 @@ import {
   resetPlayerSlots,
   registerPlayerSlot,
 } from './src/core/playerSlot.js';
+import {
+  createHostInputAdapter,
+  createArrowKeysInputAdapter,
+} from './src/core/inputAdapters.js';
 import { createRunTelemetryController } from './src/systems/runTelemetryController.js';
 import {
   getRoomDef as getRoomDefValue,
@@ -860,8 +864,103 @@ function installPlayerSlot0() {
     metrics: slot0Metrics,
     timers: slot0Timers,
     aim: slot0Aim,
-    input: null, // wired in C2c when debug coopdebug introduces slot 1
+    input: createHostInputAdapter(joy),
   }));
+  if (COOP_DEBUG) installGuestDebugSlot();
+}
+
+// ── COOP DEBUG SLOT 1 (Phase C2c, dev-only) ──────────────────────────────────
+// `?coopdebug=1` spins up a second visible player slot controlled by the
+// arrow keys. It exists ONLY so multi-slot rendering/movement/scoring can be
+// validated without also bringing up the full Supabase transport. It is
+// never exposed in the UI and must be removed once real online co-op ships.
+const COOP_DEBUG = (typeof window !== 'undefined' && window.location)
+  ? new URLSearchParams(window.location.search).get('coopdebug') === '1'
+  : false;
+const guestKeyState = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+let _guestKeysBound = false;
+function bindGuestKeys() {
+  if (_guestKeysBound || typeof document === 'undefined') return;
+  _guestKeysBound = true;
+  document.addEventListener('keydown', (e) => {
+    if (!(e.key in guestKeyState)) return;
+    guestKeyState[e.key] = true;
+    e.preventDefault();
+  });
+  document.addEventListener('keyup', (e) => {
+    if (!(e.key in guestKeyState)) return;
+    guestKeyState[e.key] = false;
+    e.preventDefault();
+  });
+}
+function installGuestDebugSlot() {
+  if (!COOP_DEBUG) return;
+  bindGuestKeys();
+  const body = createInitialPlayerState(cv.width, cv.height);
+  body.x = Math.min(cv.width - 24, body.x + 60);
+  body.invincible = Number.POSITIVE_INFINITY; // slot 1 takes no damage in C2c
+  const upg = getDefaultUpgrades();
+  const metrics = { score: 0, kills: 0, charge: 0, fireT: 0, stillTimer: 0, prevStill: false, hp: BASE_PLAYER_HP, maxHp: BASE_PLAYER_HP };
+  const timers = {
+    barrierPulseTimer: 0, slipCooldown: 0, absorbComboCount: 0, absorbComboTimer: 0,
+    chainMagnetTimer: 0, echoCounter: 0, vampiricRestoresThisRoom: 0,
+    killSustainHealedThisRoom: 0, colossusShockwaveCd: 0, volatileOrbGlobalCooldown: 0,
+  };
+  const aim = { angle: -Math.PI * 0.5, hasTarget: false };
+  registerPlayerSlot(createPlayerSlot({
+    id: 1,
+    getBody: () => body,
+    getUpg: () => upg,
+    metrics, timers, aim,
+    input: createArrowKeysInputAdapter(guestKeyState),
+  }));
+  try { console.info('[coopdebug] guest slot 1 spawned. Arrow keys to move.'); } catch (_) {}
+}
+
+// Called from the main update() right after slot 0's movement block. Slot 0
+// is already driven by the legacy joystick block for bit-identity; this only
+// moves guests. Simplified movement (no obstacles, no phase-walk nuance) is
+// intentional for the C2c milestone — C2d formalizes guest combat.
+function updateGuestSlotMovement(dt, W, H) {
+  for (let i = 1; i < playerSlots.length; i++) {
+    const slot = playerSlots[i];
+    if (!slot || !slot.input) continue;
+    const body = slot.body;
+    const { dx, dy, t, active } = slot.input.moveVector();
+    const SPD = 165 * GLOBAL_SPEED_LIFT;
+    if (active) { body.vx = dx * SPD * t; body.vy = dy * SPD * t; }
+    else { body.vx = 0; body.vy = 0; }
+    body.x = Math.max(M + body.r, Math.min(W - M - body.r, body.x + body.vx * dt));
+    body.y = Math.max(M + body.r, Math.min(H - M - body.r, body.y + body.vy * dt));
+    resolveEntityObstacleCollisions(body);
+  }
+}
+
+function drawGuestSlots(ts) {
+  for (let i = 1; i < playerSlots.length; i++) {
+    const slot = playerSlots[i];
+    if (!slot) continue;
+    const body = slot.body;
+    drawGhostSprite(ctx, ts, {
+      playerState: body,
+      chargeValue: slot.metrics.charge,
+      maxChargeValue: slot.upg.maxCharge,
+      fireProgress: 0,
+      gameState: gstate,
+      hpValue: slot.metrics.hp,
+      maxHpValue: slot.metrics.maxHp,
+      hatKey: null,
+    });
+    // Dev-only marker ring so slot 1 is visually distinct.
+    ctx.save();
+    ctx.strokeStyle = '#6ad1ff';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.arc(body.x, body.y, body.r + 5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 const telemetryController = createRunTelemetryController({
@@ -2079,6 +2178,7 @@ function update(dt,ts){
   }
   if(player.invincible>0)player.invincible-=dt;
   if(player.distort>0)player.distort-=dt;
+  updateGuestSlotMovement(dt, W, H);
 
   // ── Shields — sync count to tier, tick cooldowns
   while(player.shields.length < UPG.shieldTier) player.shields.push({cooldown:0, hardened: !!UPG.shieldTempered, mirrorCooldown:-9999});
@@ -3314,6 +3414,7 @@ function draw(ts){
   }
   const show=player.invincible<=0||Math.floor(ts/90)%2===0;
   if(show){ drawGhost(ts); }
+  drawGuestSlots(ts);
   if(show && playerAimHasTarget){
     const drift = Math.sin(ts * 0.01) * 0.8;
     const dist = player.r + AIM_ARROW_OFFSET + drift;
