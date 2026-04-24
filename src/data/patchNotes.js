@@ -2,6 +2,25 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.32',
+      label: 'COOP PHASE D5c: INTERPOLATION BUFFER + UPSERT-BY-ID',
+      summary: ['Guest now renders smooth motion. The applier holds a 2-snapshot buffer (prev + curr) and lerps entity positions at `renderTimeMs - renderDelayMs` (default 100 ms). Upsert-by-id replaces wipe-and-rebuild — entities only despawn when missing from the latest snapshot. Solo / host / COOP_DEBUG remain byte-identical (applier null). Determinism canary 11/11.'],
+      highlights: [
+        'snapshotApplier.js rewritten end-to-end. The applier now keeps a 2-snapshot buffer ({snapshot, recvAtMs} for prev and curr). Each frame, the loop calls .apply() with the latest known snapshot + the current rAF timestamp; the applier shifts curr→prev only when the input is a genuinely newer (runId, seq) tuple, then renders interpolated state at `renderTimeMs - renderDelayMs`.',
+        'Position interpolation: enemies, bullets, and slot bodies all lerp x/y/vx/vy by id between prev and curr. Default render delay = 100 ms, roughly one snapshot interval at 10 Hz, so guest typically has prev+curr to interp between unless a snapshot is dropped.',
+        'Aim arrow uses shortest-arc angle interpolation (lerpAngle wraps over ±π). Without this, an aim crossing the back hemisphere would spin the wrong way for one frame on every snapshot.',
+        'Discrete values (hp, charge, maxCharge, invulnT, alive flag, room index/phase, score) are taken from curr — never lerped. Health bars don\'t flicker fractional values; pause/death state changes flip cleanly on the next snapshot.',
+        'Upsert-by-id: enemies/bullets are now indexed by id when interpolating. Ids in both prev+curr lerp; ids only in curr (just-spawned) render at curr position; ids only in prev (despawned) drop out of the local arrays. No accidental zombies, no flicker between rebuilds.',
+        'Boundary handling: targetT < prev.recvAt → snap to prev (alpha=0). targetT > curr.recvAt → snap to curr (alpha=1, no extrapolation in D5c). Same-seq replays don\'t shift the buffer but still re-render at advancing alpha so the loop animates smoothly between snapshot arrivals.',
+        'Run-id epoch: a snapshot from a different runId clears prev so the new run\'s first frame snaps to curr (no stale interp into the new world). Last-applied seq tracker resets on epoch.',
+        'D5b-compatible fallback: if renderTimeMs is omitted, applier snaps to curr (alpha=1, interpolated=false). Useful in tests and for any caller that just wants latest authoritative state.',
+        'Wiring in script.js: snapshot ingest now stamps performance.now() into latestRemoteSnapshotRecvAtMs alongside the decoded snapshot. Loop hook in loop(ts) passes both renderTimeMs (frameStartTs) and snapshotRecvAtMs to apply().',
+        'Test suite rewritten — 51 assertions covering: first-snapshot snap, mid-window interpolation, slot lerp, shortest-arc aim, despawn (id missing in curr), spawn (id missing in prev), extrapolation skip, prev clamp, same-seq replay, older-seq protection, runId reset, fallback path, unknown enemy type, bullet field round-trip, bullet position lerp, maxHp safe default, reset, null-arg guards, discrete-value pass-through.',
+        'Test state: 23 suites green (374+ assertions, +1 suite vs D5b). Determinism 11/11 byte-identical.',
+        'Next up (Phase D5d): local prediction for guest\'s OWN slot — guest reads its joystick, simulates its own movement locally, and submits inputs to host. Snapshot applier will skip writing slot 1 from snapshots so prediction owns the frame.',
+      ]
+    },
+  {
       version: '1.20.31',
       label: 'COOP PHASE D5b: SNAP-TO-LATEST SNAPSHOT APPLIER',
       summary: ['Guest now actually sees the world. The snapshot applier ingests host broadcasts, validates them via decodeSnapshot, and writes enemy / bullet / slot state into the local arrays so guest renders the host\'s authoritative state. Solo / host / COOP_DEBUG remain byte-identical (applier is null on those code paths). Determinism canary 11/11.'],

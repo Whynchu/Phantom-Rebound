@@ -827,6 +827,9 @@ let currentRunId = null;
 // from it (D5 wires interpolation/prediction). Reset on runId change.
 let latestRemoteSnapshot = null;
 let latestRemoteSnapshotSeq = null;
+// Phase D5c — wall-clock receive time of the latest snapshot. Used by the
+// applier's interpolation buffer as the curr-snapshot timestamp on shift.
+let latestRemoteSnapshotRecvAtMs = 0;
 // Phase D4.5: host-side processor that tracks the highest sim-tick for
 // which the host has actually consumed a remote-input frame (for slot 1).
 // `null` outside online host runs. Powers `lastProcessedInputSeq[1]` on
@@ -1024,6 +1027,7 @@ function teardownCoopInputUplink() {
   coopSnapshotSequencer = null;
   latestRemoteSnapshot = null;
   latestRemoteSnapshotSeq = null;
+  latestRemoteSnapshotRecvAtMs = 0;
   // Phase D4.5: tear down host-side slot 1 + processor.
   hostRemoteInputProcessor = null;
   if (onlineHostSlot1Installed) {
@@ -1144,6 +1148,7 @@ function installCoopInputUplink(armedCoop) {
       if (latestRemoteSnapshot && latestRemoteSnapshot.runId !== decoded.runId) {
         latestRemoteSnapshot = null;
         latestRemoteSnapshotSeq = null;
+        latestRemoteSnapshotRecvAtMs = 0;
       }
       // Newest-wins on snapshotSeq. isNewerSnapshot handles the wrap edge case.
       if (latestRemoteSnapshotSeq != null && !isNewerSnapshot(decoded.snapshotSeq, latestRemoteSnapshotSeq)) {
@@ -1151,6 +1156,10 @@ function installCoopInputUplink(armedCoop) {
       }
       latestRemoteSnapshot = decoded;
       latestRemoteSnapshotSeq = decoded.snapshotSeq;
+      // D5c: stamp the wall-clock arrival time. The applier uses this as
+      // the curr-snapshot timestamp; rAF's `ts` is the same clock domain.
+      try { latestRemoteSnapshotRecvAtMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
+      catch (_) { latestRemoteSnapshotRecvAtMs = Date.now(); }
       return;
     }
   });
@@ -2798,6 +2807,7 @@ function loop(ts){
     const frameMs = Math.min(ts - lastT, MAX_FRAME_DT_MS);
     lastT = ts;
     simAccumulatorMs += frameMs;
+    const frameStartTs = ts;
     let steps = 0;
     while (simAccumulatorMs >= SIM_STEP_MS && steps < MAX_SIM_STEPS_PER_FRAME) {
       simNowMs += SIM_STEP_MS;
@@ -2830,24 +2840,26 @@ function loop(ts){
       // keep the loop responsive.
       simAccumulatorMs = 0;
     }
-    // Phase D5b: guest applies the latest remote snapshot once per frame
-    // (only when it's actually NEWER than the last applied — applier
-    // memoizes seq/runId internally). Solo / host: no-op (applier is null).
+    // Phase D5c: guest applies the latest remote snapshot once per frame
+    // with interpolation. The applier holds a 2-snapshot buffer and renders
+    // entities at `renderTimeMs - renderDelayMs`, lerping between prev and
+    // curr by id. Solo / host: applier is null, hook skipped.
     // Order: AFTER sim ticks (host's update path is a no-op on guest), and
-    // BEFORE draw, so this frame's render reflects the host's authoritative
-    // state. Per-frame is fine; D5c will revisit cadence for interpolation.
+    // BEFORE draw, so this frame's render reflects the interpolated state.
     if (guestSnapshotApplier && latestRemoteSnapshot) {
       try {
         const result = guestSnapshotApplier.apply(latestRemoteSnapshot, {
           enemies,
           bullets,
           slotsById: { 0: playerSlots[0] || null, 1: playerSlots[1] || null },
+        }, {
+          renderTimeMs: frameStartTs,
+          snapshotRecvAtMs: latestRemoteSnapshotRecvAtMs,
         });
         if (result && result.applied) {
-          // Guest mirrors host room phase + score so HUD reads stay in sync.
-          // Intentionally NOT writing runElapsedMs (advanced locally on
-          // guest in update()'s isCoopGuest branch — overwriting here at
-          // ~10 Hz would cause stutter/jump-back between snapshots).
+          // Mirror room phase + score from authoritative state. Intentionally
+          // NOT runElapsedMs (advanced locally on guest in update()'s
+          // isCoopGuest branch — overwriting at ~10 Hz would jitter the HUD).
           if (result.room) {
             roomIndex = result.room.index;
             roomPhase = result.room.phase;

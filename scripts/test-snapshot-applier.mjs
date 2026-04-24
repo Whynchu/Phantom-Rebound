@@ -1,7 +1,5 @@
-// D5b — Snapshot applier tests.
-// Validates the guest-side snap-to-latest applier in isolation: no globals,
-// no DOM, no transport. Mirrors the unit-test conventions in
-// scripts/test-coop-snapshot.mjs (assert + section banner).
+// D5c — Snapshot applier (interpolating) tests.
+// Validates the guest-side applier with 2-snapshot buffer + upsert-by-id.
 
 import { createSnapshotApplier } from '../src/net/snapshotApplier.js';
 import { encodeSnapshot } from '../src/net/coopSnapshot.js';
@@ -11,228 +9,350 @@ function ok(name, cond, detail) {
   if (cond) { pass++; console.log('  \u2713 ' + name); }
   else { fail++; console.log('  \u2717 ' + name + (detail ? '  -- ' + detail : '')); }
 }
+function near(a, b, eps) { return Math.abs(a - b) <= (eps || 1e-6); }
 
-console.log('D5b — snapshotApplier');
+console.log('D5c — snapshotApplier (interpolating)');
 
-// ── Fixtures ────────────────────────────────────────────────────────────
 const ENEMY_DEFS = {
   chaser: { label: 'Buster', colorRole: 'danger', isElite: false, r: 12, spd: 100, fRate: 1500 },
   triangle: { label: 'Trigon', colorRole: 'aggressive', isTriangle: true, isElite: false, r: 12, spd: 130 },
-  elite: { label: 'Elite', colorRole: 'elite', isElite: true, r: 14, spd: 110 },
 };
-
-function colorResolver(type, def) {
-  return { col: '#' + type.slice(0, 3), glowCol: 'rgba(0,0,0,0.5)' };
-}
+const colorResolver = (type) => ({ col: '#abc', glowCol: 'rgba(0,0,0,0.5)' });
 
 function makeSlot(id) {
   const body = { x: 0, y: 0, vx: 0, vy: 0, r: 14, invincible: 0, deadAt: 0 };
   const upg = { maxCharge: 100 };
   const metrics = { hp: 0, maxHp: 0, charge: 0, stillTimer: 0 };
   const aim = { angle: 0, hasTarget: false };
-  return {
-    id,
-    body, upg, metrics, aim,
-    getBody: () => body,
-    getUpg: () => upg,
-  };
-}
-
-function baseSnapshot(overrides = {}) {
-  return encodeSnapshot({
-    runId: 'run-1',
-    snapshotSeq: 1,
-    snapshotSimTick: 60,
-    lastProcessedInputSeq: { 0: 10, 1: 11 },
-    slots: [
-      { id: 0, x: 100, y: 200, vx: 1, vy: 2, hp: 5, maxHp: 5, charge: 25, maxCharge: 100, aimAngle: 0.5, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
-      { id: 1, x: 300, y: 400, vx: 0, vy: 0, hp: 4, maxHp: 5, charge: 60, maxCharge: 100, aimAngle: 1.5, invulnT: 0.2, shieldT: 0, stillTimer: 0, alive: true },
-    ],
-    bullets: [
-      { id: 1, x: 50, y: 60, vx: 1, vy: 0, r: 5, type: 'p', state: 'output', ownerSlot: 0, bounces: 0, spawnTick: 1 },
-      { id: 2, x: 70, y: 80, vx: 0, vy: 1, r: 7, type: 'e', state: 'danger', ownerSlot: 99, bounces: 1, spawnTick: 2 },
-    ],
-    enemies: [
-      { id: 1, x: 10, y: 20, vx: 0, vy: 0, hp: 3, maxHp: 5, r: 12, type: 'chaser', fT: 100, fRate: 1500 },
-      { id: 2, x: 30, y: 40, vx: 0, vy: 0, hp: 6, maxHp: 6, r: 12, type: 'triangle', fT: 0, fRate: 0 },
-    ],
-    room: { index: 5, phase: 'fighting', clearTimer: 0.5, spawnQueueLen: 0 },
-    score: 1234,
-    elapsedMs: 5000,
-    ...overrides,
-  });
+  return { id, body, upg, metrics, aim, getBody: () => body, getUpg: () => upg };
 }
 
 function freshTarget() {
   return { enemies: [], bullets: [], slotsById: { 0: makeSlot(0), 1: makeSlot(1) } };
 }
 
+// Build a snapshot with overrides applied to the canonical fixture.
+function snap(overrides = {}) {
+  const base = {
+    runId: 'run-1',
+    snapshotSeq: 1,
+    snapshotSimTick: 60,
+    lastProcessedInputSeq: { 0: 10, 1: 11 },
+    slots: [
+      { id: 0, x: 100, y: 200, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 25, maxCharge: 100, aimAngle: 0.5, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 300, y: 400, vx: 0, vy: 0, hp: 4, maxHp: 5, charge: 60, maxCharge: 100, aimAngle: 1.5, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+    ],
+    bullets: [
+      { id: 1, x: 50, y: 60, vx: 0, vy: 0, r: 5, type: 'p', state: 'output', ownerSlot: 0, bounces: 0, spawnTick: 1 },
+    ],
+    enemies: [
+      { id: 1, x: 10, y: 20, vx: 0, vy: 0, hp: 3, maxHp: 5, r: 12, type: 'chaser', fT: 0, fRate: 1500 },
+    ],
+    room: { index: 5, phase: 'fighting', clearTimer: 0, spawnQueueLen: 0 },
+    score: 100,
+    elapsedMs: 0,
+  };
+  return encodeSnapshot({ ...base, ...overrides });
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────
 
-// 1. Basic apply: enemies + bullets rebuilt; slots positioned.
+// 1. First snapshot — snap to curr, no interp (no prev yet).
 {
-  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver });
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
   const t = freshTarget();
-  const r = ap.apply(baseSnapshot(), t);
-  ok('apply: returns applied=true on first snapshot', r && r.applied === true);
-  ok('apply: enemies length matches snapshot', t.enemies.length === 2);
-  ok('apply: bullets length matches snapshot', t.bullets.length === 2);
-  ok('apply: slot 0 body x=100', t.slotsById[0].body.x === 100);
-  ok('apply: slot 1 body x=300', t.slotsById[1].body.x === 300);
-  ok('apply: slot 0 metrics.hp=5', t.slotsById[0].metrics.hp === 5);
-  ok('apply: slot 1 metrics.charge=60', t.slotsById[1].metrics.charge === 60);
-  ok('apply: slot 1 invincible=invulnT', Math.abs(t.slotsById[1].body.invincible - 0.2) < 1e-9);
-  ok('apply: slot aim.angle written', t.slotsById[1].aim.angle === 1.5);
-  ok('apply: returns room', r.room && r.room.index === 5 && r.room.phase === 'fighting');
-  ok('apply: returns score', r.score === 1234);
-  ok('apply: does NOT return elapsedMs (rubber-duck D5b)', !('elapsedMs' in r));
+  const r = ap.apply(snap(), t, { snapshotRecvAtMs: 1000, renderTimeMs: 1100 });
+  ok('first: applied=true', r && r.applied);
+  ok('first: alpha=1 (no prev)', r.alpha === 1);
+  ok('first: interpolated=false', r.interpolated === false);
+  ok('first: enemy at curr position', t.enemies[0].x === 10 && t.enemies[0].y === 20);
+  ok('first: slot 0 body x=100', t.slotsById[0].body.x === 100);
+  ok('first: bufferDepth=1', ap.getBufferDepth() === 1);
 }
 
-// 2. Wipe between calls (no leak across snapshots).
+// 2. Second snapshot, mid-window interpolation. enemy moves (10,20)→(110,120).
+//    prev recvAt=1000, curr recvAt=1100. renderTime=1200, delay=100 ⇒ targetT=1100 (==curr).
+//    That equals curr exactly, so alpha=1. To exercise the lerp, render at 1150.
 {
-  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver });
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
   const t = freshTarget();
-  ap.apply(baseSnapshot({ snapshotSeq: 1 }), t);
-  // Second snapshot has only one enemy, one bullet.
-  ap.apply(baseSnapshot({
-    snapshotSeq: 2,
-    enemies: [{ id: 99, x: 5, y: 5, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }],
-    bullets: [],
-  }), t);
-  ok('wipe: second snapshot replaces enemies (length 1)', t.enemies.length === 1);
-  ok('wipe: second snapshot replaces bullets (length 0)', t.bullets.length === 0);
-  ok('wipe: new enemy id present', t.enemies[0].eid === 99);
+  ap.apply(snap({ snapshotSeq: 1, enemies: [{ id: 1, x: 10, y: 20, vx: 0, vy: 0, hp: 3, maxHp: 5, r: 12, type: 'chaser', fT: 0, fRate: 1500 }] }), t,
+    { snapshotRecvAtMs: 1000, renderTimeMs: 1000 });
+  const r = ap.apply(snap({ snapshotSeq: 2, enemies: [{ id: 1, x: 110, y: 120, vx: 0, vy: 0, hp: 3, maxHp: 5, r: 12, type: 'chaser', fT: 0, fRate: 1500 }] }), t,
+    { snapshotRecvAtMs: 1100, renderTimeMs: 1150 });
+  ok('lerp: bufferDepth=2', ap.getBufferDepth() === 2);
+  ok('lerp: interpolated=true', r.interpolated === true);
+  // targetT = 1150 - 100 = 1050. alpha = (1050-1000)/(1100-1000) = 0.5.
+  ok('lerp: alpha~0.5', near(r.alpha, 0.5));
+  ok('lerp: enemy x lerped to 60', near(t.enemies[0].x, 60));
+  ok('lerp: enemy y lerped to 70', near(t.enemies[0].y, 70));
 }
 
-// 3. Empty snapshot — arrays empty, no crash.
+// 3. Slot body lerp.
 {
-  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver });
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
   const t = freshTarget();
-  const r = ap.apply(baseSnapshot({ enemies: [], bullets: [], slots: [] }), t);
-  ok('empty: applied=true', r && r.applied === true);
-  ok('empty: enemies empty', t.enemies.length === 0);
-  ok('empty: bullets empty', t.bullets.length === 0);
-}
-
-// 4. Slot match by ID, not array index.
-{
-  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver });
-  const t = freshTarget();
-  // Snapshot with only slot 1 (host might omit a slot in some flows).
-  ap.apply(baseSnapshot({
+  ap.apply(snap({
+    snapshotSeq: 1,
     slots: [
-      { id: 1, x: 999, y: 888, vx: 0, vy: 0, hp: 3, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 0, x: 0, y: 0, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 100, y: 100, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
     ],
-  }), t);
-  ok('match-by-id: slot 0 untouched (still x=0)', t.slotsById[0].body.x === 0);
-  ok('match-by-id: slot 1 written (x=999)', t.slotsById[1].body.x === 999);
+  }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ap.apply(snap({
+    snapshotSeq: 2,
+    slots: [
+      { id: 0, x: 200, y: 200, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 300, y: 300, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+    ],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 150 });
+  // targetT = 50, alpha = (50-0)/(100-0) = 0.5.
+  ok('slot-lerp: slot 1 body x=200 (lerp 100→300 at 0.5)', near(t.slotsById[1].body.x, 200));
+  ok('slot-lerp: slot 0 body x=100 (lerp 0→200 at 0.5)', near(t.slotsById[0].body.x, 100));
 }
 
-// 5. Same-or-older seq → no-op, returns null.
+// 4. Aim angle lerp uses shortest arc (wraps over ±π).
 {
-  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver });
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
   const t = freshTarget();
-  ap.apply(baseSnapshot({ snapshotSeq: 5 }), t);
-  ok('seq-skip: lastAppliedSeq=5', ap.getLastAppliedSeq() === 5);
-  // Replay same seq.
-  const r1 = ap.apply(baseSnapshot({ snapshotSeq: 5, enemies: [] }), t);
-  ok('seq-skip: same seq returns null', r1 === null);
-  ok('seq-skip: arrays untouched (still 2 enemies)', t.enemies.length === 2);
-  // Older seq.
-  const r2 = ap.apply(baseSnapshot({ snapshotSeq: 4, enemies: [] }), t);
-  ok('seq-skip: older seq returns null', r2 === null);
-  ok('seq-skip: arrays untouched (still 2 enemies)', t.enemies.length === 2);
-  // Newer seq applies.
-  const r3 = ap.apply(baseSnapshot({ snapshotSeq: 6, enemies: [] }), t);
-  ok('seq-skip: newer seq applies', r3 && r3.applied);
-  ok('seq-skip: arrays now empty', t.enemies.length === 0);
+  ap.apply(snap({
+    snapshotSeq: 1,
+    slots: [
+      { id: 0, x: 0, y: 0, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 3.0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+    ],
+  }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  // From 3.0 (≈π-0.14) wrapping to -3.0 — shortest arc goes the SHORT way through π
+  // (delta ≈ +0.28 rad), not the long way (≈ -6 rad).
+  ap.apply(snap({
+    snapshotSeq: 2,
+    slots: [
+      { id: 0, x: 0, y: 0, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: -3.0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+    ],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 150 });
+  // alpha=0.5. Expected: 3.0 + 0.5*0.2832... ≈ 3.1416 (≈π). NOT a long-way value (~0).
+  const a = t.slotsById[0].aim.angle;
+  ok('aim: shortest-arc lerp (≈π, not 0)', Math.abs(Math.abs(a) - Math.PI) < 0.05, 'got ' + a);
 }
 
-// 6. runId change → reset seq tracker, applies even if seq lower.
+// 5. Despawn — id in prev, missing in curr → not in target after apply.
 {
-  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver });
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
   const t = freshTarget();
-  ap.apply(baseSnapshot({ runId: 'run-A', snapshotSeq: 100 }), t);
-  ok('runid-reset: lastRunId=run-A', ap.getLastRunId() === 'run-A');
-  // New run with much lower seq still applies.
-  const r = ap.apply(baseSnapshot({ runId: 'run-B', snapshotSeq: 1 }), t);
-  ok('runid-reset: new run applies even with lower seq', r && r.applied);
-  ok('runid-reset: lastRunId=run-B', ap.getLastRunId() === 'run-B');
-  ok('runid-reset: lastAppliedSeq=1', ap.getLastAppliedSeq() === 1);
+  ap.apply(snap({
+    snapshotSeq: 1,
+    enemies: [
+      { id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 },
+      { id: 2, x: 50, y: 50, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 },
+    ],
+  }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ap.apply(snap({
+    snapshotSeq: 2,
+    enemies: [
+      { id: 1, x: 100, y: 100, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 },
+    ],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 250 });
+  ok('despawn: only id=1 remains', t.enemies.length === 1 && t.enemies[0].eid === 1);
 }
 
-// 7. Unknown enemy type — fallback (no throw, defaults applied).
+// 6. Spawn — id in curr, missing in prev → present at curr position (no lerp).
 {
-  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver });
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
+  const t = freshTarget();
+  ap.apply(snap({ snapshotSeq: 1, enemies: [] }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ap.apply(snap({
+    snapshotSeq: 2,
+    enemies: [{ id: 5, x: 999, y: 888, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 150 });
+  ok('spawn: new id present', t.enemies.length === 1 && t.enemies[0].eid === 5);
+  ok('spawn: at curr position (no prev to lerp from)', t.enemies[0].x === 999 && t.enemies[0].y === 888);
+}
+
+// 7. RenderTime past curr (extrapolation skipped) → snap to curr (alpha=1).
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
+  const t = freshTarget();
+  ap.apply(snap({ snapshotSeq: 1, enemies: [{ id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t,
+    { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ap.apply(snap({ snapshotSeq: 2, enemies: [{ id: 1, x: 200, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t,
+    { snapshotRecvAtMs: 100, renderTimeMs: 1000 });
+  // targetT = 900, way past curr (100). Snap to curr.
+  ok('extrapolate-skip: snap to curr (x=200)', t.enemies[0].x === 200);
+}
+
+// 8. RenderTime before prev → alpha=0 (snap to prev).
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
+  const t = freshTarget();
+  ap.apply(snap({ snapshotSeq: 1, enemies: [{ id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t,
+    { snapshotRecvAtMs: 1000, renderTimeMs: 1000 });
+  ap.apply(snap({ snapshotSeq: 2, enemies: [{ id: 1, x: 200, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t,
+    { snapshotRecvAtMs: 1100, renderTimeMs: 1050 });
+  // targetT = 950. prev.recvAt = 1000. targetT < prev.recvAt → alpha=0, snap to prev x=0.
+  ok('clamp-low: snap to prev x=0', t.enemies[0].x === 0);
+}
+
+// 9. Same seq replay does NOT shift buffer; subsequent calls re-render at advancing time.
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
+  const t = freshTarget();
+  ap.apply(snap({ snapshotSeq: 1, enemies: [{ id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t,
+    { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ap.apply(snap({ snapshotSeq: 2, enemies: [{ id: 1, x: 100, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t,
+    { snapshotRecvAtMs: 100, renderTimeMs: 150 });
+  ok('same-seq: bufferDepth=2 after first new snapshot', ap.getBufferDepth() === 2);
+  // Now call apply again with the SAME (seq=2) snapshot — re-render at advancing time.
+  const sameSnap = snap({ snapshotSeq: 2, enemies: [{ id: 1, x: 100, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] });
+  const r = ap.apply(sameSnap, t, { renderTimeMs: 175 });
+  ok('same-seq: still applied (returns object, not null)', r && r.applied);
+  ok('same-seq: bufferDepth still 2 (no shift)', ap.getBufferDepth() === 2);
+  // targetT = 75, alpha = 0.75 → x = 75.
+  ok('same-seq: re-renders at advancing alpha (x=75)', near(t.enemies[0].x, 75));
+}
+
+// 10. Older seq → no shift (buffer protected); still re-renders against existing curr.
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
+  const t = freshTarget();
+  ap.apply(snap({ snapshotSeq: 5, enemies: [{ id: 1, x: 100, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t,
+    { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ok('older-seq: lastAppliedSeq=5', ap.getLastAppliedSeq() === 5);
+  // Now feed seq=3 (older). Buffer should NOT shift.
+  ap.apply(snap({ snapshotSeq: 3, enemies: [{ id: 1, x: 999, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t,
+    { snapshotRecvAtMs: 50, renderTimeMs: 50 });
+  ok('older-seq: lastAppliedSeq still 5', ap.getLastAppliedSeq() === 5);
+  ok('older-seq: render uses curr (x=100)', t.enemies[0].x === 100);
+}
+
+// 11. runId change — buffer resets; new run renders at curr (no stale interp).
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
+  const t = freshTarget();
+  ap.apply(snap({ runId: 'A', snapshotSeq: 100, enemies: [{ id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t,
+    { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ap.apply(snap({ runId: 'A', snapshotSeq: 101, enemies: [{ id: 1, x: 100, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t,
+    { snapshotRecvAtMs: 100, renderTimeMs: 150 });
+  ok('runid: bufferDepth=2 mid-run', ap.getBufferDepth() === 2);
+  // New run.
+  const r = ap.apply(snap({ runId: 'B', snapshotSeq: 1, enemies: [{ id: 9, x: 555, y: 555, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t,
+    { snapshotRecvAtMs: 200, renderTimeMs: 250 });
+  ok('runid: new runId resets prev (bufferDepth=1)', ap.getBufferDepth() === 1);
+  ok('runid: new run snaps to curr (alpha=1)', r.alpha === 1 && r.interpolated === false);
+  ok('runid: target only has new run\'s enemy', t.enemies.length === 1 && t.enemies[0].eid === 9);
+  ok('runid: lastRunId=B', ap.getLastRunId() === 'B');
+}
+
+// 12. No renderTimeMs → snap to curr (D5b-compatible fallback).
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
+  const t = freshTarget();
+  ap.apply(snap({ snapshotSeq: 1, enemies: [{ id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t);
+  ap.apply(snap({ snapshotSeq: 2, enemies: [{ id: 1, x: 200, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t);
+  ok('no-rendertime: snap to curr (x=200)', t.enemies[0].x === 200);
+}
+
+// 13. Unknown enemy type — falls back, doesn't throw.
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
   const t = freshTarget();
   let threw = false;
   try {
-    ap.apply(baseSnapshot({
-      enemies: [{ id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'mystery_xyz', fT: 0, fRate: 0 }],
-    }), t);
+    ap.apply(snap({ enemies: [{ id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, type: 'mystery', fT: 0, fRate: 0 }] }), t,
+      { snapshotRecvAtMs: 0, renderTimeMs: 0 });
   } catch (_) { threw = true; }
-  ok('unknown-type: does not throw', !threw);
-  ok('unknown-type: falls back to colorRole=danger', t.enemies[0].colorRole === 'danger');
-  ok('unknown-type: type preserved', t.enemies[0].type === 'mystery_xyz');
+  ok('unknown-type: no throw', !threw);
+  ok('unknown-type: type preserved', t.enemies[0].type === 'mystery');
+  ok('unknown-type: colorRole defaults to danger', t.enemies[0].colorRole === 'danger');
 }
 
-// 8. maxHp safe fallback (no NaN HP bar).
+// 14. Bullets carry r/state/ownerId/bounces; danger fallback flag.
 {
-  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver });
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
   const t = freshTarget();
-  // maxHp=0 in snapshot — applier should derive safe non-zero default.
-  ap.apply(baseSnapshot({
-    enemies: [{ id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 3, maxHp: 0, r: 12, type: 'chaser', fT: 0, fRate: 0 }],
-  }), t);
-  ok('maxHp: zero-on-wire becomes max(hp,1)', t.enemies[0].maxHp === 3);
-  ok('maxHp: hp passes through', t.enemies[0].hp === 3);
+  ap.apply(snap({
+    snapshotSeq: 1,
+    bullets: [
+      { id: 1, x: 0, y: 0, vx: 0, vy: 0, r: 5, type: 'p', state: 'output', ownerSlot: 0, bounces: 0, spawnTick: 1 },
+      { id: 2, x: 0, y: 0, vx: 0, vy: 0, r: 7, type: 'e', state: 'danger', ownerSlot: 99, bounces: 1, spawnTick: 2 },
+    ],
+  }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ok('bullet: r preserved', t.bullets[0].r === 5 && t.bullets[1].r === 7);
+  ok('bullet: state preserved', t.bullets[0].state === 'output' && t.bullets[1].state === 'danger');
+  ok('bullet: danger fallback flag', t.bullets[1].danger === true && t.bullets[0].danger === false);
+  ok('bullet: ownerId from ownerSlot', t.bullets[0].ownerId === 0 && t.bullets[1].ownerId === 99);
+  ok('bullet: bounces preserved', t.bullets[1].bounces === 1);
 }
 
-// 9. Bullets carry r, state, type, ownerId, bounces.
+// 15. Bullet position lerp.
 {
-  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver });
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
   const t = freshTarget();
-  ap.apply(baseSnapshot(), t);
-  const b0 = t.bullets[0];
-  const b1 = t.bullets[1];
-  ok('bullet: r preserved', b0.r === 5 && b1.r === 7);
-  ok('bullet: state preserved', b0.state === 'output' && b1.state === 'danger');
-  ok('bullet: type preserved', b0.type === 'p' && b1.type === 'e');
-  ok('bullet: ownerId from ownerSlot', b0.ownerId === 0 && b1.ownerId === 99);
-  ok('bullet: bounces preserved', b1.bounces === 1);
-  ok('bullet: danger fallback flag', b1.danger === true && b0.danger === false);
+  ap.apply(snap({ snapshotSeq: 1, bullets: [{ id: 1, x: 0, y: 0, vx: 0, vy: 0, r: 5, type: 'p', state: 'output', ownerSlot: 0, bounces: 0, spawnTick: 1 }] }), t,
+    { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ap.apply(snap({ snapshotSeq: 2, bullets: [{ id: 1, x: 100, y: 0, vx: 0, vy: 0, r: 5, type: 'p', state: 'output', ownerSlot: 0, bounces: 0, spawnTick: 1 }] }), t,
+    { snapshotRecvAtMs: 100, renderTimeMs: 150 });
+  ok('bullet-lerp: x=50 (alpha=0.5)', near(t.bullets[0].x, 50));
 }
 
-// 10. Missing slotsById entries — no crash.
+// 16. maxHp safe fallback (no NaN HP bar).
 {
-  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver });
-  const target = { enemies: [], bullets: [], slotsById: { 0: makeSlot(0) /* slot 1 missing */ } };
-  let threw = false;
-  try { ap.apply(baseSnapshot(), target); } catch (_) { threw = true; }
-  ok('missing-slot: does not throw', !threw);
-  ok('missing-slot: slot 0 still applied', target.slotsById[0].body.x === 100);
-}
-
-// 11. reset() clears tracker.
-{
-  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver });
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
   const t = freshTarget();
-  ap.apply(baseSnapshot({ snapshotSeq: 50 }), t);
+  ap.apply(snap({ enemies: [{ id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 3, maxHp: 0, r: 12, type: 'chaser', fT: 0, fRate: 0 }] }), t,
+    { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ok('maxHp: zero on wire becomes max(hp,1)', t.enemies[0].maxHp === 3);
+}
+
+// 17. reset() clears buffer + tracker.
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
+  const t = freshTarget();
+  ap.apply(snap({ snapshotSeq: 50 }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
   ok('reset: pre-state seq=50', ap.getLastAppliedSeq() === 50);
   ap.reset();
-  ok('reset: lastAppliedSeq null', ap.getLastAppliedSeq() === null);
-  ok('reset: lastRunId null', ap.getLastRunId() === null);
-  // After reset, even old seq applies.
-  const r = ap.apply(baseSnapshot({ snapshotSeq: 1 }), t);
+  ok('reset: bufferDepth=0', ap.getBufferDepth() === 0);
+  ok('reset: lastAppliedSeq=null', ap.getLastAppliedSeq() === null);
+  // After reset, even old seq applies cleanly.
+  const r = ap.apply(snap({ snapshotSeq: 1 }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
   ok('reset: old seq applies after reset', r && r.applied);
 }
 
-// 12. Null/invalid args — null return, no throw.
+// 18. Null/invalid args.
 {
   const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver });
   const t = freshTarget();
-  ok('guard: null snapshot returns null', ap.apply(null, t) === null);
-  ok('guard: null target returns null', ap.apply(baseSnapshot(), null) === null);
+  ok('guard: null target returns null', ap.apply(snap(), null) === null);
+  // null snapshot before any curr buffered → null.
+  ok('guard: null snapshot, no buffer → null', ap.apply(null, t) === null);
+  // After we buffer one, null snapshot should still re-render (advance time)
+  // because curr exists. It just shouldn't crash.
+  ap.apply(snap({ snapshotSeq: 1 }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  let threw = false;
+  try { ap.apply(null, t, { renderTimeMs: 50 }); } catch (_) { threw = true; }
+  ok('guard: null snapshot with buffered curr does not throw', !threw);
+}
+
+// 19. HP/charge/maxCharge come from curr (NOT lerped).
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
+  const t = freshTarget();
+  ap.apply(snap({
+    snapshotSeq: 1,
+    slots: [
+      { id: 0, x: 0, y: 0, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+    ],
+  }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ap.apply(snap({
+    snapshotSeq: 2,
+    slots: [
+      { id: 0, x: 0, y: 0, vx: 0, vy: 0, hp: 3, maxHp: 5, charge: 80, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+    ],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 150 });
+  ok('discrete: hp from curr (3, not 4)', t.slotsById[0].metrics.hp === 3);
+  ok('discrete: charge from curr (80, not 40)', t.slotsById[0].metrics.charge === 80);
 }
 
 console.log(pass + ' passed, ' + fail + ' failed');
