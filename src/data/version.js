@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.23', label: 'D3 GUEST INPUT UPLINK' };
+const VERSION = { num: '1.20.24', label: 'D4A SNAPSHOT SCHEMA' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

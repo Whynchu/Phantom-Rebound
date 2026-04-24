@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.24',
+      label: 'COOP PHASE D4A: SNAPSHOT SCHEMA',
+      summary: ['Defined the wire format host will use to broadcast authoritative state. Pure data module with encode/decode/validation — no script.js wiring yet; that lands in D4.'],
+      highlights: [
+        'New src/net/coopSnapshot.js: createSnapshotSequencer (monotonic uint32 with wraparound), encodeSnapshot / decodeSnapshot (strict field validation), isNewerSnapshot (32-bit-safe ordering with half-range ambiguity rule).',
+        'Wire shape: {kind:\'snapshot\', snapshotSeq, snapshotSimTick, lastProcessedInputSeq:{0,1}, slots[pos/vel/hp/charge/aim/invuln/shield/alive], bullets[id/pos/vel/type/owner/bounces/spawnTick], enemies[id/pos/hp/type/fireT/windup], room{index/phase/clearTimer/spawnQueueLen}, score, elapsedMs}. FULL snapshots only for first cut — delta compression deferred past D9.',
+        'lastProcessedInputSeq is the reconciliation anchor (rubber-duck #3): tells the guest which input tick the host had consumed when the snapshot was sampled, so D6 can replay only inputs AFTER that tick.',
+        'Strict validation: throws on NaN/Infinity positions, negative u32 fields, missing required fields, wrong kind. Lenient on missing optional scalars (defaults to 0/false). All throws include descriptive field paths like "slots[0].x" or "bullets[1].ownerSlot".',
+        'scripts/test-coop-snapshot.mjs: 18 assertions covering sequencer, wraparound (0x00 follows 0xFFFFFFFF), half-range boundary, JSON round-trip, default-fill, fractional floor, all validation error paths, and sequencer-driven newest-wins ordering.',
+        '19 test suites green. Determinism 11/11 byte-identical (pure module not imported by script.js yet).',
+        'Next up (Phase D4b): monotonic bullet IDs. Every bullet gets a stable id (per-owner spawn seq) so snapshots can correlate predicted vs authoritative bullets during reconciliation.',
+      ]
+    },
+  {
       version: '1.20.23',
       label: 'COOP PHASE D3: GUEST INPUT UPLINK',
       summary: ['Guest browsers now stream their local input frames to the host over the coop gameplay channel. Host ingests into a ring buffer, ready for slot-1 sim to drain in D4. Solo and ?coopdebug=1 untouched.'],
