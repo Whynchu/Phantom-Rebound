@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.10',
+      label: 'COOP PHASE C2D-2: GUEST FIRE',
+      summary: ['Internal scaffolding: guest slot 1 now auto-aims at the nearest enemy and fires. ?coopdebug=1 is now end-to-end playable same-device 2P (dev harness).'],
+      highlights: [
+        'New fireGuestSlot(slot, tx, ty): fresh-default UPG means no spread/crit/pierce/bounce/homing — a simple single bullet per charge unit. Stamps ownerId=slot.id and expireAt=simNowMs+PLAYER_SHOT_LIFE_MS so it obeys the normal bullet lifecycle.',
+        'New updateGuestFire(dt, combatActive): charge builds at 1/s while still (matches default UPG), fire interval = 1/(sps*2)=0.625s. Uses pickPlayerAutoTarget(body.x, body.y) so the target-selection is shared with host.',
+        'slot.aim.angle/hasTarget now reflect live targeting — renderer + future facing indicators can read them directly.',
+        'Ghost sprite charge ring now animates for guest slot (previously fireProgress was hardcoded 0).',
+        'New scripts/test-guest-fire.mjs: 15 contract tests (charge consume, ownerId stamp, fire gating, still-required, interval math). 147 tests total across 9 suites.',
+        'Determinism preserved: solo path has no guest slots → updateGuestFire is skipped entirely. 50-room compound replay still byte-identical. Playwright smoke clean for both solo and ?coopdebug=1.',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.9',
       label: 'COOP PHASE C2D-1B: PER-SLOT DAMAGE',
       summary: ['Internal scaffolding: guest slot 1 now takes real damage from enemies in ?coopdebug=1. Invisible to solo players.'],

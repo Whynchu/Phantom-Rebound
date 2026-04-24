@@ -991,6 +991,72 @@ function respawnGuestSlot(slot) {
   sparks(body.x, body.y, '#6ad1ff', 18, 180);
 }
 
+// C2d-2 — guest slot auto-aim + fire. Slot 1 has fresh-default UPG (no
+// boons/crits/pierce/bounce/homing/spread), so the fire path is drastically
+// simpler than host's firePlayer(): build charge while still, find nearest
+// enemy, fire a single default bullet stamped with ownerId=slot.id.
+// Host firing remains the legacy path for bit-identity in solo.
+function fireGuestSlot(slot, tx, ty) {
+  if ((slot.metrics.charge || 0) < 1) return;
+  const body = slot.body;
+  const upg = slot.upg;
+  const angle = Math.atan2(ty - body.y, tx - body.x);
+  slot.aim.angle = angle;
+  slot.aim.hasTarget = true;
+  const speed = 230 * GLOBAL_SPEED_LIFT * (upg.shotSpd || 1);
+  const radius = 4.5 * (upg.shotSize || 1);
+  const damage = 10; // baseline from firePlayer (see script.js damage chain)
+  slot.metrics.charge = Math.max(0, slot.metrics.charge - 1);
+  pushOutputBullet({
+    bullets,
+    x: body.x,
+    y: body.y,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    radius,
+    bounceLeft: 0,
+    pierceLeft: 0,
+    homing: false,
+    crit: false,
+    dmg: damage,
+    expireAt: simNowMs + PLAYER_SHOT_LIFE_MS,
+    ownerId: slot.id,
+  });
+}
+
+function updateGuestFire(dt, combatActive) {
+  if (!combatActive) return;
+  for (let i = 1; i < playerSlots.length; i++) {
+    const slot = playerSlots[i];
+    if (!slot) continue;
+    const body = slot.body;
+    if (!body || (slot.metrics.hp || 0) <= 0) continue;
+    const upg = slot.upg;
+    const mv = slot.input ? slot.input.moveVector() : { active: false };
+    const isStill = !mv.active;
+
+    // Charge build: full 1.0 in ~1s while still (matches default UPG).
+    if (isStill) {
+      slot.metrics.charge = Math.min(upg.maxCharge || 1, (slot.metrics.charge || 0) + dt);
+    }
+
+    if (enemies.length === 0) { slot.aim.hasTarget = false; continue; }
+    const target = pickPlayerAutoTarget(body.x, body.y);
+    if (!target) { slot.aim.hasTarget = false; continue; }
+    slot.aim.angle = Math.atan2(target.e.y - body.y, target.e.x - body.x);
+    slot.aim.hasTarget = true;
+
+    if ((slot.metrics.charge || 0) < 1) continue;
+    const interval = 1 / ((upg.sps || 0.8) * 2);
+    slot.metrics.fireT = (slot.metrics.fireT || 0) + dt;
+    if (!isStill) slot.metrics.fireT = Math.min(slot.metrics.fireT, interval);
+    if (slot.metrics.fireT >= interval && isStill) {
+      slot.metrics.fireT = slot.metrics.fireT % interval;
+      fireGuestSlot(slot, target.e.x, target.e.y);
+    }
+  }
+}
+
 // C2d-1b — second pass over danger bullets to hit guest slots. Runs after the
 // host's main danger-bullet loop (which already splices any bullet that hit
 // slot 0). Any bullet that survived that pass and now overlaps a guest is
@@ -1055,7 +1121,7 @@ function drawGuestSlots(ts) {
       playerState: body,
       chargeValue: slot.metrics.charge,
       maxChargeValue: slot.upg.maxCharge,
-      fireProgress: 0,
+      fireProgress: slot.metrics.charge >= 1 ? (slot.metrics.fireT || 0) / (1 / ((slot.upg.sps || 0.8) * 2)) : 0,
       gameState: gstate,
       hpValue: slot.metrics.hp,
       maxHpValue: slot.metrics.maxHp,
@@ -2473,6 +2539,9 @@ function update(dt,ts){
       UPG.sustainedFireBonus = 1;
     }
   }
+
+  // C2d-2 — guest slots auto-aim + fire using their own charge/UPG.
+  if (playerSlots.length > 1) updateGuestFire(dt, combatActive);
 
   prevStill = isStill;
 
