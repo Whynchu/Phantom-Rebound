@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.19',
+      label: 'COOP ARCHITECTURE PIVOT: LOCKSTEP → AUTHORITATIVE-HOST',
+      summary: ['Lockstep scheduler removed. Pivoting online co-op to authoritative-host + client prediction + reconciliation (Valve model) for latency-tolerant twitch play. Solo and ?coopdebug=1 paths unchanged.'],
+      highlights: [
+        'Rationale: lockstep gates every shot on round-trip latency — unacceptable for bullet-heaven pacing. Authoritative-host (one peer = server, other = client predicting locally) gives zero-latency feel on own input while keeping sim deterministic.',
+        'DELETED src/net/coopLockstep.js and scripts/test-coop-lockstep.mjs. The two-counter gate and 42 lockstep tests are gone. Test count drops from 321 → 279 across 15 suites.',
+        'KEPT (still useful under host-authority model): coopRunConfig (seed + roles + isOnlineCoopRun), onlineSlotRuntime, coopSession gameplay channel (sendGameplay/onGameplay), coopInputSync (input quantization + batching), remoteInputBuffer (host\'s guest-input queue), C3a-min-1 single-room termination gate.',
+        'script.js unchanged — lockstep was never wired into the main loop (would have shipped in c3a-ship-1, now scrapped).',
+        'inputSync.sampleFrame retains its return value for the upcoming guest-side prediction path (guest echoes its own quantized frame into a prediction buffer for reconciliation).',
+        'Next up (Phase D): host-authoritative sim flag → guest input uplink → 20 Hz host snapshot broadcast → guest prediction + interpolation → reconciliation → host-side lag comp for guest hit-reg → two-peer integration test → first playable online run.',
+        'Determinism byte-identical (11/11). Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.18',
       label: 'COOP PHASE C3A-MIN-1: SINGLE-ROOM TERMINATION',
       summary: ['Online coop runs now terminate cleanly after Room 1 clears, skipping the boon picker. Foundation for one deterministic online single-room run. Solo and ?coopdebug=1 paths unchanged.'],
