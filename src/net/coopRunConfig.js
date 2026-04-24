@@ -69,6 +69,18 @@ function isOnlineCoopRun() {
   return role === 'host' || role === 'guest';
 }
 
+// Phase D2 — EXACT role checks. Use these to key host-vs-guest behavior
+// differences (authoritative sim ownership, snapshot producer vs consumer,
+// input uplink direction). Never negate (`!isCoopGuest()`) — solo and
+// COOP_DEBUG (role:'local') must fall through the host-like code path.
+function isCoopHost() {
+  return _active?.role === 'host';
+}
+
+function isCoopGuest() {
+  return _active?.role === 'guest';
+}
+
 export {
   armPendingCoopRun,
   consumePendingCoopRun,
@@ -77,4 +89,6 @@ export {
   isCoopRun,
   getActiveCoopRun,
   isOnlineCoopRun,
+  isCoopHost,
+  isCoopGuest,
 };

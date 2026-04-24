@@ -135,6 +135,8 @@ import {
   clearCoopRun,
   isCoopRun,
   isOnlineCoopRun,
+  isCoopHost,
+  isCoopGuest,
 } from './src/net/coopRunConfig.js';
 import { getLocalSlot } from './src/net/onlineSlotRuntime.js';
 import {
@@ -2422,6 +2424,20 @@ function update(dt,ts){
         renderBoons: renderGameOverBoons,
       });
     }
+    return;
+  }
+
+  // ── PHASE D2: GUEST GATE ─────────────────────────────────────────────────
+  // When our role is 'guest', the host peer owns the authoritative simulation.
+  // We skip the entire local sim; enemies/bullets/scoring/room-progression are
+  // driven by host snapshots (applied in D4+). The guest still advances its
+  // own frame-clock (for interpolation), collects local input (D3 uplink),
+  // and renders via draw(). Solo (no active coop run) and COOP_DEBUG
+  // (role:'local') keep the full sim — never negate; always check === 'guest'.
+  if (isCoopGuest()) {
+    runElapsedMs += dt * 1000;
+    simNowMs += dt * 1000;
+    prevStill = true;
     return;
   }
 

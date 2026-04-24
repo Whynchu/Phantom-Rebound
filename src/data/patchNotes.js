@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.22',
+      label: 'COOP PHASE D2: HOST-AUTHORITATIVE SIM',
+      summary: ['Guest browsers now skip the local simulation entirely; the host peer is the authority for enemies/bullets/scoring/room progression. Solo and ?coopdebug=1 keep the full sim, byte-identical.'],
+      highlights: [
+        'New src/net/coopRunConfig.js helpers: isCoopHost() / isCoopGuest() — strict role === \'host\' / \'guest\' checks. Never negate (!isCoopGuest()) — solo and COOP_DEBUG (role:\'local\') must always fall through the host-like path.',
+        'update(dt,ts) in script.js: right after the dying early-return, added a guest gate. role===\'guest\' → advance runElapsedMs + simNowMs, clear prevStill, return. No enemy/bullet/scoring work runs on guest browsers.',
+        'Guest draw() continues to run so the UI stays responsive; until D4 snapshots land, guests see an effectively frozen arena (expected intermediate state).',
+        'scripts/test-coop-run-config.mjs +12 assertions: isCoopHost/Guest state matrix across solo/host/guest/local; explicit "critical invariant: solo/local/host NEVER get guest gate" checks.',
+        'Determinism 11/11 byte-identical (guest gate is gated by role which is null in solo). 17 test suites green. Browser smoke (solo + ?coopdebug=1) clean.',
+        'Rubber-duck-flagged anti-pattern enforced in code comments: exact role checks only — no negation.',
+        'Next up (Phase D3): guest → host input uplink on the gameplay channel so the host can drive slot 1 inside its authoritative sim.',
+      ]
+    },
+  {
       version: '1.20.21',
       label: 'COOP PHASE D0B: PER-SLOT FIRE',
       summary: ['firePlayer now reads/writes through the passed-in slot instead of module globals. Host and guest share the same full-featured fire path (boons, shockwave, echo, overload, volleys). Solo byte-identical via slot 0 getter/setter bridges.'],

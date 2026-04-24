@@ -7,6 +7,9 @@ import {
   clearCoopRun,
   isCoopRun,
   getActiveCoopRun,
+  isCoopHost,
+  isCoopGuest,
+  isOnlineCoopRun,
 } from '../src/net/coopRunConfig.js';
 
 let pass = 0, fail = 0;
@@ -99,6 +102,48 @@ reset();
 armPendingCoopRun({ role: 'host', seed: 100 });
 armPendingCoopRun({ role: 'guest', seed: 200 });
 assert('re-arm overwrites pending', peekPendingCoopRun()?.seed === 200);
+
+// ── Phase D2: isCoopHost() / isCoopGuest() EXACT role checks ─────────────
+// These MUST use strict equality on role, never negation, so solo and
+// COOP_DEBUG (role:'local') fall through the host-like code path.
+reset();
+assert('isCoopHost() false when no run', isCoopHost() === false);
+assert('isCoopGuest() false when no run', isCoopGuest() === false);
+
+reset();
+armPendingCoopRun({ role: 'host', seed: 1 });
+consumePendingCoopRun();
+assert("isCoopHost() true when role='host'", isCoopHost() === true);
+assert("isCoopGuest() false when role='host'", isCoopGuest() === false);
+
+reset();
+armPendingCoopRun({ role: 'guest', seed: 1 });
+consumePendingCoopRun();
+assert("isCoopGuest() true when role='guest'", isCoopGuest() === true);
+assert("isCoopHost() false when role='guest'", isCoopHost() === false);
+
+reset();
+armPendingCoopRun({ role: 'local', seed: 1 });
+consumePendingCoopRun();
+assert("isCoopHost() false when role='local' (COOP_DEBUG)", isCoopHost() === false);
+assert("isCoopGuest() false when role='local' (COOP_DEBUG)", isCoopGuest() === false);
+
+// Critical invariant: solo/local/host NEVER get the guest gate.
+reset();
+assert('solo: isCoopGuest() === false', isCoopGuest() === false);
+armPendingCoopRun({ role: 'local', seed: 1 }); consumePendingCoopRun();
+assert('local: isCoopGuest() === false', isCoopGuest() === false);
+reset();
+armPendingCoopRun({ role: 'host', seed: 1 }); consumePendingCoopRun();
+assert('host: isCoopGuest() === false', isCoopGuest() === false);
+
+// clear resets both
+reset();
+armPendingCoopRun({ role: 'guest', seed: 1 });
+consumePendingCoopRun();
+clearCoopRun();
+assert('after clear: isCoopHost() false', isCoopHost() === false);
+assert('after clear: isCoopGuest() false', isCoopGuest() === false);
 
 console.log(`Coop-run-config suite: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
