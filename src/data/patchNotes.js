@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.18',
+      label: 'COOP PHASE C3A-MIN-1: SINGLE-ROOM TERMINATION',
+      summary: ['Online coop runs now terminate cleanly after Room 1 clears, skipping the boon picker. Foundation for one deterministic online single-room run. Solo and ?coopdebug=1 paths unchanged.'],
+      highlights: [
+        'New isOnlineCoopRun() in src/net/coopRunConfig.js: true only when role===\'host\'||\'guest\'. solo (no run) and COOP_DEBUG (role:\'local\') return false — both behave identically to today.',
+        'script.js: shouldShowUpgrades gate now routes online coop peers to endCoopDemoRun() instead of showUpgrades(). Solo and COOP_DEBUG still call showUpgrades() unchanged.',
+        'endCoopDemoRun(): freezes sim (gstate=\'gameover\', cancelAnimationFrame), reuses the gameOver overlay with note "COOP DEMO COMPLETE · Room 1 cleared · Boon selection coming in C3b", calls clearCoopRun(). Does NOT push leaderboard entry.',
+        'COOP_DEBUG parity: ?coopdebug=1 has role:\'local\' → isOnlineCoopRun()=false → still shows boon picker as before.',
+        'Determinism: endCoopDemoRun is a no-op in the pure-sim harness (no coop run armed) — byte-identical 11/11.',
+        'New scripts/test-coop-single-room.mjs: 26 contract tests (isOnlineCoopRun helper, all-four-states matrix, shouldEndAfterRoomClear pure logic). 321 tests across 16 suites.',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.17',
       label: 'COOP PHASE C3A-CORE-3: LOCKSTEP GATE',
       summary: ['Internal scaffolding: two-counter lockstep gate (sendTick / executeTick) prevents sim divergence when network latency is non-zero. ?coopdebug=1 only.'],

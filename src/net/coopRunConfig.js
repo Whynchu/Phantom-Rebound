@@ -61,6 +61,14 @@ function getActiveCoopRun() {
   return _active;
 }
 
+// Returns true only for real online peers (host or guest).
+// solo (no run) and COOP_DEBUG (role:'local') both return false so neither
+// path hits the single-room termination gate introduced in C3a-min-1.
+function isOnlineCoopRun() {
+  const role = _active?.role;
+  return role === 'host' || role === 'guest';
+}
+
 export {
   armPendingCoopRun,
   consumePendingCoopRun,
@@ -68,4 +76,5 @@ export {
   clearCoopRun,
   isCoopRun,
   getActiveCoopRun,
+  isOnlineCoopRun,
 };

@@ -134,6 +134,7 @@ import {
   consumePendingCoopRun,
   clearCoopRun,
   isCoopRun,
+  isOnlineCoopRun,
 } from './src/net/coopRunConfig.js';
 import { getLocalSlot } from './src/net/onlineSlotRuntime.js';
 import {
@@ -2225,6 +2226,30 @@ function restoreRun(saved) {
   clearSavedRun();
 }
 
+// C3a-min-1: terminate online coop run cleanly after the first room clears,
+// skipping the boon picker. Solo and COOP_DEBUG (role:'local') never reach
+// this path — isOnlineCoopRun() gates the call site.
+function endCoopDemoRun() {
+  if (gameOverShown) return;
+  gameOverShown = true;
+  clearSavedRun();
+  gstate = 'gameover';
+  cancelAnimationFrame(raf);
+  showGameOverScreen({
+    panelEl: gameOverScreen,
+    boonsPanelEl: goBoonsPanel,
+    scoreEl: goScoreEl,
+    noteEl: goNoteEl,
+    breakdownEl: goBreakdownEl,
+    score,
+    note: 'COOP DEMO COMPLETE · Room 1 cleared · Boon selection coming in C3b',
+    breakdown: { ...scoreBreakdown },
+    stats: { kills, rooms: roomIndex + 1, elapsedMs: runElapsedMs, damagelessRooms },
+    renderBoons: renderGameOverBoons,
+  });
+  try { clearCoopRun(); } catch (_) {}
+}
+
 function gameOver(){
   if(gameOverShown) return;
   gameOverShown = true;
@@ -2571,7 +2596,11 @@ function update(dt,ts){
   roomPhase = clearStep.roomPhase;
   roomClearTimer = clearStep.roomClearTimer;
   if(clearStep.shouldShowUpgrades) {
-    showUpgrades();
+    if (isOnlineCoopRun()) {
+      endCoopDemoRun();
+    } else {
+      showUpgrades();
+    }
   }
 
   // 'reward' and 'between' phases are handled by showUpgrades / card click callbacks
