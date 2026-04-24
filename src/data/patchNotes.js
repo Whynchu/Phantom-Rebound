@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.11',
+      label: 'COOP PHASE C2E: PER-SLOT BOONS',
+      summary: ['Internal scaffolding: guest slot 1 now gets its own boon picker between rooms. Each player picks independently before play resumes. ?coopdebug=1 only.'],
+      highlights: [
+        'New pendingBoonSlotQueue + advanceCoopBoonQueue(): host picks first (full legendary path unchanged), then each alive guest slot picks from its own UPG clone.',
+        'New showUpgradesForGuestSlot(slot): calls the existing showBoonSelection UI with slot.upg as the pool, applying picks to slot.upg and slot.metrics.hp/maxHp. No rerolls, no legendaries for guest slot in this phase.',
+        'Resume path consolidated into resumePlayAfterBoons() and called once the queue drains. Solo path has an empty queue → bit-identical to previous flow.',
+        'Guest boon picks persist across rooms via slot.upg and surface in the renderer (charge ring, aim) on the next combat tick.',
+        'New scripts/test-coop-boon-queue.mjs: 10 contract tests (solo no-op, FIFO order, dead-slot skip, multi-guest drain). 157 tests total across 10 suites.',
+        'Determinism preserved: solo path unchanged; compound replay still byte-identical. Playwright smoke clean for both solo and ?coopdebug=1 (two pickers open serially, play resumes after second).',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.10',
       label: 'COOP PHASE C2D-2: GUEST FIRE',
       summary: ['Internal scaffolding: guest slot 1 now auto-aims at the nearest enemy and fires. ?coopdebug=1 is now end-to-end playable same-device 2P (dev harness).'],

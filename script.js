@@ -1852,10 +1852,66 @@ function spawnGreyDrops(x,y,ts,count=getEnemyGreyDropCount()) {
   });
 }
 
+function resumePlayAfterBoons() {
+  startRoom(roomIndex + 1);
+  gstate = 'playing';
+  lastT = performance.now();
+  simAccumulatorMs = 0;
+  raf = requestAnimationFrame(loop);
+  btnPause.style.display = 'inline-flex';
+  btnPatchNotes.style.display = 'none';
+}
+
+// C2e — per-player boon picker queue. Host picks first (via the legacy
+// showUpgrades flow), then each guest slot picks from its own UPG pool before
+// play resumes. Guest picks are simpler: fresh-default UPG, no legendaries,
+// no reroll economy — just 3 standard choices applied to slot.upg.
+let pendingBoonSlotQueue = [];
+
+function advanceCoopBoonQueue() {
+  if (!COOP_DEBUG) return false;
+  while (pendingBoonSlotQueue.length > 0) {
+    const nextSlot = pendingBoonSlotQueue.shift();
+    if (!nextSlot || (nextSlot.metrics.hp || 0) <= 0) continue;
+    showUpgradesForGuestSlot(nextSlot);
+    return true;
+  }
+  return false;
+}
+
+function showUpgradesForGuestSlot(slot) {
+  gstate = 'upgrade';
+  cancelAnimationFrame(raf);
+  showBoonSelection({
+    upg: slot.upg,
+    hp: slot.metrics.hp,
+    maxHp: slot.metrics.maxHp,
+    rerolls: 0,
+    onSelect: (boon) => {
+      const state = { hp: slot.metrics.hp, maxHp: slot.metrics.maxHp };
+      const evolvedBoon = getEvolvedBoon(boon, slot.upg);
+      evolvedBoon.apply(slot.upg, state);
+      slot.metrics.hp = state.hp;
+      slot.metrics.maxHp = state.maxHp;
+      try { (slot.upg.boonSelectionOrder = slot.upg.boonSelectionOrder || []).push(evolvedBoon.name); } catch (_) {}
+      document.getElementById('s-up').classList.add('off');
+      if (advanceCoopBoonQueue()) return;
+      resumePlayAfterBoons();
+    },
+  });
+}
+
 function showUpgrades() {
   gstate='upgrade'; cancelAnimationFrame(raf);
   saveRunState();
   UPG._roomIndex = roomIndex;
+  // C2e — enqueue guest slots so they pick after host. Guests share the same
+  // between-room trigger but apply choices to their own UPG clone.
+  if (COOP_DEBUG) {
+    pendingBoonSlotQueue = playerSlots.filter((s) => s && s.id !== 0 && (s.metrics.hp || 0) > 0);
+  } else {
+    pendingBoonSlotQueue = [];
+  }
   showBoonSelection({
     upg: UPG,
     hp,
@@ -1870,10 +1926,8 @@ function showUpgrades() {
       document.getElementById('s-up').classList.add('off');
       UPG._boonAppliedForRoom = roomIndex + 1;
       saveRunState();
-      startRoom(roomIndex+1);
-      gstate='playing'; lastT=performance.now(); simAccumulatorMs=0; raf=requestAnimationFrame(loop);
-      btnPause.style.display = 'inline-flex';
-      btnPatchNotes.style.display = 'none';
+      if (advanceCoopBoonQueue()) return;
+      resumePlayAfterBoons();
     },
     onLegendaryReject: (leg) => {
       legendaryRejectedIds.add(leg.id);
@@ -1881,10 +1935,8 @@ function showUpgrades() {
       pendingLegendary = null;
       boonHistory.push('Reject-' + leg.name);
       document.getElementById('s-up').classList.add('off');
-      startRoom(roomIndex+1);
-      gstate='playing'; lastT=performance.now(); simAccumulatorMs=0; raf=requestAnimationFrame(loop);
-      btnPause.style.display = 'inline-flex';
-      btnPatchNotes.style.display = 'none';
+      if (advanceCoopBoonQueue()) return;
+      resumePlayAfterBoons();
     },
     onSelect: (boon) => {
       const state = { hp, maxHp };
@@ -1904,11 +1956,8 @@ function showUpgrades() {
       document.getElementById('s-up').classList.add('off');
       UPG._boonAppliedForRoom = roomIndex + 1;
       saveRunState();
-      startRoom(roomIndex+1);
-      gstate='playing'; lastT=performance.now(); simAccumulatorMs=0;
-      raf=requestAnimationFrame(loop);
-      btnPause.style.display = 'inline-flex';
-      btnPatchNotes.style.display = 'none';
+      if (advanceCoopBoonQueue()) return;
+      resumePlayAfterBoons();
     },
   });
 }
