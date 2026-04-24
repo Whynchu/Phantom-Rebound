@@ -64,59 +64,74 @@ function createNullInputAdapter() {
 // Phase C3a-core-2 — Remote input adapter.
 //
 // Reads quantized frames from a remoteInputBuffer ring buffer and dequantizes
-// them back to the moveVector contract. If no frame is available for the
-// current tick, returns an inactive/stall vector — the lockstep gate (C3a-
-// core-3) prevents the sim from advancing past a missing tick, so this
-// fallback should rarely fire in a healthy run.
+// them back to the moveVector contract. If no fresh frame is available for the
+// current tick, returns a stale/no-signal vector (active=false, isStill=false)
+// so the consumer can suppress autofire instead of locking on a stale still=1
+// frame.
+//
+// D12 — staleness guard. Previously, a missing exact-tick match would either
+// freeze slot 1 (pre-D11) or, with D11's peekOldest fallback, return a
+// possibly-ancient still=1 frame which made the host's slot 1 autofire
+// continuously even though the guest had moved on. Now: if the best matching
+// frame is more than STALE_TICK_THRESHOLD ticks behind the requested tick (or
+// no frame exists at all), we report `stale: true` and `active: false` so
+// updateGuestFire can skip charging+firing during gaps. Movement zeroes out
+// for the gap; consumers that want to lerp through gaps can read `stale`.
 //
 // Dequantization:
 //   dx = frame.dx / 127   (inverse of Math.round(v * 127))
 //   dy = frame.dy / 127
 //   t  = frame.t  / 255
-function createRemoteInputAdapter(ringBuffer, { getCurrentTick } = {}) {
+const STALE_TICK_THRESHOLD = 12; // ~200 ms at 60 Hz; tolerates a 4-frame batch + jitter
+
+function createRemoteInputAdapter(ringBuffer, { getCurrentTick, staleTickThreshold = STALE_TICK_THRESHOLD } = {}) {
   if (!ringBuffer || typeof ringBuffer.peekAt !== 'function') {
     throw new Error('createRemoteInputAdapter: ringBuffer required');
   }
   if (typeof getCurrentTick !== 'function') {
     throw new Error('createRemoteInputAdapter: getCurrentTick required');
   }
-  // D11 — tick-tolerant lookup. Try exact tick match first (deterministic
-  // path used by the host-remote-input processor), then fall back to the
-  // newest frame at-or-before the requested tick (for when host's simTick
-  // has drifted past available frames — e.g. out-of-sync start, network
-  // jitter, post-pause resume). If the host is BEHIND any buffered frame
-  // (peekLatestUpTo returns null), use the oldest available frame so slot 1
-  // still moves while ticks catch up. Without this fallback chain, slot 1
-  // freezes whenever the two simTick clocks diverge by more than one frame.
+  // D11/D12 — tick-tolerant lookup with staleness guard.
+  // Returns { frame, stale } where:
+  //   frame: best-effort frame to use (newest ≤ tick, then oldest, then null)
+  //   stale: true when no frame is "fresh" — caller should suppress autofire,
+  //          stop motion, etc. Determinism path (hostRemoteInputProcessor)
+  //          uses peekAt directly and is unaffected.
   function selectFrame() {
     const t = getCurrentTick();
-    let frame = ringBuffer.peekAt(t);
-    if (frame) return frame;
+    const exact = ringBuffer.peekAt(t);
+    if (exact) return { frame: exact, stale: false };
+    let frame = null;
     if (typeof ringBuffer.peekLatestUpTo === 'function') {
       frame = ringBuffer.peekLatestUpTo(t);
-      if (frame) return frame;
     }
-    if (typeof ringBuffer.peekOldest === 'function') {
+    if (!frame && typeof ringBuffer.peekOldest === 'function') {
       frame = ringBuffer.peekOldest();
-      if (frame) return frame;
     }
-    return null;
+    if (!frame) return { frame: null, stale: true };
+    const ageTicks = Math.abs(t - frame.tick);
+    return { frame, stale: ageTicks > staleTickThreshold };
   }
   return {
     kind: 'remote',
     moveVector() {
-      const frame = selectFrame();
-      if (!frame) return { dx: 0, dy: 0, t: 0, active: false };
+      const { frame, stale } = selectFrame();
+      if (!frame || stale) {
+        return { dx: 0, dy: 0, t: 0, active: false, stale: true };
+      }
       return {
         dx: frame.dx / 127,
         dy: frame.dy / 127,
         t: frame.t / 255,
         active: frame.still === 0,
+        stale: false,
       };
     },
     isStill() {
-      const frame = selectFrame();
-      if (!frame) return true;
+      const { frame, stale } = selectFrame();
+      // No fresh signal: report not-still so autofire callers (which trigger
+      // on `isStill === true`) don't fire on stale data.
+      if (!frame || stale) return false;
       return frame.still === 1;
     },
   };

@@ -1177,12 +1177,14 @@ function installCoopInputUplink(armedCoop) {
     sendGameplay: (msg) => session.sendGameplay(msg),
     localAdapter: createHostInputAdapter(joy),
     localSlotIndex,
-    batchSize: 8,
+    // D12 — was 8 (133 ms input lag); 4 cuts the latency in half (~67 ms)
+    // while staying well under the Supabase 20 msg/s rate cap (15 msg/s).
+    batchSize: 4,
   });
   // Phase D4: host-only snapshot broadcaster. Emits a full state snapshot
-  // every 6 sim ticks (60 Hz / 6 = 10 Hz). Combined with guest's 8-frame
-  // input batch (~7.5 msg/s) this stays under Supabase's 20 msg/s budget
-  // with comfortable headroom.
+  // every 4 sim ticks (60 Hz / 4 = 15 Hz, D12 — was 6/10 Hz). Combined with
+  // guest's 4-frame input batch (~15 msg/s) each peer stays within the
+  // Supabase 20 msg/s budget with headroom for handshakes and retries.
   if (role === 'host') {
     // Phase D4.5: spin up slot 1 driven by the remote-input ring buffer +
     // a processor that tracks consumed ticks. Must come BEFORE the broadcaster
@@ -1194,7 +1196,7 @@ function installCoopInputUplink(armedCoop) {
       sendGameplay: (msg) => session.sendGameplay(msg),
       sequencer: coopSnapshotSequencer,
       runId: currentRunId,
-      ticksPerSnapshot: 6,
+      ticksPerSnapshot: 4,
       getState: collectHostSnapshotState,
       logger: (msg, err) => { try { console.warn('[coop] ' + msg, err || ''); } catch (_) {} },
     });
@@ -1210,6 +1212,11 @@ function installCoopInputUplink(armedCoop) {
     // don't thrash the entity arrays at 60 Hz against a 10 Hz feed.
     guestSnapshotApplier = createSnapshotApplier({
       enemyTypeDefs: ENEMY_TYPES,
+      // D12 — render at -70ms instead of -100ms. Snapshots now arrive every
+      // 67ms (15 Hz) so 70ms still buffers slightly more than one full
+      // interval, preserving smooth interpolation while making the guest's
+      // view of the host ~30ms more current.
+      renderDelayMs: 70,
       // Phase D5d — guest's own slot 1 is locally predicted. The applier
       // skips continuous body x/y/vx/vy writes for slot id 1 so the
       // prediction step (updateOnlineGuestPrediction) owns movement;
@@ -1639,9 +1646,17 @@ function updateGuestFire(dt, combatActive) {
     const upg = slot.upg;
     const mv = slot.input ? slot.input.moveVector() : { active: false };
     const isStill = !mv.active;
+    // D12 — when the remote-input adapter has no fresh frame, treat the slot
+    // as "no signal": don't charge, don't autofire, and cap the fire timer
+    // exactly as we would for a moving slot. This prevents the host from
+    // spamming bullets for slot 1 whenever the guest's input batch is in
+    // flight or lost (the pre-D12 behavior locked onto a stale still=1
+    // frame and fired continuously).
+    const noSignal = !!mv.stale;
 
     // Charge build: full 1.0 in ~1s while still (matches default UPG).
-    if (isStill) {
+    // Only charge on a fresh "still" signal — never during stale gaps.
+    if (isStill && !noSignal) {
       slot.metrics.charge = Math.min(upg.maxCharge || 1, (slot.metrics.charge || 0) + dt);
     }
 
@@ -1654,8 +1669,8 @@ function updateGuestFire(dt, combatActive) {
     if ((slot.metrics.charge || 0) < 1) continue;
     const interval = 1 / ((upg.sps || 0.8) * 2);
     slot.metrics.fireT = (slot.metrics.fireT || 0) + dt;
-    if (!isStill) slot.metrics.fireT = Math.min(slot.metrics.fireT, interval);
-    if (slot.metrics.fireT >= interval && isStill) {
+    if (!isStill || noSignal) slot.metrics.fireT = Math.min(slot.metrics.fireT, interval);
+    if (slot.metrics.fireT >= interval && isStill && !noSignal) {
       slot.metrics.fireT = slot.metrics.fireT % interval;
       firePlayer(slot, target.e.x, target.e.y);
     }

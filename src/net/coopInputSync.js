@@ -5,8 +5,11 @@
 // populates a ring buffer.
 //
 // Supabase realtime hard cap: 20 events/s. Sim runs at 60 Hz. Default
-// batchSize=8 → ~7.5 messages/s. Combined with the 10 Hz host snapshot
-// broadcaster (D4) that gives ~17.5 msg/s with headroom for retries/pings.
+// batchSize=4 (D12) → ~15 messages/s. Combined with the 15 Hz host snapshot
+// broadcaster (D12) that's 15 msg/s on each peer's outbound, well under the
+// 20 msg/s budget. Pre-D12 default of batchSize=8 produced ~133 ms input
+// latency which made slot 1 feel sluggish on the host's screen; halving to
+// 4 brings input lag to ~67 ms.
 //
 // Quantization note:
 //   dx/dy: Math.round(v * 127)  →  int8 range [-127, 127]
@@ -19,7 +22,7 @@ function createCoopInputSync({
   sendGameplay,
   localAdapter,
   localSlotIndex,
-  batchSize = 8,
+  batchSize = 4,
   logger = null,
 } = {}) {
   if (typeof sendGameplay !== 'function') throw new Error('createCoopInputSync: sendGameplay required');

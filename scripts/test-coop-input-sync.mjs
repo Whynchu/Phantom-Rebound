@@ -319,7 +319,7 @@ test('ingest: multiple listeners all fire; unsubscribe stops one', () => {
 // Remote adapter tests (4)
 // ---------------------------------------------------------------------------
 
-test('remote adapter: moveVector() with no frame returns inactive', () => {
+test('remote adapter: moveVector() with no frame returns inactive + stale', () => {
   const rb = createRemoteInputBuffer();
   let currentTick = 5;
   const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => currentTick });
@@ -328,7 +328,10 @@ test('remote adapter: moveVector() with no frame returns inactive', () => {
   assert.equal(v.dx, 0);
   assert.equal(v.dy, 0);
   assert.equal(v.t, 0);
-  assert.equal(adapter.isStill(), true);
+  assert.equal(v.stale, true);
+  // D12 — isStill() returns false on no signal so autofire callers don't
+  // lock onto a non-existent "still" state and spam-fire indefinitely.
+  assert.equal(adapter.isStill(), false);
 });
 
 test('remote adapter: moveVector() with frame dequantized correctly (within ±0.01)', () => {
@@ -366,6 +369,43 @@ test('remote adapter: kind is "remote"', () => {
   const rb = createRemoteInputBuffer();
   const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => 0 });
   assert.equal(adapter.kind, 'remote');
+});
+
+// D12 — staleness guard tests
+test('remote adapter: D12 stale frame (>threshold ticks old) reports stale + isStill=false', () => {
+  const rb = createRemoteInputBuffer();
+  // still=1 frame at tick 0 — pre-D12 this would lock isStill=true forever
+  // when host raced ahead, causing slot 1 to autofire continuously.
+  rb.push({ tick: 0, dx: 0, dy: 0, t: 0, still: 1 });
+  let currentTick = 100; // 100 ticks ahead → stale
+  const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => currentTick });
+  const v = adapter.moveVector();
+  assert.equal(v.stale, true, 'moveVector should mark stale');
+  assert.equal(v.active, false, 'stale frame must not be active');
+  assert.equal(adapter.isStill(), false, 'isStill must be false on stale to suppress autofire');
+});
+
+test('remote adapter: D12 fresh frame within threshold is NOT stale', () => {
+  const rb = createRemoteInputBuffer();
+  rb.push({ tick: 95, dx: 0, dy: 0, t: 0, still: 1 });
+  let currentTick = 100; // 5 ticks ahead — within default threshold of 12
+  const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => currentTick });
+  const v = adapter.moveVector();
+  assert.equal(v.stale, false, 'within threshold should NOT be stale');
+  assert.equal(adapter.isStill(), true, 'fresh still=1 propagates as isStill=true');
+});
+
+test('remote adapter: D12 staleTickThreshold is configurable', () => {
+  const rb = createRemoteInputBuffer();
+  rb.push({ tick: 0, dx: 0, dy: 0, t: 0, still: 1 });
+  let currentTick = 5;
+  const adapter = createRemoteInputAdapter(rb, {
+    getCurrentTick: () => currentTick,
+    staleTickThreshold: 3,
+  });
+  // 5 ticks ahead, threshold=3 → stale
+  assert.equal(adapter.moveVector().stale, true);
+  assert.equal(adapter.isStill(), false);
 });
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,22 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.38',
+      label: 'COOP PHASE D12: LATENCY CUT + AUTOFIRE FIX',
+      summary: ['First post-D11 playtest revealed two heavy issues: slot 1 (guest\'s player) appeared to fire constantly on the host\'s screen even when the guest was moving, and both peers\' views of each other felt sluggish and stale (positions lagged the actual play by 200ms+ end-to-end). D12 cuts ~50% off the input/snapshot latency stack and adds a staleness guard to the remote-input adapter so missing/old frames no longer trigger phantom autofire.'],
+      highlights: [
+        'Root cause of "P2 always firing": auto-fire-when-still is the game\'s core fire mechanic. With D11\'s peekOldest fallback returning whatever frame the buffer had — usually a stale `still=1` from before the guest moved — host\'s slot 1 saw a permanent "still" signal and fired every shot interval (~625 ms) until a fresher frame arrived. With 8-frame input batches at 60 Hz the fresh frames landed ~133 ms apart, so the false-still window was wide enough to look like nonstop fire.',
+        'Staleness guard on remote input adapter: each lookup now reports `stale: true` when the best matching frame is more than 12 ticks (~200 ms) behind the host\'s simTick, OR when no frame exists at all. moveVector returns `{active:false, stale:true}` and isStill returns `false` (no signal — explicitly NOT still). updateGuestFire respects the new flag: charge build pauses, fire timer caps as if the slot is moving, autofire skipped. When fresh frames resume arriving, fire behavior returns instantly.',
+        'Threshold is configurable per adapter via `staleTickThreshold` for testing — default 12 ticks tolerates one full batch + jitter without false positives.',
+        'Input batch size halved: 8 → 4 (`createCoopInputSync` default + the lobby wire-up site). Average slot-1 input lag on host drops from 133 ms to 67 ms; guest motion changes (start/stop direction) reach the host roughly twice as fast. Bandwidth stays well under Supabase\'s 20 events/s cap (~15 msg/s outbound input, +15 msg/s inbound snapshots = 15 each direction).',
+        'Snapshot rate raised: 10 Hz → 15 Hz (`ticksPerSnapshot: 6 → 4`). Host now broadcasts entity state every 67 ms instead of 100 ms — guest sees the host position update 50% more often.',
+        'Render delay tightened: 100 ms → 70 ms in the guest\'s snapshot applier. Still buffers slightly more than one snapshot interval (67 ms) so the 2-snapshot interpolation never starves; takes 30 ms of authoritative-view lag off the guest\'s perception.',
+        'Net combined latency improvement: input round-trip (guest move → host applies → snapshot back to guest) drops from ~233 ms to ~137 ms — about 40% off, while staying single-shot under the 20 msg/s rate cap.',
+        'Tests: +3 new staleness suite cases on the remote adapter (stale-frame returns stale+isStill=false; fresh-within-threshold passes through; threshold is configurable). Updated the legacy "no frame returns inactive" test to assert the new contract (stale=true, isStill=false). 27 cases in coop-input-sync, 24 suites green overall, determinism 11/11 byte-identical (solo/COOP_DEBUG never use the remote adapter).',
+        'Known limits kept open for D13+: guest-side bullet prediction (D5f) — guest\'s own shots still appear after the next snapshot lands, so firing has a perceptible click-to-bullet delay on the guest. Host-tab-hidden policy and auto-rejoin on guest refresh remain unimplemented; both are robustness items targeted for D14.',
+      ]
+    },
+  {
       version: '1.20.37',
       label: 'COOP PHASE D11: SYNC START + TICK-TOLERANT INPUT',
       summary: ['Fixes the two bugs that surfaced in v1.20.36 playtest: (1) host and guest started their sims at independent moments (whoever clicked Start first ran ahead until the other clicked theirs), so simTick clocks were never aligned; (2) host\'s slot-1 remote-input adapter only matched on EXACT tick — once host\'s simTick passed available frames, slot 1 froze on the host\'s screen. Online co-op should now play with the guest visibly moving on the host\'s screen.'],
