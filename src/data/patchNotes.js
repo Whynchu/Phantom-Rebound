@@ -2,6 +2,26 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.27',
+      label: 'COOP PHASE D4: HOST SNAPSHOT BROADCAST',
+      summary: ['Host now emits a full state snapshot every 6 sim ticks (~10 Hz). Each snapshot is tagged with a runId/epoch so stale packets from a disposed run can never contaminate the next one. Guests receive and store the latest snapshot but do not yet render from it — D5 wires prediction + interpolation. Determinism canary byte-identical.'],
+      highlights: [
+        'New src/net/coopSnapshotBroadcaster.js: tick-cadence broadcaster. Cadence is sim-tick-based (NOT wall time) so behavior is independent of frame jitter, tab-throttle and rAF resume bursts — a 500-tick gap emits exactly ONE snapshot, not 84 catch-up sends.',
+        'Async-safe sendGameplay: Promise.resolve(result).then(() => sent++).catch(failed++) pattern matches the D3-fix shape so unhandled rejections cannot leak. Sync throws and async rejections are both counted in stats.failed.',
+        'Late-resolve safety: if dispose() fires before an in-flight async send resolves, the late .then() does NOT increment stats.sent. Important for runId/epoch transitions where a brand-new broadcaster is taking over.',
+        'New src/net/coopSnapshot.js schema additions: required `runId` (string 1-128 chars) on every encoded snapshot; lastProcessedInputSeq[0|1] now u32-or-null (was forced 0). null = "host has not consumed any input for this slot yet" — D6 reconciliation must NOT trim replay buffer when null. 0 is reserved as a valid tick.',
+        'script.js wiring: currentRunId generated via crypto.randomUUID() (with fallback) on init() and restoreRun() right after resetBulletIds(). installCoopInputUplink builds the broadcaster on host role; teardownCoopInputUplink disposes it. Loop calls coopSnapshotBroadcaster?.tick(simTick) inside the fixed-step accumulator so cadence is deterministic.',
+        'Guest snapshot receipt: onGameplay handler now also processes kind=\'snapshot\' envelopes. Epoch gate: if incoming runId differs from latestRemoteSnapshot.runId we hard-reset seq tracking (otherwise a late packet from the old run could fight a fresh sequence). isNewerSnapshot() then gates against duplicates / out-of-order delivery.',
+        'collectHostSnapshotState() builds a defensive loose object: ?? defaults on every field, ownerSlot clamped to non-negative (danger bullets carry the danger/player discriminator in the `type` field). encodeSnapshot is strict — any throw is caught by the broadcaster and counted as a failed send rather than crashing the loop.',
+        'Rate budget: 10 Hz host (snapshots) + ~7.5 Hz guest (8-frame input batch) = ~17.5 msg/s. Comfortable headroom under Supabase 20 msg/s cap for retries / pings / boon-pick handshakes.',
+        'New scripts/test-coop-snapshot-broadcaster.mjs: 14 tests covering construction guards, cadence (first-tick + every-N), gap-no-burst, ticksPerSnapshot floor, non-finite simTick rejection, output envelope shape, sequencer integration, sync send error isolation, async rejection not-unhandled, getState throw isolation, encode failure isolation, dispose stops sends, late-resolve-after-dispose does not count, stats fields populated.',
+        'Updated scripts/test-coop-snapshot.mjs: every encodeSnapshot call now includes runId; new tests for runId required, runId type/length validation, lastProcessedInputSeq null support per slot. 21/21 passing.',
+        'All 21 test suites green (260+ assertions). Determinism 11/11 byte-identical — no host-only code path touches the deterministic sim.',
+        'D7 host-side lag-comp remains BLOCKED/DEFERRED: Valve-style rewind only works for hitscan, but our projectiles bounce/home/split. Host-authoritative projectile timing for v1; revisit if playtest shows guest shots feel unfair.',
+        'Next up (Phase D4.5): host drives online slot 1 by draining remoteInputBuffer + sets a true lastProcessedInputSeq[1]. Then D5 (guest prediction + interpolation, snapshots actually drive rendering).',
+      ]
+    },
+  {
       version: '1.20.26',
       label: 'COOP PHASE D3-FIX: TRANSPORT CONTRACT + ASYNC SEND',
       summary: ['Pre-D4 hotfix. Rubber-duck found that D3 was silently broken on the real Supabase transport: the onGameplay handler treated its arg as the raw payload, but coopSession actually delivers {payload,from,ts} envelopes — every guest input frame was being dropped. Also tightened async sendGameplay error handling.'],

@@ -9,12 +9,17 @@
 //
 //   {
 //     kind: 'snapshot',
-//     snapshotSeq: uint32            // monotonic, host-produced, wraps at 2^32
-//     snapshotSimTick: uint32,       // host simTick AT which state was sampled
+//     runId: string,                  // host-scoped run epoch (D4). Guests
+//                                     //   reset latest-snapshot tracking when
+//                                     //   runId changes; protects against
+//                                     //   stale post-dispose deliveries.
+//     snapshotSeq: uint32             // monotonic, host-produced, wraps at 2^32
+//     snapshotSimTick: uint32,        // host simTick AT which state was sampled
 //     lastProcessedInputSeq: {        // per-slot: last guest-input tick the
-//       0: uint32,                   //    host consumed BEFORE this snapshot.
-//       1: uint32,                   //    Guests use this to trim their
-//     },                             //    replay buffer during reconciliation.
+//       0: uint32 | null,             //    host consumed BEFORE this snapshot.
+//       1: uint32 | null,             //    null = no input consumed yet for
+//     },                              //    that slot. D6 must NOT trim its
+//                                     //    replay buffer when null.
 //     slots: [
 //       { id, x, y, vx, vy, hp, maxHp, charge, maxCharge, aimAngle,
 //         invulnT, shieldT, stillTimer, alive }
@@ -76,6 +81,22 @@ function createSnapshotSequencer({ start = 0 } = {}) {
 function u32(v, fieldName) {
   if (!Number.isFinite(v) || v < 0) throw new Error('snapshot: ' + fieldName + ' must be non-negative finite, got ' + v);
   return (Math.floor(v) >>> 0);
+}
+
+// uint32 OR null. Used for lastProcessedInputSeq slot fields where the host
+// has not consumed any guest input yet (rubber-duck #4: do not fake this
+// field with a synthetic 0/-1 sentinel — null means "no ack to anchor on").
+function u32OrNull(v, fieldName) {
+  if (v === null || v === undefined) return null;
+  return u32(v, fieldName);
+}
+
+function reqString(v, fieldName, { minLen = 1, maxLen = 128 } = {}) {
+  if (typeof v !== 'string') throw new Error('snapshot: ' + fieldName + ' must be string, got ' + typeof v);
+  if (v.length < minLen || v.length > maxLen) {
+    throw new Error('snapshot: ' + fieldName + ' length out of range [' + minLen + ',' + maxLen + '], got ' + v.length);
+  }
+  return v;
 }
 
 // Coerce to finite number, throwing on NaN/Infinity.
@@ -147,10 +168,10 @@ function encodeRoom(src) {
 }
 
 function encodeLastProcessedInputSeq(src) {
-  if (!src || typeof src !== 'object') return { 0: 0, 1: 0 };
+  if (!src || typeof src !== 'object') return { 0: null, 1: null };
   return {
-    0: u32(src[0] ?? 0, 'lastProcessedInputSeq[0]'),
-    1: u32(src[1] ?? 0, 'lastProcessedInputSeq[1]'),
+    0: u32OrNull(src[0], 'lastProcessedInputSeq[0]'),
+    1: u32OrNull(src[1], 'lastProcessedInputSeq[1]'),
   };
 }
 
@@ -158,6 +179,7 @@ function encodeLastProcessedInputSeq(src) {
 // Caller owns the input; output is a fresh object safe to JSON.stringify.
 function encodeSnapshot(state) {
   if (!state || typeof state !== 'object') throw new Error('snapshot: state object required');
+  const runId = reqString(state.runId, 'runId');
   const snapshotSeq = u32(state.snapshotSeq, 'snapshotSeq');
   const snapshotSimTick = u32(state.snapshotSimTick, 'snapshotSimTick');
   const lastProcessedInputSeq = encodeLastProcessedInputSeq(state.lastProcessedInputSeq);
@@ -169,6 +191,7 @@ function encodeSnapshot(state) {
   const elapsedMs = num(state.elapsedMs ?? 0, 'elapsedMs');
   return {
     kind: SNAPSHOT_KIND,
+    runId,
     snapshotSeq,
     snapshotSimTick,
     lastProcessedInputSeq,

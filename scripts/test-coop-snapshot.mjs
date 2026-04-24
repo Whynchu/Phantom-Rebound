@@ -23,6 +23,8 @@ function assertThrows(fn, pattern) {
 
 console.log('D4a — coopSnapshot schema');
 
+const RID = 'run-test'; // every snapshot needs a runId; reuse this throughout
+
 // ── Sequencer ─────────────────────────────────────────────────────────────────
 test('sequencer: next increments, peek returns current', () => {
   const s = createSnapshotSequencer();
@@ -67,8 +69,9 @@ test('isNewerSnapshot: non-finite inputs return false', () => {
 
 // ── encodeSnapshot ────────────────────────────────────────────────────────────
 test('encode: minimal valid state', () => {
-  const snap = encodeSnapshot({ snapshotSeq: 3, snapshotSimTick: 180 });
+  const snap = encodeSnapshot({ runId: RID, snapshotSeq: 3, snapshotSimTick: 180 });
   assertEq(snap.kind, SNAPSHOT_KIND);
+  assertEq(snap.runId, RID);
   assertEq(snap.snapshotSeq, 3);
   assertEq(snap.snapshotSimTick, 180);
   assertEq(snap.slots.length, 0);
@@ -78,12 +81,13 @@ test('encode: minimal valid state', () => {
   assertEq(snap.room.phase, 'intro');
   assertEq(snap.score, 0);
   assertEq(snap.elapsedMs, 0);
-  assertEq(snap.lastProcessedInputSeq[0], 0);
-  assertEq(snap.lastProcessedInputSeq[1], 0);
+  assertEq(snap.lastProcessedInputSeq[0], null);
+  assertEq(snap.lastProcessedInputSeq[1], null);
 });
 
 test('encode: full state round-trips via JSON', () => {
   const src = {
+    runId: RID,
     snapshotSeq: 42,
     snapshotSimTick: 2520,
     lastProcessedInputSeq: { 0: 100, 1: 98 },
@@ -120,6 +124,7 @@ test('encode: full state round-trips via JSON', () => {
 
 test('encode: defaults missing optional scalars to 0/false', () => {
   const snap = encodeSnapshot({
+    runId: RID,
     snapshotSeq: 1,
     snapshotSimTick: 60,
     slots: [{ id: 0, x: 0, y: 0 }], // missing most fields
@@ -133,6 +138,7 @@ test('encode: defaults missing optional scalars to 0/false', () => {
 
 test('encode: coerces fractional u32 fields via floor', () => {
   const snap = encodeSnapshot({
+    runId: RID,
     snapshotSeq: 5.9,  // should floor to 5
     snapshotSimTick: 100.1,
   });
@@ -143,28 +149,32 @@ test('encode: coerces fractional u32 fields via floor', () => {
 // ── Validation failures ───────────────────────────────────────────────────────
 test('encode: throws on missing required top-level fields', () => {
   assertThrows(() => encodeSnapshot(null), /state object required/);
-  assertThrows(() => encodeSnapshot({ snapshotSimTick: 1 }), /snapshotSeq/);
-  assertThrows(() => encodeSnapshot({ snapshotSeq: 1 }), /snapshotSimTick/);
+  assertThrows(() => encodeSnapshot({ runId: RID, snapshotSimTick: 1 }), /snapshotSeq/);
+  assertThrows(() => encodeSnapshot({ runId: RID, snapshotSeq: 1 }), /snapshotSimTick/);
+  assertThrows(() => encodeSnapshot({ snapshotSeq: 1, snapshotSimTick: 1 }), /runId/);
+  assertThrows(() => encodeSnapshot({ runId: '', snapshotSeq: 1, snapshotSimTick: 1 }), /runId/);
+  assertThrows(() => encodeSnapshot({ runId: 123, snapshotSeq: 1, snapshotSimTick: 1 }), /runId/);
 });
 
 test('encode: throws on NaN/Infinity positions', () => {
   assertThrows(
-    () => encodeSnapshot({ snapshotSeq: 1, snapshotSimTick: 1, slots: [{ id: 0, x: NaN, y: 0 }] }),
+    () => encodeSnapshot({ runId: RID, snapshotSeq: 1, snapshotSimTick: 1, slots: [{ id: 0, x: NaN, y: 0 }] }),
     /slots\[0\]\.x/,
   );
   assertThrows(
-    () => encodeSnapshot({ snapshotSeq: 1, snapshotSimTick: 1, slots: [{ id: 0, x: Infinity, y: 0 }] }),
+    () => encodeSnapshot({ runId: RID, snapshotSeq: 1, snapshotSimTick: 1, slots: [{ id: 0, x: Infinity, y: 0 }] }),
     /slots\[0\]\.x/,
   );
 });
 
 test('encode: throws on negative u32 fields', () => {
   assertThrows(
-    () => encodeSnapshot({ snapshotSeq: -1, snapshotSimTick: 0 }),
+    () => encodeSnapshot({ runId: RID, snapshotSeq: -1, snapshotSimTick: 0 }),
     /snapshotSeq/,
   );
   assertThrows(
     () => encodeSnapshot({
+      runId: RID,
       snapshotSeq: 1, snapshotSimTick: 1,
       bullets: [{ id: -5, x: 0, y: 0 }],
     }),
@@ -174,7 +184,7 @@ test('encode: throws on negative u32 fields', () => {
 
 // ── decodeSnapshot ────────────────────────────────────────────────────────────
 test('decode: rejects wrong kind', () => {
-  assertThrows(() => decodeSnapshot({ kind: 'input', snapshotSeq: 1, snapshotSimTick: 1 }), /wrong kind/);
+  assertThrows(() => decodeSnapshot({ kind: 'input', runId: RID, snapshotSeq: 1, snapshotSimTick: 1 }), /wrong kind/);
 });
 
 test('decode: rejects non-object payload', () => {
@@ -183,7 +193,7 @@ test('decode: rejects non-object payload', () => {
 });
 
 test('decode: accepts encoded snapshot as input (idempotent)', () => {
-  const snap1 = encodeSnapshot({ snapshotSeq: 7, snapshotSimTick: 420 });
+  const snap1 = encodeSnapshot({ runId: RID, snapshotSeq: 7, snapshotSimTick: 420 });
   const snap2 = decodeSnapshot(snap1);
   assertEq(snap2.snapshotSeq, 7);
   assertEq(snap2.snapshotSimTick, 420);
@@ -194,7 +204,7 @@ test('decode: accepts encoded snapshot as input (idempotent)', () => {
 
 test('decode: malformed element surfaces a descriptive error', () => {
   assertThrows(
-    () => decodeSnapshot({ kind: 'snapshot', snapshotSeq: 1, snapshotSimTick: 1, enemies: [{ id: 1, x: 'oops', y: 0 }] }),
+    () => decodeSnapshot({ kind: 'snapshot', runId: RID, snapshotSeq: 1, snapshotSimTick: 1, enemies: [{ id: 1, x: 'oops', y: 0 }] }),
     /enemies\[0\]\.x/,
   );
 });
@@ -202,13 +212,36 @@ test('decode: malformed element surfaces a descriptive error', () => {
 // ── Integration with sequencer ────────────────────────────────────────────────
 test('sequencer drives encode; newest-wins via isNewerSnapshot', () => {
   const seq = createSnapshotSequencer();
-  const state = { snapshotSimTick: 60, slots: [], bullets: [], enemies: [] };
+  const state = { runId: RID, snapshotSimTick: 60, slots: [], bullets: [], enemies: [] };
   const s1 = encodeSnapshot({ ...state, snapshotSeq: seq.next() });
   const s2 = encodeSnapshot({ ...state, snapshotSeq: seq.next() });
   const s3 = encodeSnapshot({ ...state, snapshotSeq: seq.next() });
   assert(isNewerSnapshot(s2.snapshotSeq, s1.snapshotSeq));
   assert(isNewerSnapshot(s3.snapshotSeq, s2.snapshotSeq));
   assert(!isNewerSnapshot(s1.snapshotSeq, s3.snapshotSeq), 'out-of-order old packet must lose');
+});
+
+// ── lastProcessedInputSeq null support (D4 rubber-duck #4) ────────────────────
+test('encode: lastProcessedInputSeq accepts null per slot (no-ack sentinel)', () => {
+  const snap = encodeSnapshot({
+    runId: RID, snapshotSeq: 1, snapshotSimTick: 1,
+    lastProcessedInputSeq: { 0: 7, 1: null },
+  });
+  assertEq(snap.lastProcessedInputSeq[0], 7);
+  assertEq(snap.lastProcessedInputSeq[1], null);
+});
+
+test('encode: lastProcessedInputSeq missing entirely defaults to {0:null,1:null}', () => {
+  const snap = encodeSnapshot({ runId: RID, snapshotSeq: 1, snapshotSimTick: 1 });
+  assertEq(snap.lastProcessedInputSeq[0], null);
+  assertEq(snap.lastProcessedInputSeq[1], null);
+});
+
+test('encode: lastProcessedInputSeq throws on negative tick', () => {
+  assertThrows(
+    () => encodeSnapshot({ runId: RID, snapshotSeq: 1, snapshotSimTick: 1, lastProcessedInputSeq: { 0: -1 } }),
+    /lastProcessedInputSeq\[0\]/,
+  );
 });
 
 console.log();

@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.26', label: 'D3-fix transport contract + async send' };
+const VERSION = { num: '1.20.27', label: 'D4 SNAPSHOT BROADCAST' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

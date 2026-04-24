@@ -142,6 +142,11 @@ import {
 import { getLocalSlot } from './src/net/onlineSlotRuntime.js';
 import { createCoopInputSync } from './src/net/coopInputSync.js';
 import {
+  createSnapshotSequencer,
+  isNewerSnapshot,
+} from './src/net/coopSnapshot.js';
+import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
+import {
   showRoomClearOverlay,
   showBossDefeatedOverlay,
   showRoomIntroOverlay,
@@ -805,6 +810,19 @@ let simTick = 0;
 // gameover / new run.
 let coopInputSync = null;
 let coopInputUnsubscribe = null;
+// Phase D4: host-side snapshot broadcaster + runId/epoch tracking. The host
+// generates a fresh runId at init()/restoreRun() (after resetBulletIds) and
+// includes it in every emitted snapshot. Guests track the latest snapshot
+// they've received per runId; when runId changes the guest resets its
+// sequence-number tracker so post-dispose stale packets from a prior run
+// can't contaminate the new one. `null` outside online coop runs.
+let coopSnapshotBroadcaster = null;
+let coopSnapshotSequencer = null;
+let currentRunId = null;
+// Phase D4: guest stores newest received snapshot but does NOT yet render
+// from it (D5 wires interpolation/prediction). Reset on runId change.
+let latestRemoteSnapshot = null;
+let latestRemoteSnapshotSeq = null;
 // Fixed-step accumulator (Phase C1b). Sim runs at a deterministic
 // 60 Hz cadence regardless of display refresh rate. On fast displays
 // we may run 0-1 sim steps per rAF; on slow displays we catch up by
@@ -986,6 +1004,26 @@ function teardownCoopInputUplink() {
     try { coopInputSync.dispose(); } catch (_) {}
     coopInputSync = null;
   }
+  if (coopSnapshotBroadcaster) {
+    try { coopSnapshotBroadcaster.dispose(); } catch (_) {}
+    coopSnapshotBroadcaster = null;
+  }
+  coopSnapshotSequencer = null;
+  latestRemoteSnapshot = null;
+  latestRemoteSnapshotSeq = null;
+}
+
+// Phase D4: deterministic-ish unique run identifier. Used as the snapshot
+// epoch so guests can hard-reset their snapshot tracking when a fresh run
+// starts (otherwise a late-arriving packet from a disposed run could
+// overwrite freshly-initialized state).
+function generateRunId() {
+  try {
+    if (typeof crypto !== 'undefined' && crypto && typeof crypto.randomUUID === 'function') {
+      return 'run-' + crypto.randomUUID();
+    }
+  } catch (_) {}
+  return 'run-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
 }
 
 function installCoopInputUplink(armedCoop) {
@@ -1008,18 +1046,132 @@ function installCoopInputUplink(armedCoop) {
     localSlotIndex,
     batchSize: 8,
   });
+  // Phase D4: host-only snapshot broadcaster. Emits a full state snapshot
+  // every 6 sim ticks (60 Hz / 6 = 10 Hz). Combined with guest's 8-frame
+  // input batch (~7.5 msg/s) this stays under Supabase's 20 msg/s budget
+  // with comfortable headroom.
+  if (role === 'host') {
+    coopSnapshotSequencer = createSnapshotSequencer();
+    coopSnapshotBroadcaster = createSnapshotBroadcaster({
+      sendGameplay: (msg) => session.sendGameplay(msg),
+      sequencer: coopSnapshotSequencer,
+      runId: currentRunId,
+      ticksPerSnapshot: 6,
+      getState: collectHostSnapshotState,
+      logger: (msg, err) => { try { console.warn('[coop] ' + msg, err || ''); } catch (_) {} },
+    });
+    try { console.info('[coop] snapshot broadcaster armed runId=' + currentRunId); } catch (_) {}
+  }
   // Ingest any gameplay payload that is an input frame from the peer.
   // coopSession.onGameplay delivers { payload, from, ts } envelopes — we must
   // unwrap before checking kind. (Pre-D3-fix bug: handler treated `ev` as the
   // raw payload, so every input frame was silently dropped.)
   coopInputUnsubscribe = session.onGameplay((ev) => {
     const payload = ev && ev.payload;
-    if (!payload || payload.kind !== 'input') return;
-    try { coopInputSync && coopInputSync.ingest(payload); } catch (err) {
-      try { console.warn('[coop] input ingest error', err); } catch (_) {}
+    if (!payload) return;
+    if (payload.kind === 'input') {
+      try { coopInputSync && coopInputSync.ingest(payload); } catch (err) {
+        try { console.warn('[coop] input ingest error', err); } catch (_) {}
+      }
+      return;
+    }
+    if (payload.kind === 'snapshot' && role === 'guest') {
+      // Phase D4: guest receives but does not yet render from snapshots.
+      // D5 will hook these up to interpolation/prediction.
+      // Epoch gate: if the packet is from a different run (e.g. host
+      // restarted, late arrival from a disposed broadcaster), drop our
+      // tracker so we don't compare seqs across runs.
+      const incomingRunId = payload.runId;
+      if (latestRemoteSnapshot && latestRemoteSnapshot.runId !== incomingRunId) {
+        latestRemoteSnapshot = null;
+        latestRemoteSnapshotSeq = null;
+      }
+      // Newest-wins on snapshotSeq. isNewerSnapshot handles the wrap edge case.
+      if (latestRemoteSnapshotSeq != null && !isNewerSnapshot(payload.snapshotSeq, latestRemoteSnapshotSeq)) {
+        return;
+      }
+      latestRemoteSnapshot = payload;
+      latestRemoteSnapshotSeq = payload.snapshotSeq;
+      return;
     }
   });
   try { console.info('[coop] input uplink installed role=' + role + ' slot=' + localSlotIndex); } catch (_) {}
+}
+
+// Phase D4: builds the loose state object passed into encodeSnapshot.
+// Called by the broadcaster every ticksPerSnapshot. Defensive defaults on
+// every field — encodeSnapshot is strict and any throw is caught and
+// counted as a failed send by the broadcaster.
+function collectHostSnapshotState() {
+  const slotsOut = [];
+  for (let i = 0; i < playerSlots.length; i++) {
+    const s = playerSlots[i];
+    if (!s) continue;
+    const body = (typeof s.getBody === 'function') ? s.getBody() : null;
+    if (!body) continue;
+    slotsOut.push({
+      id: s.id ?? i,
+      x: body.x ?? 0,
+      y: body.y ?? 0,
+      vx: body.vx ?? 0,
+      vy: body.vy ?? 0,
+      hp: (typeof s.getHp === 'function' ? s.getHp() : (body.hp ?? 0)),
+      maxHp: (typeof s.getMaxHp === 'function' ? s.getMaxHp() : (body.maxHp ?? 0)),
+    });
+  }
+  const bulletsOut = [];
+  for (let i = 0; i < bullets.length; i++) {
+    const b = bullets[i];
+    if (!b) continue;
+    const owner = b.ownerId;
+    bulletsOut.push({
+      id: (b.id != null && b.id >= 0) ? (b.id | 0) : i,
+      x: b.x ?? 0,
+      y: b.y ?? 0,
+      vx: b.vx ?? 0,
+      vy: b.vy ?? 0,
+      type: b.kind || (b.danger ? 'd' : 'p'),
+      // Schema requires u32 ≥ 0. Danger bullets carry no slot owner: clamp
+      // to 0 — the `type` field carries the player/danger discriminator.
+      ownerSlot: (typeof owner === 'number' && owner >= 0) ? (owner | 0) : 0,
+      bounces: b.bounces ?? 0,
+      spawnTick: b.spawnTick ?? 0,
+    });
+  }
+  const enemiesOut = [];
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (!e) continue;
+    enemiesOut.push({
+      id: (e.id != null && e.id >= 0) ? (e.id | 0) : i,
+      x: e.x ?? 0,
+      y: e.y ?? 0,
+      vx: e.vx ?? 0,
+      vy: e.vy ?? 0,
+      hp: e.hp ?? 0,
+      type: e.type || 'e',
+      fireT: e.fireT ?? 0,
+      windup: e.windup ?? 0,
+    });
+  }
+  return {
+    // runId/snapshotSeq/snapshotSimTick are stamped by the broadcaster.
+    slots: slotsOut,
+    bullets: bulletsOut,
+    enemies: enemiesOut,
+    room: {
+      index: roomIndex | 0,
+      phase: roomPhase || 'intro',
+      clearTimer: 0,
+      spawnQueueLen: spawnQueue.length | 0,
+    },
+    score: score | 0,
+    elapsedMs: runElapsedMs | 0,
+    // Slot 0 is host-owned; we've consumed all our own input up to simTick.
+    // Slot 1 ack lands in D4.5 once the host actually drains remoteInputBuffer
+    // to drive slot 1's sim. Until then, send null per the no-ack sentinel.
+    lastProcessedInputSeq: { 0: simTick | 0, 1: null },
+  };
 }
 
 
@@ -2300,6 +2452,7 @@ function restoreRun(saved) {
   installPlayerSlot0();
   bullets.length = 0; enemies.length = 0; clearParticles(); shockwaves.length = 0;
   resetBulletIds();
+  currentRunId = generateRunId();
   _orbFireTimers = []; _orbCooldown = [];
   resetJoystickState(joy);
   fireT = 0; stillTimer = 0; prevStill = false;
@@ -2402,6 +2555,7 @@ function init() {
   lastStallSpawnAt = runMetrics.lastStallSpawnAt;
   enemyIdSeq = runMetrics.enemyIdSeq;
   resetBulletIds();
+  currentRunId = generateRunId();
   bossClears = runMetrics.bossClears;
   playerAimAngle = -Math.PI * 0.5;
   playerAimHasTarget = false;
@@ -2451,6 +2605,14 @@ function loop(ts){
       simNowMs += SIM_STEP_MS;
       simTick++;
       update(SIM_STEP_SEC, simNowMs);
+      // Phase D4: host emits a snapshot every ticksPerSnapshot sim ticks.
+      // No-op on guest/solo. Tick-cadence (not ms) so behavior is
+      // deterministic and resilient to rAF jitter / tab unfreeze bursts.
+      if (coopSnapshotBroadcaster) {
+        try { coopSnapshotBroadcaster.tick(simTick); } catch (err) {
+          try { console.warn('[coop] snapshot tick error', err); } catch (_) {}
+        }
+      }
       simAccumulatorMs -= SIM_STEP_MS;
       steps++;
     }
