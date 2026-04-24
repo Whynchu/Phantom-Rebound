@@ -161,7 +161,7 @@ function bindCoopLobby({
       if (seedEl) seedEl.textContent = String(seed);
       if (roleEl) roleEl.textContent = role.toUpperCase();
       showView('ready');
-      onReady?.({ seed, partnerIdentity, role, code });
+      onReady?.({ seed, partnerIdentity, role, code, session });
     });
 
     if (role === 'host') {

@@ -2,6 +2,21 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.35',
+      label: 'COOP PHASE D9: LOBBY → RUN HANDSHAKE',
+      summary: ['The online lobby can now actually start a game. Once both peers reach the Ready view, a new "Start Run" button arms the pending coop run (role/seed/code/session) and launches via the same init+loop path solo uses. Online coop is now reachable from the UI for the first time. Same-room single-room playable end-to-end.'],
+      highlights: [
+        'New "Start Run" button on the coop ready view (#coop-ready-start). The "Gameplay launch arrives in the next experimental build" placeholder text is gone — the next build is here.',
+        'CoopLobby `onReady` payload now includes the gameplay channel `session` so the host\'s session reference can be forwarded to `armPendingCoopRun` and re-used by `installCoopInputUplink` in init() — no second transport instance, no double-listener.',
+        'Wire path: `lobby.onReady` → `armPendingCoopRun({ role, seed, code, session })` → user clicks Start Run → `init()` (consumes pending coop record, seeds RNG from coop seed, installs uplink + slots/applier/reconciler appropriate to role) → `gstate=playing` → loop starts.',
+        'Both peers must press Start Run independently on their own device — no auto-start. This is intentional for the first ship: gives each player a beat to confirm they\'re ready before the host starts authoritative sim and the guest snaps into prediction.',
+        'D5e reconciliation (shipped in v1.20.34) now actually exercises end-to-end through the lobby path. Predicted movement + soft-pull correction visible in real online play.',
+        'Single-room termination (C3a-min-1) still applies online: round 1 plays through, run ends on room clear / death / pause-quit. Multi-room boon handshake (D10) is the next blocker for full runs.',
+        'Test state: 24 suites green, determinism 11/11 byte-identical. Lobby wiring is UI-only — no tests added (would require DOM harness).',
+        'Known limits this ship: (a) one room only — see D10. (b) no predicted bullet visuals on guest fire — guest sees their bullets emerge from authoritative position with ~snapshot-interval delay until D5f. (c) no host-tab-hidden handling — minimizing host tab will desync until either pause-both or end-run policy lands. (d) no leaderboard for coop runs (intentional, gated by isCoopRun).',
+      ]
+    },
+  {
       version: '1.20.34',
       label: 'COOP PHASE D5e: RECONCILIATION (INPUT REPLAY)',
       summary: ['Closes the loop on guest prediction. Each fresh host snapshot, the guest replays its own locally-buffered input frames forward from the host-acknowledged tick, computes a "corrected" position, and either snaps (large desync) or softly pulls the predicted body toward truth (small drift). Result: predicted-feel stays responsive while authoritative state always wins over time. Determinism canary 11/11.'],

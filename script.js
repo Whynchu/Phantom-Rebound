@@ -4834,8 +4834,34 @@ bindCoopLobby({
   getPlayerColor: () => null,
   setMenuChromeVisible,
   transportFactory: supabaseTransportFactory,
-  onReady: ({ seed, partnerIdentity, role, code }) => {
-    console.log('[coop] lobby ready', { seed, role, code, partner: partnerIdentity?.name });
+  // Phase D9 — when both peers are ready in the lobby, arm the pending coop
+  // run record (role/seed/code/session) so init() can pick it up. Then expose
+  // a "Start Run" button on the ready view that drops the lobby and starts the
+  // game via the same initRun + beginLoop path as solo. Session reference is
+  // forwarded so installCoopInputUplink (in init) wires both peers' channels
+  // without re-creating the transport.
+  onReady: ({ seed, partnerIdentity, role, code, session }) => {
+    try { console.info('[coop] lobby ready', { seed, role, code, partner: partnerIdentity?.name }); } catch (_) {}
+    try { armPendingCoopRun({ role, seed, code, session: session || null }); } catch (err) {
+      try { console.warn('[coop] arm pending run failed', err); } catch (_) {}
+      return;
+    }
+    const startBtn = document.getElementById('coop-ready-start');
+    if (!startBtn) return;
+    const lobbyScreen = document.getElementById('s-coop-lobby');
+    const onClick = () => {
+      startBtn.removeEventListener('click', onClick);
+      if (lobbyScreen) lobbyScreen.classList.add('off');
+      setMenuChromeVisible(false);
+      init();
+      gstate = 'playing';
+      lastT = performance.now();
+      simAccumulatorMs = 0;
+      raf = requestAnimationFrame(loop);
+      btnPause.style.display = 'inline-flex';
+      if (typeof btnPatchNotes !== 'undefined' && btnPatchNotes) btnPatchNotes.style.display = 'none';
+    };
+    startBtn.addEventListener('click', onClick);
   },
 });
 
