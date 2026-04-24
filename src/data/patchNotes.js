@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.40',
+      label: 'COOP PHASE D12.2: GUEST UX FIXES',
+      summary: ['Post-D12.1 playtest revealed four guest-side bugs that compounded into a "half-broken" feel: the room intro overlay never went away on guest, the host\'s death didn\'t propagate to the guest (game just froze on the last snapshot), the bottom of the arena was clipped on PC browsers when guest viewport had a different aspect from the host, and a stray dev-only blue ring orbited the partner slot. D12.2 fixes all four; per-peer boon picks remains tracked for D15.'],
+      highlights: [
+        '"READY?" overlay sticking on guest: the room intro state machine (advanceRoomIntroPhase) only runs in the host\'s sim path, which guest skips. Snapshots already carry roomPhase but nothing was hiding the overlay when phase advanced. Snapshot apply now tracks prev/next roomPhase + roomIndex and calls showRoomIntro/hideRoomIntro on the appropriate edges. Guest sees READY?→GO!→fighting in sync with host across every room.',
+        'Game-over propagation: host\'s gameOver() now broadcasts a `coop-game-over` packet (with score + roomIndex) BEFORE teardownCoopInputUplink disposes the session. Guest listener mirrors host\'s final score/room and triggers its own gameOver() so the death animation + leaderboard UI run on both peers. Without this, guest sat watching the host\'s last-snapshot pose forever.',
+        'Bottom-of-arena truncation on PC browsers: guest\'s canvas was non-uniformly scaled (separate sx/sy) to fit world into a viewport with a different aspect than the host\'s. While mathematically the full world should render, in practice CSS constraints + body overflow occasionally clipped the bottom rows. D12.2 changes the strategy when the world is host-pinned: cv.width/cv.height are set to WORLD_W/WORLD_H exactly (1:1 render transform — no distortion), and only cv.style.width/height are scaled to fit the viewport while preserving the host\'s world aspect ratio. CSS letterboxes uniformly; the canvas always renders the full arena.',
+        'Removed the dev-only #6ad1ff marker ring drawn around partner slots in drawGuestSlots. It served as a visual debug during D5 plumbing but is now just a distracting blue halo for players. Slot identity remains conveyed by hat/color/HP bar.',
+        'Tests: 24 suites green, determinism 11/11 byte-identical (all changes are guest-side render/UI; host sim untouched).',
+        'Known limit kept open: per-peer boon picks still on the host (mirrorHostUpgToSlot1). Both players will see the host\'s boon screen; guest does not get its own picks. This is the D15 milestone — a real two-screen boon flow needs per-peer UPG, separate boonSelectionOrder, and a barrier to wait for both picks before resuming the run.',
+      ]
+    },
+  {
       version: '1.20.39',
       label: 'COOP PHASE D12.1: SHARED WORLD SIZE',
       summary: ['Playtest after D12 surfaced spatial desync: host and guest were each sizing their sim arena to their own canvas. Phones with different viewports had different WORLD_W/WORLD_H, so an enemy at (300, 500) on the host was off-screen on the guest, obstacle layouts diverged, and bullet bounds clipped at different walls. D12.1 pins the guest\'s sim world to the host\'s authoritative dimensions while keeping each device\'s canvas free to scale.'],

@@ -475,6 +475,24 @@ function resize() {
 
   cv.style.width = `${cv.width}px`;
   cv.style.height = `${cv.height}px`;
+
+  // D12.2 — coop guest with host-pinned world: use host's WORLD_W/WORLD_H
+  // as the canvas pixel buffer (1:1 render transform → no distortion or
+  // bottom-truncation when guest's viewport aspect differs from host's),
+  // and scale only the CSS display size to fit the device while preserving
+  // world aspect. Joystick reads via getBoundingClientRect so input still
+  // maps correctly across the pixel/CSS scale gap.
+  if (coopWorldPinned && WORLD_W > 0 && WORLD_H > 0) {
+    const displayW = cv.width;
+    const displayH = cv.height;
+    cv.width = WORLD_W;
+    cv.height = WORLD_H;
+    const worldAspect = WORLD_H / WORLD_W;
+    const cssW = Math.min(displayW, displayH / worldAspect);
+    const cssH = cssW * worldAspect;
+    cv.style.width = `${Math.floor(cssW)}px`;
+    cv.style.height = `${Math.floor(cssH)}px`;
+  }
 }
 bindResponsiveViewport(resize);
 
@@ -1299,6 +1317,20 @@ function installCoopInputUplink(armedCoop) {
       }
       return;
     }
+    if (payload.kind === 'coop-game-over' && role === 'guest') {
+      // D12.2 — host died → end the run on guest too. Without this, the
+      // guest sits on the last snapshot pose indefinitely. We mirror score
+      // from the host's payload so the guest's leaderboard push uses the
+      // shared run's final value (host already pushed its own entry).
+      try {
+        if (Number.isFinite(payload.score)) score = payload.score;
+        if (Number.isFinite(payload.roomIndex)) roomIndex = payload.roomIndex;
+        gameOver();
+      } catch (err) {
+        try { console.warn('[coop] coop-game-over handler error', err); } catch (_) {}
+      }
+      return;
+    }
     if (payload.kind === 'snapshot' && role === 'guest') {
       // Phase D5b: validate via decodeSnapshot before storing. Malformed
       // packets are dropped (decoder throws on bad scalars) so they can't
@@ -1787,15 +1819,6 @@ function drawGuestSlots(ts) {
       maxHpValue: slot.metrics.maxHp,
       hatKey: null,
     });
-    // Dev-only marker ring so slot 1 is visually distinct.
-    ctx.save();
-    ctx.strokeStyle = '#6ad1ff';
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.85;
-    ctx.beginPath();
-    ctx.arc(body.x, body.y, body.r + 5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
   }
 }
 
@@ -2921,6 +2944,21 @@ function gameOver(){
   player.deadPulse = 0;
   player.deadPop = false;
   pushLeaderboardEntry();
+  // D12.2 — propagate game-over to the partner peer BEFORE we tear down the
+  // input uplink (which disposes the gameplay channel). Otherwise the guest
+  // sits forever watching the host's last-snapshot pose with no game-over UI.
+  // Host broadcasts; guest mirrors via the existing onGameplay listener.
+  try {
+    if (isCoopHost()) {
+      if (activeCoopSession && typeof activeCoopSession.sendGameplay === 'function') {
+        Promise.resolve(activeCoopSession.sendGameplay({ kind: 'coop-game-over', score, roomIndex })).catch((err) => {
+          try { console.warn('[coop] coop-game-over send failed', err); } catch (_) {}
+        });
+      }
+    }
+  } catch (err) {
+    try { console.warn('[coop] coop-game-over send threw', err); } catch (_) {}
+  }
   // C3a-pre-1: disarm coop run flag so subsequent solo starts aren't treated
   // as coop. pushLeaderboardEntry above already consulted isCoopRun().
   try { clearCoopRun(); } catch (_) {}
@@ -3078,8 +3116,20 @@ function loop(ts){
           // NOT runElapsedMs (advanced locally on guest in update()'s
           // isCoopGuest branch — overwriting at ~10 Hz would jitter the HUD).
           if (result.room) {
+            const prevRoomIndex = roomIndex;
+            const prevRoomPhase = roomPhase;
             roomIndex = result.room.index;
             roomPhase = result.room.phase;
+            // D12.2 — sync the room intro overlay on guest. Host runs the
+            // advanceRoomIntroPhase state machine in update() (skipped on
+            // guest), so without this the "READY?" panel would stick on
+            // screen for the whole run. Show on entering 'intro' (new room),
+            // hide on leaving it.
+            if (roomPhase === 'intro' && (prevRoomPhase !== 'intro' || roomIndex !== prevRoomIndex)) {
+              try { showRoomIntro('READY?', false); } catch (_) {}
+            } else if (prevRoomPhase === 'intro' && roomPhase !== 'intro') {
+              try { hideRoomIntro(); } catch (_) {}
+            }
           }
           if (Number.isFinite(result.score)) score = result.score;
           // Phase D5e — reconciliation. Once per fresh snapshot, compare our
