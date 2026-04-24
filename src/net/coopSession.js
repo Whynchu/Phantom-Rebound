@@ -75,6 +75,9 @@ function createCoopSession({
     }
   }
 
+  const gameplayListeners = new Set();
+  let legacyWarnedOnce = false;
+
   const state = {
     phase: 'idle',
     role,
@@ -135,6 +138,26 @@ function createCoopSession({
     });
   }
 
+  async function sendHandshake(payload) {
+    return send({ kind: 'handshake', payload });
+  }
+
+  async function sendGameplay(payload) {
+    if (state.phase !== 'ready') {
+      throw new Error('coopSession: sendGameplay requires ready phase');
+    }
+    if (payload === null || payload === undefined || typeof payload !== 'object') {
+      throw new Error('coopSession: sendGameplay payload must be a non-null object');
+    }
+    return send({ kind: 'gameplay', payload });
+  }
+
+  function onGameplay(fn) {
+    if (typeof fn !== 'function') throw new Error('coopSession: onGameplay requires a function');
+    gameplayListeners.add(fn);
+    return () => gameplayListeners.delete(fn);
+  }
+
   function handleMessage(msg) {
     if (!msg || typeof msg !== 'object') return;
     if (msg.from === localId) return; // ignore our own echoed broadcasts
@@ -143,25 +166,52 @@ function createCoopSession({
       return;
     }
 
-    if (role === 'host') return handleMessageAsHost(msg);
-    return handleMessageAsGuest(msg);
+    let kind, payload;
+    if (msg.kind === 'handshake' || msg.kind === 'gameplay') {
+      kind = msg.kind;
+      payload = msg.payload;
+    } else {
+      // Legacy unwrapped form: msg.type at top level (no kind field)
+      if (!legacyWarnedOnce) {
+        legacyWarnedOnce = true;
+        logger?.('coopSession: legacy unwrapped message received; treating as handshake');
+      }
+      kind = 'handshake';
+      payload = msg;
+    }
+
+    if (kind === 'gameplay') {
+      if (state.phase !== 'ready') {
+        logger?.('coopSession: gameplay message dropped (phase=' + state.phase + ')');
+        return;
+      }
+      for (const fn of gameplayListeners) {
+        try { fn({ payload, from: msg.from, ts: msg.ts }); } catch (err) { logger?.('coopSession gameplay listener error', err); }
+      }
+      return;
+    }
+
+    // kind === 'handshake': merge from into payload so handlers see msg.from
+    const handshakeMsg = { ...payload, from: msg.from };
+    if (role === 'host') return handleMessageAsHost(handshakeMsg);
+    return handleMessageAsGuest(handshakeMsg);
   }
 
   function handleMessageAsHost(msg) {
     if (msg.type === 'hello') {
       if (state.partnerId && state.partnerId !== msg.from) {
-        send({ type: 'full', toId: msg.from }).catch(() => {});
+        sendHandshake({ type: 'full', toId: msg.from }).catch(() => {});
         return;
       }
       if (state.partnerId === msg.from && state.phase === 'ready') {
-        send({ type: 'accept', toId: msg.from, seed: state.seed, hostIdentity: state.localIdentity }).catch(() => {});
+        sendHandshake({ type: 'accept', toId: msg.from, seed: state.seed, hostIdentity: state.localIdentity }).catch(() => {});
         return;
       }
       state.partnerId = msg.from;
       state.partnerIdentity = msg.identity || { name: 'PARTNER' };
       state.seed = generateSeed();
       cancelAll();
-      send({
+      sendHandshake({
         type: 'accept',
         toId: msg.from,
         seed: state.seed,
@@ -243,7 +293,7 @@ function createCoopSession({
     });
 
     try {
-      await send({ type: 'hello', identity: state.localIdentity });
+      await sendHandshake({ type: 'hello', identity: state.localIdentity });
     } catch (err) {
       cancel(helloAckTimer);
       fail('sendFailed', String(err?.message || err));
@@ -260,7 +310,7 @@ function createCoopSession({
   async function close() {
     if (state.phase === 'closed') return;
     if (channel) {
-      try { await send({ type: 'bye' }); } catch { /* ignore */ }
+      try { await sendHandshake({ type: 'bye' }); } catch { /* ignore */ }
       try { await channel.leave(); } catch { /* ignore */ }
     }
     cancelAll();
@@ -274,6 +324,8 @@ function createCoopSession({
     on,
     start,
     close,
+    sendGameplay,
+    onGameplay,
     getState: () => ({ ...state }),
     get channelName() { return channelName; },
     get localId() { return localId; },

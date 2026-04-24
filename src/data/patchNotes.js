@@ -2,7 +2,21 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
-      version: '1.20.13',
+      version: '1.20.14',
+      label: 'COOP PHASE C3A-PRE-2: GAMEPLAY CHANNEL',
+      summary: ['Internal scaffolding: coopSession gains sendGameplay/onGameplay multiplexed with handshake. Foundation for C3a input sync. ?coopdebug=1 only.'],
+      highlights: [
+        'Envelope wrapper: every outbound message is now {kind:\'handshake\'|\'gameplay\', payload, from, protocol, ts}. Handshake payload fields unchanged.',
+        'Backward-compat: legacy unwrapped messages (no kind field, type at top level) are still accepted and treated as handshake with a one-time logger warning.',
+        'New sendGameplay(payload): async; throws if not ready phase or if payload is null/undefined/non-object.',
+        'New onGameplay(fn): returns unsubscribe; fires {payload, from, ts} for each inbound gameplay message. Listener isolation: gameplay traffic never reaches handshake handlers and vice versa.',
+        'Pre-ready gameplay messages are silently dropped (debug log only) — no buffering, no error.',
+        'Internal refactor: sendHandshake(payload) helper wraps all handshake send sites; handleMessageAsHost/Guest unchanged in shape.',
+        'New scripts/test-coop-gameplay-channel.mjs: 12 contract tests. 201 tests across 13 suites. Determinism byte-identical.',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       label: 'COOP PHASE C3A-PRE-1: ISCOOPRUN FLAG',
       summary: ['Internal scaffolding: real coop-run lifecycle flag + seed bootstrap. Foundation for online lockstep. ?coopdebug=1 only.'],
       highlights: [
