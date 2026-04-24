@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.30',
+      label: 'COOP PHASE D5a: RENDER/HUD TO LOCAL SLOT',
+      summary: ['Ghost sprite and HUD now read from the local render slot (whichever slot represents this browser) instead of hardcoded slot 0. Solo / host / COOP_DEBUG → byte-identical (local slot is slot 0, whose metrics/upg bridge to the legacy globals). Online guest will now correctly bind its own ghost + charge bar + sps to slot 1 once D5b installs the guest body.'],
+      highlights: [
+        'New getLocalRenderSlot() helper in script.js wraps getLocalSlot(playerSlots) and falls back to playerSlots[0] when the local slot has not been installed yet — guests wake up with no slot 1 until D5b\'s snapshot applier seats one, and we never want the renderer to NPE in that gap.',
+        'drawGhost(ts) now reads body / charge / maxCharge / fireT / hp / maxHp / sps from the local slot\'s body+metrics+upg instead of the slot-0 globals (player / charge / UPG.maxCharge / fireT / hp / maxHp / UPG.sps). For solo and host these are the same objects via the slot 0 getter bridges, so the canary stays byte-identical.',
+        'drawGuestSlots(ts) now skips whichever slot is local rather than hardcoding `i = 1`. On the host this still draws slot 1 (the guest); on the guest, after D5b, this will draw slot 0 (the host) — both peers see their partner via the same code path.',
+        'hudUpdate() now reads charge / maxCharge / sps from the local slot\'s metrics+upg. roomIndex / runElapsedMs / score remain global (they are game-wide values shared between both peers, not per-slot).',
+        'Out of scope (intentionally deferred): payload ring, aim arrow, shields, orbit spheres, void walker. These still read player.* / UPG.* globals. They will be retargeted in a follow-up once D5b populates slot positions on the guest — until then, slot 0 has no useful x/y on a guest peer, so retargeting now would render onto stale data anyway.',
+        'Test state: 22 suites green (273+ assertions). Determinism 11/11 byte-identical — local slot collapses to slot 0 in the canary harness so render reads are unchanged.',
+        'Next up (Phase D5b): snap-to-latest snapshot applier so the guest actually sees enemies / bullets / partner positions instead of an empty world.',
+      ]
+    },
+  {
       version: '1.20.29',
       label: 'COOP PHASE D4.6: SNAPSHOT CONTRACT FIX',
       summary: ['Pre-D5 audit caught four bugs in the wire format that would have made guest rendering impossible: enemy IDs were unstable, enemy fire fields were unpopulated, bullets lacked render-critical fields, and slot data was incomplete. All fixed before guests start consuming snapshots in D5. Determinism canary byte-identical.'],

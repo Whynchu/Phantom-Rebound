@@ -139,7 +139,7 @@ import {
   isCoopHost,
   isCoopGuest,
 } from './src/net/coopRunConfig.js';
-import { getLocalSlot } from './src/net/onlineSlotRuntime.js';
+import { getLocalSlot, getLocalSlotIndex } from './src/net/onlineSlotRuntime.js';
 import { createCoopInputSync } from './src/net/coopInputSync.js';
 import {
   createSnapshotSequencer,
@@ -1455,8 +1455,18 @@ function getEnemyTargetSlot(enemy) {
   return best;
 }
 
+// D5a — pick the slot that represents "this browser's player". For solo /
+// host / COOP_DEBUG this collapses to slot 0 (byte-identical). For an online
+// guest, this is slot 1 once D5b installs the guest's local body; until then
+// it falls back to slot 0 so render code never NPEs.
+function getLocalRenderSlot() {
+  return getLocalSlot(playerSlots) || playerSlots[0] || null;
+}
+
 function drawGuestSlots(ts) {
-  for (let i = 1; i < playerSlots.length; i++) {
+  const localIdx = getLocalSlotIndex();
+  for (let i = 0; i < playerSlots.length; i++) {
+    if (i === localIdx) continue;
     const slot = playerSlots[i];
     if (!slot) continue;
     const body = slot.body;
@@ -4290,16 +4300,31 @@ function draw(ts){
 }
 
 // ── GHOST SPRITE ──────────────────────────────────────────────────────────────
+// D5a — read body/charge/hp/upg through the local render slot so the online
+// guest sees its OWN ghost (slot 1) once the guest body lands in D5b. For
+// solo/host/COOP_DEBUG the local slot is slot 0 → bridges to the legacy
+// `player`/`UPG`/`charge`/`hp` globals → byte-identical to pre-D5a.
 function drawGhost(ts){
-  const shotInterval = 1 / (UPG.sps * 2 * (UPG.heavyRoundsFireMult || 1));
+  const slot = getLocalRenderSlot();
+  const body = slot ? slot.body : player;
+  const slotUpg = slot ? slot.upg : UPG;
+  const slotMetrics = slot ? slot.metrics : null;
+  const chargeValue = slotMetrics ? slotMetrics.charge : charge;
+  const maxChargeValue = slotUpg ? slotUpg.maxCharge : UPG.maxCharge;
+  const fireTValue = slotMetrics ? (slotMetrics.fireT || 0) : fireT;
+  const hpValue = slotMetrics ? slotMetrics.hp : hp;
+  const maxHpValue = slotMetrics ? slotMetrics.maxHp : maxHp;
+  const sps = (slotUpg && slotUpg.sps) || UPG.sps;
+  const heavyMult = (slotUpg && slotUpg.heavyRoundsFireMult) || 1;
+  const shotInterval = 1 / (sps * 2 * heavyMult);
   drawGhostSprite(ctx, ts, {
-    playerState: player,
-    chargeValue: charge,
-    maxChargeValue: UPG.maxCharge,
-    fireProgress: charge >= 1 ? fireT / shotInterval : 0,
+    playerState: body,
+    chargeValue,
+    maxChargeValue,
+    fireProgress: chargeValue >= 1 ? fireTValue / shotInterval : 0,
     gameState: gstate,
-    hpValue: hp,
-    maxHpValue: maxHp,
+    hpValue,
+    maxHpValue,
     hatKey: playerHat,
   });
 }
@@ -4359,13 +4384,23 @@ function drawHatOptionPreview(canvas, hatKey) {
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
 function hudUpdate(){
+  // D5a — charge/sps come from the local render slot so the online guest
+  // sees its OWN bar/sps once D5b ships the guest body. roomIndex/score/
+  // runElapsedMs are game-wide and stay global. Solo/host/COOP_DEBUG: local
+  // slot is slot 0, whose metrics/upg bridge to globals → unchanged.
+  const slot = getLocalRenderSlot();
+  const slotMetrics = slot ? slot.metrics : null;
+  const slotUpg = slot ? slot.upg : UPG;
+  const localCharge = slotMetrics ? slotMetrics.charge : charge;
+  const localMaxCharge = (slotUpg && slotUpg.maxCharge) || UPG.maxCharge;
+  const localSps = ((slotUpg && slotUpg.sps) || UPG.sps) * ((slotUpg && slotUpg.heavyRoundsFireMult) || 1);
   renderHud({
     roomIndex,
     runElapsedMs,
     score,
-    charge,
-    maxCharge: UPG.maxCharge,
-    sps: UPG.sps * (UPG.heavyRoundsFireMult || 1),
+    charge: localCharge,
+    maxCharge: localMaxCharge,
+    sps: localSps,
     elements: {
       roomCounter: roomCounterEl,
       scoreText: scoreTextEl,
