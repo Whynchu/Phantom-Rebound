@@ -2,6 +2,18 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.39',
+      label: 'COOP PHASE D12.1: SHARED WORLD SIZE',
+      summary: ['Playtest after D12 surfaced spatial desync: host and guest were each sizing their sim arena to their own canvas. Phones with different viewports had different WORLD_W/WORLD_H, so an enemy at (300, 500) on the host was off-screen on the guest, obstacle layouts diverged, and bullet bounds clipped at different walls. D12.1 pins the guest\'s sim world to the host\'s authoritative dimensions while keeping each device\'s canvas free to scale.'],
+      highlights: [
+        '`coop-run-start` packet now carries the host\'s `worldW` / `worldH`. The guest applies them via the new `setCoopWorldFromHost()` helper before `launchCoopRun()` runs, so room generation, obstacle picks, and reconciler world-bounds all use the host\'s arena from the very first frame.',
+        'New `coopWorldPinned` flag in script.js makes `syncWorldFromCanvas()` a no-op once the world is pinned — subsequent canvas resizes (orientation change, viewport rescale) keep adjusting the canvas pixel size but never overwrite the host\'s world dims.',
+        'Renderer already used `worldSpace.getRenderScale(cv.width, cv.height)` to letterbox the world into the canvas via a ctx transform (Phase D0a), so the guest\'s viewport now scales the host\'s arena uniformly on screen instead of cropping to its own canvas. Input is direction-only / unit-vector based, so it\'s scale-invariant — no input adjustments needed.',
+        'Pin is released on coop teardown; a subsequent solo run re-syncs the world from the local canvas via the normal path. Solo and `?coopdebug=1` paths are untouched (the pin only engages on online guests after `coop-run-start`).',
+        'Tests: 24 suites green. Determinism canary 11/11 byte-identical (worldSpace tests already covered the pure module; the new wiring is host/guest specific and exercised at runtime).',
+      ]
+    },
+  {
       version: '1.20.38',
       label: 'COOP PHASE D12: LATENCY CUT + AUTOFIRE FIX',
       summary: ['First post-D11 playtest revealed two heavy issues: slot 1 (guest\'s player) appeared to fire constantly on the host\'s screen even when the guest was moving, and both peers\' views of each other felt sluggish and stale (positions lagged the actual play by 200ms+ end-to-end). D12 cuts ~50% off the input/snapshot latency stack and adds a staleness guard to the remote-input adapter so missing/old frames no longer trigger phantom autofire.'],

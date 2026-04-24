@@ -323,11 +323,35 @@ const ctx = cv.getContext('2d');
 const worldSpace = createWorldSpace();
 let WORLD_W = 0;
 let WORLD_H = 0;
+// D12.1 — once the guest receives the host's world dimensions on coop-run-start
+// the world is "pinned": subsequent canvas resizes (orientation change, viewport
+// rescale, etc.) must NOT clobber WORLD_W/WORLD_H, only change the render
+// scale via getRenderScale. Cleared on coop teardown so solo runs go back to
+// canvas-driven world sizing.
+let coopWorldPinned = false;
 function syncWorldFromCanvas() {
+  if (coopWorldPinned) return; // Coop guest: world is host-authoritative.
   if (cv.width > 0 && cv.height > 0) {
     worldSpace.set(cv.width, cv.height);
     WORLD_W = worldSpace.width;
     WORLD_H = worldSpace.height;
+  }
+}
+function setCoopWorldFromHost(worldW, worldH) {
+  // Coop guest: pin sim world to host's dimensions. Render scale is computed
+  // each frame from worldSpace + cv.width/cv.height, so the guest's canvas
+  // can stay at any resolution and the arena will letterbox-scale to fit.
+  if (!Number.isFinite(worldW) || !Number.isFinite(worldH) || worldW <= 0 || worldH <= 0) return false;
+  try {
+    worldSpace.set(worldW | 0, worldH | 0);
+    WORLD_W = worldSpace.width;
+    WORLD_H = worldSpace.height;
+    coopWorldPinned = true;
+    try { console.info('[coop] world pinned to host: ' + WORLD_W + 'x' + WORLD_H); } catch (_) {}
+    return true;
+  } catch (err) {
+    try { console.warn('[coop] setCoopWorldFromHost failed', err); } catch (_) {}
+    return false;
   }
 }
 const LB_KEY = STORAGE_KEYS.leaderboard;
@@ -1067,6 +1091,12 @@ function teardownCoopInputUplink() {
   activeCoopSession = null;
   onlineCoopBoonPhase = null;
   hideCoopGuestWaitOverlay();
+  // D12.1 — release the world pin so a subsequent solo run resizes
+  // its sim world from the local canvas again.
+  if (coopWorldPinned) {
+    coopWorldPinned = false;
+    try { syncWorldFromCanvas(); } catch (_) {}
+  }
 }
 
 // Phase D10 — multi-room boon handshake state. Host enters the boon phase
@@ -4995,6 +5025,14 @@ bindCoopLobby({
         unsubStartListener = session.onGameplay((ev) => {
           const payload = ev && ev.payload;
           if (payload && payload.kind === 'coop-run-start') {
+            // D12.1 — pin our sim world to the host's dimensions BEFORE init()
+            // so room generation, obstacle layout, spawn picks, and bullet
+            // bounds all use the same arena as the host. Without this, the
+            // guest sim would use its own canvas size as the world, causing
+            // entities at host coordinates to clip/teleport.
+            if (Number.isFinite(payload.worldW) && Number.isFinite(payload.worldH)) {
+              setCoopWorldFromHost(payload.worldW, payload.worldH);
+            }
             launchCoopRun();
           }
         });
@@ -5012,8 +5050,14 @@ bindCoopLobby({
       try { startBtn.disabled = true; } catch (_) {}
       try {
         if (session && typeof session.sendGameplay === 'function') {
+          // D12.1 — include world dimensions in the start packet so the guest
+          // can pin its sim arena to ours before its first frame runs.
           // Fire-and-forget; lobby is already in 'ready' phase.
-          Promise.resolve(session.sendGameplay({ kind: 'coop-run-start' })).catch((err) => {
+          Promise.resolve(session.sendGameplay({
+            kind: 'coop-run-start',
+            worldW: WORLD_W,
+            worldH: WORLD_H,
+          })).catch((err) => {
             try { console.warn('[coop] coop-run-start send failed', err); } catch (_) {}
           });
         }
