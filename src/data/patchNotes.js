@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.20',
+      label: 'COOP PHASE D0A: WORLD-SPACE DECOUPLED',
+      summary: ['Simulation now runs in a dedicated WORLD coordinate space, independent from each device\'s canvas pixels. Foundation for host+guest sharing an identical arena regardless of screen size. Solo and ?coopdebug=1 paths byte-identical.'],
+      highlights: [
+        'New src/core/worldSpace.js pure module: createWorldSpace() owns width/height + getRenderScale(canvasW, canvasH). 15 unit tests (scripts/test-world-space.mjs).',
+        'script.js: WORLD_W/WORLD_H module vars now drive the sim. 14 sim call sites migrated from cv.width/cv.height → WORLD_W/WORLD_H (player init, body.x clamp, createRoomObstacles, spawnEnemy ctx, update W/H, createInitialPlayerState x2, room intro centers, telemetry bridge).',
+        'Renderer: draw() now wraps the scene in ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0) using worldSpace.getRenderScale(). Identity (1,1) in solo since WORLD is mirrored from canvas. Transform reset to identity before joystick UI draw (joystick stays in canvas-pixel space).',
+        'resize() calls syncWorldFromCanvas() — keeps WORLD === canvas in solo/?coopdebug=1 so today\'s behavior is untouched. In Phase D2+ online coop, host will pin WORLD to a fixed size (likely 400×472) and guests render scaled regardless of their device size.',
+        'Rubber-duck critique blocker #1 resolved: before this change, host and guest on different-sized devices would have run different-sized arenas. Now the sim is authoritative over world dims.',
+        'Determinism 11/11 byte-identical. 17 test suites green (was 16 + new world-space suite). Experimental repo only; live repo unchanged.',
+        'Next up (Phase D0b): extract pure per-slot player step function (firePlayer currently reads globals — blocker for prediction/reconciliation).',
+      ]
+    },
+  {
       version: '1.20.19',
       label: 'COOP ARCHITECTURE PIVOT: LOCKSTEP → AUTHORITATIVE-HOST',
       summary: ['Lockstep scheduler removed. Pivoting online co-op to authoritative-host + client prediction + reconciliation (Valve model) for latency-tolerant twitch play. Solo and ?coopdebug=1 paths unchanged.'],

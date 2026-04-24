@@ -214,6 +214,7 @@ import {
   resolvePostHitAftermath,
 } from './src/systems/dangerHit.js';
 import { createInitialPlayerState, createInitialRunMetrics, createInitialRuntimeTimers } from './src/core/runState.js';
+import { createWorldSpace } from './src/core/worldSpace.js';
 import {
   createPlayerSlot,
   playerSlots,
@@ -298,6 +299,23 @@ window.addEventListener('phantom:color-assist-change', (event) => {
 
 const cv  = document.getElementById('cv');
 const ctx = cv.getContext('2d');
+
+// ── WORLD-SPACE (Phase D0a, 2026-04-24) ──────────────────────────────────────
+// The sim runs in WORLD coordinates. In solo (and ?coopdebug=1) WORLD_W/WORLD_H
+// are mirrored from cv.width/cv.height in resize() so behavior is byte-identical.
+// In online coop (Phase D+) the host pins a fixed world size and the renderer
+// scales the canvas viewport into world space via a ctx transform in draw().
+// This gives host + guest a shared arena regardless of each device's screen.
+const worldSpace = createWorldSpace();
+let WORLD_W = 0;
+let WORLD_H = 0;
+function syncWorldFromCanvas() {
+  if (cv.width > 0 && cv.height > 0) {
+    worldSpace.set(cv.width, cv.height);
+    WORLD_W = worldSpace.width;
+    WORLD_H = worldSpace.height;
+  }
+}
 const LB_KEY = STORAGE_KEYS.leaderboard;
 const NAME_KEY = STORAGE_KEYS.runnerName;
 const LEGACY_RUN_RECOVERY_KEY = STORAGE_KEYS.legacyRunRecovery;
@@ -388,6 +406,7 @@ function resize() {
     const nextHeight = Math.max(Math.floor(nextWidth * BASE_ARENA_ASPECT), Math.floor(height));
     cv.width = nextWidth;
     cv.height = nextHeight;
+    syncWorldFromCanvas();
   };
 
   const maxWidthByViewport = Math.min(400, viewportWidth - 16);
@@ -904,8 +923,8 @@ function bindGuestKeys() {
 function installGuestDebugSlot() {
   if (!COOP_DEBUG) return;
   bindGuestKeys();
-  const body = createInitialPlayerState(cv.width, cv.height);
-  body.x = Math.min(cv.width - 24, body.x + 60);
+  const body = createInitialPlayerState(WORLD_W, WORLD_H);
+  body.x = Math.min(WORLD_W - 24, body.x + 60);
   body.invincible = 1.5; // brief spawn-in invuln; drops after that so C2d-1b damage applies
   body.distort = 0;
   body.spawnX = body.x;
@@ -1161,7 +1180,7 @@ const telemetryController = createRunTelemetryController({
   getBullets: () => bullets,
   getPlayerColor: () => getPlayerColor(),
   getViewportModeLabel: () => getViewportModeLabel(),
-  getCanvasSize: () => ({ width: cv.width, height: cv.height }),
+  getCanvasSize: () => ({ width: WORLD_W, height: WORLD_H }),
   getVersionNum: () => VERSION.num,
   getRequiredShotCount: (u) => getRequiredShotCount(u),
   getKineticChargeRate: (u) => getKineticChargeRate(u),
@@ -1334,8 +1353,8 @@ function beginWaveIntro(nextWaveIndex) {
   roomIntroTimer = 0;
   bullets.length = 0;
   clearParticles();
-  player.x = cv.width / 2;
-  player.y = cv.height / 2;
+  player.x = WORLD_W / 2;
+  player.y = WORLD_H / 2;
   player.vx = 0;
   player.vy = 0;
   showRoomIntro(`WAVE ${nextWaveIndex + 1}`, false);
@@ -1358,7 +1377,7 @@ function startRoom(idx) {
   roomTimer = 0;
   roomIntroTimer = 0;
   roomPhase = 'intro';
-  roomObstacles = createRoomObstacles(cv.width, cv.height);
+  roomObstacles = createRoomObstacles(WORLD_W, WORLD_H);
   enemies.length = 0;
   bullets.length = 0;
   clearDmgNumbers();
@@ -1373,8 +1392,8 @@ function startRoom(idx) {
   escortRespawnTimer = 0;
   reinforceTimer = 0;
   currentRoomMaxOnScreen = getRoomMaxOnScreen(roomIndex, currentRoomIsBoss);
-  player.x = cv.width / 2;
-  player.y = cv.height / 2;
+  player.x = WORLD_W / 2;
+  player.y = WORLD_H / 2;
   player.vx = 0;
   player.vy = 0;
   startRoomTelemetry(idx + 1, def);
@@ -1451,8 +1470,8 @@ function getBossEscortRespawnMs(idx) {
 
 function spawnEnemy(type, isBoss = false, bossScale = 1) {
   const enemy = createEnemy(type, {
-    width: cv.width,
-    height: cv.height,
+    width: WORLD_W,
+    height: WORLD_H,
     margin: M,
     roomIndex,
     nextEnemyId: enemyIdSeq++,
@@ -2215,7 +2234,7 @@ function restoreRun(saved) {
   // Re-sync derived state
   syncRunChargeCapacity();
   syncPlayerScale();
-  player = createInitialPlayerState(cv.width, cv.height);
+  player = createInitialPlayerState(WORLD_W, WORLD_H);
   installPlayerSlot0();
   bullets.length = 0; enemies.length = 0; clearParticles(); shockwaves.length = 0;
   _orbFireTimers = []; _orbCooldown = [];
@@ -2320,7 +2339,7 @@ function init() {
   bossClears = runMetrics.bossClears;
   playerAimAngle = -Math.PI * 0.5;
   playerAimHasTarget = false;
-  player = createInitialPlayerState(cv.width, cv.height);
+  player = createInitialPlayerState(WORLD_W, WORLD_H);
   installPlayerSlot0();
   _barrierPulseTimer = runtimeTimers.barrierPulseTimer;
   _slipCooldown = runtimeTimers.slipCooldown;
@@ -2420,7 +2439,7 @@ function update(dt,ts){
     return;
   }
 
-  const W=cv.width,H=cv.height;
+  const W=WORLD_W,H=WORLD_H;
   recordRoomPeakState();
   const titanSlow = UPG.colossus ? 1 - (1 - (UPG.titanSlowMult || 1)) * 0.5 : (UPG.titanSlowMult || 1);
   const bloodRushMult = UPG.bloodRush && UPG.bloodRushTimer > ts ? 1 + ((UPG.bloodRushStacks || 0) * 0.10) : 1;
@@ -3585,7 +3604,13 @@ function hideRoomIntro() {
 
 // ── DRAW ──────────────────────────────────────────────────────────────────────
 function draw(ts){
-  const W=cv.width,H=cv.height;
+  const W=WORLD_W,H=WORLD_H;
+  // D0a (Phase D world-space): scale world coordinates onto the canvas viewport.
+  // Identity when cv.width === WORLD_W (solo + ?coopdebug=1). Only non-identity
+  // once online coop (Phase D2+) pins a fixed world size on differently-sized
+  // guest devices.
+  const renderScale = worldSpace.getRenderScale(cv.width, cv.height);
+  ctx.setTransform(renderScale.x, 0, 0, renderScale.y, 0, 0);
   ctx.clearRect(0,0,W,H);
   ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
 
@@ -3871,7 +3896,10 @@ function draw(ts){
   }
   ctx.restore();
 
-  // Joystick anchor — tiny subtle dot where finger landed
+  // Joystick anchor — tiny subtle dot where finger landed (canvas-pixel coords)
+  // D0a: reset transform so joystick UI is drawn in canvas-pixel space, not
+  // scaled world space. Solo: identity anyway, so no-op.
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   if(joy.active){
     ctx.globalAlpha=0.18;
     ctx.strokeStyle='#fff';
