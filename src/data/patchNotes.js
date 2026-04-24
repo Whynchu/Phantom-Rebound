@@ -2,6 +2,23 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.36',
+      label: 'COOP PHASE D10: MULTI-ROOM BOONS',
+      summary: ['Co-op runs no longer end after room 1. When the host clears a room, a `coop-boon-start` message hits the gameplay channel, the host opens the standard boon picker, and on confirm the host\'s upgraded UPG is mirrored onto guest slot 1 + a `coop-room-advance` hint clears the guest\'s wait overlay before the next snapshot lands. Both peers proceed into the next room together. Online co-op is now multi-room playable end-to-end.'],
+      highlights: [
+        'Replaces C3a-min-1 single-room termination (`endCoopDemoRun`) with `enterOnlineCoopBoonPhaseHost()` at the `clearStep.shouldShowUpgrades` branch. The unused demo-end function has been removed.',
+        'Two new gameplay-channel message kinds: `coop-boon-start` (host → guest, fires when host opens the picker) and `coop-room-advance` (host → guest, fires when host\'s pick is applied and the next room is starting). Guest-only handlers wired alongside existing input/snapshot branches in `installCoopInputUplink`.',
+        'Guest renders a "PARTNER PICKING A BOON…" full-screen overlay (#coop-wait-overlay) on `coop-boon-start` and clears it on `coop-room-advance`. Pure DOM injection — no extra CSS file changes — overlay is non-interactive (pointer-events:none) so it doesn\'t block input batching.',
+        'Boon-application model v1: team boons. Host picks once per room (full legendary path included); the resulting UPG state is deep-cloned (JSON) and mirrored onto `playerSlots[1].upg` in-place (slot.upg is a frozen closure ref so we mutate keys rather than reassign). This means slot 1\'s authoritative bullets fire with the same stat/orb/shockwave/echo configuration as slot 0.',
+        'Per-peer picks (each player chooses their own boon) are deferred — would require sending guest\'s picker state both ways, surfacing a richer overlay UI, and handling both-locked-in lockout. v1\'s host-picks-for-both keeps the protocol to two host→guest messages and ships today.',
+        'Session reference is now captured at `installCoopInputUplink` time into a module-level `activeCoopSession` so non-uplink code paths (boon entry/advance) can publish messages without re-plumbing the session object through every call site. Cleared on teardown.',
+        'Wait overlay + boon-phase state are reset by `teardownCoopInputUplink`, so leaving online mode (game over, leaving lobby, role change) leaves no stale UI behind.',
+        'Test state: 24 suites green, determinism 11/11 byte-identical. New behavior is gated to `isCoopHost()` / role==="guest" and never touches solo / COOP_DEBUG sims.',
+        'Known limits this ship: (a) host\'s tab being hidden during a pick still freezes the broadcaster — guest will sit on the wait overlay until host returns. (b) if `coop-boon-start` is dropped, guest sees no overlay but the next snapshot still advances the room cleanly — gameplay safe, UI cosmetic only. (c) if guest disconnects mid-pick, host\'s pick still applies + run continues solo-from-host\'s-POV until session detects disconnect.',
+        'Remaining for v1.21.0: D5f predicted bullet visuals OR D8 two-peer fuzz harness (whichever surfaces first in playtest), C4 enemy 2× HP + per-client tint, host-tab-hidden / suspended policy.',
+      ]
+    },
+  {
       version: '1.20.35',
       label: 'COOP PHASE D9: LOBBY → RUN HANDSHAKE',
       summary: ['The online lobby can now actually start a game. Once both peers reach the Ready view, a new "Start Run" button arms the pending coop run (role/seed/code/session) and launches via the same init+loop path solo uses. Online coop is now reachable from the UI for the first time. Same-room single-room playable end-to-end.'],

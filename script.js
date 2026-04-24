@@ -1063,6 +1063,84 @@ function teardownCoopInputUplink() {
     try { delete playerSlots[1]; } catch (_) {}
     onlineGuestSlot1Installed = false;
   }
+  // Phase D10: drop session ref + boon-phase state + guest overlay.
+  activeCoopSession = null;
+  onlineCoopBoonPhase = null;
+  hideCoopGuestWaitOverlay();
+}
+
+// Phase D10 — multi-room boon handshake state. Host enters the boon phase
+// when a room clears, broadcasts `coop-boon-start`, runs the regular
+// showUpgrades() flow, then on resume mirrors its UPG onto guest slot 1's
+// UPG and broadcasts `coop-room-advance`. Guests render a "PARTNER PICKING"
+// overlay during the phase and clear it on advance. v1: team boons (host
+// picks for both) — per-peer picker is a future iteration.
+let activeCoopSession = null;
+let onlineCoopBoonPhase = null;
+let coopGuestWaitOverlayEl = null;
+
+function showCoopGuestWaitOverlay(text) {
+  try {
+    if (typeof document === 'undefined' || !document.body) return;
+    if (!coopGuestWaitOverlayEl) {
+      const el = document.createElement('div');
+      el.id = 'coop-wait-overlay';
+      el.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);color:#fff;font:bold 22px system-ui,sans-serif;letter-spacing:0.08em;text-align:center;z-index:9000;pointer-events:none;text-shadow:0 0 12px rgba(0,0,0,0.85);padding:24px;';
+      document.body.appendChild(el);
+      coopGuestWaitOverlayEl = el;
+    }
+    coopGuestWaitOverlayEl.textContent = text || '';
+    coopGuestWaitOverlayEl.style.display = 'flex';
+  } catch (_) {}
+}
+
+function hideCoopGuestWaitOverlay() {
+  try {
+    if (coopGuestWaitOverlayEl) coopGuestWaitOverlayEl.style.display = 'none';
+  } catch (_) {}
+}
+
+// Sync host's UPG into slot 1's UPG (mutates in place — slot.upg is a
+// const closure ref, can't be reassigned). UPG is data-only (primitives +
+// boonSelectionOrder array) so a JSON deep clone is safe and complete.
+function mirrorHostUpgToSlot1() {
+  try {
+    const slot1 = playerSlots[1];
+    if (!slot1) return;
+    const target = (typeof slot1.getUpg === 'function') ? slot1.getUpg() : slot1.upg;
+    if (!target || typeof target !== 'object') return;
+    const cloned = JSON.parse(JSON.stringify(UPG));
+    for (const k of Object.keys(target)) delete target[k];
+    Object.assign(target, cloned);
+  } catch (err) {
+    try { console.warn('[coop] mirror UPG to slot 1 failed', err); } catch (_) {}
+  }
+}
+
+function isOnlineCoopBoonPhaseActive() {
+  return !!onlineCoopBoonPhase;
+}
+
+function enterOnlineCoopBoonPhaseHost() {
+  onlineCoopBoonPhase = { roomIndex };
+  try {
+    if (activeCoopSession && typeof activeCoopSession.sendGameplay === 'function') {
+      activeCoopSession.sendGameplay({ kind: 'coop-boon-start', roomIndex });
+    }
+  } catch (err) {
+    try { console.warn('[coop] coop-boon-start send failed', err); } catch (_) {}
+  }
+  showUpgrades();
+}
+
+function handleCoopBoonStartGuest(payload) {
+  onlineCoopBoonPhase = { roomIndex: (payload && payload.roomIndex) | 0 };
+  showCoopGuestWaitOverlay('PARTNER PICKING A BOON…');
+}
+
+function handleCoopRoomAdvanceGuest() {
+  onlineCoopBoonPhase = null;
+  hideCoopGuestWaitOverlay();
 }
 
 // Phase D4: deterministic-ish unique run identifier. Used as the snapshot
@@ -1088,6 +1166,9 @@ function installCoopInputUplink(armedCoop) {
     try { console.warn('[coop] input uplink: missing session transport, skipping'); } catch (_) {}
     return;
   }
+  // Phase D10: capture session ref so non-uplink code paths (boon-phase
+  // entry/advance) can publish gameplay-channel messages.
+  activeCoopSession = session;
   // On host, localSlotIndex=0 (host owns slot 0) and we never sampleFrame;
   // we only ingest. On guest, localSlotIndex=1 — the frames we send describe
   // slot 1's input as owned by this peer.
@@ -1166,6 +1247,18 @@ function installCoopInputUplink(armedCoop) {
     if (payload.kind === 'input') {
       try { coopInputSync && coopInputSync.ingest(payload); } catch (err) {
         try { console.warn('[coop] input ingest error', err); } catch (_) {}
+      }
+      return;
+    }
+    if (payload.kind === 'coop-boon-start' && role === 'guest') {
+      try { handleCoopBoonStartGuest(payload); } catch (err) {
+        try { console.warn('[coop] coop-boon-start handler error', err); } catch (_) {}
+      }
+      return;
+    }
+    if (payload.kind === 'coop-room-advance' && role === 'guest') {
+      try { handleCoopRoomAdvanceGuest(); } catch (err) {
+        try { console.warn('[coop] coop-room-advance handler error', err); } catch (_) {}
       }
       return;
     }
@@ -2383,6 +2476,23 @@ function spawnGreyDrops(x,y,ts,count=getEnemyGreyDropCount()) {
 }
 
 function resumePlayAfterBoons() {
+  // Phase D10 — multi-room boon handshake. Online host: at this point the
+  // host has applied a boon to its own UPG. Mirror the full UPG state onto
+  // slot 1's UPG so the guest's slot fires with matching boons (team-boons
+  // model — per-peer picks are a future iteration), then broadcast the
+  // room-advance hint so the guest's "PARTNER PICKING…" overlay clears even
+  // before the next snapshot lands.
+  if (onlineCoopBoonPhase && isCoopHost && isCoopHost()) {
+    mirrorHostUpgToSlot1();
+    try {
+      if (activeCoopSession && typeof activeCoopSession.sendGameplay === 'function') {
+        activeCoopSession.sendGameplay({ kind: 'coop-room-advance', roomIndex: roomIndex + 1 });
+      }
+    } catch (err) {
+      try { console.warn('[coop] coop-room-advance send failed', err); } catch (_) {}
+    }
+    onlineCoopBoonPhase = null;
+  }
   startRoom(roomIndex + 1);
   gstate = 'playing';
   lastT = performance.now();
@@ -2750,30 +2860,10 @@ function restoreRun(saved) {
   clearSavedRun();
 }
 
-// C3a-min-1: terminate online coop run cleanly after the first room clears,
-// skipping the boon picker. Solo and COOP_DEBUG (role:'local') never reach
-// this path — isOnlineCoopRun() gates the call site.
-function endCoopDemoRun() {
-  if (gameOverShown) return;
-  gameOverShown = true;
-  clearSavedRun();
-  gstate = 'gameover';
-  cancelAnimationFrame(raf);
-  showGameOverScreen({
-    panelEl: gameOverScreen,
-    boonsPanelEl: goBoonsPanel,
-    scoreEl: goScoreEl,
-    noteEl: goNoteEl,
-    breakdownEl: goBreakdownEl,
-    score,
-    note: 'COOP DEMO COMPLETE · Room 1 cleared · Boon selection coming in C3b',
-    breakdown: { ...scoreBreakdown },
-    stats: { kills, rooms: roomIndex + 1, elapsedMs: runElapsedMs, damagelessRooms },
-    renderBoons: renderGameOverBoons,
-  });
-  try { clearCoopRun(); } catch (_) {}
-  teardownCoopInputUplink();
-}
+// Phase D10 superseded C3a-min-1's single-room termination — endCoopDemoRun
+// has been removed. Online coop now flows through enterOnlineCoopBoonPhaseHost
+// → showUpgrades → resumePlayAfterBoons every room. Solo / COOP_DEBUG paths
+// continue to use showUpgrades directly.
 
 function gameOver(){
   if(gameOverShown) return;
@@ -3270,7 +3360,10 @@ function update(dt,ts){
   roomClearTimer = clearStep.roomClearTimer;
   if(clearStep.shouldShowUpgrades) {
     if (isOnlineCoopRun()) {
-      endCoopDemoRun();
+      // Phase D10: enter the multi-room boon handshake. Host runs the
+      // standard picker, then mirrors the resulting UPG to slot 1 + signals
+      // advance on the gameplay channel (handled in resumePlayAfterBoons).
+      enterOnlineCoopBoonPhaseHost();
     } else {
       showUpgrades();
     }
