@@ -4928,11 +4928,17 @@ bindCoopLobby({
   setMenuChromeVisible,
   transportFactory: supabaseTransportFactory,
   // Phase D9 — when both peers are ready in the lobby, arm the pending coop
-  // run record (role/seed/code/session) so init() can pick it up. Then expose
-  // a "Start Run" button on the ready view that drops the lobby and starts the
-  // game via the same initRun + beginLoop path as solo. Session reference is
-  // forwarded so installCoopInputUplink (in init) wires both peers' channels
-  // without re-creating the transport.
+  // run record (role/seed/code/session) so init() can pick it up.
+  // Phase D11 — synchronized start. The HOST's Start Run click broadcasts
+  // `coop-run-start` over the gameplay channel and launches its own loop;
+  // the GUEST'S button is replaced with a "Waiting for host…" label and the
+  // guest auto-launches when the start message arrives. Without this, host
+  // and guest had independent simTick clocks (host ran ahead by however
+  // long it took the guest to also click Start), and the host's slot-1
+  // remote-input adapter peekAt(simTick) never matched any guest frames
+  // (guest frames were tagged with guest's far-behind tick), leaving the
+  // guest's player frozen on the host's screen. Tick-tolerant fallback in
+  // the adapter (peekLatestUpTo / peekOldest) is the secondary safety net.
   onReady: ({ seed, partnerIdentity, role, code, session }) => {
     try { console.info('[coop] lobby ready', { seed, role, code, partner: partnerIdentity?.name }); } catch (_) {}
     try { armPendingCoopRun({ role, seed, code, session: session || null }); } catch (err) {
@@ -4942,8 +4948,16 @@ bindCoopLobby({
     const startBtn = document.getElementById('coop-ready-start');
     if (!startBtn) return;
     const lobbyScreen = document.getElementById('s-coop-lobby');
-    const onClick = () => {
-      startBtn.removeEventListener('click', onClick);
+    let launched = false;
+    let unsubStartListener = null;
+
+    const launchCoopRun = () => {
+      if (launched) return;
+      launched = true;
+      try { unsubStartListener && unsubStartListener(); } catch (_) {}
+      unsubStartListener = null;
+      // Restore default label/state for the next time the lobby is opened.
+      try { startBtn.textContent = 'Start Run'; startBtn.disabled = false; } catch (_) {}
       if (lobbyScreen) lobbyScreen.classList.add('off');
       setMenuChromeVisible(false);
       init();
@@ -4953,6 +4967,45 @@ bindCoopLobby({
       raf = requestAnimationFrame(loop);
       btnPause.style.display = 'inline-flex';
       if (typeof btnPatchNotes !== 'undefined' && btnPatchNotes) btnPatchNotes.style.display = 'none';
+    };
+
+    if (role === 'guest') {
+      // Guest waits for host's broadcast. Replace the button visually so the
+      // user understands they're not the one starting the run.
+      try {
+        startBtn.textContent = 'Waiting for host…';
+        startBtn.disabled = true;
+      } catch (_) {}
+      if (session && typeof session.onGameplay === 'function') {
+        unsubStartListener = session.onGameplay((ev) => {
+          const payload = ev && ev.payload;
+          if (payload && payload.kind === 'coop-run-start') {
+            launchCoopRun();
+          }
+        });
+      } else {
+        // No session transport: degrade gracefully — let the guest tap to start.
+        const onClick = () => { startBtn.removeEventListener('click', onClick); launchCoopRun(); };
+        startBtn.addEventListener('click', onClick);
+      }
+      return;
+    }
+
+    // Host path: click broadcasts the start signal then launches.
+    const onClick = () => {
+      startBtn.removeEventListener('click', onClick);
+      try { startBtn.disabled = true; } catch (_) {}
+      try {
+        if (session && typeof session.sendGameplay === 'function') {
+          // Fire-and-forget; lobby is already in 'ready' phase.
+          Promise.resolve(session.sendGameplay({ kind: 'coop-run-start' })).catch((err) => {
+            try { console.warn('[coop] coop-run-start send failed', err); } catch (_) {}
+          });
+        }
+      } catch (err) {
+        try { console.warn('[coop] coop-run-start send threw', err); } catch (_) {}
+      }
+      launchCoopRun();
     };
     startBtn.addEventListener('click', onClick);
   },

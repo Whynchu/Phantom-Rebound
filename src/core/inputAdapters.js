@@ -80,10 +80,32 @@ function createRemoteInputAdapter(ringBuffer, { getCurrentTick } = {}) {
   if (typeof getCurrentTick !== 'function') {
     throw new Error('createRemoteInputAdapter: getCurrentTick required');
   }
+  // D11 — tick-tolerant lookup. Try exact tick match first (deterministic
+  // path used by the host-remote-input processor), then fall back to the
+  // newest frame at-or-before the requested tick (for when host's simTick
+  // has drifted past available frames — e.g. out-of-sync start, network
+  // jitter, post-pause resume). If the host is BEHIND any buffered frame
+  // (peekLatestUpTo returns null), use the oldest available frame so slot 1
+  // still moves while ticks catch up. Without this fallback chain, slot 1
+  // freezes whenever the two simTick clocks diverge by more than one frame.
+  function selectFrame() {
+    const t = getCurrentTick();
+    let frame = ringBuffer.peekAt(t);
+    if (frame) return frame;
+    if (typeof ringBuffer.peekLatestUpTo === 'function') {
+      frame = ringBuffer.peekLatestUpTo(t);
+      if (frame) return frame;
+    }
+    if (typeof ringBuffer.peekOldest === 'function') {
+      frame = ringBuffer.peekOldest();
+      if (frame) return frame;
+    }
+    return null;
+  }
   return {
     kind: 'remote',
     moveVector() {
-      const frame = ringBuffer.peekAt(getCurrentTick());
+      const frame = selectFrame();
       if (!frame) return { dx: 0, dy: 0, t: 0, active: false };
       return {
         dx: frame.dx / 127,
@@ -93,7 +115,7 @@ function createRemoteInputAdapter(ringBuffer, { getCurrentTick } = {}) {
       };
     },
     isStill() {
-      const frame = ringBuffer.peekAt(getCurrentTick());
+      const frame = selectFrame();
       if (!frame) return true;
       return frame.still === 1;
     },

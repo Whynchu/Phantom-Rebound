@@ -52,6 +52,27 @@ function createRemoteInputBuffer({ capacity = 120, logger = null } = {}) {
     return null;
   }
 
+  // D11 — tolerant lookup. Returns the latest frame whose tick is <= the
+  // requested tick. Used by the remote-input adapter to fall back to the
+  // most recently received input when the host's simTick has drifted past
+  // any exact match (e.g. out-of-sync run start, network jitter, host pause
+  // resume). Walks from newest to oldest, O(N) worst case, O(1) typical.
+  function peekLatestUpTo(tick) {
+    for (let i = buf.length - 1; i >= 0; i--) {
+      if (buf[i].tick <= tick) return buf[i];
+    }
+    return null;
+  }
+
+  // D11 — bounded fallback used when host has no buffered frames at or
+  // before the requested tick (i.e. host is BEHIND the guest, common at
+  // run-start when guest has been ticking for ~one round-trip already).
+  // Returns the OLDEST frame in the buffer, which is the best approximation
+  // of "most recent guest input we've seen" for the current movement vector.
+  function peekOldest() {
+    return buf.length > 0 ? buf[0] : null;
+  }
+
   function consumeUpTo(tick) {
     let count = 0;
     while (buf.length > 0 && buf[0].tick <= tick) {
@@ -88,7 +109,7 @@ function createRemoteInputBuffer({ capacity = 120, logger = null } = {}) {
     };
   }
 
-  return { push, peekAt, consumeUpTo, hasFrameFor, size, oldestTick, newestTick, stats };
+  return { push, peekAt, peekLatestUpTo, peekOldest, consumeUpTo, hasFrameFor, size, oldestTick, newestTick, stats };
 }
 
 export { createRemoteInputBuffer };

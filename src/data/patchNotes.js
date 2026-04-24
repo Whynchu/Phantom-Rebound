@@ -2,6 +2,21 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.37',
+      label: 'COOP PHASE D11: SYNC START + TICK-TOLERANT INPUT',
+      summary: ['Fixes the two bugs that surfaced in v1.20.36 playtest: (1) host and guest started their sims at independent moments (whoever clicked Start first ran ahead until the other clicked theirs), so simTick clocks were never aligned; (2) host\'s slot-1 remote-input adapter only matched on EXACT tick — once host\'s simTick passed available frames, slot 1 froze on the host\'s screen. Online co-op should now play with the guest visibly moving on the host\'s screen.'],
+      highlights: [
+        'Synchronized run start: host\'s "Start Run" click broadcasts `coop-run-start` over the gameplay channel and launches its own loop. Guest\'s button is replaced with a disabled "Waiting for host…" label and the guest auto-launches when the start message arrives. One human action, two synchronized sim starts (within a single Supabase round-trip).',
+        'Lobby start handler refactored — the launch logic is now a `launchCoopRun()` helper that\'s idempotent (guard against double-launch) and triggered from both the host\'s click path AND the guest\'s `coop-run-start` listener. Listener is unsubscribed once the run launches.',
+        'Tick-tolerant remote-input adapter: `peekAt(simTick)` is still the deterministic primary path (used by the host-remote-input processor for ack tracking). When it misses, the adapter now falls back to `peekLatestUpTo(simTick)` — newest frame at-or-before the requested tick — and finally to `peekOldest()` if host is BEHIND any buffered frame (run-start race). Slot 1 keeps moving across simTick drift instead of freezing.',
+        'Two new buffer methods on `remoteInputBuffer.js`: `peekLatestUpTo(tick)` (reverse-linear scan, O(1) typical) and `peekOldest()`. Both pure / no side-effects; they don\'t consume frames so the processor\'s exact-tick `hasFrameFor` accounting (for snapshot `lastProcessedInputSeq[1]`) stays unchanged.',
+        'Both fixes are independent — sync-start brings the two simTick clocks within one network RTT of each other, tick-tolerant lookup absorbs the residual drift + jitter + boon-pause-induced gaps. Together: guest\'s player visibly moves on host\'s screen.',
+        'Test state: 24 suites green (415+ assertions). Determinism canary 11/11 byte-identical. The new fallback paths are invoked only when exact-tick match fails, so the determinism replay (which always calls peekAt against ticks for which a frame was just pushed) never touches the new code paths.',
+        'Known limits this ship: (a) if guest reloads or refreshes after pressing Start, they get stuck on the lobby ready view (no auto-rejoin) — pre-existing. (b) if host clicks Start while guest\'s tab is backgrounded, guest may miss the start message until rAF resumes — they\'ll be a few seconds behind on tick alignment but the tick-tolerant adapter will keep their input flowing. (c) snapshot interpolation lag (~100ms) means guest still feels a slight delay on slot 0\'s position — predicted by D5d for slot 1 only.',
+        'Known limits inherited: D10 team-boons (host picks for both), no leaderboard for coop runs, no host-tab-hidden policy.',
+      ]
+    },
+  {
       version: '1.20.36',
       label: 'COOP PHASE D10: MULTI-ROOM BOONS',
       summary: ['Co-op runs no longer end after room 1. When the host clears a room, a `coop-boon-start` message hits the gameplay channel, the host opens the standard boon picker, and on confirm the host\'s upgraded UPG is mirrored onto guest slot 1 + a `coop-room-advance` hint clears the guest\'s wait overlay before the next snapshot lands. Both peers proceed into the next room together. Online co-op is now multi-room playable end-to-end.'],
