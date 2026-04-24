@@ -936,6 +936,35 @@ function updateGuestSlotMovement(dt, W, H) {
   }
 }
 
+// Phase C2d — Target-selection for enemies. Picks the nearest living slot,
+// tie-break by slot.id ASC (canonical ordering so both peers agree once
+// networking lands). Dead slots (hp<=0) are skipped so enemies don't camp
+// a corpse. Returns null only if every slot is dead.
+//
+// Determinism: in solo (only slot 0 present), returns slot 0 → behavior is
+// bit-identical to the pre-C2d direct-player-singleton code path.
+function getEnemyTargetSlot(enemy) {
+  let best = null;
+  let bestDistSq = Infinity;
+  for (let i = 0; i < playerSlots.length; i++) {
+    const slot = playerSlots[i];
+    if (!slot) continue;
+    const body = slot.body;
+    if (!body || typeof body.x !== 'number') continue;
+    if ((slot.metrics.hp || 0) <= 0) continue;
+    const dx = body.x - enemy.x;
+    const dy = body.y - enemy.y;
+    const d2 = dx * dx + dy * dy;
+    if (best === null || d2 < bestDistSq) {
+      best = slot;
+      bestDistSq = d2;
+    } else if (d2 === bestDistSq && slot.id < best.id) {
+      best = slot;
+    }
+  }
+  return best;
+}
+
 function drawGuestSlots(ts) {
   for (let i = 1; i < playerSlots.length; i++) {
     const slot = playerSlots[i];
@@ -1363,10 +1392,10 @@ function getDoubleBounceBulletPalette() {
   });
 }
 
-function spawnEB(ex,ey, angleOverride = null) {
+function spawnEB(ex,ey, angleOverride = null, target = player) {
   spawnAimedEnemyBullet({
     bullets,
-    player,
+    player: target,
     x: ex,
     y: ey,
     angleOverride,
@@ -1394,10 +1423,10 @@ function spawnEliteZB(ex, ey, idx, total, stageOverride) {
   spawnEliteBullet(ex, ey, a, spd, stage);
 }
 
-function spawnDBB(ex,ey, angleOverride = null) {
+function spawnDBB(ex,ey, angleOverride = null, target = player) {
   spawnAimedEnemyBullet({
     bullets,
-    player,
+    player: target,
     x: ex,
     y: ey,
     angleOverride,
@@ -1407,10 +1436,10 @@ function spawnDBB(ex,ey, angleOverride = null) {
   });
 }
 
-function spawnTB(ex,ey) {
+function spawnTB(ex,ey, target = player) {
   spawnAimedEnemyBullet({
     bullets,
-    player,
+    player: target,
     x: ex,
     y: ey,
     spread: 0.18,
@@ -1452,8 +1481,8 @@ function spawnEliteBullet(ex, ey, angle, speed, stageOverride, extras = {}) {
 }
 
 // Elite triangle shots use the same staged palette, just scaled up.
-function spawnEliteTriangleBullet(ex, ey) {
-  const a = Math.atan2(player.y - ey, player.x - ex) + (simRng.next() - 0.5) * 0.18;
+function spawnEliteTriangleBullet(ex, ey, target = player) {
+  const a = Math.atan2(target.y - ey, target.x - ex) + (simRng.next() - 0.5) * 0.18;
   const spd = (145 + simRng.next() * 40) * bulletSpeedScale();
   spawnEliteBullet(ex, ey, a, spd, 1, { r: 7 });
 }
@@ -2379,8 +2408,13 @@ function update(dt,ts){
     }
     for(let ei=enemies.length-1;ei>=0;ei--){
       const e=enemies[ei];
+      // C2d — pick target once per enemy per frame so movement, contact,
+      // siphon, and fire aftermath all reference the same slot.
+      const targetSlot = getEnemyTargetSlot(e) || playerSlots[0] || null;
+      const targetBody = targetSlot ? targetSlot.body : player;
+      const targetIsHost = targetBody === player;
       const combatStep = stepEnemyCombatState(e, {
-        player,
+        player: targetBody,
         ts,
         dt,
         width: W,
@@ -2392,9 +2426,14 @@ function update(dt,ts){
       });
       resolveEntityObstacleCollisions(e);
       if(combatStep.kind === 'siphon'){
-        if(combatStep.shouldDrainCharge){charge=Math.max(0,charge-2.8*dt);sparks(player.x,player.y,C.siphon,1,35);}
+        // Slot 1 charge-drain is deferred to C2d-1b (per-slot metrics pipeline).
+        // For now only host (slot 0) charge is drained.
+        if(combatStep.shouldDrainCharge && targetIsHost){charge=Math.max(0,charge-2.8*dt);sparks(player.x,player.y,C.siphon,1,35);}
       } else if(combatStep.kind === 'rusher'){
-        if(combatStep.distanceToPlayer<player.r+e.r+2 && player.invincible<=0){
+        // Contact damage plumbing still mutates host globals only — guarded
+        // by targetIsHost. Slot 1 is invincible in C2c so rusher-vs-slot-1
+        // silently no-ops until C2d-1b wires per-slot damage.
+        if(targetIsHost && combatStep.distanceToPlayer<player.r+e.r+2 && player.invincible<=0){
           const rusherHit = resolveRusherContactHit({
             hp,
             upgrades: UPG,
@@ -2444,18 +2483,18 @@ function update(dt,ts){
       } else {
         if(combatStep.shouldFire){
           fireEnemyBurst(e, {
-            player,
+            player: targetBody,
             bulletSpeedScale,
             obstacles: roomObstacles,
             random: () => simRng.next(),
             canEnemyUsePurpleShots: (enemy) => canEnemyUsePurpleShots(enemy, roomIndex),
             spawnZoner: (idx, total) => spawnZB(e.x, e.y, idx, total),
             spawnEliteZoner: (idx, total, stage) => spawnEliteZB(e.x, e.y, idx, total, stage),
-            spawnDoubleBounce: (angle) => spawnDBB(e.x, e.y, angle),
-            spawnTriangle: () => spawnTB(e.x, e.y),
-            spawnEliteTriangle: () => spawnEliteTriangleBullet(e.x, e.y),
+            spawnDoubleBounce: (angle) => spawnDBB(e.x, e.y, angle, targetBody),
+            spawnTriangle: () => spawnTB(e.x, e.y, targetBody),
+            spawnEliteTriangle: () => spawnEliteTriangleBullet(e.x, e.y, targetBody),
             spawnEliteBullet: (angle, speed, stage) => spawnEliteBullet(e.x, e.y, angle, speed, stage),
-            spawnEnemyBullet: (angle) => spawnEB(e.x, e.y, angle),
+            spawnEnemyBullet: (angle) => spawnEB(e.x, e.y, angle, targetBody),
           });
         }
       }

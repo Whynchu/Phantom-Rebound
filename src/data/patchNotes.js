@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.8',
+      label: 'COOP PHASE C2D-1A: ENEMY TARGETING',
+      summary: ['Internal scaffolding: enemies now pick the nearest living player slot each tick instead of hard-coding slot 0. Invisible to solo players.'],
+      highlights: [
+        'New getEnemyTargetSlot(enemy) selector: iterates getActiveSlots(), skips dead slots (hp<=0), returns nearest by distance-squared with a stable id-ASC tie-break so networking peers will agree.',
+        'Enemy step loop (stepEnemyCombatState + fireEnemyBurst) now receives the chosen slot body as player, once per enemy per frame.',
+        'spawnEB / spawnDBB / spawnTB / spawnEliteTriangleBullet accept an optional target param (defaults to host player singleton) so enemy projectiles aim at the same slot their parent enemy targeted.',
+        'Damage and charge-drain paths are still host-only — gated by targetIsHost. Slot-aware damage plumbing comes in C2d-1b; slot 1 shooting comes in C2d-2. Slot 1 in ?coopdebug=1 stays invincible for now but will now have enemies aiming at it whenever it\'s the nearest slot.',
+        'New scripts/test-enemy-targeting.mjs: 8 contract tests (solo, nearer-wins, tie-break, dead-slot skip, sparse array, null body). 121 tests total across 7 suites.',
+        'Determinism preserved: solo path returns slot 0 → bit-identical to pre-C2d behavior. 50-room compound replay test still byte-identical.',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.7',
       label: 'COOP PHASE C2C: SECOND PLAYER (DEV)',
       summary: ['Internal scaffolding: a second player slot can now render and move behind a dev-only URL flag. Invisible to solo players; never exposed in the UI.'],
