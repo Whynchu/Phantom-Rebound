@@ -147,6 +147,7 @@ import {
   decodeSnapshot,
 } from './src/net/coopSnapshot.js';
 import { createSnapshotApplier } from './src/net/snapshotApplier.js';
+import { createPredictionReconciler } from './src/net/predictionReconciler.js';
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
 import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
 import {
@@ -839,6 +840,22 @@ let onlineHostSlot1Installed = false;
 // Phase D5b — guest-side snapshot applier + slot 1 install.
 let guestSnapshotApplier = null;
 let onlineGuestSlot1Installed = false;
+// Phase D5e — guest-side prediction reconciler. Records local input frames
+// per tick and replays them from authoritative state to compute drift
+// corrections. Null outside online guest runs. Plus a tracker for the
+// last snapshot seq we already reconciled against (don't double-correct
+// the same snapshot at 60 Hz against a 10 Hz feed).
+let guestPredictionReconciler = null;
+let lastReconciledSnapshotSeq = null;
+// Phase D5e — correction thresholds. HARD_SNAP: error magnitude (px) above
+// which we instantly teleport the predicted body to the corrected position
+// (massive desync, prediction is unrecoverable). SOFT_DEAD_ZONE: errors
+// below this are ignored (small numerical noise). SOFT_FACTOR: fraction of
+// error closed per snapshot inside the soft band (10 Hz cadence → ~3-5
+// snapshots to fully converge on a typical drift).
+const RECONCILE_HARD_SNAP_PX = 96;
+const RECONCILE_SOFT_DEAD_ZONE_PX = 1.5;
+const RECONCILE_SOFT_FACTOR = 0.35;
 // Fixed-step accumulator (Phase C1b). Sim runs at a deterministic
 // 60 Hz cadence regardless of display refresh rate. On fast displays
 // we may run 0-1 sim steps per rAF; on slow displays we catch up by
@@ -1039,6 +1056,9 @@ function teardownCoopInputUplink() {
   }
   // Phase D5b: tear down guest-side slot 1 + applier.
   guestSnapshotApplier = null;
+  // Phase D5e: tear down reconciler + correction tracker.
+  guestPredictionReconciler = null;
+  lastReconciledSnapshotSeq = null;
   if (onlineGuestSlot1Installed) {
     try { delete playerSlots[1]; } catch (_) {}
     onlineGuestSlot1Installed = false;
@@ -1123,6 +1143,18 @@ function installCoopInputUplink(armedCoop) {
       },
     });
     try { console.info('[coop] guest snapshot applier armed'); } catch (_) {}
+    // Phase D5e — Build the prediction reconciler. Records local input
+    // frames per sim tick and provides replay for drift correction.
+    // SPD must match updateOnlineGuestPrediction's (165 * GLOBAL_SPEED_LIFT)
+    // or replay drifts by construction. World bounds default to current
+    // WORLD_W/WORLD_H; updated whenever the room/world resizes via the
+    // existing world-space recomputation path.
+    guestPredictionReconciler = createPredictionReconciler({
+      speedPerSecond: 165 * GLOBAL_SPEED_LIFT,
+      worldBounds: { left: M, right: WORLD_W - M, top: M, bottom: WORLD_H - M },
+    });
+    lastReconciledSnapshotSeq = null;
+    try { console.info('[coop] guest prediction reconciler armed'); } catch (_) {}
   }
   // Ingest any gameplay payload that is an input frame from the peer.
   // coopSession.onGameplay delivers { payload, from, ts } envelopes — we must
@@ -1402,6 +1434,17 @@ function updateOnlineGuestPrediction(dt) {
   }
   if (!slot.input || typeof slot.input.moveVector !== 'function') return;
   const { dx, dy, t, active } = slot.input.moveVector();
+  // Phase D5e — record the input frame BEFORE applying movement so the
+  // reconciler's stored frame matches what this tick simulated. Replay
+  // can then reproduce this exact step from authoritative state.
+  if (guestPredictionReconciler) {
+    try {
+      guestPredictionReconciler.record({
+        tick: simTick | 0,
+        dx, dy, t, active,
+      });
+    } catch (_) {}
+  }
   const SPD = 165 * GLOBAL_SPEED_LIFT;
   if (active) { body.vx = dx * SPD * t; body.vy = dy * SPD * t; }
   else { body.vx = 0; body.vy = 0; }
@@ -2904,6 +2947,64 @@ function loop(ts){
             roomPhase = result.room.phase;
           }
           if (Number.isFinite(result.score)) score = result.score;
+          // Phase D5e — reconciliation. Once per fresh snapshot, compare our
+          // predicted slot 1 body against an authoritative replay from the
+          // host's state-at-snapshot, replaying our locally-buffered inputs
+          // forward to current simTick. The applier left body x/y untouched
+          // (predictedSlotId=1 → skipBody) so we can correct it directly.
+          const snap = latestRemoteSnapshot;
+          const snapSeq = snap && snap.snapshotSeq;
+          if (
+            guestPredictionReconciler &&
+            snap &&
+            Number.isFinite(snapSeq) &&
+            snapSeq !== lastReconciledSnapshotSeq
+          ) {
+            try {
+              const slot1 = playerSlots[1];
+              const body = slot1 && slot1.body;
+              const authSlot = snap.slots && snap.slots.find(s => s && s.id === 1);
+              const fromTick = snap.lastProcessedInputSeq && snap.lastProcessedInputSeq[1];
+              // Skip if guest body absent, slot 1 not yet known to host, or
+              // host hasn't ack'd any of our input ticks yet — nothing to
+              // anchor the replay on. The next snapshot may carry it.
+              if (
+                body &&
+                authSlot &&
+                authSlot.alive &&
+                (body.deadAt | 0) === 0 &&
+                Number.isFinite(fromTick) &&
+                fromTick !== null
+              ) {
+                const toTick = simTick | 0;
+                if (toTick >= fromTick) {
+                  const corrected = guestPredictionReconciler.replay(
+                    { x: authSlot.x, y: authSlot.y, vx: authSlot.vx, vy: authSlot.vy },
+                    fromTick | 0,
+                    toTick,
+                    SIM_STEP_SEC,
+                    body.r || 0,
+                  );
+                  if (corrected) {
+                    const ex = corrected.x - body.x;
+                    const ey = corrected.y - body.y;
+                    const errMag = Math.hypot(ex, ey);
+                    if (errMag >= RECONCILE_HARD_SNAP_PX) {
+                      body.x = corrected.x;
+                      body.y = corrected.y;
+                    } else if (errMag > RECONCILE_SOFT_DEAD_ZONE_PX) {
+                      body.x += ex * RECONCILE_SOFT_FACTOR;
+                      body.y += ey * RECONCILE_SOFT_FACTOR;
+                    }
+                  }
+                }
+              }
+              lastReconciledSnapshotSeq = snapSeq;
+            } catch (recErr) {
+              try { console.warn('[coop] reconcile error', recErr); } catch (_) {}
+              lastReconciledSnapshotSeq = snapSeq;
+            }
+          }
         }
       } catch (err) {
         try { console.warn('[coop] snapshot apply error', err); } catch (_) {}

@@ -2,6 +2,22 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.34',
+      label: 'COOP PHASE D5e: RECONCILIATION (INPUT REPLAY)',
+      summary: ['Closes the loop on guest prediction. Each fresh host snapshot, the guest replays its own locally-buffered input frames forward from the host-acknowledged tick, computes a "corrected" position, and either snaps (large desync) or softly pulls the predicted body toward truth (small drift). Result: predicted-feel stays responsive while authoritative state always wins over time. Determinism canary 11/11.'],
+      highlights: [
+        'New module `src/net/predictionReconciler.js` (~190 lines): tick-keyed ring-buffer for guest input frames, plus a pure replay function that applies the same prediction math (165 * GLOBAL_SPEED_LIFT * tMag) starting from any authoritative state. Default 240-tick (4s @ 60Hz) capacity gives comfortable margin against packet loss at 10Hz snapshot cadence. 31 unit tests covering empty history, single/multi-frame replay, inactive frames, world-bound clamping, ring wraparound, reset, constructor validation.',
+        'Guest install path now builds the reconciler alongside the snapshot applier with matching speedPerSecond and current world bounds. Lifecycle: rebuilt per guest run, torn down with the rest of the coop scaffolding when leaving online mode.',
+        '`updateOnlineGuestPrediction` records this tick\'s input frame ({tick, dx, dy, t, active}) into the reconciler BEFORE applying movement — so the recorded frame matches what the local sim used and what was sent up to the host on the input channel.',
+        'Reconciliation correction runs in the loop\'s applier hook ONCE per fresh snapshot (gated by snapshotSeq tracker, so 60Hz render against 10Hz snapshots doesn\'t multi-correct). Pulls authoritative slot 1 state + lastProcessedInputSeq[1] from the snapshot, calls reconciler.replay(auth, ackTick, simTick, dt, bodyR), and compares the corrected position to the predicted body.',
+        'Hard-snap threshold: 96px error → instant teleport (catastrophic desync, prediction is unrecoverable). Soft band: 1.5px–96px → close 35% of error per snapshot, converging in ~3-5 snapshots (~0.3-0.5s). Below 1.5px: ignored as numerical noise. Tunable via constants near the top of script.js.',
+        'Skipped during respawn lifecycle: when guest is dead (body.deadAt) or host slot is dead, no replay runs — applier\'s alive-edge anchor handles those discontinuities instead. Skipped also when host hasn\'t yet ack\'d any of our input ticks (lastProcessedInputSeq[1] === null).',
+        'Obstacle collision deliberately NOT replayed in this version. Drift near walls is acceptable since each snapshot recorrects, and the obstacle solver depends on global room state the reconciler can\'t see. World-bounds clamping IS replayed.',
+        'Test state: 24 suites green (413+ assertions). Determinism canary 11/11 byte-identical — reconciliation is gated to isCoopGuest()-only paths and never touches host/solo/COOP_DEBUG sims.',
+        'Next up: D5f (predicted bullet visuals or first multi-peer integration test against the reconciler under simulated jitter/loss).',
+      ]
+    },
+  {
       version: '1.20.33',
       label: 'COOP PHASE D5d: LOCAL PREDICTION (GUEST SLOT 1)',
       summary: ['Guest now feels their own movement instantly. Joystick input drives the local slot 1 body each frame; the snapshot applier skips writing slot 1\'s body x/y/vx/vy continuously, but still re-anchors on death, respawn, runId reset, and first snapshot. Aim, hp, charge, invulnT, and alive flag remain host-authoritative. Determinism canary 11/11.'],
