@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.16',
+      label: 'COOP PHASE C3A-CORE-2: INPUT SYNC',
+      summary: ['Internal scaffolding: new coopInputSync batches local input at 15 msg/s (4 frames/batch, 60 Hz sim) and fans out remote frames via a ring buffer. Foundation for lockstep tick gate (C3a-core-3). ?coopdebug=1 only.'],
+      highlights: [
+        'New src/net/remoteInputBuffer.js: sorted ring buffer (capacity 120) for remote quantized frames. push/peekAt/consumeUpTo/hasFrameFor/stats — reverse-linear scan, O(1) amortised for in-order arrivals. Duplicate ticks: first wins. Capacity overflow: oldest dropped.',
+        'New src/net/coopInputSync.js: createCoopInputSync({sendGameplay, localAdapter, localSlotIndex, batchSize=4}). sampleFrame(tick) quantizes dx/dy to int8, t to uint8; flushes via sendGameplay when batch full. flush() for manual/shutdown drain. ingest(payload) validates+fans out to onRemoteFrame listeners and populates ring buffer. getStats()/getRemoteRingBuffer()/dispose().',
+        'Quantization: dx/dy=Math.round(v*127) int8; t=Math.round(v*255) uint8. Round-trip error ≤1/127≈0.79% per axis. Supabase 20 events/s cap: batchSize=4 yields ~15 msg/s.',
+        'Extended src/core/inputAdapters.js: new createRemoteInputAdapter(ringBuffer, {getCurrentTick}). Dequantizes frames; stall default (dx=0,dy=0,active=false) when no frame present for tick.',
+        'New scripts/test-coop-input-sync.mjs: 24 tests (7 ring buffer, 8 batching, 5 ingest/dispatch, 4 remote adapter). No wiring into script.js — C3a-core-3 (lockstep) owns that.',
+        '253 tests across 15 suites. Determinism byte-identical (11/11). Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.15',
       label: 'COOP PHASE C3A-CORE-1: LOCAL SLOT RUNTIME',
       summary: ['Internal scaffolding: new onlineSlotRuntime resolves "which slot is the person at this browser?" Foundation for input sync + HUD routing. ?coopdebug=1 only.'],

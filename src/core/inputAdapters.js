@@ -61,8 +61,48 @@ function createNullInputAdapter() {
   };
 }
 
+// Phase C3a-core-2 — Remote input adapter.
+//
+// Reads quantized frames from a remoteInputBuffer ring buffer and dequantizes
+// them back to the moveVector contract. If no frame is available for the
+// current tick, returns an inactive/stall vector — the lockstep gate (C3a-
+// core-3) prevents the sim from advancing past a missing tick, so this
+// fallback should rarely fire in a healthy run.
+//
+// Dequantization:
+//   dx = frame.dx / 127   (inverse of Math.round(v * 127))
+//   dy = frame.dy / 127
+//   t  = frame.t  / 255
+function createRemoteInputAdapter(ringBuffer, { getCurrentTick } = {}) {
+  if (!ringBuffer || typeof ringBuffer.peekAt !== 'function') {
+    throw new Error('createRemoteInputAdapter: ringBuffer required');
+  }
+  if (typeof getCurrentTick !== 'function') {
+    throw new Error('createRemoteInputAdapter: getCurrentTick required');
+  }
+  return {
+    kind: 'remote',
+    moveVector() {
+      const frame = ringBuffer.peekAt(getCurrentTick());
+      if (!frame) return { dx: 0, dy: 0, t: 0, active: false };
+      return {
+        dx: frame.dx / 127,
+        dy: frame.dy / 127,
+        t: frame.t / 255,
+        active: frame.still === 0,
+      };
+    },
+    isStill() {
+      const frame = ringBuffer.peekAt(getCurrentTick());
+      if (!frame) return true;
+      return frame.still === 1;
+    },
+  };
+}
+
 export {
   createHostInputAdapter,
   createArrowKeysInputAdapter,
   createNullInputAdapter,
+  createRemoteInputAdapter,
 };
