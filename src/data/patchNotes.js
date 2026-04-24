@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.15',
+      label: 'COOP PHASE C3A-CORE-1: LOCAL SLOT RUNTIME',
+      summary: ['Internal scaffolding: new onlineSlotRuntime resolves "which slot is the person at this browser?" Foundation for input sync + HUD routing. ?coopdebug=1 only.'],
+      highlights: [
+        'New src/net/onlineSlotRuntime.js: resolveLocalSlotIndex/getLocalSlotIndex/getLocalSlot/isLocalSlot — derives local slot from coopRunConfig role (host/local→0, guest→1).',
+        'Pure utility module with explicit-override support; no globals read outside of getActiveCoopRun(). Enables Node integration tests for online slot logic without touching the DOM.',
+        'Wired the auto-fire call site in script.js to route through getLocalSlot(). Solo/host/COOP_DEBUG paths resolve to slot 0 → byte-identical. Only a real online guest (role=guest) flips to slot 1, and that path is not yet playable.',
+        'New scripts/test-online-slot-runtime.mjs: 28 contract tests (role mapping, override, sparse arrays, solo invariant, isLocalSlot identity).',
+        '229 tests across 14 suites. Determinism byte-identical (11/11). Playwright smoke clean for solo and ?coopdebug=1.',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.14',
       label: 'COOP PHASE C3A-PRE-2: GAMEPLAY CHANNEL',
       summary: ['Internal scaffolding: coopSession gains sendGameplay/onGameplay multiplexed with handshake. Foundation for C3a input sync. ?coopdebug=1 only.'],

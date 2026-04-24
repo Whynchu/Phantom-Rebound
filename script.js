@@ -135,6 +135,7 @@ import {
   clearCoopRun,
   isCoopRun,
 } from './src/net/coopRunConfig.js';
+import { getLocalSlot } from './src/net/onlineSlotRuntime.js';
 import {
   showRoomClearOverlay,
   showBossDefeatedOverlay,
@@ -2614,7 +2615,9 @@ function update(dt,ts){
     if(fireT >= interval && isStill){
       fireT = fireT % interval;
       if(autoTarget) {
-        firePlayer(playerSlots[0] || null, autoTarget.e.x,autoTarget.e.y);
+        // C3a-core-1: local browser's auto-fire drives the local slot.
+        // Solo/host/COOP_DEBUG → slot 0 (byte-identical). Online guest → slot 1.
+        firePlayer(getLocalSlot(playerSlots) || playerSlots[0] || null, autoTarget.e.x,autoTarget.e.y);
         UPG.sustainedFireShots = (UPG.sustainedFireShots || 0) + 1;
         UPG.sustainedFireLastShotTime = simNowMs;
       }
