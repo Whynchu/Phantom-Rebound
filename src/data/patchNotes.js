@@ -2,6 +2,23 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.29',
+      label: 'COOP PHASE D4.6: SNAPSHOT CONTRACT FIX',
+      summary: ['Pre-D5 audit caught four bugs in the wire format that would have made guest rendering impossible: enemy IDs were unstable, enemy fire fields were unpopulated, bullets lacked render-critical fields, and slot data was incomplete. All fixed before guests start consuming snapshots in D5. Determinism canary byte-identical.'],
+      highlights: [
+        'Enemy stable IDs: collectHostSnapshotState now reads e.eid (the runtime field set by createEnemy) instead of e.id (which is undefined → was falling back to array index → guest upsert would have thrashed every frame as enemies sorted differently).',
+        'Enemy fire fields renamed to match runtime: schema now carries fT (cooldown counter, ms) and fRate (period, ms) instead of nonexistent fireT/windup. Guests will be able to render live fire-tells (charging-up animation before an enemy shoots).',
+        'Bullets now carry r (radius) and state (output|grey|danger). bulletRenderer.js dispatches on b.state directly, so without these fields every guest-rendered projectile would have crashed or fallen through to default visuals. r is needed for hit-region drawing and bounce-ring math.',
+        'Slot data now fully populated. encodeSlot already declared charge/maxCharge/aimAngle/invulnT/shieldT/stillTimer/alive but collectHostSnapshotState was only writing 6 of the 13 fields → guests would have decoded zeros for shields, aim arrow, charge bar, etc. Now reads s.metrics for hp/maxHp/charge/stillTimer, slot.upg.maxCharge, slot.aim.angle, body.invincible (invulnT), body.shields[0].t (shieldT), body.deadAt (alive).',
+        'Bullet ownerSlot still clamped to 0 for danger bullets (no slot owner) — type/state fields carry the player/danger discriminator. spawnTick still 0 until D4b proper bullet spawn-tick stamping (which D5 does not need).',
+        'New coopSnapshot tests (24 total, +3): default values for new fields (bullet r=6, state=output; enemy r=12, fT=0, fRate=0), regression guard ensuring legacy fireT/windup keys are NOT present in encoded output (we want hard breaks if anything still reads the old names).',
+        'No changes to broadcaster, applier, runtime sim, or HUD. Pure schema/collection fix.',
+        'Rubber-duck of D5 plan flagged this as a blocker — ALL of D5\'s rendering would have been built on phantom data. Better to catch it now than after D5b lands and guests render the wrong world.',
+        'All 22 test suites green (273+ assertions). Determinism 11/11 byte-identical — change is host-broadcast-only, sim path untouched.',
+        'Next up (Phase D5a): route render/HUD to local slot (currently hardcoded to slot 0) so the guest sees their own slot 1 as the "main" player rather than the host.',
+      ]
+    },
+  {
       version: '1.20.28',
       label: 'COOP PHASE D4.5: HOST DRIVES ONLINE SLOT 1',
       summary: ['Host now actually consumes guest input frames to drive slot 1 in the authoritative sim. lastProcessedInputSeq[1] is no longer a placeholder — it reflects the highest sim-tick where the host applied a real remote-input frame, ready for D6 reconciliation. Determinism canary byte-identical (online host code path is gated; offline runs untouched).'],

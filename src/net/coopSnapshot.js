@@ -133,7 +133,12 @@ function encodeBullet(src, idx) {
     y: num(src.y, 'bullets[' + idx + '].y'),
     vx: num(src.vx ?? 0, 'bullets[' + idx + '].vx'),
     vy: num(src.vy ?? 0, 'bullets[' + idx + '].vy'),
+    r: num(src.r ?? 6, 'bullets[' + idx + '].r'),
     type: String(src.type ?? 'p'),
+    // D4.6: bulletRenderer dispatches on b.state ('danger' | 'grey' | 'output').
+    // The legacy `type` field carried this discriminator, but the renderer
+    // checks `state` directly, so guests need it on the wire.
+    state: String(src.state ?? 'output'),
     ownerSlot: u32(src.ownerSlot ?? 0, 'bullets[' + idx + '].ownerSlot'),
     bounces: u32(src.bounces ?? 0, 'bullets[' + idx + '].bounces'),
     spawnTick: u32(src.spawnTick ?? 0, 'bullets[' + idx + '].spawnTick'),
@@ -149,9 +154,14 @@ function encodeEnemy(src, idx) {
     vx: num(src.vx ?? 0, 'enemies[' + idx + '].vx'),
     vy: num(src.vy ?? 0, 'enemies[' + idx + '].vy'),
     hp: num(src.hp ?? 0, 'enemies[' + idx + '].hp'),
+    r: num(src.r ?? 12, 'enemies[' + idx + '].r'),
     type: String(src.type ?? 'e'),
-    fireT: num(src.fireT ?? 0, 'enemies[' + idx + '].fireT'),
-    windup: num(src.windup ?? 0, 'enemies[' + idx + '].windup'),
+    // D4.6: runtime enemies use fT (cooldown counter, ms) and fRate (period,
+    // ms). Older drafts of this schema named these fireT/windup, but no
+    // matching runtime fields existed — guests would have rendered ghosts
+    // with broken fire-tells. Use the runtime field names directly.
+    fT: num(src.fT ?? 0, 'enemies[' + idx + '].fT'),
+    fRate: num(src.fRate ?? 0, 'enemies[' + idx + '].fRate'),
   };
 }
 

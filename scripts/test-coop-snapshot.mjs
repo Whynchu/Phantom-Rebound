@@ -96,11 +96,11 @@ test('encode: full state round-trips via JSON', () => {
       { id: 1, x: 160, y: 200, vx: 0, vy: 0, hp: 3, maxHp: 5, charge: 0, maxCharge: 1, aimAngle: -1.57, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
     ],
     bullets: [
-      { id: 1, x: 120, y: 130, vx: 300, vy: 0, type: 'p', ownerSlot: 0, bounces: 0, spawnTick: 2510 },
-      { id: 2, x: 130, y: 140, vx: -200, vy: 50, type: 't', ownerSlot: 99, bounces: 1, spawnTick: 2515 },
+      { id: 1, x: 120, y: 130, vx: 300, vy: 0, r: 6, type: 'p', state: 'output', ownerSlot: 0, bounces: 0, spawnTick: 2510 },
+      { id: 2, x: 130, y: 140, vx: -200, vy: 50, r: 8, type: 't', state: 'danger', ownerSlot: 99, bounces: 1, spawnTick: 2515 },
     ],
     enemies: [
-      { id: 10, x: 250, y: 100, vx: 10, vy: 0, hp: 12, type: 'circle', fireT: 0.2, windup: 0 },
+      { id: 10, x: 250, y: 100, vx: 10, vy: 0, hp: 12, r: 13, type: 'circle', fT: 0.2, fRate: 1800 },
     ],
     room: { index: 2, phase: 'fighting', clearTimer: 0, spawnQueueLen: 3 },
     score: 1234,
@@ -114,9 +114,15 @@ test('encode: full state round-trips via JSON', () => {
   assertEq(roundTrip.slots[0].x, 100.5);
   assertEq(roundTrip.slots[1].aimAngle, -1.57);
   assertEq(roundTrip.bullets.length, 2);
+  assertEq(roundTrip.bullets[0].r, 6);
+  assertEq(roundTrip.bullets[0].state, 'output');
   assertEq(roundTrip.bullets[1].type, 't');
+  assertEq(roundTrip.bullets[1].state, 'danger');
   assertEq(roundTrip.bullets[1].bounces, 1);
   assertEq(roundTrip.enemies[0].hp, 12);
+  assertEq(roundTrip.enemies[0].r, 13);
+  assertEq(roundTrip.enemies[0].fT, 0.2);
+  assertEq(roundTrip.enemies[0].fRate, 1800);
   assertEq(roundTrip.room.phase, 'fighting');
   assertEq(roundTrip.score, 1234);
   assertEq(roundTrip.lastProcessedInputSeq[0], 100);
@@ -134,6 +140,44 @@ test('encode: defaults missing optional scalars to 0/false', () => {
   assertEq(s.hp, 0);
   assertEq(s.invulnT, 0);
   assertEq(s.alive, false);
+});
+
+// D4.6: new schema fields (bullet.r/state, enemy.r/fT/fRate) must default
+// gracefully so a snapshot built from a partial host state still encodes.
+test('encode: D4.6 bullet r/state default to 6/output', () => {
+  const snap = encodeSnapshot({
+    runId: RID, snapshotSeq: 1, snapshotSimTick: 1,
+    bullets: [{ id: 1, x: 0, y: 0 }],
+  });
+  assertEq(snap.bullets[0].r, 6);
+  assertEq(snap.bullets[0].state, 'output');
+});
+
+test('encode: D4.6 enemy fT/fRate default to 0; r defaults to 12', () => {
+  const snap = encodeSnapshot({
+    runId: RID, snapshotSeq: 1, snapshotSimTick: 1,
+    enemies: [{ id: 1, x: 0, y: 0 }],
+  });
+  assertEq(snap.enemies[0].fT, 0);
+  assertEq(snap.enemies[0].fRate, 0);
+  assertEq(snap.enemies[0].r, 12);
+});
+
+test('encode: D4.6 bullet/enemy preserve runtime field names', () => {
+  // Regression guard: enemy fT/fRate must NOT be silently aliased back to
+  // legacy fireT/windup names. The whole point of D4.6 is that these match
+  // runtime so the guest can read them directly.
+  const snap = encodeSnapshot({
+    runId: RID, snapshotSeq: 1, snapshotSimTick: 1,
+    enemies: [{ id: 1, x: 0, y: 0, fT: 1234, fRate: 1800 }],
+    bullets: [{ id: 1, x: 0, y: 0, r: 7.5, state: 'grey' }],
+  });
+  assertEq(snap.enemies[0].fT, 1234);
+  assertEq(snap.enemies[0].fRate, 1800);
+  assertEq(snap.enemies[0].fireT, undefined);
+  assertEq(snap.enemies[0].windup, undefined);
+  assertEq(snap.bullets[0].r, 7.5);
+  assertEq(snap.bullets[0].state, 'grey');
 });
 
 test('encode: coerces fractional u32 fields via floor', () => {

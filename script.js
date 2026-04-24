@@ -1124,21 +1124,50 @@ function installCoopInputUplink(armedCoop) {
 // Called by the broadcaster every ticksPerSnapshot. Defensive defaults on
 // every field — encodeSnapshot is strict and any throw is caught and
 // counted as a failed send by the broadcaster.
+// Phase D4 — host snapshot collection. Phase D4.6 — fixed:
+//   - enemy id was `e.id ?? i` (always falls through to array index because
+//     runtime uses `eid`); now reads `e.eid`. Stable IDs are required for
+//     guest-side upsert in D5.
+//   - enemy fire fields were `fireT`/`windup`; runtime has `fT`/`fRate` and
+//     no `windup`. Renamed to match runtime so guests see live fire-tells.
+//   - bullets need `r` and `state` to render correctly via bulletRenderer,
+//     which dispatches on `b.state`.
+//   - slot output now writes the full schema (charge/aim/invulnT/etc.); the
+//     fields were declared in encodeSlot but never populated, so guests
+//     would have decoded zeros.
 function collectHostSnapshotState() {
   const slotsOut = [];
   for (let i = 0; i < playerSlots.length; i++) {
     const s = playerSlots[i];
     if (!s) continue;
     const body = (typeof s.getBody === 'function') ? s.getBody() : null;
-    if (!body) continue;
+    const bodyOrSlot = body || (s.body ?? null);
+    if (!bodyOrSlot) continue;
+    const m = s.metrics || {};
+    const upg = (typeof s.getUpg === 'function') ? s.getUpg() : (s.upg || {});
+    const aim = s.aim || {};
+    // body.shields is an array of active shield records; first entry's
+    // remaining time is the canonical "shield timer" for the renderer.
+    const shieldT = (Array.isArray(bodyOrSlot.shields) && bodyOrSlot.shields.length > 0)
+      ? Number(bodyOrSlot.shields[0].t || bodyOrSlot.shields[0].timer || 0)
+      : 0;
     slotsOut.push({
       id: s.id ?? i,
-      x: body.x ?? 0,
-      y: body.y ?? 0,
-      vx: body.vx ?? 0,
-      vy: body.vy ?? 0,
-      hp: (typeof s.getHp === 'function' ? s.getHp() : (body.hp ?? 0)),
-      maxHp: (typeof s.getMaxHp === 'function' ? s.getMaxHp() : (body.maxHp ?? 0)),
+      x: bodyOrSlot.x ?? 0,
+      y: bodyOrSlot.y ?? 0,
+      vx: bodyOrSlot.vx ?? 0,
+      vy: bodyOrSlot.vy ?? 0,
+      hp: m.hp ?? 0,
+      maxHp: m.maxHp ?? 0,
+      charge: m.charge ?? 0,
+      maxCharge: upg.maxCharge ?? 1,
+      aimAngle: aim.angle ?? 0,
+      invulnT: bodyOrSlot.invincible ?? 0,
+      shieldT,
+      stillTimer: m.stillTimer ?? 0,
+      // body.deadAt > 0 marks a dead player; createInitialPlayerState
+      // initializes deadAt:0. m.hp > 0 is a defensive secondary check.
+      alive: !((bodyOrSlot.deadAt ?? 0) > 0) && ((m.hp ?? 0) > 0 || (m.maxHp ?? 0) === 0 ? true : (m.hp ?? 0) > 0),
     });
   }
   const bulletsOut = [];
@@ -1152,9 +1181,14 @@ function collectHostSnapshotState() {
       y: b.y ?? 0,
       vx: b.vx ?? 0,
       vy: b.vy ?? 0,
+      r: b.r ?? 6,
       type: b.kind || (b.danger ? 'd' : 'p'),
+      // D4.6: bulletRenderer reads `b.state` directly. Pass through the
+      // runtime field; default 'output' keeps any oddly-shaped bullets
+      // rendering as player shots rather than crashing the renderer.
+      state: b.state || (b.danger ? 'danger' : 'output'),
       // Schema requires u32 ≥ 0. Danger bullets carry no slot owner: clamp
-      // to 0 — the `type` field carries the player/danger discriminator.
+      // to 0 — the `type`/`state` fields carry the player/danger discriminator.
       ownerSlot: (typeof owner === 'number' && owner >= 0) ? (owner | 0) : 0,
       bounces: b.bounces ?? 0,
       spawnTick: b.spawnTick ?? 0,
@@ -1164,16 +1198,24 @@ function collectHostSnapshotState() {
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i];
     if (!e) continue;
+    // D4.6: runtime enemies use `eid` (set by createEnemy). Falling back to
+    // array index would make IDs non-stable across snapshots, breaking
+    // upsert in the D5 applier.
+    const stableId = (e.eid != null && e.eid >= 0) ? (e.eid | 0)
+      : (e.id != null && e.id >= 0) ? (e.id | 0)
+      : i;
     enemiesOut.push({
-      id: (e.id != null && e.id >= 0) ? (e.id | 0) : i,
+      id: stableId,
       x: e.x ?? 0,
       y: e.y ?? 0,
       vx: e.vx ?? 0,
       vy: e.vy ?? 0,
       hp: e.hp ?? 0,
+      r: e.r ?? 12,
       type: e.type || 'e',
-      fireT: e.fireT ?? 0,
-      windup: e.windup ?? 0,
+      // D4.6: runtime field names (fT cooldown counter ms, fRate period ms).
+      fT: e.fT ?? 0,
+      fRate: e.fRate ?? 0,
     });
   }
   return {
