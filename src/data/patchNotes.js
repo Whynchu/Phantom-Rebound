@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.12',
+      label: 'COOP PHASE C2F: COOP GATING',
+      summary: ['Internal scaffolding: save/continue/leaderboard are now solo-only. Coop (?coopdebug=1) runs don\'t persist and don\'t submit scores. ?coopdebug=1 only.'],
+      highlights: [
+        'saveRunState() early-returns under COOP_DEBUG — no stale saves left behind after a coop session. Solo saves unchanged.',
+        'pushLeaderboardEntry() early-returns under COOP_DEBUG (still clears legacy recovery). Coop scores don\'t belong on the solo board — one player per device, different scoring model.',
+        '"Continue Run" button is hidden under COOP_DEBUG (you can\'t resume a coop session solo).',
+        'New scripts/test-coop-gating.mjs: 10 contract tests (save/leaderboard/continue gates, determinism).',
+        '167 tests total across 11 suites. Determinism byte-identical. Playwright smoke clean for solo and ?coopdebug=1.',
+        'Experimental repo only; live repo unchanged.',
+      ]
+    },
+  {
       version: '1.20.11',
       label: 'COOP PHASE C2E: PER-SLOT BOONS',
       summary: ['Internal scaffolding: guest slot 1 now gets its own boon picker between rooms. Each player picks independently before play resumes. ?coopdebug=1 only.'],

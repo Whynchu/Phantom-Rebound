@@ -2044,6 +2044,12 @@ async function refreshLeaderboardView() {
 }
 
 function pushLeaderboardEntry() {
+  // C2f — coop runs don't submit to the solo leaderboard (separate scoring +
+  // one player per device means the local score doesn't represent a solo run).
+  if (COOP_DEBUG) {
+    clearLegacyRunRecovery();
+    return;
+  }
   const entry = buildScoreEntry();
   leaderboard = upsertLocalLeaderboardEntry(leaderboard, entry, 500);
   saveLeaderboard();
@@ -2139,6 +2145,10 @@ const showPauseConfirm = pauseControls.showPauseConfirm;
 const SAVED_RUN_KEY = STORAGE_KEYS.savedRun;
 
 function saveRunState() {
+  // C2f — coop runs don't persist. The remote peer's state isn't captured here
+  // and "Continue Run" is solo-only. Skip to avoid leaving stale/misleading
+  // saves behind after a coop session.
+  if (COOP_DEBUG) return;
   const state = {
     UPG: { ...UPG },
     score, kills, hp, maxHp, charge,
@@ -4082,9 +4092,9 @@ function showLbBoonsPopup(runnerName, boons, boonOrder = '') {
 loadLeaderboard();
 clearLegacyRunRecovery();
 
-// Continue Run — show button if saved run exists
+// Continue Run — show button if saved run exists (solo only; C2f gates coop).
 const continueRunBtn = document.getElementById('btn-continue-run');
-const savedRun = loadSavedRun();
+const savedRun = COOP_DEBUG ? null : loadSavedRun();
 if (savedRun && continueRunBtn) {
   continueRunBtn.classList.remove('off');
   continueRunBtn.textContent = `Continue Run (Room ${(savedRun.roomIndex || 0) + 1})`;
