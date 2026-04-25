@@ -1506,6 +1506,267 @@ function handleCoopRoomAdvanceGuest() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// D15 — Coop end-of-run screen + rematch flow.
+// ---------------------------------------------------------------------------
+// On run end in coop, we want both peers to land on a dedicated end screen
+// with both runners' names + the team score, plus REMATCH (one-tap loop back
+// into another coop run on the same lobby) and LEAVE buttons. The transport
+// session must outlive the gameOver teardown so coop-rematch packets can
+// flow; we capture role/code/partnerName + the session ref into a context
+// object that's preserved across the teardown.
+let coopRematchSession = null;
+let coopRematchRole = null;
+let coopRematchCode = null;
+let coopPartnerName = '';
+let coopRematchListenerUnsub = null;
+let coopGameOverPayload = null; // { score, roomIndex, hostName, guestName }
+
+function setCoopRematchLobbyContext({ role, code, partnerName }) {
+  coopRematchRole = role || null;
+  coopRematchCode = code || null;
+  coopPartnerName = partnerName || '';
+}
+
+function getLocalRunnerName() {
+  try { return playerName || 'YOU'; } catch (_) { return 'YOU'; }
+}
+
+function buildCoopGameOverPayload() {
+  const role = coopRematchRole;
+  const local = getLocalRunnerName();
+  const partner = coopPartnerName || 'PARTNER';
+  return {
+    score: score | 0,
+    roomIndex: roomIndex | 0,
+    hostName: role === 'host' ? local : partner,
+    guestName: role === 'guest' ? local : partner,
+  };
+}
+
+function showCoopGameOverScreen(payload) {
+  const panel = document.getElementById('s-go-coop');
+  if (!panel) return;
+  // Hide the solo end screen if it slipped in (it shouldn't on the coop path,
+  // but defensive).
+  try { document.getElementById('s-go')?.classList.add('off'); } catch (_) {}
+  const data = payload || coopGameOverPayload || buildCoopGameOverPayload();
+  coopGameOverPayload = data;
+  try {
+    const scoreEl = document.getElementById('go-coop-score');
+    if (scoreEl) scoreEl.textContent = String(data.score | 0);
+    const hostNameEl = document.getElementById('go-coop-host-name');
+    if (hostNameEl) hostNameEl.textContent = (data.hostName || 'HOST').toUpperCase();
+    const guestNameEl = document.getElementById('go-coop-guest-name');
+    if (guestNameEl) guestNameEl.textContent = (data.guestName || 'GUEST').toUpperCase();
+    const metaEl = document.getElementById('go-coop-meta');
+    if (metaEl) metaEl.textContent = `Room ${(data.roomIndex | 0) + 1} reached`;
+    const status = document.getElementById('go-coop-status');
+    if (status) status.textContent = '';
+    const rematchBtn = document.getElementById('btn-coop-rematch');
+    if (rematchBtn) {
+      if (coopRematchRole === 'guest') {
+        rematchBtn.textContent = 'Request Rematch';
+        rematchBtn.disabled = false;
+      } else {
+        rematchBtn.textContent = 'Rematch';
+        rematchBtn.disabled = false;
+      }
+    }
+    const nameInput = document.getElementById('name-input-go-coop');
+    if (nameInput) {
+      try { nameInput.value = getLocalRunnerName(); } catch (_) {}
+    }
+    setMenuChromeVisible(true);
+    panel.classList.remove('off');
+  } catch (err) {
+    try { console.warn('[coop] showCoopGameOverScreen failed', err); } catch (_) {}
+  }
+}
+
+function hideCoopGameOverScreen() {
+  try { document.getElementById('s-go-coop')?.classList.add('off'); } catch (_) {}
+}
+
+// Install a separate gameplay listener that survives teardownCoopInputUplink
+// so we can still receive coop-rematch / coop-leave during the post-game
+// screen. The main onGameplay listener is torn down with the input uplink.
+function installCoopRematchListener() {
+  if (!coopRematchSession || typeof coopRematchSession.onGameplay !== 'function') return;
+  if (coopRematchListenerUnsub) {
+    try { coopRematchListenerUnsub(); } catch (_) {}
+    coopRematchListenerUnsub = null;
+  }
+  try {
+    coopRematchListenerUnsub = coopRematchSession.onGameplay((ev) => {
+      const payload = ev && ev.payload;
+      if (!payload || typeof payload !== 'object') return;
+      if (payload.kind === 'coop-rematch') {
+        try { handleCoopRematchIncoming(payload); } catch (err) {
+          try { console.warn('[coop] coop-rematch handler error', err); } catch (_) {}
+        }
+        return;
+      }
+      if (payload.kind === 'coop-rematch-request') {
+        try { handleCoopRematchRequest(); } catch (err) {
+          try { console.warn('[coop] coop-rematch-request handler error', err); } catch (_) {}
+        }
+        return;
+      }
+      if (payload.kind === 'coop-leave') {
+        try { handleCoopPartnerLeft(); } catch (err) {
+          try { console.warn('[coop] coop-leave handler error', err); } catch (_) {}
+        }
+        return;
+      }
+    });
+  } catch (err) {
+    try { console.warn('[coop] rematch listener install failed', err); } catch (_) {}
+  }
+}
+
+function teardownCoopRematchListener() {
+  if (coopRematchListenerUnsub) {
+    try { coopRematchListenerUnsub(); } catch (_) {}
+    coopRematchListenerUnsub = null;
+  }
+}
+
+function disposeCoopRematchSession() {
+  teardownCoopRematchListener();
+  // The transport session (Supabase realtime channel etc.) is owned by the
+  // lobby. Calling dispose here would break a potential second lobby launch
+  // in the same page session if the transport is shared. But the lobby
+  // creates a NEW transport on each open, so it's safe to release the ref —
+  // GC + the transport's own lifecycle rules handle teardown.
+  coopRematchSession = null;
+  coopRematchRole = null;
+  coopRematchCode = null;
+  coopPartnerName = '';
+  coopGameOverPayload = null;
+}
+
+function handleCoopGameOverPacket(payload) {
+  if (!payload) return;
+  // Mirror the host's payload locally so guest's end screen shows the same
+  // score + names + room. roomIndex / score were already mirrored in the
+  // existing handler before D15; here we additionally stash names for UI.
+  coopGameOverPayload = {
+    score: Number.isFinite(payload.score) ? (payload.score | 0) : (score | 0),
+    roomIndex: Number.isFinite(payload.roomIndex) ? (payload.roomIndex | 0) : (roomIndex | 0),
+    hostName: typeof payload.hostName === 'string' ? payload.hostName : (coopRematchRole === 'host' ? getLocalRunnerName() : (coopPartnerName || 'HOST')),
+    guestName: typeof payload.guestName === 'string' ? payload.guestName : (coopRematchRole === 'guest' ? getLocalRunnerName() : (coopPartnerName || 'GUEST')),
+  };
+}
+
+function handleCoopRematchIncoming(payload) {
+  // Both peers receive this; only the side that DIDN'T initiate uses the
+  // payload's seed to start the new run. Host sends → guest receives & launches.
+  // (Guest's "Request Rematch" sends a coop-rematch-request; host responds
+  // with the authoritative coop-rematch.)
+  if (payload.kind !== 'coop-rematch') return;
+  const seed = (payload.seed | 0) >>> 0;
+  if (!seed) return;
+  const role = coopRematchRole;
+  if (!role) return;
+  // Update status briefly so the user sees feedback before the screen swaps.
+  try {
+    const status = document.getElementById('go-coop-status');
+    if (status) status.textContent = 'Starting rematch…';
+  } catch (_) {}
+  startCoopRematchRun(seed);
+}
+
+function handleCoopRematchRequest() {
+  // Host receives a guest's "Request Rematch" tap. We auto-accept v1 (no
+  // confirmation): generate the new seed, broadcast coop-rematch, launch.
+  if (coopRematchRole !== 'host') return;
+  const newSeed = ((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0) || 1;
+  broadcastCoopRematch(newSeed);
+  startCoopRematchRun(newSeed);
+}
+
+function broadcastCoopRematch(seed) {
+  if (!coopRematchSession || typeof coopRematchSession.sendGameplay !== 'function') return;
+  try {
+    Promise.resolve(coopRematchSession.sendGameplay({ kind: 'coop-rematch', seed: seed >>> 0 })).catch((err) => {
+      try { console.warn('[coop] coop-rematch send failed', err); } catch (_) {}
+    });
+  } catch (err) {
+    try { console.warn('[coop] coop-rematch send threw', err); } catch (_) {}
+  }
+}
+
+function broadcastCoopLeave() {
+  if (!coopRematchSession || typeof coopRematchSession.sendGameplay !== 'function') return;
+  try {
+    Promise.resolve(coopRematchSession.sendGameplay({ kind: 'coop-leave' })).catch(() => {});
+  } catch (_) {}
+}
+
+function handleCoopPartnerLeft() {
+  try {
+    const status = document.getElementById('go-coop-status');
+    if (status) status.textContent = 'Partner left the run.';
+    const rematchBtn = document.getElementById('btn-coop-rematch');
+    if (rematchBtn) rematchBtn.disabled = true;
+  } catch (_) {}
+}
+
+// Re-arm a pending coop run with a fresh seed but the SAME session/role/
+// code, then run init() + start the loop. Used for both host-initiated and
+// guest-confirmed rematches.
+function startCoopRematchRun(seed) {
+  const session = coopRematchSession;
+  const role = coopRematchRole;
+  const code = coopRematchCode;
+  if (!session || !role) {
+    try { console.warn('[coop] rematch missing session/role'); } catch (_) {}
+    return;
+  }
+  // The post-game listener will be torn down + re-installed once init's
+  // installCoopInputUplink runs. Drop the old one explicitly so the new
+  // install isn't racing a stale subscription.
+  teardownCoopRematchListener();
+  try {
+    armPendingCoopRun({ role, seed: seed >>> 0, code, session });
+  } catch (err) {
+    try { console.warn('[coop] rematch arm failed', err); } catch (_) {}
+    // Re-install listener so we can retry.
+    installCoopRematchListener();
+    return;
+  }
+  hideCoopGameOverScreen();
+  setMenuChromeVisible(false);
+  // Reset DOM bits the solo gameOver path normally clears via "New Run"
+  // (e.g. boons panel collapsed), and ensure the legacy s-go is hidden.
+  try { document.getElementById('s-go')?.classList.add('off'); } catch (_) {}
+  try { document.getElementById('go-boons-panel')?.classList.add('off'); } catch (_) {}
+  init();
+  gstate = 'playing';
+  lastT = performance.now();
+  simAccumulatorMs = 0;
+  raf = requestAnimationFrame(loop);
+  try { btnPause.style.display = 'inline-flex'; } catch (_) {}
+  try { btnPatchNotes.style.display = 'none'; } catch (_) {}
+}
+
+function leaveCoopGame() {
+  // Notify partner so their UI updates, then tear down the rematch context
+  // and return to the start screen. The lobby will create a fresh transport
+  // on next open.
+  broadcastCoopLeave();
+  disposeCoopRematchSession();
+  try { clearCoopRun(); } catch (_) {}
+  hideCoopGameOverScreen();
+  setMenuChromeVisible(true);
+  try { startScreen?.classList.remove('off'); } catch (_) {}
+  try { document.getElementById('s-coop-lobby')?.classList.add('off'); } catch (_) {}
+  gstate = 'start';
+  try { btnPatchNotes.style.display = 'inline-flex'; } catch (_) {}
+  try { btnPause.style.display = 'none'; } catch (_) {}
+}
+
 // Phase D4: deterministic-ish unique run identifier. Used as the snapshot
 // epoch so guests can hard-reset their snapshot tracking when a fresh run
 // starts (otherwise a late-arriving packet from a disposed run could
@@ -1670,9 +1931,16 @@ function installCoopInputUplink(armedCoop) {
       // guest sits on the last snapshot pose indefinitely. We mirror score
       // from the host's payload so the guest's leaderboard push uses the
       // shared run's final value (host already pushed its own entry).
+      // D15 — payload now also carries hostName/guestName for the coop end
+      // screen. Stash the rematch session + role for the post-game flow
+      // BEFORE gameOver tears down the input uplink (gameOver also captures
+      // these but we want them available on both sides, including guests
+      // that didn't trigger gameOver themselves).
       try {
         if (Number.isFinite(payload.score)) score = payload.score;
         if (Number.isFinite(payload.roomIndex)) roomIndex = payload.roomIndex;
+        coopRematchSession = activeCoopSession;
+        handleCoopGameOverPacket(payload);
         gameOver();
       } catch (err) {
         try { console.warn('[coop] coop-game-over handler error', err); } catch (_) {}
@@ -3416,14 +3684,25 @@ function gameOver(){
   player.deadPulse = 0;
   player.deadPop = false;
   pushLeaderboardEntry();
+  // D15 — coop end-of-run handoff. Capture the coop transport session +
+  // role/code BEFORE teardownCoopInputUplink nulls activeCoopSession, so the
+  // post-game screen can still send/receive coop-rematch / coop-leave.
+  const wasCoopRun = (() => { try { return isCoopRun(); } catch (_) { return false; } })();
+  if (wasCoopRun) {
+    coopRematchSession = activeCoopSession;
+    coopGameOverPayload = buildCoopGameOverPayload();
+  }
   // D12.2 — propagate game-over to the partner peer BEFORE we tear down the
   // input uplink (which disposes the gameplay channel). Otherwise the guest
   // sits forever watching the host's last-snapshot pose with no game-over UI.
   // Host broadcasts; guest mirrors via the existing onGameplay listener.
+  // D15 — extended payload: include both peers' display names so the coop
+  // end screen can render the same roster on both sides.
   try {
     if (isCoopHost()) {
       if (activeCoopSession && typeof activeCoopSession.sendGameplay === 'function') {
-        Promise.resolve(activeCoopSession.sendGameplay({ kind: 'coop-game-over', score, roomIndex })).catch((err) => {
+        const overPayload = wasCoopRun ? coopGameOverPayload : { score, roomIndex };
+        Promise.resolve(activeCoopSession.sendGameplay({ kind: 'coop-game-over', ...overPayload })).catch((err) => {
           try { console.warn('[coop] coop-game-over send failed', err); } catch (_) {}
         });
       }
@@ -3435,6 +3714,12 @@ function gameOver(){
   // as coop. pushLeaderboardEntry above already consulted isCoopRun().
   try { clearCoopRun(); } catch (_) {}
   teardownCoopInputUplink();
+  // D15 — after teardown, install the standalone post-game listener so we
+  // can still receive coop-rematch / coop-leave from the partner. Solo runs
+  // skip this entirely (no rematch session captured).
+  if (wasCoopRun && coopRematchSession) {
+    installCoopRematchListener();
+  }
 }
 
 function init() {
@@ -3703,6 +3988,14 @@ function update(dt,ts){
     if(ts - player.deadAt >= GAME_OVER_ANIM_MS){
       gstate='gameover';
       cancelAnimationFrame(raf);
+      // D15 — coop runs land on the dedicated end screen with REMATCH/LEAVE.
+      // gameOver() captures coopRematchSession before clearing the coop run
+      // flag, so isCoopRun() can't be used here; presence of the session +
+      // role is the canonical "this was a coop run" signal.
+      if (coopRematchSession && coopRematchRole) {
+        showCoopGameOverScreen(coopGameOverPayload || buildCoopGameOverPayload());
+        return;
+      }
       showGameOverScreen({
         panelEl: gameOverScreen,
         boonsPanelEl: goBoonsPanel,
@@ -5472,6 +5765,55 @@ bindNameInputs({
   setPlayerName,
 });
 
+// D15 — coop end-of-run controls. Both buttons are inert until a coop run
+// has set up the rematch context; safe to wire unconditionally.
+{
+  const coopGoNameInput = document.getElementById('name-input-go-coop');
+  if (coopGoNameInput) {
+    coopGoNameInput.addEventListener('input', () => {
+      try { setPlayerName(coopGoNameInput.value, { syncInputs: true }); } catch (_) {}
+    });
+    coopGoNameInput.addEventListener('change', () => {
+      try { setPlayerName(coopGoNameInput.value, { syncInputs: true }); } catch (_) {}
+    });
+  }
+  const rematchBtn = document.getElementById('btn-coop-rematch');
+  if (rematchBtn) {
+    rematchBtn.addEventListener('click', () => {
+      if (!coopRematchSession || !coopRematchRole) return;
+      if (coopRematchRole === 'host') {
+        const seed = ((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0) || 1;
+        try {
+          const status = document.getElementById('go-coop-status');
+          if (status) status.textContent = 'Starting rematch…';
+        } catch (_) {}
+        broadcastCoopRematch(seed);
+        startCoopRematchRun(seed);
+      } else {
+        // Guest "Request Rematch" → ask host. v1 host auto-accepts on receipt.
+        try {
+          if (coopRematchSession && typeof coopRematchSession.sendGameplay === 'function') {
+            Promise.resolve(coopRematchSession.sendGameplay({ kind: 'coop-rematch-request' })).catch(() => {});
+          }
+        } catch (_) {}
+        try {
+          rematchBtn.disabled = true;
+          const status = document.getElementById('go-coop-status');
+          if (status) status.textContent = 'Waiting for host…';
+        } catch (_) {}
+      }
+    });
+  }
+  const leaveBtn = document.getElementById('btn-coop-leave');
+  if (leaveBtn) {
+    leaveBtn.addEventListener('click', () => {
+      try { leaveCoopGame(); } catch (err) {
+        try { console.warn('[coop] leave failed', err); } catch (_) {}
+      }
+    });
+  }
+}
+
 // Initialize color picker on start screen
 renderColorSelector('color-picker');
 renderSettingsPanel();
@@ -5537,6 +5879,9 @@ bindCoopLobby({
       try { console.warn('[coop] arm pending run failed', err); } catch (_) {}
       return;
     }
+    // D15 — stash partner display name + lobby code for the coop end-of-run
+    // screen and rematch flow. armPendingCoopRun already keeps role + session.
+    try { setCoopRematchLobbyContext({ role, code, partnerName: partnerIdentity?.name || '' }); } catch (_) {}
     const startBtn = document.getElementById('coop-ready-start');
     if (!startBtn) return;
     const lobbyScreen = document.getElementById('s-coop-lobby');

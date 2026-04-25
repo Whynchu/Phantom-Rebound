@@ -2,6 +2,22 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.47',
+      label: 'COOP PHASE D15: DEDICATED END-OF-RUN SCREEN + REMATCH',
+      summary: ['Co-op runs were ending on the solo game-over panel, which had no path back into another co-op run together — players had to leave to the lobby and re-pair every time. D15 swaps in a dedicated coop end screen with both runners\' names, the team score, REMATCH (loop straight back into another run on the same lobby) and LEAVE.'],
+      highlights: [
+        'New screen #s-go-coop with HOST/GUEST roster cards (large name tags), team score, and "Room N reached" meta line. The solo s-go panel is bypassed entirely when coopRematchSession + coopRematchRole are set, so coop runs never see the wrong end UI.',
+        'Session preservation: gameOver() now captures activeCoopSession into coopRematchSession BEFORE clearCoopRun + teardownCoopInputUplink fire. After teardown, a separate listener (installCoopRematchListener) is installed on the same session for coop-rematch / coop-leave / coop-rematch-request packets — the realtime channel survives the run-over so peers can talk.',
+        'coop-game-over packet extended with hostName/guestName so both peers render the same roster regardless of whether they triggered the death. Guest mirrors score + roomIndex from host\'s payload (already did) plus now the names into coopGameOverPayload.',
+        'REMATCH (host): generates a fresh seed, broadcasts coop-rematch { seed }, re-arms the pending coop run with the SAME session+role+code, then runs init() + restarts the loop. installCoopInputUplink internally tears down + re-installs on the same session, so the transport channel is reused.',
+        'REMATCH (guest): button reads "Request Rematch" → sends coop-rematch-request to host. Host auto-accepts in v1 (no confirmation prompt), broadcasts coop-rematch with a new seed; both peers call startCoopRematchRun in parallel. Guest\'s button shows "Waiting for host…" until the rematch packet arrives.',
+        'LEAVE: broadcasts coop-leave so partner sees "Partner left the run." status, then clearCoopRun + dispose rematch session refs and return to the start screen. Partner\'s rematch button disables on receipt.',
+        'Name input on the coop end screen wired to setPlayerName(syncInputs:true) so changes propagate to all name inputs (start screen, solo go screen) and persist to localStorage.',
+        'Tests: all 24 suites green; determinism canary 11/11 byte-identical. D15 is purely a presentation + transport layer change — no sim/seed paths touched.',
+        'Known limitations (v1): host pulls all rematch authority (seed gen + start). No version handshake on rematch yet — if the host reloads to a newer build mid-pair, mismatch detection is deferred to a later coop-handshake phase. Score split per peer is still unified team score; per-slot leaderboard is a separate D17 task.',
+      ]
+    },
+  {
       version: '1.20.46',
       label: 'COOP PHASE D14: PER-PEER BOON PICKS (SLOT-1 SAFE WHITELIST)',
       summary: ['Until now coop ran a "team boons" model: only the host saw a picker, and slot 1 inherited host\'s UPG via mirrorHostUpgToSlot1 on every room transition. Players asked for guests to pick their own boons. D14 splits picks per-peer: host picks for slot 0 from the full pool; guest picks for slot 1 from a curated whitelist of boons that work correctly when applied in isolation to a single slot.'],

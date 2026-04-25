@@ -13,7 +13,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png?v=1.20.32">
 <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=1.20.32">
 <script>
-window.__APP_BUILD__ = '1.20.46';
+window.__APP_BUILD__ = '1.20.47';
 (function () {
   const currentBuild = window.__APP_BUILD__;
   const updateFlagKey = 'phantom-rebound-update-available';
@@ -28,7 +28,7 @@ window.__APP_BUILD__ = '1.20.46';
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=1.20.46">
+<link rel="stylesheet" href="styles.css?v=1.20.47">
 </head>
 <body class="app-loading menu-chrome-visible">
 <div id="wrap">
@@ -224,6 +224,30 @@ window.__APP_BUILD__ = '1.20.46';
         <button class="btn btn-secondary btn-up-sub" id="btn-go-boons-close" type="button">Back</button>
       </div>
     </div>
+
+    <div class="screen off" id="s-go-coop">
+      <div class="eyebrow">// Coop Run Complete</div>
+      <div id="go-coop-sub">Final Score</div>
+      <div id="go-coop-score">0</div>
+      <div id="go-coop-roster" class="go-coop-roster">
+        <div class="go-coop-peer" id="go-coop-host-card">
+          <div class="go-coop-peer-tag">HOST</div>
+          <div class="go-coop-peer-name" id="go-coop-host-name">YOU</div>
+        </div>
+        <div class="go-coop-peer" id="go-coop-guest-card">
+          <div class="go-coop-peer-tag">GUEST</div>
+          <div class="go-coop-peer-name" id="go-coop-guest-name">PARTNER</div>
+        </div>
+      </div>
+      <div id="go-coop-meta" class="go-coop-meta"></div>
+      <div id="go-coop-status" class="go-coop-status"></div>
+      <div class="name-row">
+        <label class="name-lbl" for="name-input-go-coop">Runner Name</label>
+        <input id="name-input-go-coop" class="name-input" type="text" maxlength="14" placeholder="ENTER CALLSIGN" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+      <button class="btn" id="btn-coop-rematch">Rematch</button>
+      <button class="btn btn-secondary btn-menu-sub" id="btn-coop-leave" type="button">Leave Run</button>
+    </div>
   </div>
 
   <div id="legend">
@@ -327,7 +351,7 @@ window.__APP_BUILD__ = '1.20.46';
   </div>
 </div>
 
-<script type="module" src="script.js?v=1.20.46"></script>
+<script type="module" src="script.js?v=1.20.47"></script>
 </body>
 </html>
 
