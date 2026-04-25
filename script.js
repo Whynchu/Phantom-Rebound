@@ -880,6 +880,29 @@ const BLOOD_PACT_BLOOD_MOON_BONUS_CAP = 1;
 // setBulletIdState below; bulletIds.js reads/writes simState.nextBulletId.
 let simState = createSimState({ seed: 1, worldW: 0, worldH: 0, slotCount: 1 });
 setBulletIdState(simState);
+// R0.4 chunk 3 — bridge score/kills/scoreBreakdown into simState.run for
+// rollback serialization. The `let score`/`let kills` bindings stay the
+// canonical runtime storage (so the ~25 read/write sites in script.js need
+// zero changes); simState.run.score and simState.run.kills become accessor
+// properties that forward through to those lets via getter/setter. On
+// rollback restore, fields will be written field-by-field which fires the
+// setters and propagates back into the let bindings — never replace simState
+// itself, always mutate in place. scoreBreakdown is a never-reassigned object
+// imported from gameState.js, so we just point simState.run.scoreBreakdown at
+// the same reference; mutations on either side are visible to both.
+Object.defineProperty(simState.run, 'score', {
+  get() { return score; },
+  set(v) { score = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'kills', {
+  get() { return kills; },
+  set(v) { kills = v; },
+  enumerable: true,
+  configurable: true,
+});
+simState.run.scoreBreakdown = scoreBreakdown;
 let playerName = 'RUNNER';
 let leaderboard = [];
 let lbPeriod = 'daily';
