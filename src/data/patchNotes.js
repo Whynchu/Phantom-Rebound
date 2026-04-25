@@ -2,6 +2,15 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.60',
+      label: 'D18.12b: GUEST FIRE-RING MATCHES SOLO PLAYER\'S SLOW-FILL',
+      summary: ['Follow-up to D18.12: the partner\'s fire-ready ring on the guest device was capping at the SPS interval the moment the partner started moving, instead of slowly continuing to fill like the solo player\'s own ring does. Solo advances fireT at dt * mobileChargeRate (~10%) while moving — the ring keeps creeping up gradually until you stop. D18.12\'s gating used full dt and an immediate cap, so the ring on guest looked too eager.'],
+      highlights: [
+        'Guest cosmetic fireT ticker now uses the solo formula verbatim: const mobileChargeMult = isStill ? 1.0 : (slot.upg.mobileChargeRate || 0.10); next = prev + dt * mobileChargeMult; cap at interval while moving; modulo-wrap only when still + has-target. Partner\'s ring now fills at the same gentle pace the solo player\'s own ring fills while running.',
+        'Determinism canary 11/11; all coop logic still gated on activeCoopSession.',
+      ]
+    },
+  {
       version: '1.20.59',
       label: 'D18.12: GUEST CHARGE LERP + GUEST REROLLS + RING PARITY',
       summary: ['Three guest-side parity issues from playtest: (1) the charge ring on the guest\'s screen ticked up in visible 15Hz steps instead of filling smoothly, making the SPS pacing feel "off" compared to the host\'s smooth ring. (2) The guest\'s boon picker had no Reroll button at all — only the host could reroll their three options. (3) The host\'s fire-ready ring on the guest\'s screen kept cycling even when the host was clearly moving (host wouldn\'t actually be firing in that state).'],
