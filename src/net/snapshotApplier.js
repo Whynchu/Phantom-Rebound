@@ -185,7 +185,17 @@ function applySlot(snapSlot, prevSnapSlot, slot, alpha, opts) {
   if (slot.metrics) {
     slot.metrics.hp = snapSlot.hp || 0;
     slot.metrics.maxHp = snapSlot.maxHp || slot.metrics.maxHp || 0;
-    slot.metrics.charge = snapSlot.charge || 0;
+    // D18.12 — lerp charge between prev and curr snapshot so the charge
+    // ring on the guest updates at render-rate (60Hz visible) instead of
+    // popping at snapshot-rate (~15-20Hz). Without lerp, the ring fills
+    // in discrete steps and feels "wrong pace" vs the host's smooth fill.
+    if (prevSnapSlot && Number.isFinite(prevSnapSlot.charge)) {
+      const pc = prevSnapSlot.charge || 0;
+      const cc = snapSlot.charge || 0;
+      slot.metrics.charge = pc + (cc - pc) * alpha;
+    } else {
+      slot.metrics.charge = snapSlot.charge || 0;
+    }
     slot.metrics.stillTimer = snapSlot.stillTimer || 0;
   }
   if (slot.upg && Number.isFinite(snapSlot.maxCharge) && snapSlot.maxCharge > 0) {

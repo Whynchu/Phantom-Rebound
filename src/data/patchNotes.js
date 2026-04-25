@@ -2,6 +2,17 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.59',
+      label: 'D18.12: GUEST CHARGE LERP + GUEST REROLLS + RING PARITY',
+      summary: ['Three guest-side parity issues from playtest: (1) the charge ring on the guest\'s screen ticked up in visible 15Hz steps instead of filling smoothly, making the SPS pacing feel "off" compared to the host\'s smooth ring. (2) The guest\'s boon picker had no Reroll button at all — only the host could reroll their three options. (3) The host\'s fire-ready ring on the guest\'s screen kept cycling even when the host was clearly moving (host wouldn\'t actually be firing in that state).'],
+      highlights: [
+        'Snapshot applier now lerps slot.metrics.charge between the previous and current snapshot frame using the same alpha that already drives body x/y/vx/vy. Previously charge was snapped to the latest snapshot value at ~15Hz, producing a stair-step charge ring on the guest device. With lerp the ring fills at render rate (60Hz visible) and matches the host\'s perceived pace. Solo/host paths never hit the applier (null in solo / canary), so determinism is unaffected.',
+        'Guest now gets a working Reroll button on the boon picker (1 reroll per fresh coop run, mirroring host\'s starting count). showBoonSelection accepts an onReroll callback that returns a new boon array even when boonsOverride is set — guest\'s callback regenerates a fresh slot1-safe pool locally (same getSlot1SafeBoonPool the host uses to seed slot1BoonIds, just shuffled on the guest device). Final pick still ships via coop-boon-pick so host applies the chosen boon to slot 1\'s authoritative UPG.',
+        'Guest\'s local fireT cosmetic ticker now matches host\'s fire logic exactly: fireT advances every frame, but is CAPPED at the SPS interval when isStill=false (slot has nonzero velocity in the latest snapshot) or when noSignal=true (aim.hasTarget=false). Modulo wrap only happens when both still and signal — i.e. when the host would actually be firing. Previously the ring cycled unconditionally whenever charge was full, including while the host was sprinting around. Now the partner ring only "ticks" when the partner is actually shooting.',
+        'Tests: all 24 suites green; determinism canary 11/11 byte-identical (charge lerp and fireT gating only run inside the snapshot applier and guest cosmetic ticker — both no-ops on solo/host, both gated on activeCoopSession via the existing applier-null short-circuit).',
+      ]
+    },
+  {
       version: '1.20.58',
       label: 'D18.11: COOP DISCONNECT RESILIENCE (SOFT PAUSE + HARD TIMEOUT)',
       summary: ['Playtest on iPhone: when the guest device suspended the app (home button / lock), the run entered a broken half-state. The guest woke up stuck on a "WAITING FOR HOST" overlay forever; the host kept playing solo and even pushed past room boundaries oblivious to the guest being gone. There was no host-side disconnect detection at all (slot 1\'s remote-input adapter just produced inactive frames when the ring was empty), and the guest\'s 30s watchdog was gated off during boon-phase so a suspend during pick was unrecoverable. Both peers now share a symmetric liveness monitor with quick soft-pause feedback and authoritative hard-timeout teardown.'],

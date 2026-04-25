@@ -995,6 +995,11 @@ let simAccumulatorMs = 0;
 let startGhostPreviewRaf = 0;
 let gameOverShown = false;
 let boonRerolls = 1;
+// D18.12 — guest's own reroll counter (online coop only). Tracked separately
+// from `boonRerolls` because the host's run state is authoritative for slot
+// 0; the guest manages slot 1's reroll economy locally. Reset to 1 on each
+// fresh coop run start (see installOnlineCoopGuestSlot1 / coop teardown).
+let guestBoonRerolls = 1;
 let damagelessRooms = 0;
 let tookDamageThisRoom = false;
 let lastStallSpawnAt = -99999;
@@ -1766,8 +1771,29 @@ function handleCoopBoonStartGuest(payload) {
       upg: slot1.upg,
       hp: slot1.metrics.hp,
       maxHp: slot1.metrics.maxHp,
-      rerolls: 0,
-      onReroll: null,
+      // D18.12 — give guest their own reroll button. onReroll returns a
+      // freshly shuffled slot1-safe pool so the picker swaps in new
+      // choices without round-tripping through the host. Host's pick
+      // list (shipped via slot1BoonIds) is unrelated to guest's local
+      // pool — guest's final pick is networked via coop-boon-pick.
+      rerolls: guestBoonRerolls,
+      onReroll: () => {
+        if (guestBoonRerolls > 0) guestBoonRerolls--;
+        try {
+          const safePool = getSlot1SafeBoonPool().filter((b) => {
+            try { return !b.requires || b.requires(slot1.upg); } catch (_) { return false; }
+          });
+          const shuffled = safePool.slice();
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = (Math.random() * (i + 1)) | 0;
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+          return shuffled.slice(0, 3);
+        } catch (err) {
+          try { console.warn('[coop] guest reroll failed', err); } catch (_) {}
+          return null;
+        }
+      },
       boonsOverride: choices,
       onSelect: (boon) => {
         try {
@@ -2651,6 +2677,9 @@ function installOnlineCoopHostSlot1(remoteRing) {
 // teardown).
 function installOnlineCoopGuestSlot1() {
   if (playerSlots[1]) return;
+  // D18.12 — fresh coop run starts the guest with one reroll, mirroring the
+  // host's `boonRerolls = 1` initial value. Tracked locally on guest device.
+  guestBoonRerolls = 1;
   const body = createInitialPlayerState(WORLD_W, WORLD_H);
   body.x = Math.min(WORLD_W - 24, body.x + 60);
   body.invincible = 1.5;
@@ -4652,15 +4681,26 @@ function update(dt,ts){
           m.fireT = 0;
           guestLocalFireTBySlotId.set(sl.id, 0);
         } else {
-          // D18.10b — wrap fireT at the SPS interval so the fire-ready ring
-          // visibly cycles 0→1→0 instead of saturating at 1. Without the
-          // modulo, prev+dt grows unbounded, fireProgress clamps at 1, and
-          // the ring on the partner slot looks "fully filled" forever.
+          // D18.12 — match host's fireT logic exactly (script.js:2866-2870):
+          //   fireT += dt
+          //   if (!isStill || noSignal) fireT = min(fireT, interval)  // cap
+          //   if (fireT >= interval && isStill && !noSignal) fireT %= interval
+          // Without this gating, the partner's ring cycles even while they're
+          // moving (host wouldn't actually be firing in that state). isStill
+          // is inferred from snapshot velocity; noSignal from aim.hasTarget.
           const sps = (sl.upg && sl.upg.sps) || 0.8;
           const interval = 1 / Math.max(0.001, sps * 2);
+          const body = sl.body || {};
+          const speed2 = (body.vx || 0) * (body.vx || 0) + (body.vy || 0) * (body.vy || 0);
+          const isStill = speed2 < 1; // ~1 px/s² threshold
+          const noSignal = !sl.aim || !sl.aim.hasTarget;
           const prev = guestLocalFireTBySlotId.get(sl.id) || 0;
           let next = prev + dt;
-          if (next >= interval) next = next % interval;
+          if (!isStill || noSignal) {
+            if (next > interval) next = interval;
+          } else if (next >= interval) {
+            next = next % interval;
+          }
           guestLocalFireTBySlotId.set(sl.id, next);
           m.fireT = next;
         }

@@ -37,7 +37,11 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
   let pool = Array.isArray(boonsOverride) && boonsOverride.length > 0
     ? boonsOverride.slice()
     : pickBoonChoices(upg, hp, maxHp, pendingLegendary && onLegendaryAccept ? 2 : 3);
-  let remainingRerolls = (boonsOverride && boonsOverride.length > 0) ? 0 : rerolls;
+  // D18.12 — when boonsOverride is set, callers may still allow reroll by
+  // passing onReroll that returns a fresh array of boon objects. Used by
+  // the coop guest picker so the guest can reroll its own slot1-safe pool
+  // locally without round-tripping through the host.
+  let remainingRerolls = rerolls;
   const healBoon = createHealBoon(upg);
   const toggleBtn = document.getElementById('btn-up-active');
   const activePanel = document.getElementById('up-active-panel');
@@ -160,10 +164,17 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
     updateRerollCard();
     rerollCard.onclick = () => {
       if(remainingRerolls <= 0 || panel.classList.contains('screen-leaving')) return;
-      if(boonsOverride) return; // D14: reroll disabled when caller supplies a fixed pool
       remainingRerolls--;
-      onReroll();
-      pool = pickBoonChoices(upg, hp, maxHp, pendingLegendary && onLegendaryAccept ? 2 : 3);
+      const result = onReroll();
+      if(boonsOverride) {
+        // D18.12 — caller-supplied pool: trust onReroll's return as the new
+        // pool. If it returns nothing usable, keep the old pool (defensive).
+        if(Array.isArray(result) && result.length > 0) {
+          pool = result.slice();
+        }
+      } else {
+        pool = pickBoonChoices(upg, hp, maxHp, pendingLegendary && onLegendaryAccept ? 2 : 3);
+      }
       buildMainCards();
       updateRerollCard();
     };

@@ -352,7 +352,11 @@ function snap(overrides = {}) {
     ],
   }), t, { snapshotRecvAtMs: 100, renderTimeMs: 150 });
   ok('discrete: hp from curr (3, not 4)', t.slotsById[0].metrics.hp === 3);
-  ok('discrete: charge from curr (80, not 40)', t.slotsById[0].metrics.charge === 80);
+  // D18.12 — charge is now LERPED (was discrete pre-D18.12). At alpha=0.5
+  // between prev=0 and curr=80, expect 40. This produces a smooth charge
+  // ring on the guest device at render-rate instead of a stair-step at
+  // snapshot-rate. Test renamed accordingly.
+  ok('lerp: charge halfway (40 between 0 and 80 at alpha=0.5)', t.slotsById[0].metrics.charge === 40);
 }
 
 // 20. predictedSlotId: continuous body writes are skipped for the predicted
