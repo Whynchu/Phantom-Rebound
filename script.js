@@ -3277,6 +3277,22 @@ function spawnGreyDrops(x,y,ts,count=getEnemyGreyDropCount()) {
 }
 
 function resumePlayAfterBoons() {
+  // D18.5 — if the user bailed to the main menu while the boon picker was
+  // open (via the pause-controller's exitToMenu), gstate is already 'start'.
+  // Any deferred boon-click that fires after that exit must NOT restart the
+  // sim or flip pause-button visibility, otherwise the start screen ends up
+  // showing the in-run pause button and the loop ticks behind the menu.
+  if (gstate === 'start' || gstate === 'gameover') {
+    onlineCoopBoonPhase = null;
+    currentBoonPhaseId = null;
+    pendingCoopBoonPicks = { hostDone: false, guestDone: false };
+    if (coopBoonAfkTimer) {
+      try { clearTimeout(coopBoonAfkTimer); } catch (_) {}
+      coopBoonAfkTimer = null;
+    }
+    try { document.getElementById('s-up')?.classList.add('off'); } catch (_) {}
+    return;
+  }
   // Phase D10/D14 — multi-room boon handshake. Online host: when both peers
   // have picked their boon (or AFK auto-resolved), advance the room. Slot 1's
   // UPG evolves independently from per-peer picks — no mirror call. Broadcast

@@ -93,6 +93,11 @@ export function createPauseController({
     setGameState('start');
     cancelLoop();
     pausePanel.classList.add('off');
+    // D18.5 — hide the boon picker if the user came in from the upgrade
+    // phase. Without this, s-up overlays s-start and the user's "Main Menu"
+    // tap looks broken; then any subsequent boon click leaks pause-button
+    // visibility back over the menu chrome.
+    try { doc.getElementById('s-up')?.classList.add('off'); } catch (_) {}
     setMenuChromeVisible(true);
     doc.getElementById('s-start').classList.remove('off');
     if (btnPatchNotes) btnPatchNotes.style.display = 'inline-flex';

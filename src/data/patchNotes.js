@@ -2,6 +2,17 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.48',
+      label: 'D18.5: PAUSE-FROM-BOON MENU EXIT + BUTTON-STATE LEAK FIX',
+      summary: ['Bug: pausing during the upgrade/boon-pick screen and clicking "Main Menu" appeared to do nothing — the s-up boon picker stayed visible over the start screen. Then any subsequent boon click reanimated the in-run UI: pause button replaced the patch-notes button on the menu and the RAF sim restarted behind the chrome.'],
+      highlights: [
+        'pauseController.exitToMenu now also hides the s-up boon picker before showing s-start, so the user immediately sees the menu instead of an overlaid picker.',
+        'resumePlayAfterBoons short-circuits when gstate is "start" or "gameover" — clears coop boon-phase state + AFK timer + s-up panel, then returns without flipping pause-button visibility or restarting the loop. Prevents stale boon clicks (e.g. the user picked a boon after exitToMenu fired) from leaking in-run UI into the menu.',
+        'D18 plan document added in session workspace covering 5 active playtest issues: D18.1 guest hit-freeze, D18.2 guest local-slot HUD parity (charge ring + aim triangle), D18.3 unified coop teardown + disconnect watchdog, D18.4 desktop sizing matches phone exactly, D18.5 (this).',
+        'Tests: all suites green; determinism canary 11/11.',
+      ]
+    },
+  {
       version: '1.20.47',
       label: 'COOP PHASE D15: DEDICATED END-OF-RUN SCREEN + REMATCH',
       summary: ['Co-op runs were ending on the solo game-over panel, which had no path back into another co-op run together — players had to leave to the lobby and re-pair every time. D15 swaps in a dedicated coop end screen with both runners\' names, the team score, REMATCH (loop straight back into another run on the same lobby) and LEAVE.'],
