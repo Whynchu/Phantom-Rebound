@@ -2,6 +2,17 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.63',
+      label: 'D18.15: COOP SPECTATOR-ON-DEATH',
+      summary: ['Dying in coop no longer ends the run for both players. When a coop player dies, they become a translucent inert ghost frozen at the death position until the room ends — they can\'t move, fire, take damage, or be targeted, but their corpse stays visible at 30% opacity so the survivor can see where they fell. The survivor continues the room solo. If both players are dead the run ends. On the next room, dead players revive at 25% maxHp (or higher if HP boons were picked between rooms) and rejoin normal play. Solo runs are completely unaffected — death still ends the run immediately.'],
+      highlights: [
+        'New coop-only spectator state on body.coopSpectating: blocks movement (joystick gated for slot 0; updateGuestSlotMovement zeros vx/vy and continues for slot 1+), blocks fire (firePlayer early-out at top), blocks damage (existing invincible-gates short-circuit on the sticky 1e9 invuln), blocks targeting (getEnemyTargetSlot already filters hp<=0). The slot-1 contact + danger-bullet helpers also early-out on coopSpectating before the legacy hp<=0 path.',
+        'Run-end logic: 3 slot-0 gameOver sites (rusher contact, phase-dash hit, direct projectile hit) now route through playerSlot0DiedOrGameOver() which calls handleSlotDeathInCoop. Solo (no activeCoopSession) returns true → gameOver fires identically to before. Coop: marks the slot as spectating and only ends the run when countLiveCoopSlots()===0. Slot 1+ contact/danger helpers route through the same handleSlotDeathInCoop instead of the old respawnGuestSlot insta-full-HP teleport.',
+        'Revive: revivePartialHpSpectators() runs at the end of startRoom() — for each spectating slot, hp = max(currentHp, max(1, floor(maxHp * 0.25))) so HP boons picked while dead stack on the 25% floor instead of being clobbered. Clears coopSpectating, grants 2.0s spawn invuln, bumps respawnSeq so the snapshot applier re-anchors guest prediction. Slot 0 also syncs the legacy `hp` global and clears player.deadAt.',
+        'Render: drawGuestSlots and drawGhost both wrap drawGhostSprite with ctx.globalAlpha = 0.3 when body.coopSpectating; spectators skip the aim arrow + charge ring overlays. The dead pose is still visible to both players. Determinism canary 11/11 byte-identical (all spectator branches gate on activeCoopSession or coopSpectating which are never set in solo). All 24 test suites pass.',
+      ]
+    },
+  {
       version: '1.20.62',
       label: 'D18.14: COOP HAT HANDSHAKE',
       summary: ['Hat cosmetics now carry over to your coop partner. Before this, drawGuestSlots hardcoded hatKey=null for the partner ghost — your bunny ears were invisible to your friend (and theirs to you), so there was no way to see what they\'d picked. Color was already handshaked via the D18.7 coop-color message; now hat does the same thing through a parallel coop-hat message.'],
