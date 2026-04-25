@@ -57,7 +57,7 @@ import {
   spawnSplitOutputBullets,
   spawnRadialOutputBurst,
 } from './src/entities/playerProjectiles.js';
-import { resetBulletIds } from './src/entities/bulletIds.js';
+import { resetBulletIds, setBulletIdState } from './src/entities/bulletIds.js';
 import {
   createLaneOffsets as createLaneOffsetsValue,
   buildPlayerShotPlan,
@@ -876,7 +876,10 @@ const BLOOD_PACT_BLOOD_MOON_BONUS_CAP = 1;
 // The simState instance is created with placeholder world dims and slot count;
 // remaining fields (bullets, enemies, slot bodies, world.obstacles, etc.) will
 // be migrated in subsequent versions following the map in src/sim/simState.js.
+// R0.4 chunk 2 — bullet IDs (host counter) also routed through this state via
+// setBulletIdState below; bulletIds.js reads/writes simState.nextBulletId.
 let simState = createSimState({ seed: 1, worldW: 0, worldH: 0, slotCount: 1 });
+setBulletIdState(simState);
 let playerName = 'RUNNER';
 let leaderboard = [];
 let lbPeriod = 'daily';
