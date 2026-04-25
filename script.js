@@ -1846,6 +1846,15 @@ function handleCoopGameOverPacket(payload) {
     // payload field consistent for future symmetry.
     boonIds: Array.isArray(payload.boonIds) ? payload.boonIds.slice() : [],
   };
+  // D18.10 — if guest's end screen is already showing (its local game-over
+  // ran before the host's packet arrived), re-render with the host's
+  // authoritative breakdown/stats/boons.
+  try {
+    const panel = document.getElementById('s-go-coop');
+    if (panel && !panel.classList.contains('off')) {
+      showCoopGameOverScreen(coopGameOverPayload);
+    }
+  } catch (_) {}
 }
 
 function handleCoopRematchIncoming(payload) {
@@ -3933,7 +3942,15 @@ function gameOver(){
   const wasCoopRun = (() => { try { return isCoopRun(); } catch (_) { return false; } })();
   if (wasCoopRun) {
     coopRematchSession = activeCoopSession;
-    coopGameOverPayload = buildCoopGameOverPayload();
+    // D18.10 — guest has no authoritative sim, so its locally-built payload
+    // has empty scoreBreakdown / 0 kills. The host's coop-game-over packet
+    // (handled in handleCoopGameOverPacket) is the source of truth for
+    // breakdown/stats/boonIds. Only rebuild on host, or as a fallback if
+    // the host packet hasn't arrived yet.
+    const isLocalHost = coopRematchRole === 'host' || (() => { try { return isCoopHost(); } catch (_) { return false; } })();
+    if (isLocalHost || !coopGameOverPayload) {
+      coopGameOverPayload = buildCoopGameOverPayload();
+    }
   }
   // D12.2 — propagate game-over to the partner peer BEFORE we tear down the
   // input uplink (which disposes the gameplay channel). Otherwise the guest

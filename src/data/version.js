@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.55', label: 'D18.9 — partner aim reticle uses partner color' };
+const VERSION = { num: '1.20.56', label: 'D18.10 - Coop end-screen breakdown parity' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

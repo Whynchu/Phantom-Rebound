@@ -2,6 +2,16 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.56',
+      label: 'D18.10: COOP END-SCREEN BREAKDOWN PARITY',
+      summary: ['Playtest screenshots showed the coop end screen looked very different from the solo end screen on the GUEST side: no score breakdown rows, no "X kills · Room N · M:SS" footer. D18.8 had already extended the coop-game-over packet to include breakdown/stats/boonIds and wired renderScoreBreakdown into #s-go-coop, but a guest-side bug in gameOver() was wiping the host-supplied payload before the screen could render it.'],
+      highlights: [
+        'gameOver() previously called coopGameOverPayload = buildCoopGameOverPayload() unconditionally on both peers. On guest, buildCoopGameOverPayload() builds from local state (scoreBreakdown is empty, kills is 0 — guest doesn\'t run the authoritative sim) so it overwrote the host\'s authoritative breakdown that had been stashed by handleCoopGameOverPacket moments earlier. Guard now: rebuild only when the local peer is host, or as a fallback if no host packet has arrived yet.',
+        'handleCoopGameOverPacket also re-renders the end screen if it\'s already visible. Race protection: if the guest\'s local game-over (triggered by its own slot dying) ran before the host\'s coop-game-over packet landed, the screen used to stay blank-breakdown forever; now the late packet refreshes it with the authoritative data.',
+        'Tests: all 24 suites green; determinism canary 11/11 byte-identical (changes are guest-side UI plumbing — host sim path untouched).',
+      ]
+    },
+  {
       version: '1.20.55',
       label: 'D18.9: PARTNER AIM RETICLE USES PARTNER COLOR',
       summary: ['Playtest gap from the D18.7 color-sync work: drawGuestSlots was already passing the partner\'s colorScheme to drawGhostSprite (so the body, glow, charge ring, and HP bar render in the partner\'s color), but the aim reticle triangle drawn just below the sprite still hardcoded C.getRgba(C.green, 0.6) — the LOCAL player\'s color. Result: host saw the guest body in the guest\'s color but the guest\'s aim arrow in the host\'s color (and vice versa). The arrow should match the slot it belongs to.'],
