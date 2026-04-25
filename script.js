@@ -928,6 +928,25 @@ const guestGreyDecayStartByBulletId = new Map();
 // without ticking locally the ring stays empty on the guest screen even
 // when its slot is fully charged. Reset to 0 when charge drops < 1.
 const guestLocalFireTBySlotId = new Map();
+// D18.11 — Coop disconnect resilience.
+// Wall-clock of the most recent inbound gameplay packet (any kind:
+// input/snapshot/heartbeat/boon/etc). 0 outside a live coop run; the
+// liveness check is gated on activeCoopSession so solo/canary paths are
+// inert. Soft pause shows an overlay + freezes sim stepping; hard pause
+// trips unified teardown. Heartbeat decouples liveness from gameplay
+// activity so a slow-boon-picker doesn't false-trip the watchdog.
+let coopLastInboundAtMs = 0;
+let coopSoftDisconnectActive = false;
+let coopSoftDisconnectShownAtMs = 0;
+let coopHardDisconnectTripped = false;
+let coopHeartbeatTimer = null;
+let coopVisibilityListenersInstalled = false;
+let coopByeSentForHidden = false;
+let coopHiddenAtMs = 0;
+const COOP_SOFT_DISCONNECT_MS = 7000;
+const COOP_HARD_DISCONNECT_MS = 30000;
+const COOP_HEARTBEAT_INTERVAL_MS = 2500;
+
 // D18.7 — partner color sync. Each peer broadcasts its chosen color key
 // once on coop run start (and again on local color change) via a
 // 'coop-color' gameplay message. The other peer stores it here, and
@@ -1181,6 +1200,16 @@ function teardownCoopInputUplink() {
   activeCoopSession = null;
   onlineCoopBoonPhase = null;
   hideCoopGuestWaitOverlay();
+  // D18.11 — stop heartbeat + clear disconnect state. Visibility listeners
+  // stay installed (one-shot at module load level via installCoopVisibilityListeners)
+  // since they self-gate on `activeCoopSession` being non-null.
+  try { stopCoopHeartbeat(); } catch (_) {}
+  coopLastInboundAtMs = 0;
+  coopSoftDisconnectActive = false;
+  coopSoftDisconnectShownAtMs = 0;
+  coopHardDisconnectTripped = false;
+  coopByeSentForHidden = false;
+  coopHiddenAtMs = 0;
   // D12.1 — release the world pin so a subsequent solo run resizes
   // its sim world from the local canvas again.
   if (coopWorldPinned) {
@@ -1251,6 +1280,168 @@ function tripCoopDisconnectWatchdog() {
     try { btnPause.style.display = 'none'; } catch (_) {}
     try { btnPatchNotes.style.display = 'inline-flex'; } catch (_) {}
   }, 1200);
+}
+
+// D18.11 — Coop disconnect monitor. Symmetric on host + guest. Gated on
+// `activeCoopSession` so solo / canary runs are inert (no listeners, no
+// liveness ticking). Called once per RAF from the main loop *before* sim
+// stepping; soft state freezes sim updates without cancelling RAF (keeps
+// recovery + hard-trip checks alive). Resets on teardown.
+function stampCoopInboundActivity() {
+  try {
+    const now = (typeof performance !== 'undefined' && performance.now)
+      ? performance.now() : Date.now();
+    coopLastInboundAtMs = now;
+  } catch (_) {}
+  // Any inbound activity recovers from soft pause.
+  if (coopSoftDisconnectActive) recoverCoopSoftDisconnect();
+}
+
+function showCoopDisconnectOverlay(text) {
+  try { showCoopGuestWaitOverlay(text || 'PARTNER DISCONNECTED · waiting…'); } catch (_) {}
+}
+
+function tripCoopSoftDisconnect() {
+  if (coopSoftDisconnectActive) return;
+  coopSoftDisconnectActive = true;
+  try {
+    coopSoftDisconnectShownAtMs = (typeof performance !== 'undefined' && performance.now)
+      ? performance.now() : Date.now();
+  } catch (_) { coopSoftDisconnectShownAtMs = Date.now(); }
+  try { console.info('[coop] soft-disconnect: pausing sim, awaiting partner'); } catch (_) {}
+  showCoopDisconnectOverlay('PARTNER DISCONNECTED · waiting for reconnect…');
+}
+
+function recoverCoopSoftDisconnect() {
+  if (!coopSoftDisconnectActive) return;
+  coopSoftDisconnectActive = false;
+  coopSoftDisconnectShownAtMs = 0;
+  // Drain any RAF time that accumulated while paused so the next sim step
+  // doesn't fire a catch-up burst (which would jump entities and break
+  // guest reconciliation).
+  simAccumulatorMs = 0;
+  // Only clear the overlay if it isn't being claimed by a higher-priority
+  // boon-phase wait. Boon-phase entry/exit re-shows it as needed.
+  if (currentBoonPhaseId === null && gstate !== 'upgrade') {
+    try { hideCoopGuestWaitOverlay(); } catch (_) {}
+  }
+  try { console.info('[coop] soft-disconnect: recovered, resuming sim'); } catch (_) {}
+}
+
+function tripCoopHardDisconnect() {
+  if (coopHardDisconnectTripped) return;
+  coopHardDisconnectTripped = true;
+  try { console.warn('[coop] hard-disconnect: ending run'); } catch (_) {}
+  // Fall through to the existing watchdog teardown path. It already
+  // cancels RAF, runs unified teardown, and returns to the start screen
+  // with a CONNECTION LOST banner.
+  try { tripCoopDisconnectWatchdog(); } catch (_) {}
+}
+
+function startCoopHeartbeat() {
+  if (coopHeartbeatTimer) return;
+  coopHeartbeatTimer = setInterval(() => {
+    try {
+      if (!activeCoopSession || typeof activeCoopSession.sendGameplay !== 'function') return;
+      activeCoopSession.sendGameplay({ kind: 'coop-heartbeat' });
+    } catch (_) {}
+    // D18.11 — also run a freshness check on this independent timer so the
+    // hard-disconnect path fires even when RAF is paused (boon-phase /
+    // upgrade gstate cancels RAF). The main-loop gate handles soft pause
+    // visualization while RAF is live; this catch-up handles boon-phase.
+    try {
+      if (!activeCoopSession || coopHardDisconnectTripped) return;
+      if (coopLastInboundAtMs <= 0) return;
+      const now = (typeof performance !== 'undefined' && performance.now)
+        ? performance.now() : Date.now();
+      const elapsed = now - coopLastInboundAtMs;
+      if (elapsed >= COOP_HARD_DISCONNECT_MS) {
+        tripCoopHardDisconnect();
+      } else if (elapsed >= COOP_SOFT_DISCONNECT_MS && !coopSoftDisconnectActive) {
+        // During boon-phase the wait overlay is already showing partner-pick
+        // text. Replace it with the disconnect message so the user knows
+        // why their partner has been silent. Boon flow's exit paths
+        // (handleCoopRoomAdvanceGuest / tryResumeCoopBoonPhase / teardown)
+        // will reset the overlay as needed.
+        tripCoopSoftDisconnect();
+      }
+    } catch (_) {}
+  }, COOP_HEARTBEAT_INTERVAL_MS);
+}
+
+function stopCoopHeartbeat() {
+  if (!coopHeartbeatTimer) return;
+  try { clearInterval(coopHeartbeatTimer); } catch (_) {}
+  coopHeartbeatTimer = null;
+}
+
+function sendCoopBye() {
+  try {
+    if (!activeCoopSession || typeof activeCoopSession.sendGameplay !== 'function') return;
+    activeCoopSession.sendGameplay({ kind: 'coop-bye' });
+  } catch (_) {}
+}
+
+// Per-RAF liveness gate. Returns true if the local sim should be skipped
+// this frame (soft-paused). Side-effects: trips soft / hard transitions.
+function checkCoopLivenessGate(nowMs) {
+  if (!activeCoopSession || coopHardDisconnectTripped) return coopSoftDisconnectActive;
+  if (coopLastInboundAtMs <= 0) return false;
+  const elapsed = nowMs - coopLastInboundAtMs;
+  if (elapsed >= COOP_HARD_DISCONNECT_MS) {
+    tripCoopHardDisconnect();
+    return true;
+  }
+  if (elapsed >= COOP_SOFT_DISCONNECT_MS) {
+    if (!coopSoftDisconnectActive) tripCoopSoftDisconnect();
+    return true;
+  }
+  return false;
+}
+
+function installCoopVisibilityListeners() {
+  if (coopVisibilityListenersInstalled) return;
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+  coopVisibilityListenersInstalled = true;
+  const onHidden = () => {
+    if (!activeCoopSession) return;
+    if (coopByeSentForHidden) return;
+    coopByeSentForHidden = true;
+    try {
+      coopHiddenAtMs = (typeof performance !== 'undefined' && performance.now)
+        ? performance.now() : Date.now();
+    } catch (_) { coopHiddenAtMs = Date.now(); }
+    // Best-effort accelerator only; partner still falls through to the
+    // wall-clock soft/hard timers if this packet never lands (mobile
+    // Safari often suspends JS before sendGameplay's async send fires).
+    sendCoopBye();
+  };
+  const onVisible = () => {
+    coopByeSentForHidden = false;
+    if (!activeCoopSession) return;
+    // If we were hidden longer than the hard timeout, we're definitely
+    // beyond recovery — trip teardown immediately rather than racing the
+    // watchdog. Else force a freshness re-check on the next loop tick by
+    // letting the existing gate run; if elapsed already exceeds soft, the
+    // overlay will appear right away.
+    let elapsedHidden = 0;
+    if (coopHiddenAtMs > 0) {
+      try {
+        const now = (typeof performance !== 'undefined' && performance.now)
+          ? performance.now() : Date.now();
+        elapsedHidden = now - coopHiddenAtMs;
+      } catch (_) {}
+    }
+    coopHiddenAtMs = 0;
+    if (elapsedHidden >= COOP_HARD_DISCONNECT_MS) {
+      tripCoopHardDisconnect();
+    }
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) onHidden(); else onVisible();
+  });
+  window.addEventListener('pagehide', onHidden);
+  window.addEventListener('pageshow', onVisible);
 }
 
 // Phase D10 — multi-room boon handshake state. D14 (v1.20.46) overhauls
@@ -2095,6 +2286,23 @@ function installCoopInputUplink(armedCoop) {
   coopInputUnsubscribe = session.onGameplay((ev) => {
     const payload = ev && ev.payload;
     if (!payload) return;
+    // D18.11 — any inbound gameplay packet refreshes the liveness clock
+    // and recovers from soft-pause. Done unconditionally before kind
+    // dispatch so heartbeats and unknown future kinds count too.
+    stampCoopInboundActivity();
+    if (payload.kind === 'coop-heartbeat') return;
+    if (payload.kind === 'coop-bye') {
+      // Partner explicitly told us they're going away (e.g. mobile app
+      // backgrounded). Treat as immediate soft-disconnect — no need to
+      // wait the 7s freshness window. The wall-clock hard timer continues
+      // ticking as the source of truth for full teardown.
+      try {
+        coopLastInboundAtMs = ((typeof performance !== 'undefined' && performance.now)
+          ? performance.now() : Date.now()) - COOP_SOFT_DISCONNECT_MS - 1;
+      } catch (_) {}
+      try { tripCoopSoftDisconnect(); } catch (_) {}
+      return;
+    }
     if (payload.kind === 'input') {
       if (COOP_DIAG) {
         try {
@@ -2204,6 +2412,16 @@ function installCoopInputUplink(armedCoop) {
     }
   });
   try { console.info('[coop] input uplink installed role=' + role + ' slot=' + localSlotIndex); } catch (_) {}
+  // D18.11 — reset disconnect state and arm liveness/heartbeat/visibility.
+  // The first inbound packet from the partner will refresh coopLastInboundAtMs;
+  // until then the gate is held open by the lastInbound==0 short-circuit.
+  coopLastInboundAtMs = 0;
+  coopSoftDisconnectActive = false;
+  coopHardDisconnectTripped = false;
+  coopByeSentForHidden = false;
+  coopHiddenAtMs = 0;
+  try { startCoopHeartbeat(); } catch (_) {}
+  try { installCoopVisibilityListeners(); } catch (_) {}
   if (COOP_DIAG) startCoopDiagnostics(role);
 }
 
@@ -4099,6 +4317,21 @@ function loop(ts){
     lastT = ts;
     simAccumulatorMs += frameMs;
     const frameStartTs = ts;
+    // D18.11 — coop disconnect gate. Returns true while soft-paused; in
+    // that state we still keep RAF alive (so this very check + recovery
+    // continue to run + the snapshot/heartbeat handlers continue to fire)
+    // but skip the sim-step loop and any host snapshot broadcast for this
+    // frame. simAccumulatorMs is reset by recoverCoopSoftDisconnect on
+    // resume so we don't fire a catch-up burst. Inert outside coop runs
+    // (gate short-circuits when activeCoopSession is null).
+    const coopFrozen = checkCoopLivenessGate(frameStartTs);
+    if (coopFrozen) {
+      simAccumulatorMs = 0;
+      try { draw(simNowMs); } catch (_) {}
+      try { hudUpdate(); } catch (_) {}
+      raf = requestAnimationFrame(loop);
+      return;
+    }
     let steps = 0;
     while (simAccumulatorMs >= SIM_STEP_MS && steps < MAX_SIM_STEPS_PER_FRAME) {
       simNowMs += SIM_STEP_MS;
