@@ -955,6 +955,27 @@ Object.defineProperty(_slot0Metrics, 'aimAngle', {
 Object.defineProperty(_slot0Metrics, 'aimHasTarget', {
   get() { return playerAimHasTarget; }, set(v) { playerAimHasTarget = v; }, enumerable: true, configurable: true,
 });
+// R0.4 chunk 7 — UPG (upgrade/boon state). Bridge simState.slots[0].upg to
+// the legacy `let UPG` at line 528, which is reassigned at resetUpgrades() but
+// otherwise mutated in place. Setter fires when rollback restores from snapshot,
+// propagating back into the let binding. Same getter/setter pattern as player/body.
+Object.defineProperty(simState.slots[0], 'upg', {
+  get() { return UPG; },
+  set(v) { UPG = v; },
+  enumerable: true,
+  configurable: true,
+});
+// R0.4 chunk 8 — world.obstacles. Bridge simState.world.obstacles to the
+// legacy `let roomObstacles` at line 1197, which is reassigned on room
+// transitions (line 3722) but otherwise mutated via splice/push. Getter/setter
+// allows rollback to rewind the list (and the room boundary it represents) in
+// place. Same pattern as UPG and player/body.
+Object.defineProperty(simState.world, 'obstacles', {
+  get() { return roomObstacles; },
+  set(v) { roomObstacles = v; },
+  enumerable: true,
+  configurable: true,
+});
 let playerName = 'RUNNER';
 let leaderboard = [];
 let lbPeriod = 'daily';
