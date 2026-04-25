@@ -114,7 +114,7 @@ import { renderPatchNotesPanel } from './src/ui/patchNotes.js';
 import { createPanelManager } from './src/ui/panelManager.js';
 import { createPauseController } from './src/ui/pauseController.js';
 import { simRng, parseSeedParam } from './src/systems/seededRng.js';
-import { showGameOverScreen } from './src/ui/gameOver.js';
+import { showGameOverScreen, renderScoreBreakdown } from './src/ui/gameOver.js';
 import { bullets, enemies, shockwaves, spawnQueue, scoreBreakdown, resetScoreBreakdown } from './src/core/gameState.js';
 import { runBoonHook } from './src/systems/boonHooks.js';
 import {
@@ -418,6 +418,14 @@ const goBoonsCloseBtn = document.getElementById('btn-go-boons-close');
 const goScoreEl = document.getElementById('go-score');
 const goNoteEl = document.getElementById('go-note');
 const goBreakdownEl = document.getElementById('go-breakdown');
+// D18.8 — coop end-screen DOM (parity with solo s-go).
+const goCoopBoonsBtn = document.getElementById('btn-go-coop-boons');
+const goCoopBoonsPanel = document.getElementById('go-coop-boons-panel');
+const goCoopBoonsList = document.getElementById('go-coop-boons-list');
+const goCoopBoonsCloseBtn = document.getElementById('btn-go-coop-boons-close');
+const goCoopBreakdownEl = document.getElementById('go-coop-breakdown');
+const goCoopNoteEl = document.getElementById('go-coop-note');
+const lbOpenBtnGoCoop = document.getElementById('btn-lb-open-go-coop');
 const mainMenuBtn = document.getElementById('btn-main-menu');
 const wrap = document.getElementById('wrap');
 const topHud = document.getElementById('top-hud');
@@ -526,6 +534,21 @@ function getEnemyGreyDropCount() {
 
 function renderGameOverBoons() {
   renderGameOverBoonsList(goBoonsList, getActiveBoonEntries(UPG));
+}
+
+// D18.8 — coop end screen renders the LOCAL player's loadout. Host shows
+// slot 0's UPG (== global UPG). Guest shows slot 1's UPG (independent per
+// D14.1).
+function renderCoopGameOverBoons() {
+  if (!goCoopBoonsList) return;
+  let upg = UPG;
+  try {
+    if (coopRematchRole === 'guest' && playerSlots && playerSlots[1]) {
+      const slot1 = playerSlots[1];
+      upg = (typeof slot1.getUpg === 'function') ? slot1.getUpg() : (slot1.upg || UPG);
+    }
+  } catch (_) {}
+  renderGameOverBoonsList(goCoopBoonsList, getActiveBoonEntries(upg));
 }
 
 function syncPlayerScale() {
@@ -1409,6 +1432,13 @@ function onLocalBoonPickedOnline(slotId, boon) {
   if (isHost) {
     pendingCoopBoonPicks.hostDone = true;
     sendCoopBoonPick(0, id);
+    // D18.8 — if guest hasn't picked yet, show a "WAITING FOR PARTNER…"
+    // overlay on host so the screen doesn't appear frozen between picks.
+    // Hidden by tryResumeCoopBoonPhase / handleCoopRoomAdvanceGuest /
+    // teardown.
+    if (!pendingCoopBoonPicks.guestDone) {
+      try { showCoopGuestWaitOverlay('WAITING FOR PARTNER…'); } catch (_) {}
+    }
     tryResumeCoopBoonPhase();
     return true;
   }
@@ -1449,6 +1479,8 @@ function tryResumeCoopBoonPhase() {
     try { clearTimeout(coopBoonAfkTimer); } catch (_) {}
     coopBoonAfkTimer = null;
   }
+  // D18.8 — clear any "WAITING FOR PARTNER…" overlay shown on host.
+  try { hideCoopGuestWaitOverlay(); } catch (_) {}
   resumePlayAfterBoons();
 }
 
@@ -1662,6 +1694,21 @@ function buildCoopGameOverPayload() {
     roomIndex: roomIndex | 0,
     hostName: role === 'host' ? local : partner,
     guestName: role === 'guest' ? local : partner,
+    breakdown: { ...scoreBreakdown },
+    stats: {
+      kills: kills | 0,
+      rooms: (roomIndex | 0) + 1,
+      elapsedMs: runElapsedMs | 0,
+      damagelessRooms: damagelessRooms | 0,
+    },
+    boonIds: (() => {
+      try {
+        const slot = playerSlots[role === 'guest' ? 1 : 0];
+        const upg = slot && (typeof slot.getUpg === 'function' ? slot.getUpg() : slot.upg);
+        const order = (upg && upg.boonSelectionOrder) || [];
+        return Array.isArray(order) ? order.slice() : [];
+      } catch (_) { return []; }
+    })(),
   };
 }
 
@@ -1684,6 +1731,21 @@ function showCoopGameOverScreen(payload) {
     if (metaEl) metaEl.textContent = `Room ${(data.roomIndex | 0) + 1} reached`;
     const status = document.getElementById('go-coop-status');
     if (status) status.textContent = '';
+    // D18.8 — solo-style breakdown + note. Use host-shipped breakdown/stats
+    // when present (guest has no local sim). Empty/missing → clean hidden via
+    // :empty CSS rule.
+    if (goCoopBreakdownEl) {
+      try {
+        renderScoreBreakdown(goCoopBreakdownEl, data.breakdown || null, data.stats || null);
+      } catch (err) {
+        try { console.warn('[coop] coop breakdown render failed', err); } catch (_) {}
+        goCoopBreakdownEl.innerHTML = '';
+      }
+    }
+    if (goCoopNoteEl) goCoopNoteEl.textContent = '';
+    // Hide loadout panel by default; user opens via Run Boons button.
+    if (goCoopBoonsPanel) goCoopBoonsPanel.classList.add('off');
+    try { renderCoopGameOverBoons(); } catch (_) {}
     const rematchBtn = document.getElementById('btn-coop-rematch');
     if (rematchBtn) {
       if (coopRematchRole === 'guest') {
@@ -1777,6 +1839,12 @@ function handleCoopGameOverPacket(payload) {
     roomIndex: Number.isFinite(payload.roomIndex) ? (payload.roomIndex | 0) : (roomIndex | 0),
     hostName: typeof payload.hostName === 'string' ? payload.hostName : (coopRematchRole === 'host' ? getLocalRunnerName() : (coopPartnerName || 'HOST')),
     guestName: typeof payload.guestName === 'string' ? payload.guestName : (coopRematchRole === 'guest' ? getLocalRunnerName() : (coopPartnerName || 'GUEST')),
+    breakdown: (payload.breakdown && typeof payload.breakdown === 'object') ? payload.breakdown : null,
+    stats: (payload.stats && typeof payload.stats === 'object') ? payload.stats : null,
+    // D18.8 — host's partner-side boons (slot 1 picks). Guest renders its
+    // OWN local boon list; this is host-only context, but we keep the
+    // payload field consistent for future symmetry.
+    boonIds: Array.isArray(payload.boonIds) ? payload.boonIds.slice() : [],
   };
 }
 
@@ -1863,6 +1931,7 @@ function startCoopRematchRun(seed) {
   // (e.g. boons panel collapsed), and ensure the legacy s-go is hidden.
   try { document.getElementById('s-go')?.classList.add('off'); } catch (_) {}
   try { document.getElementById('go-boons-panel')?.classList.add('off'); } catch (_) {}
+  try { document.getElementById('go-coop-boons-panel')?.classList.add('off'); } catch (_) {}
   init();
   gstate = 'playing';
   lastT = performance.now();
@@ -6026,7 +6095,7 @@ try {
 } catch {}
 
 bindLeaderboardControls({
-  openButtons: [lbOpenBtn, lbOpenBtnGo],
+  openButtons: [lbOpenBtn, lbOpenBtnGo, lbOpenBtnGoCoop],
   closeButton: lbCloseBtn,
   periodButtons: [...lbPeriodBtns],
   scopeButtons: [...lbScopeBtns],
@@ -6144,6 +6213,12 @@ bindBoonsPanelControls({
   toggleButton: goBoonsBtn,
   panelEl: goBoonsPanel,
   closeButton: goBoonsCloseBtn,
+});
+
+bindBoonsPanelControls({
+  toggleButton: goCoopBoonsBtn,
+  panelEl: goCoopBoonsPanel,
+  closeButton: goCoopBoonsCloseBtn,
 });
 
 bindCoopLobby({

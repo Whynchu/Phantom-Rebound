@@ -2,6 +2,18 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.54',
+      label: 'D18.8: COOP END-SCREEN PARITY + WAITING-FOR-PARTNER OVERLAY',
+      summary: ['Two playtest gaps: (1) the coop end-of-run panel (#s-go-coop) had only score + roster + room number — no breakdown, no "Run Boons" review, no Leaderboards button — making it feel sparse compared to the solo end panel. Players wanted feature parity with the solo s-go screen. (2) Between boon picks, when the host picked a boon before the guest, the host\'s screen reverted to a frozen frame with no "WAITING FOR PARTNER…" indicator — the wait overlay was guest-only. The guest already showed an overlay when waiting on host, but host saw nothing.'],
+      highlights: [
+        'Coop end screen now matches solo: added go-coop-breakdown (uses the same renderScoreBreakdown helper as solo, exported from src/ui/gameOver.js), go-coop-note (kept blank by default — empty:hidden via CSS), Run Boons button + go-coop-boons-panel that renders the LOCAL player\'s loadout (host shows slot 0 / global UPG; guest shows slot 1\'s independent UPG per D14.1), and Leaderboards button (btn-lb-open-go-coop wired through the existing bindLeaderboardControls). Host/guest roster cards + Rematch + Leave buttons preserved.',
+        'coop-game-over packet extended with breakdown + stats + boonIds so guest mirrors the same breakdown rows + kill/room/duration footer that the host sees. Guest\'s own scoreBreakdown is empty (it doesn\'t sim) — without this, the breakdown panel was always blank on guest\'s end screen.',
+        'CSS: #go-score, #go-sub, #go-note, #go-boons-panel, #go-boons-list rules generalized to also match the coop variants (#go-coop-score, #go-coop-sub, #go-coop-note, #go-coop-boons-panel, #go-coop-boons-list). No new selectors fork; visual parity is enforced at the stylesheet level.',
+        'Boon-pick wait overlay is now symmetric: when host picks first and guest hasn\'t responded yet, host sees "WAITING FOR PARTNER…" instead of a frozen frame. tryResumeCoopBoonPhase clears the overlay before resumePlayAfterBoons fires; existing handleCoopRoomAdvanceGuest + teardownCoopRunFully paths already clear it on guest. AFK auto-resolve still fires on the existing 30s timer.',
+        'Tests: all 24 suites green; determinism canary 11/11 byte-identical (changes are end-screen UI + coop-only overlay logic — no sim-path mutations).',
+      ]
+    },
+  {
       version: '1.20.53',
       label: 'D18.7: GUEST MOVEMENT RESTORE + PARTNER COLOR SYNC',
       summary: ['Two playtest regressions: (1) v1.20.52\'s D18.6 cosmetic-tick refactor accidentally removed the updateOnlineGuestPrediction(dt) call from the guest update gate, so the guest body stopped moving at all on its own screen — only host snapshots could move it (and they only re-anchor on death/respawn, not continuously). (2) Player color choice never crossed the network: each peer rendered both ghosts in its own locally-chosen palette, so the host saw the guest as the host\'s color and vice versa — the user picked pink as host, guest saw the host as the guest\'s color, host saw the guest as pink. Backwards from the intent.'],

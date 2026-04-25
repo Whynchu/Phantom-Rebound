@@ -948,10 +948,10 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
 .up-desc { font-size:9px; color:var(--muted); line-height:1.45; }
 .up-tag  { font-size:7px; letter-spacing:.14em; text-transform:uppercase; margin-top:2px; }
 /* GAME OVER */
-#go-score { font-family:'Syne',sans-serif; font-weight:800; font-size:44px; color:var(--accent); line-height:1; }
-#go-sub   { font-size:9px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase; }
-#go-note  { font-size:11px; color:var(--muted); text-align:center; max-width:250px; line-height:1.7; }
-#go-note:empty { display:none; }
+#go-score, #go-coop-score { font-family:'Syne',sans-serif; font-weight:800; font-size:44px; color:var(--accent); line-height:1; }
+#go-sub, #go-coop-sub   { font-size:9px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase; }
+#go-note, #go-coop-note  { font-size:11px; color:var(--muted); text-align:center; max-width:250px; line-height:1.7; }
+#go-note:empty, #go-coop-note:empty { display:none; }
 .go-breakdown {
   display:flex;
   flex-direction:column;
@@ -1037,7 +1037,7 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
   text-transform:uppercase;
   color:var(--dim);
 }
-#go-boons-panel {
+#go-boons-panel, #go-coop-boons-panel {
   position:absolute;
   inset:20px;
   display:flex;
@@ -1049,8 +1049,8 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
   border-radius:8px;
   box-shadow:0 0 30px rgba(0,0,0,0.35);
 }
-#go-boons-panel.off { display:none; }
-#go-boons-list {
+#go-boons-panel.off, #go-coop-boons-panel.off { display:none; }
+#go-boons-list, #go-coop-boons-list {
   flex:1;
   width:100%;
   display:flex;
