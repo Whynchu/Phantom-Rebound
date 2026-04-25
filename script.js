@@ -155,6 +155,7 @@ import { createBulletSpawnDetector } from './src/net/bulletSpawnDetector.js';
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
 import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
 import { setupRollback, teardownRollback, coordinatorStep } from './src/net/rollbackIntegration.js';
+import { applyJoystickVelocity } from './src/sim/playerMovement.js';
 import {
   showRoomClearOverlay,
   showBossDefeatedOverlay,
@@ -5437,15 +5438,8 @@ function update(dt,ts){
   // Drift anchor when thumb wanders far past max radius
   if(roomPhase === 'fighting' || roomPhase === 'spawning') tickJoystick(joy, dt);
 
-  // ── Player movement — virtual joystick
-  if(roomPhase !== 'intro' && joy.active && joy.mag > JOY_DEADZONE){
-    const t = Math.min((joy.mag - JOY_DEADZONE) / (joyMax - JOY_DEADZONE), 1);
-    player.vx = joy.dx * BASE_SPD * t;
-    player.vy = joy.dy * BASE_SPD * t;
-  } else {
-    player.vx = 0;
-    player.vy = 0;
-  }
+  // ── Player movement — virtual joystick (R0.4 chunk 1: extracted to src/sim/playerMovement.js)
+  applyJoystickVelocity(player, joy, BASE_SPD, JOY_DEADZONE, joyMax, roomPhase !== 'intro');
   const playerTravel = Math.hypot(player.vx, player.vy) * dt;
   const playerSteps = Math.min(10, Math.max(1, Math.ceil(playerTravel / 8)));
   const playerStepDt = dt / playerSteps;
