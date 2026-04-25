@@ -377,7 +377,7 @@ test('remote adapter: D12 stale frame (>threshold ticks old) reports stale + isS
   // still=1 frame at tick 0 — pre-D12 this would lock isStill=true forever
   // when host raced ahead, causing slot 1 to autofire continuously.
   rb.push({ tick: 0, dx: 0, dy: 0, t: 0, still: 1 });
-  let currentTick = 100; // 100 ticks ahead → stale
+  let currentTick = 100; // 100 ticks ahead → stale (> default threshold 60)
   const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => currentTick });
   const v = adapter.moveVector();
   assert.equal(v.stale, true, 'moveVector should mark stale');
@@ -388,7 +388,7 @@ test('remote adapter: D12 stale frame (>threshold ticks old) reports stale + isS
 test('remote adapter: D12 fresh frame within threshold is NOT stale', () => {
   const rb = createRemoteInputBuffer();
   rb.push({ tick: 95, dx: 0, dy: 0, t: 0, still: 1 });
-  let currentTick = 100; // 5 ticks ahead — within default threshold of 12
+  let currentTick = 100; // 5 ticks ahead — within default threshold of 60
   const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => currentTick });
   const v = adapter.moveVector();
   assert.equal(v.stale, false, 'within threshold should NOT be stale');
@@ -406,6 +406,38 @@ test('remote adapter: D12 staleTickThreshold is configurable', () => {
   // 5 ticks ahead, threshold=3 → stale
   assert.equal(adapter.moveVector().stale, true);
   assert.equal(adapter.isStill(), false);
+});
+
+// D12.3 — guest-ahead-of-host: when host pauses (e.g. boon screen) and
+// guest's simTick keeps advancing, all frames in the buffer have tick > t.
+// The pre-D12.3 adapter ran abs(t - frame.tick) > threshold, marking these
+// "future" frames as stale → slot 1 froze on host. Fix: future frames are
+// never stale, and we use peekNewest() (the most recent intent) instead of
+// the meaningless peekOldest() fallback.
+test('remote adapter: D12.3 guest AHEAD of host uses newest frame, never stale', () => {
+  const rb = createRemoteInputBuffer();
+  // Host paused for 2 seconds, guest sent 4 frames during that window
+  rb.push({ tick: 200, dx:  64, dy:  0, t: 200, still: 0 });
+  rb.push({ tick: 201, dx:  80, dy:  0, t: 220, still: 0 });
+  rb.push({ tick: 202, dx: 100, dy:  0, t: 240, still: 0 });
+  rb.push({ tick: 203, dx: 120, dy:  0, t: 250, still: 0 });
+  let currentTick = 100; // host is 100 ticks BEHIND guest
+  const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => currentTick });
+  const v = adapter.moveVector();
+  assert.equal(v.stale, false, 'future frames are never stale');
+  assert.equal(v.active, true, 'movement intent must propagate');
+  // Should pick the NEWEST frame (tick 203), not the oldest (tick 200).
+  assert.ok(Math.abs(v.dx - 120 / 127) < 0.001, 'dx should match newest frame');
+});
+
+test('remote adapter: D12.3 guest-ahead works even with very large gap', () => {
+  const rb = createRemoteInputBuffer();
+  rb.push({ tick: 1000, dx: 64, dy: 64, t: 200, still: 0 });
+  let currentTick = 0;
+  const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => currentTick });
+  const v = adapter.moveVector();
+  assert.equal(v.stale, false, 'huge future gap still treated as fresh intent');
+  assert.equal(v.active, true);
 });
 
 // ---------------------------------------------------------------------------

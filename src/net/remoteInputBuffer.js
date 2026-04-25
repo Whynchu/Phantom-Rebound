@@ -73,6 +73,15 @@ function createRemoteInputBuffer({ capacity = 120, logger = null } = {}) {
     return buf.length > 0 ? buf[0] : null;
   }
 
+  // D12.3 — when guest is AHEAD of host (e.g. host paused for a boon screen
+  // while guest's simTick kept advancing), peekLatestUpTo(t) returns null
+  // because all frames have tick > t. The right "current intent" frame in
+  // that case is the NEWEST, not the oldest. peekOldest is preserved for
+  // back-compat, but the adapter prefers peekNewest in this branch.
+  function peekNewest() {
+    return buf.length > 0 ? buf[buf.length - 1] : null;
+  }
+
   function consumeUpTo(tick) {
     let count = 0;
     while (buf.length > 0 && buf[0].tick <= tick) {
@@ -109,7 +118,7 @@ function createRemoteInputBuffer({ capacity = 120, logger = null } = {}) {
     };
   }
 
-  return { push, peekAt, peekLatestUpTo, peekOldest, consumeUpTo, hasFrameFor, size, oldestTick, newestTick, stats };
+  return { push, peekAt, peekLatestUpTo, peekOldest, peekNewest, consumeUpTo, hasFrameFor, size, oldestTick, newestTick, stats };
 }
 
 export { createRemoteInputBuffer };

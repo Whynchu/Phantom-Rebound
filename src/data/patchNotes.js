@@ -2,6 +2,18 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.42',
+      label: 'COOP PHASE D12.3: SLOT-1 GRADUAL DRIFT FIX',
+      summary: ['Playtest revealed slot-1 movement starts perfectly accurate at run start, then progressively desyncs each room until guest no longer appears to move on the host. Diagnostics from v1.20.41 plus the symptom pattern pinned it to the remote-input-buffer staleness check, not transport. Each between-room boon screen pauses the host\'s simTick (gstate != "playing") while the guest\'s simTick keeps advancing — so guest input frames accumulate ahead of host\'s clock. The pre-D12.3 adapter used `Math.abs(t - frame.tick) > 12` which marked "future" frames stale just as harshly as ancient ones; once cumulative drift crossed 12 ticks (~200 ms), the host froze slot 1.'],
+      highlights: [
+        'Staleness check is now one-sided: only frames in the PAST (t - frame.tick > threshold) are considered stale. Future frames represent input the guest just sent that the host hasn\'t caught up to yet, and are always treated as fresh — they\'re the most accurate intent we have.',
+        'STALE_TICK_THRESHOLD bumped from 12 ticks (~200 ms) to 60 ticks (~1 s). Tolerates normal cross-device sim-clock drift over long sessions plus host pauses on boon screens, while still suppressing autofire / movement when a peer has truly fallen off (≥1 s of no input).',
+        'New `peekNewest()` API on remoteInputBuffer used as the fallback when peekLatestUpTo(t) returns null (i.e. all frames in buffer are after t). Previously the adapter fell through to peekOldest(), which would return an arbitrary ancient frame that no longer reflected the guest\'s current intent — exactly the "appears to stop moving" symptom.',
+        'Tests: 5 new cases in test-coop-input-sync.mjs — guest-ahead small/large gap (verifies newest-frame selection + never-stale), past-frame stale at new threshold, configurable threshold still honored, fresh past frame within threshold. All 24 suites green; determinism canary 11/11 byte-identical (sim path unaffected: hostRemoteInputProcessor uses peekAt directly).',
+        'Diagnostic infra (?coopdiag=1) from v1.20.41 stays in for one more release in case any drift edge case is reported during the next playtest.',
+      ]
+    },
+  {
       version: '1.20.41',
       label: 'COOP PHASE D12.3: INPUT-CHAIN DIAGNOSTICS',
       summary: ['Playtest after D12.2 surfaced a one-way input bug: host can\'t see guest moving, but guest sees host fine. Snapshots flow host→guest correctly, but guest→host input frames either aren\'t being sent, aren\'t arriving, or aren\'t being consumed by host\'s slot-1 adapter. Without runtime telemetry it\'s impossible to localize the break, so D12.3 ships a no-op-by-default diagnostic mode (`?coopdiag=1`) that logs the entire chain on both peers.'],

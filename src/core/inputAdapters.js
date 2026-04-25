@@ -69,20 +69,13 @@ function createNullInputAdapter() {
 // so the consumer can suppress autofire instead of locking on a stale still=1
 // frame.
 //
-// D12 — staleness guard. Previously, a missing exact-tick match would either
-// freeze slot 1 (pre-D11) or, with D11's peekOldest fallback, return a
-// possibly-ancient still=1 frame which made the host's slot 1 autofire
-// continuously even though the guest had moved on. Now: if the best matching
-// frame is more than STALE_TICK_THRESHOLD ticks behind the requested tick (or
-// no frame exists at all), we report `stale: true` and `active: false` so
-// updateGuestFire can skip charging+firing during gaps. Movement zeroes out
-// for the gap; consumers that want to lerp through gaps can read `stale`.
-//
-// Dequantization:
-//   dx = frame.dx / 127   (inverse of Math.round(v * 127))
-//   dy = frame.dy / 127
-//   t  = frame.t  / 255
-const STALE_TICK_THRESHOLD = 12; // ~200 ms at 60 Hz; tolerates a 4-frame batch + jitter
+// D12.3 — D12 used a symmetric staleness check (Math.abs(t - frame.tick)).
+// That broke whenever the guest was AHEAD of the host (any pause on host
+// — e.g. boon-select screen — that doesn't pause the guest puts guest
+// ticks > host_simTick). All "future" frames were marked stale, freezing
+// slot 1. Threshold also bumped from 12 (~200 ms) to 60 (~1 s) to
+// tolerate normal cross-device frame-clock drift over long sessions.
+const STALE_TICK_THRESHOLD = 60; // ~1 s at 60 Hz; tolerates room transitions + drift
 
 function createRemoteInputAdapter(ringBuffer, { getCurrentTick, staleTickThreshold = STALE_TICK_THRESHOLD } = {}) {
   if (!ringBuffer || typeof ringBuffer.peekAt !== 'function') {
@@ -91,26 +84,38 @@ function createRemoteInputAdapter(ringBuffer, { getCurrentTick, staleTickThresho
   if (typeof getCurrentTick !== 'function') {
     throw new Error('createRemoteInputAdapter: getCurrentTick required');
   }
-  // D11/D12 — tick-tolerant lookup with staleness guard.
+  // D11/D12/D12.3 — tick-tolerant lookup with one-sided staleness guard.
   // Returns { frame, stale } where:
-  //   frame: best-effort frame to use (newest ≤ tick, then oldest, then null)
-  //   stale: true when no frame is "fresh" — caller should suppress autofire,
-  //          stop motion, etc. Determinism path (hostRemoteInputProcessor)
-  //          uses peekAt directly and is unaffected.
+  //   frame: best-effort frame to use:
+  //     1. exact tick match (perfect)
+  //     2. newest frame ≤ t   (host is on / ahead of guest — past frames age)
+  //     3. newest frame > t   (host is BEHIND guest — future frames are fresh)
+  //     4. null               (empty buffer)
+  //   stale: true only when the chosen frame is more than `staleTickThreshold`
+  //         ticks IN THE PAST relative to t. Future frames are never stale —
+  //         they represent input the guest just sent, ahead of host's clock.
   function selectFrame() {
     const t = getCurrentTick();
     const exact = ringBuffer.peekAt(t);
     if (exact) return { frame: exact, stale: false };
-    let frame = null;
     if (typeof ringBuffer.peekLatestUpTo === 'function') {
-      frame = ringBuffer.peekLatestUpTo(t);
+      const past = ringBuffer.peekLatestUpTo(t);
+      if (past) {
+        const ageTicks = t - past.tick; // always >= 0 here
+        return { frame: past, stale: ageTicks > staleTickThreshold };
+      }
     }
-    if (!frame && typeof ringBuffer.peekOldest === 'function') {
-      frame = ringBuffer.peekOldest();
+    // Buffer holds only future frames (guest ahead of host). Use the newest
+    // — it's the most recent intent. Never stale: guest is actively sending.
+    if (typeof ringBuffer.peekNewest === 'function') {
+      const future = ringBuffer.peekNewest();
+      if (future) return { frame: future, stale: false };
     }
-    if (!frame) return { frame: null, stale: true };
-    const ageTicks = Math.abs(t - frame.tick);
-    return { frame, stale: ageTicks > staleTickThreshold };
+    if (typeof ringBuffer.peekOldest === 'function') {
+      const fallback = ringBuffer.peekOldest();
+      if (fallback) return { frame: fallback, stale: false };
+    }
+    return { frame: null, stale: true };
   }
   return {
     kind: 'remote',
