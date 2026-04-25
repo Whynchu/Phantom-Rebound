@@ -154,6 +154,7 @@ import { createGreyLagComp } from './src/net/greyLagComp.js';
 import { createBulletSpawnDetector } from './src/net/bulletSpawnDetector.js';
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
 import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
+import { setupRollback, teardownRollback, coordinatorStep } from './src/net/rollbackIntegration.js';
 import {
   showRoomClearOverlay,
   showBossDefeatedOverlay,
@@ -1301,6 +1302,12 @@ const COOP_DEBUG = (typeof window !== 'undefined' && window.location)
 const COOP_DIAG = (typeof window !== 'undefined' && window.location)
   ? new URLSearchParams(window.location.search).get('coopdiag') === '1'
   : false;
+// R3 — `?rollback=1` enables rollback netcode coordinator (experimental).
+// Currently runs in parallel with D-series snapshot path.
+// Once R0.4 (simStep carving) is complete, this will be the primary path.
+const ROLLBACK_ENABLED = (typeof window !== 'undefined' && window.location)
+  ? new URLSearchParams(window.location.search).get('rollback') === '1'
+  : false;
 let coopDiagInterval = null;
 const guestKeyState = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 let _guestKeysBound = false;
@@ -1368,6 +1375,8 @@ function teardownCoopInputUplink() {
     try { coopInputSync.dispose(); } catch (_) {}
     coopInputSync = null;
   }
+  // R3 — tear down rollback coordinator
+  try { teardownRollback(); } catch (_) {}
   if (coopSnapshotBroadcaster) {
     try { coopSnapshotBroadcaster.dispose(); } catch (_) {}
     coopSnapshotBroadcaster = null;
@@ -2463,6 +2472,31 @@ function installCoopInputUplink(armedCoop) {
     // while staying well under the Supabase 20 msg/s rate cap (15 msg/s).
     batchSize: 4,
   });
+
+  // R3 — rollback coordinator (experimental). When ROLLBACK_ENABLED, initialize
+  // the coordinator for input-based deterministic sim. Runs in parallel with
+  // D-series snapshot path; once R0.4 carves simStep out, this becomes primary.
+  if (ROLLBACK_ENABLED) {
+    try {
+      setupRollback(
+        simState,
+        localSlotIndex,
+        async (frame) => {
+          // Route coordinator output through existing transport
+          try { await session.sendGameplay({ type: 'coop-input', frame }); } catch (_) {}
+        },
+        (callback) => {
+          // Register coordinator with existing input handler
+          // TODO: connect to coopInputSync.onRemoteInput when available
+        },
+        null, // simStep (placeholder until R0.4)
+        true  // enable logging
+      );
+      console.info('[coop] rollback coordinator armed');
+    } catch (err) {
+      try { console.warn('[coop] rollback setup failed:', err); } catch (_) {}
+    }
+  }
   // Phase D4: host-only snapshot broadcaster. Emits a full state snapshot
   // every 4 sim ticks (60 Hz / 4 = 15 Hz, D12 — was 6/10 Hz). Combined with
   // guest's 4-frame input batch (~15 msg/s) each peer stays within the
