@@ -176,6 +176,9 @@ function applySlot(snapSlot, prevSnapSlot, slot, alpha, opts) {
     // D13.3 — distort wobble for hurt animation. Pulls from curr so the
     // guest sees the same hit-flicker the host renders for slot 1.
     body.distort = snapSlot.distort || 0;
+    // D18.15a — coop spectator flag. Carries the dead-but-walking visual
+    // state to the receiver so the partner renders translucent + frowning.
+    body.coopSpectating = !!snapSlot.spectating;
     if (!snapSlot.alive) {
       if ((body.deadAt ?? 0) === 0) body.deadAt = 1;
     } else {

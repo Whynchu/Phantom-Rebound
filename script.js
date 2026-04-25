@@ -2580,12 +2580,19 @@ function collectHostSnapshotState() {
       stillTimer: m.stillTimer ?? 0,
       // body.deadAt > 0 marks a dead player; createInitialPlayerState
       // initializes deadAt:0. m.hp > 0 is a defensive secondary check.
-      alive: !((bodyOrSlot.deadAt ?? 0) > 0) && ((m.hp ?? 0) > 0 || (m.maxHp ?? 0) === 0 ? true : (m.hp ?? 0) > 0),
+      // D18.15a — spectators are wire-alive so the guest predictor doesn't
+      // halt at body.deadAt; the `spectating` flag below carries the dead
+      // pose to the partner's render.
+      alive: !((bodyOrSlot.deadAt ?? 0) > 0) && (((m.hp ?? 0) > 0) || !!bodyOrSlot.coopSpectating || (m.maxHp ?? 0) === 0),
       // D13.1 / D13.3 / D13.4 — propagate respawn counter, hurt-wobble
       // timer, and aim-target flag so guest renders match host.
       respawnSeq: (bodyOrSlot.respawnSeq | 0),
       distort: bodyOrSlot.distort ?? 0,
       hasTarget: !!aim.hasTarget,
+      // D18.15a — coop spectator-on-death. Carried over the wire so the
+      // partner renders the dead player translucent + frowning while they
+      // walk around. hp=0 on the wire so enemy targeting still skips them.
+      spectating: !!bodyOrSlot.coopSpectating,
     });
   }
   const bulletsOut = [];
@@ -2812,11 +2819,6 @@ function updateGuestSlotMovement(dt, W, H) {
     const slot = playerSlots[i];
     if (!slot || !slot.input) continue;
     const body = slot.body;
-    // D18.15 — coop spectator: corpse stays where it died, no joystick.
-    if (body && body.coopSpectating) {
-      body.vx = 0; body.vy = 0;
-      continue;
-    }
     const { dx, dy, t, active } = slot.input.moveVector();
     const SPD = 165 * GLOBAL_SPEED_LIFT;
     if (active) { body.vx = dx * SPD * t; body.vy = dy * SPD * t; }
@@ -2918,9 +2920,10 @@ function markSlotSpectating(slot) {
   if (!slot || !slot.body) return;
   const body = slot.body;
   body.coopSpectating = true;
-  body.deadAt = simNowMs;
-  body.vx = 0;
-  body.vy = 0;
+  // D18.15a — spectators can walk around (with a frown). They just can't
+  // fire, take damage, or be targeted. The hp=0 + invincible=1e9 combo
+  // handles damage/targeting gates; forceFrown render gives the dead
+  // expression. Do NOT set deadAt — that would halt the guest predictor.
   body.distort = 0;
   body.invincible = SPECTATOR_INVULN_SECONDS;
   if (slot.metrics) slot.metrics.hp = 0;
@@ -2952,14 +2955,10 @@ function playerSlot0DiedOrGameOver() {
     gameOver();
     return true;
   }
-  // Slot 0 is now a spectator; mirror the bookkeeping the legacy gameOver
-  // path would normally set on `player` so renderers see the "dead" pose
-  // without firing the run-ending flow.
-  if (slot0 && slot0.body) {
-    player.deadAt = simNowMs;
-    player.vx = 0;
-    player.vy = 0;
-  }
+  // D18.15a — slot 0 is now a spectator that can walk. Don't set deadAt
+  // (that would halt guest prediction and kill the legacy "dead pose"
+  // renderer). The body's coopSpectating flag and forceFrown render path
+  // handle the visual.
   return false;
 }
 
@@ -3118,10 +3117,8 @@ function drawGuestSlots(ts) {
     const slot = playerSlots[i];
     if (!slot) continue;
     const body = slot.body;
-    // D18.15 — coop spectator: dead partner stays visible at the death
-    // pose at 30% opacity so the survivor knows where they fell. No aim
-    // arrow / charge ring on the corpse. Skips invuln-blink because the
-    // sticky SPECTATOR_INVULN_SECONDS would make it strobe forever.
+    // D18.15 — coop spectator: dead partner still walks around but at
+    // 30% opacity with a frown. No aim arrow / charge ring while dead.
     const isSpectator = !!(body && body.coopSpectating);
     if (!isSpectator) {
       // D13.3 — invuln blink: skip render every other 90ms tick while
@@ -3129,10 +3126,6 @@ function drawGuestSlots(ts) {
       const invuln = (body && body.invincible) ? body.invincible : 0;
       const blinkVisible = invuln <= 0 || Math.floor(ts / 90) % 2 === 0;
       if (!blinkVisible) continue;
-    } else {
-      // D18.15 — for the dead-corpse pose drawGhostSprite expects hp>0 to
-      // render the body. Reuse the legacy "alive" data path with a
-      // reduced canvas alpha and skip the partner's aim/HUD overlays.
     }
     if (isSpectator) ctx.save();
     if (isSpectator) ctx.globalAlpha = 0.3;
@@ -3142,17 +3135,13 @@ function drawGuestSlots(ts) {
       maxChargeValue: slot.upg.maxCharge,
       fireProgress: !isSpectator && slot.metrics.charge >= 1 ? (slot.metrics.fireT || 0) / (1 / ((slot.upg.sps || 0.8) * 2)) : 0,
       gameState: gstate,
+      // D18.15a — pass full hp so drawGhostSprite renders the body
+      // normally. The forceFrown flag below switches the smile/eyes for
+      // the dead-frown arc without triggering death pop animation.
       hpValue: isSpectator ? Math.max(1, slot.metrics.maxHp || 1) : slot.metrics.hp,
       maxHpValue: slot.metrics.maxHp,
-      // D18.14 — render the partner's chosen hat (handshake key over
-      // 'coop-hat' message). Falls back to null = no hat when the partner
-      // hasn't announced yet (e.g. fresh subscribe before their first
-      // sendCoopLocalHat lands), matching the pre-handshake legacy look.
+      forceFrown: isSpectator,
       hatKey: coopPartnerHatKey || null,
-      // D18.7 — render the partner in their chosen color, not ours. We
-      // know it from the coop-color handshake; if it hasn't arrived yet,
-      // fall back to the local C palette (legacy behavior) — null tells
-      // drawGhostSprite to read C.green/C.ghost.
       colorScheme: coopPartnerColorKey ? getColorSchemeForKey(coopPartnerColorKey) : null,
     });
     if (isSpectator) { ctx.restore(); continue; }
@@ -4914,7 +4903,7 @@ function update(dt,ts){
   if(roomPhase === 'fighting' || roomPhase === 'spawning') tickJoystick(joy, dt);
 
   // ── Player movement — virtual joystick
-  if(roomPhase !== 'intro' && joy.active && joy.mag > JOY_DEADZONE && !player.coopSpectating){
+  if(roomPhase !== 'intro' && joy.active && joy.mag > JOY_DEADZONE){
     const t = Math.min((joy.mag - JOY_DEADZONE) / (joyMax - JOY_DEADZONE), 1);
     player.vx = joy.dx * BASE_SPD * t;
     player.vy = joy.dy * BASE_SPD * t;
@@ -6426,7 +6415,8 @@ function draw(ts){
 function drawGhost(ts){
   const slot = getLocalRenderSlot();
   const body = slot ? slot.body : player;
-  // D18.15 — coop spectator: render local player at 30% alpha when dead.
+  // D18.15 — coop spectator: render local player at 30% alpha + frown
+  // when dead but still walking.
   const isSpectator = !!(body && body.coopSpectating);
   const slotUpg = slot ? slot.upg : UPG;
   const slotMetrics = slot ? slot.metrics : null;
@@ -6448,6 +6438,7 @@ function drawGhost(ts){
     gameState: gstate,
     hpValue: isSpectator ? Math.max(1, maxHpValue || 1) : hpValue,
     maxHpValue,
+    forceFrown: isSpectator,
     hatKey: playerHat,
   });
   if (isSpectator) ctx.restore();

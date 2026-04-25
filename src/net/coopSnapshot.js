@@ -134,6 +134,10 @@ function encodeSlot(src, idx) {
     // aim arrow render in drawGuestSlots; without this every guest slot
     // would show a triangle even when there are no enemies.
     hasTarget: !!src.hasTarget,
+    // D18.15a — coop spectator flag. When true, the receiver renders the
+    // slot translucent + frowning. Carried alongside `alive` so the
+    // movement+aim path stays alive while the body is in spectator state.
+    spectating: !!src.spectating,
   };
 }
 

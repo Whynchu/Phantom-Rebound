@@ -2,6 +2,16 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.64',
+      label: 'D18.15a: SPECTATORS CAN WALK + FROWN',
+      summary: ['Playtest correction on D18.15: dead coop partners were stuck frozen in place at the death position. They should be able to walk around like a sad ghost — still translucent, still no firing/damage/targeting, but mobile. Movement is now allowed; the smile-eyes are replaced by a downward frown arc so it\'s clear they\'re dead. The frown is the same arc the gameState===\'dying\' branch already drew, just promoted to a standalone forceFrown flag so we get the expression without the death pop animation.'],
+      highlights: [
+        'Removed the slot 0 joystick gate and the slot 1 updateGuestSlotMovement gate added in D18.15 — spectators now read the joystick and walk normally. markSlotSpectating no longer sets body.deadAt or zeroes vx/vy, so the legacy guest-predictor halt at body.deadAt!=0 doesn\'t fire and prediction continues smoothly. Damage/fire/targeting still gated: hp=0 + body.invincible=1e9 short-circuits all the existing damage gates without per-site edits, and firePlayer + the slot-1 contact/danger helpers early-out on coopSpectating.',
+        'New forceFrown option on drawGhostSprite — when true (and not already in the dying pop animation), the smile-eyes branch is replaced by the same downward frown arc the dying branch draws (arc at 0,size*.08, radius 4.6, π+.25 → 2π−.25). drawGhost (slot 0 local) and drawGuestSlots (partner) both pass forceFrown when body.coopSpectating, so the dead expression travels with the player whether they\'re yours or your partner\'s.',
+        'Wire propagation: encodeSlot now serializes a `spectating` boolean (read from body.coopSpectating). The `alive` field becomes wire-true while spectating so the guest predictor doesn\'t halt at body.deadAt and the snapshot applier doesn\'t aliveEdge-anchor the body to a stale "dead" position. snapshotApplier sets body.coopSpectating=snapSlot.spectating each frame so the partner side renders translucent + frowning with no extra hooks. Determinism canary 11/11 byte-identical (no solo paths touched); 24 test suites pass.',
+      ]
+    },
+  {
       version: '1.20.63',
       label: 'D18.15: COOP SPECTATOR-ON-DEATH',
       summary: ['Dying in coop no longer ends the run for both players. When a coop player dies, they become a translucent inert ghost frozen at the death position until the room ends — they can\'t move, fire, take damage, or be targeted, but their corpse stays visible at 30% opacity so the survivor can see where they fell. The survivor continues the room solo. If both players are dead the run ends. On the next room, dead players revive at 25% maxHp (or higher if HP boons were picked between rooms) and rejoin normal play. Solo runs are completely unaffected — death still ends the run immediately.'],

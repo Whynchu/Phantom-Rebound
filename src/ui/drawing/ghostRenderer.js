@@ -25,6 +25,11 @@ export function drawGhostSprite(ctx, ts, {
   // C.green/C.ghost behavior unchanged → byte-identical canary.
   // Shape: { hex, light, dark } from PLAYER_COLORS.
   colorScheme = null,
+  // D18.15a — when true, draw the dead-frown arc (mirrors the gameState
+  // 'dying' frown at line 131) without triggering the death pop animation
+  // or the smile-eyes pulse. Used by coop spectator render so dead
+  // partners look sad while still walking around.
+  forceFrown = false,
 } = {}) {
   const p = playerState;
   if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
@@ -129,13 +134,19 @@ export function drawGhostSprite(ctx, ts, {
     ctx.beginPath(); ctx.arc(-5.5, -size * .25 - 2, 1.5, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.arc(5.5, -size * .25 - 2, 1.5, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.arc(0, size * .08, 4.6, Math.PI + .25, Math.PI * 2 - .25); ctx.stroke();
+  } else if (forceFrown) {
+    // D18.15a — coop spectator: dead pose, but still walking. Same frown
+    // arc as the dying branch (downward open arc below the eyes).
+    ctx.strokeStyle = 'rgba(12,20,16,0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(0, size * .08, 4.6, Math.PI + .25, Math.PI * 2 - .25); ctx.stroke();
   } else {
     ctx.fillStyle = greenRgba(0.9);
     ctx.beginPath(); ctx.arc(-4.5, -size * .3 - 2, 1.3, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(4.5, -size * .3 - 2, 1.3, 0, Math.PI * 2); ctx.fill();
   }
 
-  if (chargeFrac > 0.3 && gameState !== 'dying') {
+  if (chargeFrac > 0.3 && gameState !== 'dying' && !forceFrown) {
     ctx.strokeStyle = 'rgba(0,0,0,0.55)';
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(0, -size * .15, 4.5, .65, Math.PI - .65); ctx.stroke();
