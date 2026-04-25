@@ -148,6 +148,7 @@ import {
 } from './src/net/coopSnapshot.js';
 import { createSnapshotApplier } from './src/net/snapshotApplier.js';
 import { createPredictionReconciler } from './src/net/predictionReconciler.js';
+import { createBulletLocalAdvance, PREDICTABLE_STATES as BULLET_PREDICTABLE_STATES } from './src/net/bulletLocalAdvance.js';
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
 import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
 import {
@@ -973,6 +974,13 @@ let onlineHostSlot1Installed = false;
 // Phase D5b — guest-side snapshot applier + slot 1 install.
 let guestSnapshotApplier = null;
 let onlineGuestSlot1Installed = false;
+// D19.1 — guest-side bullet local-advance pool. Maintains a separate pool
+// of `output`/`danger` bullets that's stepped forward each frame at host's
+// 60 Hz cadence (matching the body's predicted clock), then reconciled
+// against snapshots once per shift. `grey` and other states stay on the
+// applier's snapshot-lerp path. Null outside online guest runs.
+let guestBulletLocalAdvance = null;
+let lastBulletReconciledSnapshotSeq = null;
 // Phase D5e — guest-side prediction reconciler. Records local input frames
 // per tick and replays them from authoritative state to compute drift
 // corrections. Null outside online guest runs. Plus a tracker for the
@@ -1218,6 +1226,12 @@ function teardownCoopInputUplink() {
   }
   // Phase D5b: tear down guest-side slot 1 + applier.
   guestSnapshotApplier = null;
+  // D19.1: tear down bullet local-advance pool + seq tracker.
+  if (guestBulletLocalAdvance) {
+    try { guestBulletLocalAdvance.clear(); } catch (_) {}
+  }
+  guestBulletLocalAdvance = null;
+  lastBulletReconciledSnapshotSeq = null;
   // Phase D5e: tear down reconciler + correction tracker.
   guestPredictionReconciler = null;
   lastReconciledSnapshotSeq = null;
@@ -2346,6 +2360,15 @@ function installCoopInputUplink(armedCoop) {
     });
     lastReconciledSnapshotSeq = null;
     try { console.info('[coop] guest prediction reconciler armed'); } catch (_) {}
+    // D19.1 — bullet local-advance pool, guest only. Wall margin & world
+    // bounds match host's bullet bounce constants exactly so reconcile
+    // thresholds reflect real divergence rather than constant offset.
+    guestBulletLocalAdvance = createBulletLocalAdvance({
+      wallMargin: M,
+      getWorldSize: () => ({ w: WORLD_W, h: WORLD_H }),
+    });
+    lastBulletReconciledSnapshotSeq = null;
+    try { console.info('[coop] guest bullet local-advance armed'); } catch (_) {}
   }
   // Ingest any gameplay payload that is an input frame from the peer.
   // coopSession.onGameplay delivers { payload, from, ts } envelopes — we must
@@ -4730,6 +4753,47 @@ function loop(ts){
               lastReconciledSnapshotSeq = snapSeq;
             }
           }
+          // D19.1 — bullet local-advance reconcile. Once per fresh snapshot,
+          // age each authoritative predictable bullet ('output'/'danger')
+          // forward by (simTick - snapshotSimTick) ticks of linear+bounce
+          // motion, then snap/soft-pull/leave the local pool. Despawns any
+          // pool entry whose id no longer appears in the snapshot.
+          if (
+            guestBulletLocalAdvance &&
+            snap &&
+            Number.isFinite(snapSeq) &&
+            snapSeq !== lastBulletReconciledSnapshotSeq
+          ) {
+            try {
+              const snapSimTick = Number.isFinite(snap.snapshotSimTick) ? (snap.snapshotSimTick | 0) : (simTick | 0);
+              const ticksElapsed = (simTick | 0) - snapSimTick;
+              guestBulletLocalAdvance.reconcile(snap.bullets || [], ticksElapsed);
+              lastBulletReconciledSnapshotSeq = snapSeq;
+            } catch (bRecErr) {
+              try { console.warn('[coop] bullet reconcile error', bRecErr); } catch (_) {}
+              lastBulletReconciledSnapshotSeq = snapSeq;
+            }
+          }
+        }
+        // D19.1 — splice the local pool's predicted bullets into the
+        // render-time bullets[] array. The applier just rebuilt the array
+        // with snapshot-lerped entries for ALL bullet states. We strip
+        // out the predictable states and replace them with our locally
+        // advanced versions so they render at sim-time-now (matching the
+        // body) instead of sim-time-now-renderDelayMs.
+        if (guestBulletLocalAdvance) {
+          try {
+            for (let bi = bullets.length - 1; bi >= 0; bi--) {
+              const b = bullets[bi];
+              if (b && b.state && BULLET_PREDICTABLE_STATES.has(b.state)) {
+                bullets.splice(bi, 1);
+              }
+            }
+            const advanced = guestBulletLocalAdvance.getBullets();
+            for (let bi = 0; bi < advanced.length; bi++) bullets.push(advanced[bi]);
+          } catch (spliceErr) {
+            try { console.warn('[coop] bullet splice error', spliceErr); } catch (_) {}
+          }
         }
         // D18.6 — stamp decayStart on grey bullets locally. The wire format
         // does NOT carry decayStart (it's a render-only value on host); the
@@ -4859,6 +4923,15 @@ function update(dt,ts){
     if (onlineGuestSlot1Installed) {
       try { updateOnlineGuestPrediction(dt); } catch (err) {
         try { console.warn('[coop] guest prediction error', err); } catch (_) {}
+      }
+    }
+    // D19.1 — advance the guest's local bullet pool by dt seconds. Runs
+    // every frame so 'output'/'danger' bullets travel on the same clock
+    // as the predicted body, eliminating the body-vs-world misalignment
+    // that made grey/danger contact feel mistimed pre-D19.
+    if (guestBulletLocalAdvance) {
+      try { guestBulletLocalAdvance.advance(dt); } catch (err) {
+        try { console.warn('[coop] bullet advance error', err); } catch (_) {}
       }
     }
     // D18.6 — tick guest-local cosmetics. Without this, particles +
