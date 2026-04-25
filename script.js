@@ -1760,7 +1760,14 @@ function showCoopGameOverScreen(payload) {
     if (nameInput) {
       try { nameInput.value = getLocalRunnerName(); } catch (_) {}
     }
-    setMenuChromeVisible(true);
+    // D18.10b — solo's gameOver path doesn't toggle menu-chrome-visible
+    // (just shows the screen overlay over the live in-game layout). Calling
+    // setMenuChromeVisible(true) here on desktop wide screens activates the
+    // CSS rule that hides #cv and collapses #wrap to the top-hud's height,
+    // leaving the .screen panel inset:0 of that tiny wrap and overflowing
+    // its content downward — which is why the PC end screen looked like
+    // the HUD was painted ON TOP of the breakdown rows. Mobile escapes
+    // because compact-viewport disables the desktop hide-canvas rule.
     panel.classList.remove('off');
   } catch (err) {
     try { console.warn('[coop] showCoopGameOverScreen failed', err); } catch (_) {}
@@ -3315,6 +3322,18 @@ function drawBulletSprite(b, ts) {
   drawBulletSpriteImpl(ctx, b, ts, {
     decayBonus: UPG.decayBonus,
     doubleBouncePalette: getDoubleBounceBulletPalette(),
+    // D18.10b — coop bullet color attribution. Returns null for solo /
+    // host's own bullets (preserves byte-identical canvas output) and the
+    // partner's colorScheme for bullets owned by the remote slot.
+    getOwnerColorScheme: (bullet) => {
+      try {
+        if (!coopPartnerColorKey) return null;
+        if (bullet == null || bullet.ownerId == null) return null;
+        const localIdx = getLocalSlotIndex();
+        if (bullet.ownerId === localIdx) return null;
+        return getColorSchemeForKey(coopPartnerColorKey) || null;
+      } catch (_) { return null; }
+    },
   });
 }
 
@@ -4400,8 +4419,15 @@ function update(dt,ts){
           m.fireT = 0;
           guestLocalFireTBySlotId.set(sl.id, 0);
         } else {
+          // D18.10b — wrap fireT at the SPS interval so the fire-ready ring
+          // visibly cycles 0→1→0 instead of saturating at 1. Without the
+          // modulo, prev+dt grows unbounded, fireProgress clamps at 1, and
+          // the ring on the partner slot looks "fully filled" forever.
+          const sps = (sl.upg && sl.upg.sps) || 0.8;
+          const interval = 1 / Math.max(0.001, sps * 2);
           const prev = guestLocalFireTBySlotId.get(sl.id) || 0;
-          const next = prev + dt;
+          let next = prev + dt;
+          if (next >= interval) next = next % interval;
           guestLocalFireTBySlotId.set(sl.id, next);
           m.fireT = next;
         }

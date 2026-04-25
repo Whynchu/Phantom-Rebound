@@ -2,6 +2,17 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.57',
+      label: 'D18.10b: PC END-SCREEN LAYOUT + RING CYCLING + BULLET COLOR',
+      summary: ['Three playtest follow-ups from D18.10: (1) bullets fired by the partner rendered in the LOCAL player\'s color instead of the partner\'s — both peers saw all bullets in their own palette. (2) The host\'s fire-ready ring on the GUEST device showed a permanent full fill instead of cycling with SPS — guest had no visual cue when the host was about to shoot. (3) The PC coop end screen had the in-run top HUD (ROOM N, PAUSE, score, STORED CHARGE, SPS) painting on top of the breakdown rows in the middle of the panel; iPhone was clean. Desktop was unusable.'],
+      highlights: [
+        'showCoopGameOverScreen no longer calls setMenuChromeVisible(true). On non-compact (desktop) viewports, that call activated CSS rules that hid #cv and collapsed #wrap to top-hud height, leaving .screen (inset:0 of #wrap) bound to a tiny area while content overflowed downward. Solo\'s showGameOverScreen has never called setMenuChromeVisible — it overlays the screen on top of the live in-game layout. Coop now matches.',
+        'Guest\'s local fireT ticker (used to drive the partner\'s fire-ready ring on the guest screen) now wraps modulo the SPS interval (1 / (sps * 2)) instead of accumulating dt unbounded. Previously, when chargeFrac >= 1 the ticker grew forever and fireProgress saturated at 1 — ring stayed full. Now it cycles: filling, firing, refilling, exactly like the host renders it.',
+        'drawBulletSprite gained an optional getOwnerColorScheme dep that resolves the bullet\'s ownerId to a color scheme when the bullet was fired by the remote partner (in coop). Local-owned bullets and solo/host paths default to the existing C.green/C.ghost palette — byte-identical to before. Partner bullets now render in the partner\'s chosen color (matching the body, ring, and aim arrow per D18.7/D18.9).',
+        'Tests: all 24 suites green; determinism canary 11/11 byte-identical (deps default null preserves the C.green/C.ghost path exactly for solo + host slot 0 sim).',
+      ]
+    },
+  {
       version: '1.20.56',
       label: 'D18.10: COOP END-SCREEN BREAKDOWN PARITY',
       summary: ['Playtest screenshots showed the coop end screen looked very different from the solo end screen on the GUEST side: no score breakdown rows, no "X kills · Room N · M:SS" footer. D18.8 had already extended the coop-game-over packet to include breakdown/stats/boonIds and wired renderScoreBreakdown into #s-go-coop, but a guest-side bug in gameOver() was wiping the host-supplied payload before the screen could render it.'],
