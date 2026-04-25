@@ -1104,6 +1104,29 @@ let legendaryRoomsSinceRejection = new Map(); // Track rooms since rejection for
 let roomIndex = 0;
 let roomPhase = 'intro';
 let roomTimer = 0;
+// R0.4 chunk 4 — bridge roomIndex/roomPhase/roomTimer into simState.run via
+// the same getter/setter pattern established in chunk 3 (score/kills). The
+// `let` bindings stay canonical storage so the ~88 bare-identifier read/write
+// sites across script.js need no churn; rollback serialize reads the values
+// off simState.run, restore writes through the setter back into the let.
+Object.defineProperty(simState.run, 'roomIndex', {
+  get() { return roomIndex; },
+  set(v) { roomIndex = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'roomPhase', {
+  get() { return roomPhase; },
+  set(v) { roomPhase = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'roomTimer', {
+  get() { return roomTimer; },
+  set(v) { roomTimer = v; },
+  enumerable: true,
+  configurable: true,
+});
 let runElapsedMs = 0;
 let activeWaveIndex = 0;
 let roomClearTimer = 0;
