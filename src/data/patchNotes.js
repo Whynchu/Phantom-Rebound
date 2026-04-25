@@ -2,6 +2,18 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.44',
+      label: 'COOP PHASE D16.1: UNIFIED ARENA ASPECT (PC + MOBILE)',
+      summary: ['Playtest screenshots showed the PC and iPhone clients rendering wildly different play areas in BOTH solo and coop. The iPhone got the intended tall portrait arena (1.78×W height) while PC was capped at 1.34×W height. Because entity spawn coordinates (busters at top/bottom corners, obstacle layouts, room intro placement) are calibrated to the tall portrait world, on PC the top busters were getting clipped off-screen and the bottom row was bunched against the canvas edge. This shipped as a coop fix but applies to solo too.'],
+      highlights: [
+        'resize(): collapsed BASE_ARENA_ASPECT (1.18) and maxArenaAspect (phone 1.78 / desktop 1.34) into a single ARENA_ASPECT = 1.78 used everywhere. Every device now sees the same tall portrait arena; on shorter desktop windows the canvas shrinks in width to keep the aspect locked rather than squishing height.',
+        'Removed the isPhoneWidth / desktop branch entirely from canvas sizing. The viewport-height path (maxWidthByHeight) handles narrow desktop windows by clamping width down so the locked-aspect height fits available space.',
+        'finalHeight is now simply finalWidth × ARENA_ASPECT — no more max(baseHeight, min(avail, extendedCap)) flattening. The canvas always preserves a consistent aspect, which means coop guest and host see the same world layout regardless of device.',
+        'Side benefit: solo PC players now see the same map proportions as solo iPhone players. Obstacles and busters are no longer cut off or compressed on desktop. Determinism is unaffected (sim is world-coordinate; aspect change is presentation-only).',
+        'Tests: all 23 suites green; determinism canary 11/11 byte-identical. No new tests were added — this is a presentation tweak with no sim impact.',
+      ]
+    },
+  {
       version: '1.20.43',
       label: 'COOP PHASE D12.4: SLOT-1 ROOM-RESET + CHARGE FIX',
       summary: ['Two playtest issues after v1.20.42 shipped: (1) the guest\'s body did not reset to room center between rooms — only host\'s slot 0 was teleported by startRoom(), so slot 1 stayed wherever it was at room-clear and felt "stuck off-spawn" after every boon screen; (2) slot 1 was auto-firing constantly on the host without the guest needing to earn charge through gameplay. Pre-D12.4 updateGuestFire built charge at +1.0/s while the guest was still, but slot 0 has no equivalent free regen — it gains charge only through kinetic movement (moveChargeRate boon) or absorb/hit boons. Slot 1 was effectively cheating.'],
