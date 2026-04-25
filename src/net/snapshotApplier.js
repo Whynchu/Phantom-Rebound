@@ -189,10 +189,20 @@ function applySlot(snapSlot, prevSnapSlot, slot, alpha, opts) {
     // ring on the guest updates at render-rate (60Hz visible) instead of
     // popping at snapshot-rate (~15-20Hz). Without lerp, the ring fills
     // in discrete steps and feels "wrong pace" vs the host's smooth fill.
+    // D18.13 — but snap on big jumps (room resets, boon-applied maxCharge
+    // bumps, damage events that reset charge): without this, prev=80 →
+    // curr=0 lerps through 40,30,20... showing a fake ramp-down between
+    // rooms. Threshold: any single-snapshot delta > 50% of maxCharge is
+    // a discontinuity, not a smooth fill.
     if (prevSnapSlot && Number.isFinite(prevSnapSlot.charge)) {
       const pc = prevSnapSlot.charge || 0;
       const cc = snapSlot.charge || 0;
-      slot.metrics.charge = pc + (cc - pc) * alpha;
+      const maxC = snapSlot.maxCharge || prevSnapSlot.maxCharge || 1;
+      if (Math.abs(cc - pc) > maxC * 0.5) {
+        slot.metrics.charge = cc;
+      } else {
+        slot.metrics.charge = pc + (cc - pc) * alpha;
+      }
     } else {
       slot.metrics.charge = snapSlot.charge || 0;
     }

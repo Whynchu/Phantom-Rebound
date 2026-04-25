@@ -4447,6 +4447,19 @@ function loop(ts){
             } else if (prevRoomPhase === 'intro' && roomPhase !== 'intro') {
               try { hideRoomIntro(); } catch (_) {}
             }
+            // D18.13 — sync the ROOM CLEAR flash overlay on guest. Host
+            // calls finalizeRoomClearState → showRoomClear() inside its
+            // update path (skipped on guest), so without this the guest
+            // never sees the "ROOM CLEAR" message between rooms. Trigger
+            // once on the prevRoomPhase!=='clear' → 'clear' edge. Use the
+            // boss overlay for boss-room indices (9, 19, 29, 39+).
+            if (roomPhase === 'clear' && prevRoomPhase !== 'clear') {
+              try {
+                const isBossRoom = !!(BOSS_ROOMS && BOSS_ROOMS[roomIndex]);
+                if (isBossRoom) showBossDefeated();
+                else showRoomClear();
+              } catch (_) {}
+            }
           }
           if (Number.isFinite(result.score)) score = result.score;
           // Phase D5e — reconciliation. Once per fresh snapshot, compare our

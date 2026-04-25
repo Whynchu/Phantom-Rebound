@@ -352,11 +352,34 @@ function snap(overrides = {}) {
     ],
   }), t, { snapshotRecvAtMs: 100, renderTimeMs: 150 });
   ok('discrete: hp from curr (3, not 4)', t.slotsById[0].metrics.hp === 3);
-  // D18.12 — charge is now LERPED (was discrete pre-D18.12). At alpha=0.5
-  // between prev=0 and curr=80, expect 40. This produces a smooth charge
-  // ring on the guest device at render-rate instead of a stair-step at
-  // snapshot-rate. Test renamed accordingly.
-  ok('lerp: charge halfway (40 between 0 and 80 at alpha=0.5)', t.slotsById[0].metrics.charge === 40);
+  // D18.13 — charge LERPS for small deltas, SNAPS for big deltas (>50% of
+  // maxCharge), preserving smooth fill while preventing fake-ramp glitches
+  // on room resets / boon applications. delta=80 of max=100 = 80% > 50%
+  // threshold, so snap to curr (80).
+  ok('lerp: big-jump snaps to curr (80, not 40)', t.slotsById[0].metrics.charge === 80);
+}
+
+// 19b. D18.13 — charge lerp with a SMALL delta (within 50% of maxCharge)
+//      should interpolate at render-rate.
+{
+  const ap = createSnapshotApplier({ enemyTypeDefs: ENEMY_DEFS, resolveColors: colorResolver, renderDelayMs: 100 });
+  const t = freshTarget();
+  ap.apply(snap({
+    snapshotSeq: 1,
+    slots: [
+      { id: 0, x: 0, y: 0, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 20, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+    ],
+  }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ap.apply(snap({
+    snapshotSeq: 2,
+    slots: [
+      { id: 0, x: 0, y: 0, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 60, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+      { id: 1, x: 0, y: 0, vx: 0, vy: 0, hp: 5, maxHp: 5, charge: 0, maxCharge: 100, aimAngle: 0, invulnT: 0, shieldT: 0, stillTimer: 0, alive: true },
+    ],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 150 });
+  // delta=40 of max=100 = 40% < 50% threshold, so lerp at alpha=0.5
+  ok('lerp: small-delta interpolates (40 between 20 and 60 at alpha=0.5)', t.slotsById[0].metrics.charge === 40);
 }
 
 // 20. predictedSlotId: continuous body writes are skipped for the predicted

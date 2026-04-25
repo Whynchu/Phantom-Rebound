@@ -2,6 +2,16 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.61',
+      label: 'D18.13: GUEST ROOM-CLEAR OVERLAY + CHARGE LERP JUMP-SNAP',
+      summary: ['Two coop guest-side fixes from playtest: (1) the guest never saw the "ROOM CLEAR" or "BOSS DEFEATED" overlay between rooms — only the host did. The host calls showRoomClear() / showBossDefeated() inside its update path (skipped on guest), and the guest\'s snapshot mirror code only synced the room INTRO overlay. (2) The new D18.12 charge lerp blindly interpolated through any prev→curr delta, including discontinuities like room resets and boon-applied charge bumps — playtest reported "weird glitchyness" on the charge ring during the ready/go and end-of-room transitions, which was the lerp showing a fake ramp between two unrelated charge values.'],
+      highlights: [
+        'Guest snapshot mirror now triggers showRoomClear() (or showBossDefeated() for boss-room indices 9/19/29/39+ via the BOSS_ROOMS map) on the prevRoomPhase!=="clear" → "clear" edge. Same wrapper functions the host uses, just driven from the snapshot transition instead of the host\'s finalizeRoomClearState.',
+        'Charge lerp now snaps to curr on big jumps: when |curr - prev| > 50% of maxCharge in a single snapshot, treat it as a discontinuity (room reset, fire-drop on a small maxCharge, boon applied) and skip the lerp. Normal smooth fills (< half maxCharge per snapshot) still lerp at 60Hz visible. Eliminates the visible "ramp through unrelated values" glitch on the charge ring during room transitions.',
+        'Determinism canary 11/11; both fixes are coop-guest-only (host/solo paths never enter snapshot applier or guest-mirror branches).',
+      ]
+    },
+  {
       version: '1.20.60',
       label: 'D18.12b: GUEST FIRE-RING MATCHES SOLO PLAYER\'S SLOW-FILL',
       summary: ['Follow-up to D18.12: the partner\'s fire-ready ring on the guest device was capping at the SPS interval the moment the partner started moving, instead of slowly continuing to fill like the solo player\'s own ring does. Solo advances fireT at dt * mobileChargeRate (~10%) while moving — the ring keeps creeping up gradually until you stop. D18.12\'s gating used full dt and an immediate cap, so the ring on guest looked too eager.'],
