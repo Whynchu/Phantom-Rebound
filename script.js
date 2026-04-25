@@ -4681,25 +4681,32 @@ function update(dt,ts){
           m.fireT = 0;
           guestLocalFireTBySlotId.set(sl.id, 0);
         } else {
-          // D18.12 — match host's fireT logic exactly (script.js:2866-2870):
-          //   fireT += dt
-          //   if (!isStill || noSignal) fireT = min(fireT, interval)  // cap
-          //   if (fireT >= interval && isStill && !noSignal) fireT %= interval
-          // Without this gating, the partner's ring cycles even while they're
-          // moving (host wouldn't actually be firing in that state). isStill
-          // is inferred from snapshot velocity; noSignal from aim.hasTarget.
+          // D18.12 — match solo player's fireT logic (script.js:4933-4947):
+          //   const mobileChargeMult = isStill ? 1.0 : (UPG.mobileChargeRate || 0.10);
+          //   fireT += dt * mobileChargeMult;
+          //   if (!isStill) fireT = min(fireT, interval);  // cap while moving
+          //   if (fireT >= interval && isStill && hasTarget) fireT %= interval;
+          // While moving, the ring still ADVANCES (just at ~10% rate) up to
+          // the interval cap, matching the solo "ring slowly fills while
+          // running" feel. While still + has-target, it wraps and the host
+          // would actually be firing. isStill from snapshot velocity;
+          // hasTarget from snapshot aim.hasTarget.
           const sps = (sl.upg && sl.upg.sps) || 0.8;
           const interval = 1 / Math.max(0.001, sps * 2);
           const body = sl.body || {};
           const speed2 = (body.vx || 0) * (body.vx || 0) + (body.vy || 0) * (body.vy || 0);
-          const isStill = speed2 < 1; // ~1 px/s² threshold
-          const noSignal = !sl.aim || !sl.aim.hasTarget;
+          const isStill = speed2 < 1; // ~1 px/s threshold
+          const hasTarget = !!(sl.aim && sl.aim.hasTarget);
+          const mobileChargeMult = isStill ? 1.0 : ((sl.upg && sl.upg.mobileChargeRate) || 0.10);
           const prev = guestLocalFireTBySlotId.get(sl.id) || 0;
-          let next = prev + dt;
-          if (!isStill || noSignal) {
+          let next = prev + dt * mobileChargeMult;
+          if (!isStill) {
             if (next > interval) next = interval;
-          } else if (next >= interval) {
+          } else if (hasTarget && next >= interval) {
             next = next % interval;
+          } else if (!hasTarget && next > interval) {
+            // still + no target: cap (host wouldn't fire either)
+            next = interval;
           }
           guestLocalFireTBySlotId.set(sl.id, next);
           m.fireT = next;
