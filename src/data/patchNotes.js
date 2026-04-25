@@ -2,6 +2,18 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.41',
+      label: 'COOP PHASE D12.3: INPUT-CHAIN DIAGNOSTICS',
+      summary: ['Playtest after D12.2 surfaced a one-way input bug: host can\'t see guest moving, but guest sees host fine. Snapshots flow host→guest correctly, but guest→host input frames either aren\'t being sent, aren\'t arriving, or aren\'t being consumed by host\'s slot-1 adapter. Without runtime telemetry it\'s impossible to localize the break, so D12.3 ships a no-op-by-default diagnostic mode (`?coopdiag=1`) that logs the entire chain on both peers.'],
+      highlights: [
+        'New URL flag `?coopdiag=1` enables verbose periodic logging (every 2s) of: simTick, gstate, roomPhase, coopInputSync stats (sent/received/pendingLocal/pendingRemote), hostRemoteInputProcessor stats (lastProcessedTick, processedCount, missCount), playerSlots[1] body x/y/vx/vy, slot.input.moveVector() output, and (on guest) joy.active/mag/dx/dy. Comparing the two peers\' logs side-by-side immediately shows where the chain breaks (e.g. guest sent=0 → joystick not capturing; guest sent>0 host received=0 → transport drop; received>0 processed=0 → tick mismatch).',
+        'Per-packet ingest log on `kind:\'input\'` reception: prints role, slot, frame count, first/last tick, first frame still-bit, and current host simTick. Lets us see exactly which guest ticks are arriving and how they line up with the host\'s clock.',
+        'Diagnostic interval is started in `installCoopInputUplink` and cleared in `teardownCoopInputUplink`, so it auto-stops on game over / disconnect / app close. Zero gameplay or determinism impact: the flag only adds console.info calls, no sim mutations.',
+        'No version bump for the test runner: 24 suites still green, determinism 11/11 byte-identical (diagnostics are flag-gated and outside any sim path).',
+        'Players are unaffected unless they explicitly add `?coopdiag=1` to the URL. Production runs see no extra logging.',
+      ]
+    },
+  {
       version: '1.20.40',
       label: 'COOP PHASE D12.2: GUEST UX FIXES',
       summary: ['Post-D12.1 playtest revealed four guest-side bugs that compounded into a "half-broken" feel: the room intro overlay never went away on guest, the host\'s death didn\'t propagate to the guest (game just froze on the last snapshot), the bottom of the arena was clipped on PC browsers when guest viewport had a different aspect from the host, and a stray dev-only blue ring orbited the partner slot. D12.2 fixes all four; per-peer boon picks remains tracked for D15.'],

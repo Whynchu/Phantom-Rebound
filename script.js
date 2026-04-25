@@ -1014,6 +1014,13 @@ function installPlayerSlot0() {
 const COOP_DEBUG = (typeof window !== 'undefined' && window.location)
   ? new URLSearchParams(window.location.search).get('coopdebug') === '1'
   : false;
+// D12.3 — `?coopdiag=1` enables verbose periodic logging of the input/snapshot
+// chain so we can pinpoint where slot-1 movement breaks down. No gameplay
+// effect; safe to leave shipped (it just no-ops when the flag is absent).
+const COOP_DIAG = (typeof window !== 'undefined' && window.location)
+  ? new URLSearchParams(window.location.search).get('coopdiag') === '1'
+  : false;
+let coopDiagInterval = null;
 const guestKeyState = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 let _guestKeysBound = false;
 function bindGuestKeys() {
@@ -1071,6 +1078,7 @@ function installGuestDebugSlot() {
 //        createHostInputAdapter(joy) instance slot 0 uses, because on guest
 //        the joystick IS the player-1 input.
 function teardownCoopInputUplink() {
+  stopCoopDiagnostics();
   if (coopInputUnsubscribe) {
     try { coopInputUnsubscribe(); } catch (_) {}
     coopInputUnsubscribe = null;
@@ -1300,6 +1308,21 @@ function installCoopInputUplink(armedCoop) {
     const payload = ev && ev.payload;
     if (!payload) return;
     if (payload.kind === 'input') {
+      if (COOP_DIAG) {
+        try {
+          const f = payload.frames && payload.frames[0];
+          const last = payload.frames && payload.frames[payload.frames.length - 1];
+          console.info('[coopdiag] ingest', {
+            role,
+            slot: payload.slot,
+            count: payload.frames ? payload.frames.length : 0,
+            firstTick: f && f.tick,
+            lastTick: last && last.tick,
+            firstStill: f && f.still,
+            simTick,
+          });
+        } catch (_) {}
+      }
       try { coopInputSync && coopInputSync.ingest(payload); } catch (err) {
         try { console.warn('[coop] input ingest error', err); } catch (_) {}
       }
@@ -1364,6 +1387,47 @@ function installCoopInputUplink(armedCoop) {
     }
   });
   try { console.info('[coop] input uplink installed role=' + role + ' slot=' + localSlotIndex); } catch (_) {}
+  if (COOP_DIAG) startCoopDiagnostics(role);
+}
+
+function startCoopDiagnostics(role) {
+  stopCoopDiagnostics();
+  try { console.info('[coopdiag] starting role=' + role + ' simTick=' + simTick); } catch (_) {}
+  coopDiagInterval = setInterval(() => {
+    try {
+      const stats = coopInputSync ? coopInputSync.getStats() : null;
+      const rp = (typeof hostRemoteInputProcessor !== 'undefined' && hostRemoteInputProcessor)
+        ? hostRemoteInputProcessor.getStats() : null;
+      const slot1 = playerSlots[1] || null;
+      const body = slot1 && slot1.body;
+      const mv = (slot1 && slot1.input && typeof slot1.input.moveVector === 'function')
+        ? slot1.input.moveVector() : null;
+      const joySnap = role === 'guest'
+        ? { active: !!joy.active, mag: +(joy.mag || 0).toFixed(2), dx: +(joy.dx || 0).toFixed(2), dy: +(joy.dy || 0).toFixed(2) }
+        : null;
+      console.info('[coopdiag]', {
+        role,
+        simTick,
+        gstate,
+        roomPhase,
+        sync: stats,
+        proc: rp,
+        slot1: body ? { x: +body.x.toFixed(1), y: +body.y.toFixed(1), vx: +(body.vx || 0).toFixed(1), vy: +(body.vy || 0).toFixed(1) } : null,
+        slot1Move: mv,
+        joy: joySnap,
+        session: !!activeCoopSession,
+      });
+    } catch (err) {
+      try { console.warn('[coopdiag] error', err); } catch (_) {}
+    }
+  }, 2000);
+}
+
+function stopCoopDiagnostics() {
+  if (coopDiagInterval) {
+    try { clearInterval(coopDiagInterval); } catch (_) {}
+    coopDiagInterval = null;
+  }
 }
 
 // Phase D4: builds the loose state object passed into encodeSnapshot.
