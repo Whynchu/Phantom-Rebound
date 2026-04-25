@@ -903,6 +903,18 @@ Object.defineProperty(simState.run, 'kills', {
   configurable: true,
 });
 simState.run.scoreBreakdown = scoreBreakdown;
+// R0.4 chunk 5 — bullets[] and enemies[] arrays. Both are imported from
+// gameState.js and never reassigned (only mutated via push/splice/length=0).
+// Identical handling to scoreBreakdown: point simState.bullets and
+// simState.enemies at the same array refs so mutations on either side are
+// visible to both. JSON.stringify(simState) and structuredClone(simState) will
+// deep-copy the elements through these refs, which is what R1 serialize needs.
+// Restore semantics: rollback writes back element-by-element using
+// `simState.bullets.length = 0; simState.bullets.push(...snapshotBullets)`
+// to preserve the shared identity — never reassign simState.bullets, that
+// would orphan gameState.js's binding.
+simState.bullets = bullets;
+simState.enemies = enemies;
 let playerName = 'RUNNER';
 let leaderboard = [];
 let lbPeriod = 'daily';
