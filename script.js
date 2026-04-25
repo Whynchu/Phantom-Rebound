@@ -986,9 +986,25 @@ let lastReconciledSnapshotSeq = null;
 // below this are ignored (small numerical noise). SOFT_FACTOR: fraction of
 // error closed per snapshot inside the soft band (10 Hz cadence → ~3-5
 // snapshots to fully converge on a typical drift).
+//
+// D18.16 — widened the dead-zone substantially. The reconciler's replay
+// is collision-free Euler (no obstacle resolves), but the predicted body
+// IS resolved against obstacles every tick. When the player walks into a
+// wall, replay says "you should be 30 px past the wall" while the body
+// is clamped at the wall edge — a tight 1.5 px dead-zone made the soft
+// pull jam the body into the wall every snapshot, producing visible
+// vibration / "sloppy" feel. 10 px dead-zone is invisible to players,
+// kills wall-wedge tug-of-war, and still corrects real drift inside ~5
+// snapshots. Soft factor reduced from 0.35 to 0.18 so the pull is half
+// as aggressive — the body slides smoothly to truth instead of snapping.
 const RECONCILE_HARD_SNAP_PX = 96;
-const RECONCILE_SOFT_DEAD_ZONE_PX = 1.5;
-const RECONCILE_SOFT_FACTOR = 0.35;
+const RECONCILE_SOFT_DEAD_ZONE_PX = 10;
+const RECONCILE_SOFT_FACTOR = 0.18;
+// D18.16 — track whether the last prediction tick was collision-clamped.
+// updateOnlineGuestPrediction sets this when actual travel < 60% of
+// expected; the reconciler skips the soft pull while true so we don't
+// yank the body into the obstacle the host's replay didn't see.
+let lastGuestPredictionWedged = false;
 // Fixed-step accumulator (Phase C1b). Sim runs at a deterministic
 // 60 Hz cadence regardless of display refresh rate. On fast displays
 // we may run 0-1 sim steps per rAF; on slow displays we catch up by
@@ -2804,9 +2820,27 @@ function updateOnlineGuestPrediction(dt) {
   const SPD = 165 * GLOBAL_SPEED_LIFT;
   if (active) { body.vx = dx * SPD * t; body.vy = dy * SPD * t; }
   else { body.vx = 0; body.vy = 0; }
-  body.x = Math.max(M + body.r, Math.min(WORLD_W - M - body.r, body.x + body.vx * dt));
-  body.y = Math.max(M + body.r, Math.min(WORLD_H - M - body.r, body.y + body.vy * dt));
+  // D18.16 — measure expected vs actual travel to detect obstacle wedge.
+  // The reconciler's replay is collision-free, so when we're pinned
+  // against a wall the auth-replay position diverges by tens of pixels
+  // and the soft-correction would jam us into the wall every snapshot.
+  // We compare actual position delta after clamping + collision resolve
+  // to the unclamped step; if the body actually moved less than 60% of
+  // what input demanded, we mark wedged and the reconciler short-circuits.
+  const beforeX = body.x;
+  const beforeY = body.y;
+  const expectDx = body.vx * dt;
+  const expectDy = body.vy * dt;
+  body.x = Math.max(M + body.r, Math.min(WORLD_W - M - body.r, body.x + expectDx));
+  body.y = Math.max(M + body.r, Math.min(WORLD_H - M - body.r, body.y + expectDy));
   resolveEntityObstacleCollisions(body);
+  const expectMag = Math.hypot(expectDx, expectDy);
+  if (expectMag > 0.5) {
+    const actualMag = Math.hypot(body.x - beforeX, body.y - beforeY);
+    lastGuestPredictionWedged = actualMag < expectMag * 0.6;
+  } else {
+    lastGuestPredictionWedged = false;
+  }
 }
 
 
@@ -4665,9 +4699,19 @@ function loop(ts){
                     const ey = corrected.y - body.y;
                     const errMag = Math.hypot(ex, ey);
                     if (errMag >= RECONCILE_HARD_SNAP_PX) {
+                      // Hard snap always fires — large drift means
+                      // prediction is genuinely unrecoverable (input
+                      // dropped, host re-anchored, etc.) and a wedge
+                      // can't account for >96 px error.
                       body.x = corrected.x;
                       body.y = corrected.y;
-                    } else if (errMag > RECONCILE_SOFT_DEAD_ZONE_PX) {
+                    } else if (errMag > RECONCILE_SOFT_DEAD_ZONE_PX && !lastGuestPredictionWedged) {
+                      // D18.16 — skip soft pull when the predicted body
+                      // is clamped against an obstacle. Replay has no
+                      // collisions so the auth target sits inside/past
+                      // the wall; pulling toward it would re-jam every
+                      // snapshot. Next tick where input clears the wall
+                      // contact, drift converges normally.
                       body.x += ex * RECONCILE_SOFT_FACTOR;
                       body.y += ey * RECONCILE_SOFT_FACTOR;
                     }

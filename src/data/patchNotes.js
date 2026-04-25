@@ -2,6 +2,16 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.66',
+      label: 'D18.16: GUEST PREDICTION TIGHTENED',
+      summary: ['Coop guests reported their character felt "sloppy" / "not locked-in" on their own device, even when network latency to the host was clearly fast (controlling the guest device while watching the host\'s screen showed instant input response — confirming network was fine, render was wrong). Root cause: the prediction reconciler was fighting itself near walls. Three tuning fixes that should make guest movement feel close to host-quality.'],
+      highlights: [
+        'Wall-wedge no-pull: the reconciler\'s replay path is a collision-free Euler integration (it doesn\'t know about obstacles), but the actual predicted body resolves obstacle collisions every tick. Walking into a wall meant the auth-replay target sat 30+ px past the wall while the body was clamped at the wall edge — and the soft-correction pulled the body INTO the wall every snapshot, where the collision resolver bounced it back. Constant tug-of-war = visible vibration. updateOnlineGuestPrediction now compares actual travel to expected travel; if the body moved less than 60% of what input demanded (i.e. it\'s clamped against geometry), a wedge flag is set and the reconciler skips the soft pull until the next clear tick. Hard snap (>96 px) still fires for genuine large-drift recoveries.',
+        'Wider dead-zone: RECONCILE_SOFT_DEAD_ZONE_PX raised from 1.5 to 10. Sub-pixel-to-few-pixel drift between predicted and authoritative is normal noise from input-ack timing (the host samples auth state at simTick T while the guest predicts at simTick T+jitter); pulling against 2-3 px drift produced micro-stutters with no visual benefit. 10 px is invisible to the player but kills constant-correction churn.',
+        'Softer pull: RECONCILE_SOFT_FACTOR reduced from 0.35 to 0.18. With ~15 Hz snapshots, the body now closes ~50% of remaining drift in ~3 snapshots (~200 ms) instead of ~80% — slower convergence on real drift, but the per-snapshot pull is half as aggressive so the body slides smoothly toward truth instead of stepping. Determinism canary 11/11 byte-identical (no solo paths touched); 24 test suites pass.',
+      ]
+    },
+  {
       version: '1.20.65',
       label: 'D18.15b: SPECTATOR HP/FROWN/FADE FIXES',
       summary: ['Three playtest bugs on the dead-but-walking spectator from D18.15a. (1) On the guest\'s own device, their character did not fade out when they died — they stayed at full alpha and just strobed. (2) Their HP bar was redrawn full while dead. (3) The frown arc was drawn at almost the same Y as the eyes, reading more like a second pair of squinted eyes than a sad mouth. All three were render-only mistakes; nothing about authority/sim/protocol changed.'],
