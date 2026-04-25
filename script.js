@@ -1781,7 +1781,9 @@ function enterOnlineCoopBoonPhaseHost() {
       // the tag distribution is heavily skewed (mostly UTILITY/OFFENSE).
       const shuffled = safePool.slice();
       for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = (Math.random() * (i + 1)) | 0;
+        // R0.2 — was Math.random(); slot-1 boon roster must be deterministic
+        // for rollback (host AND guest must produce the same shuffle).
+        const j = (simRng.next() * (i + 1)) | 0;
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
       slot1BoonIds = shuffled.slice(0, 3).map(boonIdFromBoon).filter((id) => id >= 0);
@@ -1810,7 +1812,9 @@ function enterOnlineCoopBoonPhaseHost() {
   if (slot1BoonIds.length > 0) {
     coopBoonAfkTimer = setTimeout(() => {
       if (pendingCoopBoonPicks.guestDone) return;
-      const pickIdx = Math.floor(Math.random() * slot1BoonIds.length);
+      // R0.2 — was Math.random(); auto-pick must be deterministic so a
+      // recorded run replays through the same fallback boon at the same tick.
+      const pickIdx = Math.floor(simRng.next() * slot1BoonIds.length);
       const fallbackId = slot1BoonIds[pickIdx];
       try { console.warn('[coop] guest AFK on boon pick — auto-resolving slot 1 with random pick', { pickIdx, fallbackId }); } catch (_) {}
       const boon = boonFromId(fallbackId);
@@ -1867,7 +1871,9 @@ function handleCoopBoonStartGuest(payload) {
           });
           const shuffled = safePool.slice();
           for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = (Math.random() * (i + 1)) | 0;
+            // R0.2 — was Math.random(); guest reroll shuffle must be
+            // deterministic for rollback parity.
+            const j = (simRng.next() * (i + 1)) | 0;
             [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
           }
           return shuffled.slice(0, 3);
