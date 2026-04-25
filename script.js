@@ -915,6 +915,46 @@ simState.run.scoreBreakdown = scoreBreakdown;
 // would orphan gameState.js's binding.
 simState.bullets = bullets;
 simState.enemies = enemies;
+// R0.4 chunk 6 — slot 0 body + metrics scalars. Bridge simState.slots[0].body
+// to the legacy `let player` (reassigned at run init via createInitialPlayerState),
+// and simState.slots[0].metrics.{hp,maxHp,charge,fireT,stillTimer,prevStill}
+// to the legacy module-level lets. Same getter/setter pattern as score/kills
+// (chunk 3) and roomIndex (chunk 4). Player aim scalars also bridged for
+// completeness — they're written from input/aim resolution every frame and
+// must roll back. The existing playerSlots[0] abstraction (src/core/playerSlot.js)
+// is a parallel surface that already getters into the same legacy lets — both
+// surfaces stay in sync because they both delegate to the singleton storage.
+Object.defineProperty(simState.slots[0], 'body', {
+  get() { return player; },
+  set(v) { player = v; },
+  enumerable: true,
+  configurable: true,
+});
+const _slot0Metrics = simState.slots[0].metrics;
+Object.defineProperty(_slot0Metrics, 'hp', {
+  get() { return hp; }, set(v) { hp = v; }, enumerable: true, configurable: true,
+});
+Object.defineProperty(_slot0Metrics, 'maxHp', {
+  get() { return maxHp; }, set(v) { maxHp = v; }, enumerable: true, configurable: true,
+});
+Object.defineProperty(_slot0Metrics, 'charge', {
+  get() { return charge; }, set(v) { charge = v; }, enumerable: true, configurable: true,
+});
+Object.defineProperty(_slot0Metrics, 'fireT', {
+  get() { return fireT; }, set(v) { fireT = v; }, enumerable: true, configurable: true,
+});
+Object.defineProperty(_slot0Metrics, 'stillTimer', {
+  get() { return stillTimer; }, set(v) { stillTimer = v; }, enumerable: true, configurable: true,
+});
+Object.defineProperty(_slot0Metrics, 'prevStill', {
+  get() { return prevStill; }, set(v) { prevStill = v; }, enumerable: true, configurable: true,
+});
+Object.defineProperty(_slot0Metrics, 'aimAngle', {
+  get() { return playerAimAngle; }, set(v) { playerAimAngle = v; }, enumerable: true, configurable: true,
+});
+Object.defineProperty(_slot0Metrics, 'aimHasTarget', {
+  get() { return playerAimHasTarget; }, set(v) { playerAimHasTarget = v; }, enumerable: true, configurable: true,
+});
 let playerName = 'RUNNER';
 let leaderboard = [];
 let lbPeriod = 'daily';
