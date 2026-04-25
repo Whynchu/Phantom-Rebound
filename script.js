@@ -114,6 +114,7 @@ import { renderPatchNotesPanel } from './src/ui/patchNotes.js';
 import { createPanelManager } from './src/ui/panelManager.js';
 import { createPauseController } from './src/ui/pauseController.js';
 import { simRng, parseSeedParam } from './src/systems/seededRng.js';
+import { createSimState } from './src/sim/simState.js';
 import { showGameOverScreen, renderScoreBreakdown } from './src/ui/gameOver.js';
 import { bullets, enemies, shockwaves, spawnQueue, scoreBreakdown, resetScoreBreakdown } from './src/core/gameState.js';
 import { runBoonHook } from './src/systems/boonHooks.js';
@@ -870,7 +871,12 @@ const KILL_SUSTAIN_CAP_CONFIG = {
 };
 const BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET = 1;
 const BLOOD_PACT_BLOOD_MOON_BONUS_CAP = 1;
-let enemyIdSeq = 1;
+// R0.4 chunk 1 — nextEnemyId is the first field migrated from scattered
+// module-level state into the SimState shape defined in src/sim/simState.js.
+// The simState instance is created with placeholder world dims and slot count;
+// remaining fields (bullets, enemies, slot bodies, world.obstacles, etc.) will
+// be migrated in subsequent versions following the map in src/sim/simState.js.
+let simState = createSimState({ seed: 1, worldW: 0, worldH: 0, slotCount: 1 });
 let playerName = 'RUNNER';
 let leaderboard = [];
 let lbPeriod = 'daily';
@@ -3723,7 +3729,7 @@ function spawnEnemy(type, isBoss = false, bossScale = 1) {
     height: WORLD_H,
     margin: M,
     roomIndex,
-    nextEnemyId: enemyIdSeq++,
+    nextEnemyId: simState.nextEnemyId++,
     isBoss,
     bossScale,
   });
@@ -4673,7 +4679,7 @@ function init() {
   damagelessRooms = runMetrics.damagelessRooms;
   tookDamageThisRoom = runMetrics.tookDamageThisRoom;
   lastStallSpawnAt = runMetrics.lastStallSpawnAt;
-  enemyIdSeq = runMetrics.enemyIdSeq;
+  simState.nextEnemyId = runMetrics.enemyIdSeq;
   resetBulletIds();
   currentRunId = generateRunId();
   bossClears = runMetrics.bossClears;
