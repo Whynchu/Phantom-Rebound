@@ -2,6 +2,15 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.55',
+      label: 'D18.9: PARTNER AIM RETICLE USES PARTNER COLOR',
+      summary: ['Playtest gap from the D18.7 color-sync work: drawGuestSlots was already passing the partner\'s colorScheme to drawGhostSprite (so the body, glow, charge ring, and HP bar render in the partner\'s color), but the aim reticle triangle drawn just below the sprite still hardcoded C.getRgba(C.green, 0.6) — the LOCAL player\'s color. Result: host saw the guest body in the guest\'s color but the guest\'s aim arrow in the host\'s color (and vice versa). The arrow should match the slot it belongs to.'],
+      highlights: [
+        'drawGuestSlots aim-arrow fillStyle now resolves the partner\'s hex via getColorSchemeForKey(coopPartnerColorKey) and falls back to C.green when the coop-color handshake hasn\'t landed yet (or in COOP_DEBUG split-screen where there\'s no remote partner). Local player\'s own aim arrow (drawn by the host slot-0 path) is unchanged — uses C.green which is already the local player\'s color.',
+        'Tests: all 24 suites green; determinism canary 11/11 byte-identical (render-only change, partner color path is online-coop only).',
+      ]
+    },
+  {
       version: '1.20.54',
       label: 'D18.8: COOP END-SCREEN PARITY + WAITING-FOR-PARTNER OVERLAY',
       summary: ['Two playtest gaps: (1) the coop end-of-run panel (#s-go-coop) had only score + roster + room number — no breakdown, no "Run Boons" review, no Leaderboards button — making it feel sparse compared to the solo end panel. Players wanted feature parity with the solo s-go screen. (2) Between boon picks, when the host picked a boon before the guest, the host\'s screen reverted to a frozen frame with no "WAITING FOR PARTNER…" indicator — the wait overlay was guest-only. The guest already showed an overlay when waiting on host, but host saw nothing.'],

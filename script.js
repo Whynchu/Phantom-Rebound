@@ -2742,7 +2742,12 @@ function drawGuestSlots(ts) {
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(aim.angle);
-      ctx.fillStyle = C.getRgba(C.green, 0.6);
+      // D18.9 — partner's aim reticle is the partner's color, not ours.
+      // Falls through to local C.green when the coop-color handshake hasn't
+      // landed yet (and for solo COOP_DEBUG split-screen, where there's no
+      // partner color anyway).
+      const partnerHex = coopPartnerColorKey ? getColorSchemeForKey(coopPartnerColorKey)?.hex : null;
+      ctx.fillStyle = partnerHex ? C.getRgba(partnerHex, 0.6) : C.getRgba(C.green, 0.6);
       ctx.beginPath();
       ctx.moveTo((triH * 2) / 3, 0);
       ctx.lineTo(-(triH / 3), AIM_TRI_SIDE / 2);
