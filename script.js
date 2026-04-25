@@ -5394,7 +5394,22 @@ function draw(ts){
 
   // Ghost player sprite
   // Payload-ready ring indicator (drawn before ghost so ghost is on top)
-  if(UPG.payload && payloadCooldownMs <= 0){
+  // D18.2 — source position + UPG/aim/invuln from the local render slot.
+  // On host/solo this collapses to slot 0 (player + UPG + playerAim*) so
+  // the determinism canary is unaffected. On the online guest, localIdx is
+  // 1, so the ring + blink + aim triangle now anchor to the GUEST's own
+  // body using the GUEST's predicted aim instead of the host's slot-0
+  // globals (which on a guest reflect the host, not the local player).
+  const localRenderSlot = getLocalRenderSlot();
+  const localBody = (localRenderSlot && localRenderSlot.body) || player;
+  const localUpg = (localRenderSlot && localRenderSlot.upg) || UPG;
+  const localAim = (localRenderSlot && localRenderSlot.aim) || null;
+  const localAimAngle = localAim ? (localAim.angle || 0) : playerAimAngle;
+  const localAimHasTarget = localAim ? !!localAim.hasTarget : playerAimHasTarget;
+  const localPayloadCooldown = (localRenderSlot && localRenderSlot.metrics && Number.isFinite(localRenderSlot.metrics.payloadCooldownMs))
+    ? localRenderSlot.metrics.payloadCooldownMs
+    : payloadCooldownMs;
+  if(localUpg.payload && localPayloadCooldown <= 0){
     const hex = getPlayerColorScheme().hex;
     const rr = parseInt(hex.slice(1,3),16), gg = parseInt(hex.slice(3,5),16), bb = parseInt(hex.slice(5,7),16);
     const compR = 255 - rr, compG = 255 - gg, compB = 255 - bb;
@@ -5404,22 +5419,22 @@ function draw(ts){
     ctx.strokeStyle = `rgb(${compR},${compG},${compB})`;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(player.x, player.y, player.r + 6, 0, Math.PI * 2);
+    ctx.arc(localBody.x, localBody.y, localBody.r + 6, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
-  const show=player.invincible<=0||Math.floor(ts/90)%2===0;
+  const show=(localBody.invincible || 0)<=0||Math.floor(ts/90)%2===0;
   if(show){ drawGhost(ts); }
   drawGuestSlots(ts);
-  if(show && playerAimHasTarget){
+  if(show && localAimHasTarget){
     const drift = Math.sin(ts * 0.01) * 0.8;
-    const dist = player.r + AIM_ARROW_OFFSET + drift;
-    const cx = player.x + Math.cos(playerAimAngle) * dist;
-    const cy = player.y + Math.sin(playerAimAngle) * dist;
+    const dist = localBody.r + AIM_ARROW_OFFSET + drift;
+    const cx = localBody.x + Math.cos(localAimAngle) * dist;
+    const cy = localBody.y + Math.sin(localAimAngle) * dist;
     const triH = AIM_TRI_SIDE * 0.8660254;
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(playerAimAngle);
+    ctx.rotate(localAimAngle);
     ctx.fillStyle = C.getRgba(C.green, 0.6);
     ctx.beginPath();
     ctx.moveTo((triH * 2) / 3, 0);

@@ -2,6 +2,18 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.49',
+      label: 'D18.2: GUEST LOCAL-SLOT AIM TRIANGLE + INVULN BLINK FROM LOCAL DATA',
+      summary: ['Bug: on the online guest, the player blink, payload-ring indicator, and aim triangle were all sourced from slot-0 globals (player.x/y, player.invincible, playerAimAngle, playerAimHasTarget). On a guest, slot 0 is the HOST, so the guest saw the host\'s aim arrow anchored to the host\'s body — never their own. The body blink was also gated on the host\'s invuln, so it would flicker when the host was hit instead of when the guest was hit.'],
+      highlights: [
+        'Refactored the player-render block in draw() to source position, UPG, aim, and invuln from getLocalRenderSlot() instead of slot-0 globals. Solo/host paths are unchanged: slot 0 bridges to the legacy globals via getters/setters, so the determinism canary remains byte-identical (verified 11/11 + all 24 suites green).',
+        'Guest now sees their own aim triangle anchored to their own body, using their own slot.aim.angle/hasTarget (already wired via D13.4 snapshot fields), and blinks based on their own invincibility timer.',
+        'Payload-ring indicator now uses the local slot\'s body/UPG with a graceful fallback to the global payloadCooldownMs when slot.metrics doesn\'t track it (host slot 0 keeps the global path → byte-identical).',
+        'Foundation for the rest of D18 (HUD parity for charge ring, hp bar, etc.) — same routing pattern can be applied as needed.',
+        'Tests: all 24 suites green; determinism canary 11/11.',
+      ]
+    },
+  {
       version: '1.20.48',
       label: 'D18.5: PAUSE-FROM-BOON MENU EXIT + BUTTON-STATE LEAK FIX',
       summary: ['Bug: pausing during the upgrade/boon-pick screen and clicking "Main Menu" appeared to do nothing — the s-up boon picker stayed visible over the start screen. Then any subsequent boon click reanimated the in-run UI: pause button replaced the patch-notes button on the menu and the RAF sim restarted behind the chrome.'],
