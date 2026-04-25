@@ -150,6 +150,7 @@ import { createSnapshotApplier } from './src/net/snapshotApplier.js';
 import { createPredictionReconciler } from './src/net/predictionReconciler.js';
 import { createBulletLocalAdvance, PREDICTABLE_STATES as BULLET_PREDICTABLE_STATES } from './src/net/bulletLocalAdvance.js';
 import { createGreyLagComp } from './src/net/greyLagComp.js';
+import { createBulletSpawnDetector } from './src/net/bulletSpawnDetector.js';
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
 import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
 import {
@@ -990,6 +991,12 @@ let lastBulletReconciledSnapshotSeq = null;
 // snapshot-delayed view of the grey lines up with where it counted as
 // "touched." Null on solo and on guest devices.
 let hostGreyLagComp = null;
+// D19.4 — guest-side bullet spawn detector. Tracks every bullet id observed
+// in a snapshot so we can pop a small muzzle flash the first time a given
+// id appears (host shots, enemy shots, charge orbs). Without this, bullets
+// teleport into existence at their ~70 ms snapshot-delayed position with no
+// spawn cue, looking like they came out of thin air. Null on solo and host.
+let guestBulletSpawnDetector = null;
 // Phase D5e — guest-side prediction reconciler. Records local input frames
 // per tick and replays them from authoritative state to compute drift
 // corrections. Null outside online guest runs. Plus a tracker for the
@@ -1241,6 +1248,11 @@ function teardownCoopInputUplink() {
   }
   guestBulletLocalAdvance = null;
   lastBulletReconciledSnapshotSeq = null;
+  // D19.4: tear down guest spawn detector.
+  if (guestBulletSpawnDetector) {
+    try { guestBulletSpawnDetector.clear(); } catch (_) {}
+  }
+  guestBulletSpawnDetector = null;
   // D19.3: tear down host grey lag-comp tracker.
   if (hostGreyLagComp) {
     try { hostGreyLagComp.clear(); } catch (_) {}
@@ -2383,6 +2395,9 @@ function installCoopInputUplink(armedCoop) {
     });
     lastBulletReconciledSnapshotSeq = null;
     try { console.info('[coop] guest bullet local-advance armed'); } catch (_) {}
+    // D19.4 — bullet spawn detector for any-owner muzzle flashes.
+    guestBulletSpawnDetector = createBulletSpawnDetector({});
+    try { console.info('[coop] guest bullet spawn detector armed'); } catch (_) {}
   }
   // Ingest any gameplay payload that is an input frame from the peer.
   // coopSession.onGameplay delivers { payload, from, ts } envelopes — we must
@@ -2617,6 +2632,28 @@ function collectHostSnapshotState() {
     const shieldT = (Array.isArray(bodyOrSlot.shields) && bodyOrSlot.shields.length > 0)
       ? Number(bodyOrSlot.shields[0].t || bodyOrSlot.shields[0].timer || 0)
       : 0;
+    // D19.5 — pack shield count + per-shield hardened/cooldown bitmasks so
+    // the partner's screen can render the orbiting shields. body.shields
+    // entries have shape { cooldown, hardened, mirrorCooldown }. Mask
+    // capped at 8 bits → up to 8 shields visible on partner; legendary
+    // tiers max out at ~5 so this is plenty. Slot 1 host-side typically
+    // has no shields array (boon mechanics live on slot 0 in v1) → both
+    // counts default to 0 cleanly.
+    let shieldCount = 0;
+    let shieldHardenedMask = 0;
+    let shieldCooldownMask = 0;
+    if (Array.isArray(bodyOrSlot.shields) && bodyOrSlot.shields.length > 0) {
+      const sh = bodyOrSlot.shields;
+      shieldCount = Math.min(8, sh.length);
+      for (let si = 0; si < shieldCount; si++) {
+        if (sh[si] && sh[si].hardened) shieldHardenedMask |= (1 << si);
+        if (sh[si] && (sh[si].cooldown | 0) > 0) shieldCooldownMask |= (1 << si);
+      }
+    }
+    // D19.5 — pack orbit-sphere count from the slot's own UPG. Per-orb
+    // cooldown isn't synced (host module-level _orbCooldown is slot-0 only;
+    // partner doesn't fire orbs anyway in v1). Render uses full opacity.
+    const orbCount = Math.min(8, (upg.orbitSphereTier | 0) || 0);
     slotsOut.push({
       id: s.id ?? i,
       x: bodyOrSlot.x ?? 0,
@@ -2646,6 +2683,11 @@ function collectHostSnapshotState() {
       // partner renders the dead player translucent + frowning while they
       // walk around. hp=0 on the wire so enemy targeting still skips them.
       spectating: !!bodyOrSlot.coopSpectating,
+      // D19.5 — partner cosmetic sync (shields + orbs).
+      shieldCount,
+      shieldHardenedMask,
+      shieldCooldownMask,
+      orbCount,
     });
   }
   const bulletsOut = [];
@@ -3228,6 +3270,73 @@ function drawGuestSlots(ts) {
       colorScheme: coopPartnerColorKey ? getColorSchemeForKey(coopPartnerColorKey) : null,
     });
     if (isSpectator) continue;
+    // D19.5 — partner cosmetic sync: orbiting shields. Reads counts/masks
+    // off body.coopShield* (populated by snapshotApplier from the wire).
+    // Mirrors the local shield draw routine (script.js:6527+) but uses
+    // the partner's body and a single canonical hardened/cooldown bit per
+    // shield slot. We don't have the precise cooldown timer for the
+    // partial-fill regen animation, so cooldown shields just dim — close
+    // enough; the partner's shield mechanic is host-arbitrated regardless.
+    const pShieldCount = body ? (body.coopShieldCount | 0) : 0;
+    if (pShieldCount > 0 && body) {
+      const hardenedMask = body.coopShieldHardenedMask | 0;
+      const cooldownMask = body.coopShieldCooldownMask | 0;
+      for (let si = 0; si < pShieldCount; si++) {
+        const sAngle = Math.PI * 2 / pShieldCount * si + simNowMs * SHIELD_ROTATION_SPD;
+        const sx = body.x + Math.cos(sAngle) * SHIELD_ORBIT_R;
+        const sy = body.y + Math.sin(sAngle) * SHIELD_ORBIT_R;
+        const onCooldown = !!(cooldownMask & (1 << si));
+        const isHardened = !!(hardenedMask & (1 << si));
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(sAngle + Math.PI * 0.5);
+        if (onCooldown) {
+          ctx.globalAlpha = 0.3;
+          ctx.strokeStyle = C.shieldActive;
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(-SHIELD_HALF_W, -SHIELD_HALF_H, SHIELD_HALF_W * 2, SHIELD_HALF_H * 2);
+        } else {
+          const shieldCol = isHardened ? C.shieldEnhanced : C.shieldActive;
+          ctx.shadowColor = shieldCol;
+          ctx.shadowBlur = 14;
+          ctx.strokeStyle = shieldCol;
+          ctx.lineWidth = 2;
+          ctx.globalAlpha = 0.9;
+          ctx.strokeRect(-SHIELD_HALF_W, -SHIELD_HALF_H, SHIELD_HALF_W * 2, SHIELD_HALF_H * 2);
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = isHardened ? C.getShieldEnhancedRgba(0.18) : C.getShieldActiveRgba(0.18);
+          ctx.fillRect(-SHIELD_HALF_W, -SHIELD_HALF_H, SHIELD_HALF_W * 2, SHIELD_HALF_H * 2);
+        }
+        ctx.restore();
+      }
+    }
+    // D19.5 — partner orb spheres. Use partner color (coopPartnerColorKey)
+    // so the host's green orbs and the guest's color orbs visually distinct.
+    // No per-orb cooldown over the wire (host-only state) → all rendered
+    // at full opacity; close enough since orbs fire rarely and the partner
+    // can't predict the fire-cycle anyway.
+    const pOrbCount = body ? (body.coopOrbCount | 0) : 0;
+    if (pOrbCount > 0 && body) {
+      const partnerHexLocal = coopPartnerColorKey ? getColorSchemeForKey(coopPartnerColorKey)?.hex : null;
+      const orbCol = partnerHexLocal || C.green;
+      const orbR = ORBIT_SPHERE_R; // partner doesn't sync radiusBonus; use base
+      const orbVis = 5;            // partner doesn't sync orbSizeMult; use base
+      for (let oi = 0; oi < pOrbCount; oi++) {
+        const oAngle = Math.PI * 2 / pOrbCount * oi + simNowMs * ORBIT_ROTATION_SPD;
+        const ox = body.x + Math.cos(oAngle) * orbR;
+        const oy = body.y + Math.sin(oAngle) * orbR;
+        ctx.save();
+        ctx.shadowColor = orbCol;
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = orbCol;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.arc(ox, oy, orbVis, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+    }
     // D13.4 — aim arrow for the guest slot. Mirrors the host slot-0
     // triangle drawn near script.js:4759. Hidden when the slot has no
     // current target so guests don't see a stray arrow during downtime.
@@ -4852,6 +4961,55 @@ function loop(ts){
           }
         } catch (decayErr) {
           try { console.warn('[coop] grey-decay stamp error', decayErr); } catch (_) {}
+        }
+        // D19.4 — any-owner bullet spawn muzzle. Detect bullet ids that
+        // weren't in any prior snapshot we processed and emit a small
+        // spark burst at their position so they don't materialize from
+        // thin air. Dispatcher routes color by ownerSlot/state:
+        //   • state==='danger' (enemy shot) → C.red
+        //   • ownerSlot===0 (host's player shot, partner on guest screen)
+        //     → coopPartnerColorKey hex if known, else C.green fallback
+        //   • ownerSlot===1 (guest's own shot) → C.green, but skipped if
+        //     D19.2's local fireT-wrap already fired the muzzle this
+        //     fire-cycle. Conservative dedup: skip slot==1 entirely;
+        //     D19.2 owns that slot. Drift between charge clocks is rare
+        //     and the missed muzzle is the lesser evil vs double-flash.
+        //   • Charge orbs (state==='grey' from a player) → light ghost
+        //     spark so harvested orbs visually emerge from the kill.
+        try {
+          if (guestBulletSpawnDetector) {
+            const fresh = guestBulletSpawnDetector.detectNewSpawns(bullets, simTick);
+            for (let fi = 0; fi < fresh.length; fi++) {
+              const b = fresh[fi];
+              if (!b || typeof b !== 'object') continue;
+              let col = null;
+              let count = 4;
+              const owner = b.ownerSlot | 0;
+              if (b.state === 'danger') {
+                col = C.red;
+                count = 5;
+              } else if (b.state === 'grey') {
+                // Greys don't really "spawn" — they're harvested from
+                // killed enemies. A subtle ghost spark on first sight
+                // gives the orb visual continuity instead of popping in.
+                col = C.ghost || C.grey;
+                count = 3;
+              } else if (owner === 1) {
+                // D19.2 owns the local guest's muzzle. Skip to avoid
+                // double-flash; markSeen so eviction still ages out.
+                continue;
+              } else if (owner === 0) {
+                const partnerHex = coopPartnerColorKey ? (getColorSchemeForKey(coopPartnerColorKey)?.hex || null) : null;
+                col = partnerHex || C.green;
+                count = 4;
+              } else {
+                col = C.green;
+              }
+              try { spawnSparks(b.x, b.y, col, count, 50); } catch (_) {}
+            }
+          }
+        } catch (spawnErr) {
+          try { console.warn('[coop] spawn-muzzle dispatch error', spawnErr); } catch (_) {}
         }
       } catch (err) {
         try { console.warn('[coop] snapshot apply error', err); } catch (_) {}

@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.69', label: 'D19.2/D19.3 - muzzle prediction + grey lag-comp' };
+const VERSION = { num: '1.20.70', label: 'D19.4/D19.5 - any-owner muzzle + partner cosmetic sync' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

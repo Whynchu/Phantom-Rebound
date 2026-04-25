@@ -138,6 +138,20 @@ function encodeSlot(src, idx) {
     // slot translucent + frowning. Carried alongside `alive` so the
     // movement+aim path stays alive while the body is in spectator state.
     spectating: !!src.spectating,
+    // D19.5 — partner cosmetic sync. The wire-side display of orbiting
+    // shields and orb spheres on the OTHER player needs to know how many
+    // and (for shields) which are hardened / on cooldown. Without these,
+    // a partner picking up a shield boon was invisible to their teammate
+    // — the boon worked mechanically (host arbitrates damage absorbs) but
+    // the orbiting shield/orb visuals never appeared on the remote screen.
+    // Defaults are 0 / 0 so older clients and slot 0's wire snapshot
+    // (which never has these populated on a guest device) round-trip
+    // cleanly. shieldCount/orbCount are uint8 since they can't reasonably
+    // exceed the legend-tier max (~5 each); the masks are 8-bit too.
+    shieldCount: u32(src.shieldCount ?? 0, 'slots[' + idx + '].shieldCount'),
+    shieldHardenedMask: u32(src.shieldHardenedMask ?? 0, 'slots[' + idx + '].shieldHardenedMask'),
+    shieldCooldownMask: u32(src.shieldCooldownMask ?? 0, 'slots[' + idx + '].shieldCooldownMask'),
+    orbCount: u32(src.orbCount ?? 0, 'slots[' + idx + '].orbCount'),
   };
 }
 

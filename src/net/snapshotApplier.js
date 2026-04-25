@@ -179,6 +179,14 @@ function applySlot(snapSlot, prevSnapSlot, slot, alpha, opts) {
     // D18.15a — coop spectator flag. Carries the dead-but-walking visual
     // state to the receiver so the partner renders translucent + frowning.
     body.coopSpectating = !!snapSlot.spectating;
+    // D19.5 — partner cosmetic sync (orbiting shields + orb spheres). Pulled
+    // from curr (discrete; counts/masks shouldn't lerp). Render path on the
+    // guest reads these off `body` directly. Defaults to 0 keep slot 0 on
+    // the guest device (which has no inbound snapshot for itself) clean.
+    body.coopShieldCount = snapSlot.shieldCount | 0;
+    body.coopShieldHardenedMask = snapSlot.shieldHardenedMask | 0;
+    body.coopShieldCooldownMask = snapSlot.shieldCooldownMask | 0;
+    body.coopOrbCount = snapSlot.orbCount | 0;
     if (!snapSlot.alive) {
       if ((body.deadAt ?? 0) === 0) body.deadAt = 1;
     } else {
