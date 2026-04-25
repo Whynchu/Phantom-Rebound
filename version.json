@@ -1,1 +1,1 @@
-{ "version": "1.20.80", "label": "R0.4 chunks 7-8 - bridge UPG and world.obstacles into SimState" }
+{ "version": "1.20.82", "label": "R0.6 extended canary + R1 serialize/deserialize" }

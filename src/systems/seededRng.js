@@ -19,53 +19,110 @@
 // See docs/coop-multiplayer-plan.md §2.2 for the full call-site inventory
 // and the Phase A migration plan.
 
-function mulberry32(state) {
-  return function next() {
-    state = (state + 0x6D2B79F5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+// R0.4 — seededRng.js rewritten for SimState integration.
+// RNG state now lives in a mutable context (either registered simState or
+// local context). Each RNG instance carries its own state reference.
+// createSeededRng() returns a new instance; simRng singleton is registered
+// to simState at module load (script.js calls setRngState(simState)).
+
+function mulberry32Step(state) {
+  state = (state + 0x6D2B79F5) >>> 0;
+  let t = state;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return { value: ((t ^ (t >>> 14)) >>> 0) / 4294967296, nextState: state };
+}
+
+// Module-level registered state. setRngState() points this to simState,
+// so the singleton uses the sim's RNG state. Fallback for testing when
+// no external state is registered.
+let _registeredState = null;
+let _internalFallback = { rngState: 1 };
+
+export function setRngState(simStateOrContext) {
+  if (simStateOrContext && typeof simStateOrContext === 'object') {
+    _registeredState = simStateOrContext;
+  }
 }
 
 export function createSeededRng(seed = 1) {
-  let seedState = (seed >>> 0) || 1;
-  let step = mulberry32(seedState);
+  // Each instance has its own state context. Used for testing isolation.
+  const context = { rngState: (seed >>> 0) || 1 };
+  
   return {
     reseed(nextSeed) {
-      seedState = (nextSeed >>> 0) || 1;
-      step = mulberry32(seedState);
+      context.rngState = (nextSeed >>> 0) || 1;
     },
-    getSeed() { return seedState; },
-    next() { return step(); },
-    range(min, max) { return min + step() * (max - min); },
+    getSeed() { 
+      return context.rngState;
+    },
+    next() { 
+      const { value, nextState } = mulberry32Step(context.rngState);
+      context.rngState = nextState;
+      return value;
+    },
+    range(min, max) { 
+      return min + this.next() * (max - min); 
+    },
     // Integer in [min, max] inclusive.
     int(min, max) {
       const lo = Math.ceil(min);
       const hi = Math.floor(max);
-      return lo + Math.floor(step() * (hi - lo + 1));
+      return lo + Math.floor(this.next() * (hi - lo + 1));
     },
     pick(arr) {
       if (!arr || arr.length === 0) return undefined;
-      return arr[Math.floor(step() * arr.length)];
+      return arr[Math.floor(this.next() * arr.length)];
     },
-    // Spawn an independent sub-stream. Useful when we want to isolate
-    // one system's randomness from another's for clearer testing
-    // (e.g., enemy spawn rolls shouldn't shift because a boon roll
-    // happened first). Returns a new seeded rng seeded from the
-    // current stream.
     fork() {
-      const childSeed = (step() * 0x100000000) >>> 0;
+      const childSeed = (this.next() * 0x100000000) >>> 0;
       return createSeededRng(childSeed || 1);
     },
   };
 }
 
-// Module-level singleton used across the simulation. Imported directly
-// by enemy, projectile, boon, spawn, and kill-reward modules. Seeded
-// once per run by script.js via `simRng.reseed(seed)`.
-export const simRng = createSeededRng(1);
+// Module-level singleton. Imported by enemy, projectile, boon, spawn, and
+// kill-reward modules. script.js calls setRngState(simState) once at module
+// load, then simRng reads/writes _registeredState (which is simState).
+// For standalone tests, simRng uses _internalFallback.
+const _singletonContext = {
+  get rngState() {
+    return (_registeredState || _internalFallback).rngState;
+  },
+  set rngState(v) {
+    (_registeredState || _internalFallback).rngState = v;
+  },
+};
+
+export const simRng = {
+  reseed(nextSeed) {
+    _singletonContext.rngState = (nextSeed >>> 0) || 1;
+  },
+  getSeed() {
+    return _singletonContext.rngState;
+  },
+  next() {
+    const { value, nextState } = mulberry32Step(_singletonContext.rngState);
+    _singletonContext.rngState = nextState;
+    return value;
+  },
+  range(min, max) {
+    return min + this.next() * (max - min);
+  },
+  int(min, max) {
+    const lo = Math.ceil(min);
+    const hi = Math.floor(max);
+    return lo + Math.floor(this.next() * (hi - lo + 1));
+  },
+  pick(arr) {
+    if (!arr || arr.length === 0) return undefined;
+    return arr[Math.floor(this.next() * arr.length)];
+  },
+  fork() {
+    const childSeed = (this.next() * 0x100000000) >>> 0;
+    return createSeededRng(childSeed || 1);
+  },
+};
 
 // Utility to derive a 32-bit seed from a string (used for URL codes
 // like ?seed=ABC123 being hashed to an int, and later for co-op room

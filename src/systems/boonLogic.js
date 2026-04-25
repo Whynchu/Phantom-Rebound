@@ -58,12 +58,12 @@ function getEvolvedBoon(boon, upg) {
   return { ...boon, ...boon.evolvedVersion, apply: boon.evolvedVersion.apply || boon.apply };
 }
 
-function checkLegendarySequences(history, upg, rejectedIds = new Set(), roomsSinceReject = new Map(), currentRoom = 0) {
+function checkLegendarySequences(history, upg, rejectedIds = [], roomsSinceReject = {}, currentRoom = 0) {
   const available = [];
   for(const seq of LEGENDARY_SEQUENCES){
     if(upg[seq.id]) continue; // already have it
-    if(rejectedIds.has(seq.id)) {
-      const rejectedAtRoom = roomsSinceReject.get(seq.id) || 0;
+    if(rejectedIds.includes(seq.id)) {
+      const rejectedAtRoom = roomsSinceReject[seq.id] || 0;
       if(currentRoom - rejectedAtRoom < 2) continue; // skip if within 2-room cooldown
     }
     if(seq.check(history)) available.push(seq.boon);

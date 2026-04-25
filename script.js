@@ -113,7 +113,7 @@ import { iconHTML } from './src/ui/iconRenderer.js';
 import { renderPatchNotesPanel } from './src/ui/patchNotes.js';
 import { createPanelManager } from './src/ui/panelManager.js';
 import { createPauseController } from './src/ui/pauseController.js';
-import { simRng, parseSeedParam } from './src/systems/seededRng.js';
+import { simRng, parseSeedParam, setRngState } from './src/systems/seededRng.js';
 import { createSimState } from './src/sim/simState.js';
 import { showGameOverScreen, renderScoreBreakdown } from './src/ui/gameOver.js';
 import { bullets, enemies, shockwaves, spawnQueue, scoreBreakdown, resetScoreBreakdown } from './src/core/gameState.js';
@@ -880,6 +880,12 @@ const BLOOD_PACT_BLOOD_MOON_BONUS_CAP = 1;
 // setBulletIdState below; bulletIds.js reads/writes simState.nextBulletId.
 let simState = createSimState({ seed: 1, worldW: 0, worldH: 0, slotCount: 1 });
 setBulletIdState(simState);
+// R0.4 chunk 9 — RNG state integration. Register simState to seededRng so
+// simState.rngState becomes the live backing store for RNG state. Each
+// simRng call reads/writes simState.rngState directly. On rollback restore,
+// simState.rngState = snapshotValue flows into the registered state, and the
+// next RNG call consumes it. Same singleton-ref pattern as bulletIds.js.
+setRngState(simState);
 // R0.4 chunk 3 — bridge score/kills/scoreBreakdown into simState.run for
 // rollback serialization. The `let score`/`let kills` bindings stay the
 // canonical runtime storage (so the ~25 read/write sites in script.js need
@@ -970,9 +976,20 @@ Object.defineProperty(simState.slots[0], 'upg', {
 // transitions (line 3722) but otherwise mutated via splice/push. Getter/setter
 // allows rollback to rewind the list (and the room boundary it represents) in
 // place. Same pattern as UPG and player/body.
-Object.defineProperty(simState.world, 'obstacles', {
-  get() { return roomObstacles; },
-  set(v) { roomObstacles = v; },
+// R0.4 chunk 10 — legendary tracking conversion from Map/Set to plain arrays/objects.
+// legendaryRejectedIds (was Set) → simState.run.legendaryRejectedIds (array).
+// legendaryRoomsSinceReject (was Map) → simState.run.legendaryRoomsSinceReject (plain object dict).
+// Both are modified at boon-pick time and read during legendary checks. Use bridge
+// pattern so code can continue using the legacy lets without churn.
+Object.defineProperty(simState.run, 'legendaryRejectedIds', {
+  get() { return legendaryRejectedIds; },
+  set(v) { legendaryRejectedIds = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'legendaryRoomsSinceReject', {
+  get() { return legendaryRoomsSinceReject; },
+  set(v) { legendaryRoomsSinceReject = v; },
   enumerable: true,
   configurable: true,
 });
@@ -1170,8 +1187,8 @@ let _volatileOrbGlobalCooldown = 0;
 let boonHistory = [];
 let pendingLegendary = null;
 let legendaryOffered = false;
-let legendaryRejectedIds = new Set(); // Track rejected legendary boons
-let legendaryRoomsSinceRejection = new Map(); // Track rooms since rejection for cooldown
+let legendaryRejectedIds = []; // R0.5 — converted from Set to array for determinism (no iteration-order ambiguity)
+let legendaryRoomsSinceRejection = {}; // R0.5 — converted from Map to plain object dict
 
 // Room system
 let roomIndex = 0;
@@ -4384,7 +4401,9 @@ function showUpgrades() {
     pendingLegendary: (!legendaryOffered && pendingLegendary) ? pendingLegendary : null,
     onLegendaryAccept: (leg) => {
       const lState={hp,maxHp}; leg.apply(UPG,lState); hp=lState.hp; maxHp=lState.maxHp;
-      legendaryOffered=true; pendingLegendary=null; legendaryRejectedIds.delete(leg.id);
+      legendaryOffered=true; pendingLegendary=null; 
+      // R0.5 — remove from rejected list when accepted (array.filter instead of Set.delete)
+      legendaryRejectedIds = legendaryRejectedIds.filter(id => id !== leg.id);
       syncRunChargeCapacity(); boonHistory.push(leg.name);
       document.getElementById('s-up').classList.add('off');
       UPG._boonAppliedForRoom = roomIndex + 1;
@@ -4394,8 +4413,11 @@ function showUpgrades() {
       resumePlayAfterBoons();
     },
     onLegendaryReject: (leg) => {
-      legendaryRejectedIds.add(leg.id);
-      legendaryRoomsSinceRejection.set(leg.id, roomIndex);
+      // R0.5 — add to rejected array and record room (instead of Set.add / Map.set)
+      if (!legendaryRejectedIds.includes(leg.id)) {
+        legendaryRejectedIds.push(leg.id);
+      }
+      legendaryRoomsSinceRejection[leg.id] = roomIndex;
       pendingLegendary = null;
       boonHistory.push('Reject-' + leg.name);
       document.getElementById('s-up').classList.add('off');
@@ -4820,7 +4842,7 @@ function init() {
   _colossusShockwaveCd = runtimeTimers.colossusShockwaveCd;
   _orbFireTimers=[]; _orbCooldown=[];
   boonHistory=[]; pendingLegendary=null; legendaryOffered=false;
-  legendaryRejectedIds=new Set(); legendaryRoomsSinceRejection=new Map(); // Reset rejection tracking on new run
+  legendaryRejectedIds=[]; legendaryRoomsSinceRejection={}; // R0.5 — reset to plain array/object
   telemetryController.resetRun();
   bullets.length=0;enemies.length=0;clearParticles();clearDmgNumbers();shockwaves.length=0;
   payloadCooldownMs = 0;

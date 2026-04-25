@@ -181,6 +181,52 @@ test('compound replay: 50 rooms of waves + boon choices byte-identical across ru
   assert.equal(hash(a), hash(b), 'compound 50-room replay diverged');
 });
 
+// R0.6 — extended canary: import simState and verify full state serialization round-trips
+import { createSimState, resetSimState } from '../src/sim/simState.js';
+
+test('R0.6: simState JSON round-trip and re-hash consistency', () => {
+  // Create and mutate a simState across 10 rooms of RNG consumption.
+  const state = createSimState({ seed: 9999, worldW: 512, worldH: 768, slotCount: 1 });
+  
+  // Simulate RNG consumption (mutates state.rngState).
+  for (let i = 0; i < 100; i++) {
+    state.rngState = (state.rngState + 0x6D2B79F5) >>> 0;
+  }
+  
+  // Serialize and deserialize.
+  const json = JSON.stringify(state);
+  const restored = JSON.parse(json);
+  
+  // Both must hash identically (all fields are plain values).
+  const originalHash = hash(state);
+  const restoredHash = hash(restored);
+  assert.equal(originalHash, restoredHash, 'state changed after JSON round-trip');
+});
+
+test('R0.6: simState reset preserves identity and clears run state', () => {
+  const state = createSimState({ seed: 1, worldW: 256, worldH: 512, slotCount: 1 });
+  const originalIdentity = state; // capture object identity
+  
+  // Mutate some fields.
+  state.run.score = 1000;
+  state.run.roomIndex = 15;
+  state.tick = 50;
+  state.bullets.push({ id: 1 });
+  
+  // Reset in place.
+  resetSimState(state, { seed: 2, baseHp: 300 });
+  
+  // Object identity must be preserved (not replaced).
+  assert.equal(state, originalIdentity);
+  // Run state must be cleared.
+  assert.equal(state.run.score, 0);
+  assert.equal(state.run.roomIndex, 0);
+  assert.equal(state.tick, 0);
+  // But world dims stay.
+  assert.equal(state.world.w, 256);
+  assert.equal(state.world.h, 512);
+});
+
 // -------------------------------------------------------------------------
 
 console.log('');

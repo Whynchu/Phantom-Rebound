@@ -138,6 +138,11 @@ export function createSimState({
       pendingBoonQueue: [],
       // History of boons picked, in pick order.
       boonHistory: [],
+      // Legendary tracking: which legendaries have been rejected (cooldown).
+      // legendaryRejectedIds: array of boon.id strings that were offered & rejected.
+      // legendaryRoomsSinceReject: dict { boonId: roomIndex } when that legendary was last rejected.
+      legendaryRejectedIds: [],
+      legendaryRoomsSinceReject: {},
     },
 
     // ── Sequence counters ────────────────────────────────────────
@@ -249,6 +254,8 @@ export function resetSimState(state, { seed = 1, baseHp = DEFAULT_BASE_PLAYER_HP
   state.run.paused = false;
   state.run.pendingBoonQueue.length = 0;
   state.run.boonHistory.length = 0;
+  state.run.legendaryRejectedIds.length = 0;
+  state.run.legendaryRoomsSinceReject = {};
   state.nextEnemyId = 1;
   state.nextBulletId = 1;
   state.effectQueue.length = 0;
