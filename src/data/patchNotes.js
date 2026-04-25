@@ -2,6 +2,16 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.65',
+      label: 'D18.15b: SPECTATOR HP/FROWN/FADE FIXES',
+      summary: ['Three playtest bugs on the dead-but-walking spectator from D18.15a. (1) On the guest\'s own device, their character did not fade out when they died — they stayed at full alpha and just strobed. (2) Their HP bar was redrawn full while dead. (3) The frown arc was drawn at almost the same Y as the eyes, reading more like a second pair of squinted eyes than a sad mouth. All three were render-only mistakes; nothing about authority/sim/protocol changed.'],
+      highlights: [
+        'No-fade fix: the local-player render in drawGhost is gated by an invuln-blink expression (show every other 90ms tick when body.invincible>0). Spectators carry a sticky body.invincible=1e9, so the gate was strobing them at 100% alpha instead of letting drawGhost\'s 30% spectator branch run. The gate now early-outs to "always show" when body.coopSpectating is set, so the translucent render is steady. The host saw the partner correctly because their slot 1 went through drawGuestSlots, which already had the right gate. Local aim-arrow render also short-circuits for spectators.',
+        'HP bar fix: drawGhost + drawGuestSlots were passing hpValue = max(1, maxHp) for spectators (a leftover from when I worried hpValue=0 would prevent body draw). drawGhostSprite\'s body sprite never gates on hpValue — only the HP bar uses it. Passing hpValue=0 now correctly draws an empty bar (0-width fill on top of the dark background) while the body itself still renders normally.',
+        'Frown position fix: the forceFrown arc center moved from y=size*.08 down to y=size*.45. Eyes sit at y=−size*.25−2 (above center); the old frown was barely below center and visually overlapped the eyes. The new center puts the arc clearly in the lower half of the face so it reads as a mouth. Determinism canary 11/11; 24 suites pass.',
+      ]
+    },
+  {
       version: '1.20.64',
       label: 'D18.15a: SPECTATORS CAN WALK + FROWN',
       summary: ['Playtest correction on D18.15: dead coop partners were stuck frozen in place at the death position. They should be able to walk around like a sad ghost — still translucent, still no firing/damage/targeting, but mobile. Movement is now allowed; the smile-eyes are replaced by a downward frown arc so it\'s clear they\'re dead. The frown is the same arc the gameState===\'dying\' branch already drew, just promoted to a standalone forceFrown flag so we get the expression without the death pop animation.'],

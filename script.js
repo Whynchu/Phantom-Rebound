@@ -3135,10 +3135,10 @@ function drawGuestSlots(ts) {
       maxChargeValue: slot.upg.maxCharge,
       fireProgress: !isSpectator && slot.metrics.charge >= 1 ? (slot.metrics.fireT || 0) / (1 / ((slot.upg.sps || 0.8) * 2)) : 0,
       gameState: gstate,
-      // D18.15a — pass full hp so drawGhostSprite renders the body
-      // normally. The forceFrown flag below switches the smile/eyes for
-      // the dead-frown arc without triggering death pop animation.
-      hpValue: isSpectator ? Math.max(1, slot.metrics.maxHp || 1) : slot.metrics.hp,
+      // D18.15a — pass real (zero) hp so drawGhostSprite's HP bar fills
+      // 0% width. Body still renders normally; forceFrown swaps the
+      // smile-eyes for the dead-frown without triggering death pop.
+      hpValue: isSpectator ? 0 : slot.metrics.hp,
       maxHpValue: slot.metrics.maxHp,
       forceFrown: isSpectator,
       hatKey: coopPartnerHatKey || null,
@@ -6255,10 +6255,14 @@ function draw(ts){
     ctx.stroke();
     ctx.restore();
   }
-  const show=(localBody.invincible || 0)<=0||Math.floor(ts/90)%2===0;
+  // D18.15a — coop spectator: never blink. Their body.invincible is the
+  // sticky 1e9 sentinel, so the legacy blink would strobe forever. We
+  // want a steady 30% alpha render via drawGhost's spectator branch.
+  const isLocalSpectator = !!(localBody && localBody.coopSpectating);
+  const show = isLocalSpectator || (localBody.invincible || 0)<=0 || Math.floor(ts/90)%2===0;
   if(show){ drawGhost(ts); }
   drawGuestSlots(ts);
-  if(show && localAimHasTarget){
+  if(show && localAimHasTarget && !isLocalSpectator){
     const drift = Math.sin(ts * 0.01) * 0.8;
     const dist = localBody.r + AIM_ARROW_OFFSET + drift;
     const cx = localBody.x + Math.cos(localAimAngle) * dist;
@@ -6436,7 +6440,7 @@ function drawGhost(ts){
     maxChargeValue,
     fireProgress: isSpectator ? 0 : (chargeValue >= 1 ? fireTValue / shotInterval : 0),
     gameState: gstate,
-    hpValue: isSpectator ? Math.max(1, maxHpValue || 1) : hpValue,
+    hpValue: isSpectator ? 0 : hpValue,
     maxHpValue,
     forceFrown: isSpectator,
     hatKey: playerHat,

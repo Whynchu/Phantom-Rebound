@@ -135,11 +135,13 @@ export function drawGhostSprite(ctx, ts, {
     ctx.beginPath(); ctx.arc(5.5, -size * .25 - 2, 1.5, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.arc(0, size * .08, 4.6, Math.PI + .25, Math.PI * 2 - .25); ctx.stroke();
   } else if (forceFrown) {
-    // D18.15a — coop spectator: dead pose, but still walking. Same frown
-    // arc as the dying branch (downward open arc below the eyes).
+    // D18.15a — coop spectator: dead pose, but still walking. Frown arc
+    // sits noticeably below the eyes (eyes at -size*.25-2; frown center
+    // at size*.45) so the expression reads as "sad mouth" not "another
+    // pair of squinted eyes". Same downward open arc shape as dying.
     ctx.strokeStyle = 'rgba(12,20,16,0.85)';
     ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(0, size * .08, 4.6, Math.PI + .25, Math.PI * 2 - .25); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, size * .45, 4.6, Math.PI + .25, Math.PI * 2 - .25); ctx.stroke();
   } else {
     ctx.fillStyle = greenRgba(0.9);
     ctx.beginPath(); ctx.arc(-4.5, -size * .3 - 2, 1.3, 0, Math.PI * 2); ctx.fill();
