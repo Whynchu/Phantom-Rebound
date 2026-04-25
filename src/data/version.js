@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.42', label: 'D12.3 SLOT-1 DRIFT FIX' };
+const VERSION = { num: '1.20.43', label: 'D12.4 SLOT-1 ROOM-RESET + CHARGE FIX' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

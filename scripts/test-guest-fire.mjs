@@ -30,9 +30,12 @@ function makeSlot({ id = 1, charge = 1, maxCharge = 1, sps = 0.8, shotSpd = 1, s
 }
 
 // Port of updateGuestFire charge+gate logic (enemy-picking handled by caller).
+// D12.4 — Pre-D12.4 this auto-built charge while still. Removed because slot 1
+// shouldn't get free charge (guest "auto-shoots without earning charge"
+// playtest report). Kinetic-charge gain on movement now happens in
+// updateGuestSlotMovement instead, mirroring slot 0's design.
 function tickGuestFireCore(slot, dt, isStill, hasEnemy) {
   const upg = slot.upg;
-  if (isStill) slot.metrics.charge = Math.min(upg.maxCharge || 1, (slot.metrics.charge || 0) + dt);
   if (!hasEnemy) return { fired: false };
   if ((slot.metrics.charge || 0) < 1) return { fired: false };
   const interval = 1 / ((upg.sps || 0.8) * 2);
@@ -49,7 +52,7 @@ function tickGuestFireCore(slot, dt, isStill, hasEnemy) {
 {
   const slot = makeSlot({ charge: 0.5, maxCharge: 1 });
   tickGuestFireCore(slot, 0.2, /* isStill */ true, /* hasEnemy */ false);
-  assert('still+no-enemy builds charge', approx(slot.metrics.charge, 0.7));
+  assert('D12.4: still+no-enemy does NOT build charge (was auto-build pre-D12.4)', slot.metrics.charge === 0.5);
 }
 {
   const slot = makeSlot({ charge: 0.5 });
@@ -57,9 +60,10 @@ function tickGuestFireCore(slot, dt, isStill, hasEnemy) {
   assert('moving does not build charge', slot.metrics.charge === 0.5);
 }
 {
+  // Pre-existing charge below 1 — no fire even when still + has enemy.
   const slot = makeSlot({ charge: 0.95, maxCharge: 1 });
-  tickGuestFireCore(slot, 0.2, true, true);
-  assert('charge capped at maxCharge', slot.metrics.charge === 1);
+  const r = tickGuestFireCore(slot, 0.2, true, true);
+  assert('charge < 1 blocks fire', r.fired === false);
 }
 {
   const slot = makeSlot({ charge: 1, sps: 0.8 });

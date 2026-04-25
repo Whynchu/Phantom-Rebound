@@ -1696,6 +1696,20 @@ function updateGuestSlotMovement(dt, W, H) {
     body.x = Math.max(M + body.r, Math.min(W - M - body.r, body.x + body.vx * dt));
     body.y = Math.max(M + body.r, Math.min(H - M - body.r, body.y + body.vy * dt));
     resolveEntityObstacleCollisions(body);
+    // D12.4 — kinetic charge gain for guest slots while moving, mirroring
+    // slot 0's flow at script.js:3541. Only fires when the host has the
+    // Kinetic Harvest boon (UPG.moveChargeRate > 0, mirrored to slot.upg
+    // by mirrorHostUpgToSlot1). Without this, the previous "+dt while
+    // still" auto-charge in updateGuestFire let slot 1 fire continuously
+    // for free; that was removed and replaced with this gated path.
+    if (active && (roomPhase === 'spawning' || roomPhase === 'fighting')) {
+      const upg = slot.upg;
+      if (upg && (upg.moveChargeRate || 0) > 0) {
+        const rate = getKineticChargeRate(upg, slot.metrics.charge || 0) * (upg.fluxState ? 2 : 1);
+        const cap = upg.maxCharge || 1;
+        slot.metrics.charge = Math.min(cap, (slot.metrics.charge || 0) + rate * dt);
+      }
+    }
   }
 }
 
@@ -1780,11 +1794,13 @@ function updateGuestFire(dt, combatActive) {
     // frame and fired continuously).
     const noSignal = !!mv.stale;
 
-    // Charge build: full 1.0 in ~1s while still (matches default UPG).
-    // Only charge on a fresh "still" signal — never during stale gaps.
-    if (isStill && !noSignal) {
-      slot.metrics.charge = Math.min(upg.maxCharge || 1, (slot.metrics.charge || 0) + dt);
-    }
+    // D12.4 — REMOVED the free "+dt while still" charge build. Pre-D12.4
+    // slot 1 charged at 1.0/s automatically just by being still, letting
+    // it autofire indefinitely without earning charge through gameplay.
+    // Slot 1 now gains charge only through kinetic movement (in
+    // updateGuestSlotMovement, gated on UPG.moveChargeRate, mirrored
+    // from host) — matching slot 0's design where standing still does
+    // NOT regen charge on its own.
 
     if (enemies.length === 0) { slot.aim.hasTarget = false; continue; }
     const target = pickPlayerAutoTarget(body.x, body.y);
@@ -2116,6 +2132,26 @@ function startRoom(idx) {
   player.y = WORLD_H / 2;
   player.vx = 0;
   player.vy = 0;
+  // D12.4 — reset guest slot 1 body alongside host's (slot 0) so the
+  // guest's character respawns at the room's center on every transition.
+  // Pre-D12.4: slot 1's body retained whatever position it was at when
+  // the previous room cleared, leading to a "guest stuck off-spawn" feel
+  // after each boon screen. The roomChanged force-anchor in
+  // snapshotApplier propagates this reset to the guest's predicted body.
+  for (let i = 1; i < playerSlots.length; i++) {
+    const s = playerSlots[i];
+    if (!s || !s.body) continue;
+    const sx = WORLD_W / 2 + (i === 1 ? 60 : -60);
+    const sy = WORLD_H / 2;
+    s.body.x = sx;
+    s.body.y = sy;
+    s.body.vx = 0;
+    s.body.vy = 0;
+    s.body.spawnX = sx;
+    s.body.spawnY = sy;
+    s.body.invincible = Math.max(s.body.invincible || 0, 1.0);
+    s.body.distort = 0;
+  }
   startRoomTelemetry(idx + 1, def);
   // Spawn the first wave before READY so players can parse the room layout.
   while(

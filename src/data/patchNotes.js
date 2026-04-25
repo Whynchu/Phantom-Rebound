@@ -2,6 +2,18 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.43',
+      label: 'COOP PHASE D12.4: SLOT-1 ROOM-RESET + CHARGE FIX',
+      summary: ['Two playtest issues after v1.20.42 shipped: (1) the guest\'s body did not reset to room center between rooms — only host\'s slot 0 was teleported by startRoom(), so slot 1 stayed wherever it was at room-clear and felt "stuck off-spawn" after every boon screen; (2) slot 1 was auto-firing constantly on the host without the guest needing to earn charge through gameplay. Pre-D12.4 updateGuestFire built charge at +1.0/s while the guest was still, but slot 0 has no equivalent free regen — it gains charge only through kinetic movement (moveChargeRate boon) or absorb/hit boons. Slot 1 was effectively cheating.'],
+      highlights: [
+        'startRoom now resets every guest slot\'s body to a center spawn (offset by ±60 px so slots don\'t overlap), zeroes velocity, refreshes spawnX/spawnY for the respawn-on-death path, and grants 1 s of spawn invuln. Snapshots already carry the new positions; the next change makes the guest\'s local prediction adopt them.',
+        'snapshotApplier: applySlot now accepts `roomChanged` as a force-anchor trigger alongside `aliveEdge` and `!prevSnapSlot`. apply() detects prev.room.index !== curr.room.index and passes it through, so the guest\'s predicted slot 1 body teleports to the new spawn on every room transition instead of holding its previous position.',
+        'updateGuestFire: removed the "+dt while still" auto-charge build. Slot 1 no longer charges just by standing still. This matches slot 0\'s design where standing still does not regen charge — only kinetic movement (with the Kinetic Harvest boon mirrored from host) or absorb/hit mechanics generate charge. Without the boon, slot 1 stays at 0 charge and does not fire — same behavior as a host with no charge sources.',
+        'updateGuestSlotMovement: added kinetic-charge gain for guest slots while moving, mirroring the host\'s line at script.js:3576 (gainCharge with getKineticChargeRate). Gated on UPG.moveChargeRate > 0 (i.e. the host has Kinetic Harvest) and on combat phases (spawning|fighting). UPG is mirrored from host via mirrorHostUpgToSlot1, so any boon the host picks up benefits slot 1\'s charge gain too.',
+        'Tests: updated test-guest-fire.mjs to drop the obsolete "still builds charge" assertion and add a "still+no-enemy does NOT build charge" guard against regression. All 24 suites green; determinism canary 11/11 byte-identical (host slot 0 path untouched).',
+      ]
+    },
+  {
       version: '1.20.42',
       label: 'COOP PHASE D12.3: SLOT-1 GRADUAL DRIFT FIX',
       summary: ['Playtest revealed slot-1 movement starts perfectly accurate at run start, then progressively desyncs each room until guest no longer appears to move on the host. Diagnostics from v1.20.41 plus the symptom pattern pinned it to the remote-input-buffer staleness check, not transport. Each between-room boon screen pauses the host\'s simTick (gstate != "playing") while the guest\'s simTick keeps advancing — so guest input frames accumulate ahead of host\'s clock. The pre-D12.3 adapter used `Math.abs(t - frame.tick) > 12` which marked "future" frames stale just as harshly as ancient ones; once cumulative drift crossed 12 ticks (~200 ms), the host froze slot 1.'],

@@ -138,7 +138,8 @@ function applySlot(snapSlot, prevSnapSlot, slot, alpha, opts) {
   const prevAlive = prevSnapSlot ? (prevSnapSlot.alive ? 1 : 0) : null;
   const currAlive = snapSlot.alive ? 1 : 0;
   const aliveEdge = prevAlive !== null && prevAlive !== currAlive;
-  const forceAnchor = !prevSnapSlot || aliveEdge;
+  const roomChanged = !!(opts && opts.roomChanged);
+  const forceAnchor = !prevSnapSlot || aliveEdge || roomChanged;
   const writeBody = !skipBody || forceAnchor;
   const body = (typeof slot.getBody === 'function') ? slot.getBody() : (slot.body || null);
   if (body && writeBody) {
@@ -337,6 +338,9 @@ export function createSnapshotApplier({
           if (ps && Number.isFinite(ps.id)) prevSlotsById.set(ps.id | 0, ps);
         }
       }
+      const prevRoomIdx = prevSnap && prevSnap.room ? (prevSnap.room.index | 0) : null;
+      const currRoomIdx = currSnap.room ? (currSnap.room.index | 0) : 0;
+      const roomChanged = prevRoomIdx !== null && prevRoomIdx !== currRoomIdx;
       for (let i = 0; i < slotList.length; i++) {
         const cs = slotList[i];
         if (!cs) continue;
@@ -344,6 +348,7 @@ export function createSnapshotApplier({
         if (!slotTarget) continue;
         applySlot(cs, prevSlotsById.get(cs.id | 0) || null, slotTarget, alpha, {
           skipBody: predictedSlotId !== null && (cs.id | 0) === (predictedSlotId | 0),
+          roomChanged,
         });
       }
 
