@@ -2,6 +2,16 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.62',
+      label: 'D18.14: COOP HAT HANDSHAKE',
+      summary: ['Hat cosmetics now carry over to your coop partner. Before this, drawGuestSlots hardcoded hatKey=null for the partner ghost — your bunny ears were invisible to your friend (and theirs to you), so there was no way to see what they\'d picked. Color was already handshaked via the D18.7 coop-color message; now hat does the same thing through a parallel coop-hat message.'],
+      highlights: [
+        'New gameplay-channel message kind "coop-hat" carries the local player\'s HAT_OPTIONS key (or "none"). Each peer announces on slot install, on every hat change via setPlayerHat, and reciprocally echoes when it receives a partner\'s announce without having sent its own (handles late-join races).',
+        'drawGuestSlots now reads coopPartnerHatKey instead of passing null, so partner hats render in real-time alongside their already-handshaked color scheme. Inbound payload is validated against HAT_OPTIONS so a malformed message can\'t crash the renderer.',
+        'Partner hat state is reset by teardownCoopRunFully so the next coop run re-handshakes cleanly. Determinism canary 11/11; coop-only message kind never reaches solo or host-canary paths.',
+      ]
+    },
+  {
       version: '1.20.61',
       label: 'D18.13: GUEST ROOM-CLEAR OVERLAY + CHARGE LERP JUMP-SNAP',
       summary: ['Two coop guest-side fixes from playtest: (1) the guest never saw the "ROOM CLEAR" or "BOSS DEFEATED" overlay between rooms — only the host did. The host calls showRoomClear() / showBossDefeated() inside its update path (skipped on guest), and the guest\'s snapshot mirror code only synced the room INTRO overlay. (2) The new D18.12 charge lerp blindly interpolated through any prev→curr delta, including discontinuities like room resets and boon-applied charge bumps — playtest reported "weird glitchyness" on the charge ring during the ready/go and end-of-room transitions, which was the lerp showing a fake ramp between two unrelated charge values.'],

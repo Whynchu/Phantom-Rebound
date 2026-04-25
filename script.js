@@ -298,6 +298,9 @@ function setPlayerHat(nextHat) {
   playerHat = nextHat;
   writeText(PLAYER_HAT_KEY, playerHat);
   refreshThemeBoundUi();
+  // D18.14 — re-announce our hat to the coop partner so they see the
+  // change immediately, not just on next run start. No-op if not in coop.
+  try { sendCoopLocalHat(); } catch (_) {}
 }
 
 window.addEventListener('phantom:player-color-change', (event) => {
@@ -956,6 +959,11 @@ const COOP_HEARTBEAT_INTERVAL_MS = 2500;
 // local C palette (legacy behavior). Reset by teardownCoopRunFully.
 let coopPartnerColorKey = null;
 let coopLocalColorAnnounced = false;
+// D18.14 — same idea as coopPartnerColorKey but for the partner's chosen
+// hat (HAT_OPTIONS key, or 'none'). drawGuestSlots reads this each frame
+// to render the partner with their cosmetic. Reset by teardownCoopRunFully.
+let coopPartnerHatKey = null;
+let coopLocalHatAnnounced = false;
 // Phase D4.5: host-side processor that tracks the highest sim-tick for
 // which the host has actually consumed a remote-input frame (for slot 1).
 // `null` outside online host runs. Powers `lastProcessedInputSeq[1]` on
@@ -1257,6 +1265,9 @@ function teardownCoopRunFully(reason) {
   // D18.7 — clear partner color so the next coop run re-handshakes.
   coopPartnerColorKey = null;
   coopLocalColorAnnounced = false;
+  // D18.14 — same for partner hat key.
+  coopPartnerHatKey = null;
+  coopLocalHatAnnounced = false;
   // Hide coop-only UI overlays.
   try { hideCoopGuestWaitOverlay(); } catch (_) {}
 }
@@ -1612,6 +1623,21 @@ function sendCoopLocalColor() {
     coopLocalColorAnnounced = true;
   } catch (err) {
     try { console.warn('[coop] coop-color send failed', err); } catch (_) {}
+  }
+}
+
+// D18.14 — broadcast our local hat key to the partner so their
+// drawGuestSlots can render us with the cosmetic. Idempotent: safe to
+// call multiple times (slot install + on every hat change). Mirrors
+// sendCoopLocalColor exactly.
+function sendCoopLocalHat() {
+  try {
+    if (!activeCoopSession || typeof activeCoopSession.sendGameplay !== 'function') return;
+    const hatKey = playerHat || 'none';
+    activeCoopSession.sendGameplay({ kind: 'coop-hat', hatKey });
+    coopLocalHatAnnounced = true;
+  } catch (err) {
+    try { console.warn('[coop] coop-hat send failed', err); } catch (_) {}
   }
 }
 
@@ -2384,6 +2410,22 @@ function installCoopInputUplink(armedCoop) {
       }
       return;
     }
+    if (payload.kind === 'coop-hat') {
+      // D18.14 — partner announced their hat key (parallel to coop-color).
+      // Validate against HAT_OPTIONS so a malformed payload can't crash
+      // the renderer. Echo our hat back if we haven't yet, so a late-
+      // joining peer always learns ours.
+      try {
+        if (typeof payload.hatKey === 'string'
+            && HAT_OPTIONS.some((option) => option.key === payload.hatKey)) {
+          coopPartnerHatKey = payload.hatKey;
+        }
+        if (!coopLocalHatAnnounced) sendCoopLocalHat();
+      } catch (err) {
+        try { console.warn('[coop] coop-hat handler error', err); } catch (_) {}
+      }
+      return;
+    }
     if (payload.kind === 'coop-game-over' && role === 'guest') {
       // D12.2 — host died → end the run on guest too. Without this, the
       // guest sits on the last snapshot pose indefinitely. We mirror score
@@ -2663,6 +2705,8 @@ function installOnlineCoopHostSlot1(remoteRing) {
   // D18.7 — announce our color to guest. Safe to call before guest's slot
   // install; guest will echo back so we learn theirs in turn.
   try { sendCoopLocalColor(); } catch (_) {}
+  // D18.14 — same for hat cosmetic.
+  try { sendCoopLocalHat(); } catch (_) {}
 }
 
 // Phase D5b: install online guest slot 1 — the LOCAL guest's own player body
@@ -2707,6 +2751,8 @@ function installOnlineCoopGuestSlot1() {
   // D18.7 — announce our color to host (and through host's echo, the host
   // will reciprocate so we render the host in their chosen scheme).
   try { sendCoopLocalColor(); } catch (_) {}
+  // D18.14 — same for hat cosmetic.
+  try { sendCoopLocalHat(); } catch (_) {}
 }
 
 
@@ -2984,7 +3030,11 @@ function drawGuestSlots(ts) {
       gameState: gstate,
       hpValue: slot.metrics.hp,
       maxHpValue: slot.metrics.maxHp,
-      hatKey: null,
+      // D18.14 — render the partner's chosen hat (handshake key over
+      // 'coop-hat' message). Falls back to null = no hat when the partner
+      // hasn't announced yet (e.g. fresh subscribe before their first
+      // sendCoopLocalHat lands), matching the pre-handshake legacy look.
+      hatKey: coopPartnerHatKey || null,
       // D18.7 — render the partner in their chosen color, not ours. We
       // know it from the coop-color handshake; if it hasn't arrived yet,
       // fall back to the local C palette (legacy behavior) — null tells
