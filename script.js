@@ -1281,6 +1281,18 @@ function installCoopInputUplink(armedCoop) {
       // applier still re-anchors on first snapshot, death, respawn, and
       // runId reset, and still applies aim/hp/charge/invulnT every frame.
       predictedSlotId: 1,
+      // D13.3 — host already drew the dmg# + sparks locally on its own
+      // screen when it applied the damage; this fires the same effects on
+      // the guest's screen when the snapshot's hp delta is observed. Gated
+      // inside the applier on snapshot SHIFT so it fires once per fresh
+      // snapshot, not every render frame.
+      onSlotDamage: ({ slotId, damage, x, y }) => {
+        try {
+          const dmg = Math.max(1, Math.round(damage));
+          spawnDmgNumber(x, y - 18, dmg, '#ff6b9b');
+          sparks(x, y, '#ff6b9b', 8, 70);
+        } catch (_) {}
+      },
       resolveColors: (type) => {
         try {
           const def = getEnemyDefinition(type);
@@ -1480,6 +1492,11 @@ function collectHostSnapshotState() {
       // body.deadAt > 0 marks a dead player; createInitialPlayerState
       // initializes deadAt:0. m.hp > 0 is a defensive secondary check.
       alive: !((bodyOrSlot.deadAt ?? 0) > 0) && ((m.hp ?? 0) > 0 || (m.maxHp ?? 0) === 0 ? true : (m.hp ?? 0) > 0),
+      // D13.1 / D13.3 / D13.4 — propagate respawn counter, hurt-wobble
+      // timer, and aim-target flag so guest renders match host.
+      respawnSeq: (bodyOrSlot.respawnSeq | 0),
+      distort: bodyOrSlot.distort ?? 0,
+      hasTarget: !!aim.hasTarget,
     });
   }
   const bulletsOut = [];
@@ -1573,6 +1590,7 @@ function installOnlineCoopHostSlot1(remoteRing) {
   body.distort = 0;
   body.spawnX = body.x;
   body.spawnY = body.y;
+  body.respawnSeq = 0;
   const upg = getDefaultUpgrades();
   const metrics = { score: 0, kills: 0, charge: 0, fireT: 0, stillTimer: 0, prevStill: false, hp: BASE_PLAYER_HP, maxHp: BASE_PLAYER_HP };
   const timers = {
@@ -1615,6 +1633,7 @@ function installOnlineCoopGuestSlot1() {
   body.distort = 0;
   body.spawnX = body.x;
   body.spawnY = body.y;
+  body.respawnSeq = 0;
   const upg = getDefaultUpgrades();
   const metrics = { score: 0, kills: 0, charge: 0, fireT: 0, stillTimer: 0, prevStill: false, hp: BASE_PLAYER_HP, maxHp: BASE_PLAYER_HP };
   const timers = {
@@ -1763,6 +1782,11 @@ function respawnGuestSlot(slot) {
   body.vx = 0; body.vy = 0;
   body.invincible = 2.0;
   body.distort = 0;
+  // D13.1 — bump the respawn counter so the snapshot applier can detect
+  // this teleport on the guest's predicted body. aliveEdge alone misses
+  // it because hp returns to max in the same tick the body died, so the
+  // alive flag never flips false in any serialized snapshot.
+  body.respawnSeq = ((body.respawnSeq | 0) + 1) >>> 0;
   slot.metrics.hp = slot.metrics.maxHp || BASE_PLAYER_HP;
   sparks(body.x, body.y, '#6ad1ff', 18, 180);
 }
@@ -1891,6 +1915,11 @@ function drawGuestSlots(ts) {
     const slot = playerSlots[i];
     if (!slot) continue;
     const body = slot.body;
+    // D13.3 — invuln blink: skip render every other 90ms tick while
+    // body.invincible > 0 to mirror the host's slot-0 blink behavior.
+    const invuln = (body && body.invincible) ? body.invincible : 0;
+    const blinkVisible = invuln <= 0 || Math.floor(ts / 90) % 2 === 0;
+    if (!blinkVisible) continue;
     drawGhostSprite(ctx, ts, {
       playerState: body,
       chargeValue: slot.metrics.charge,
@@ -1901,6 +1930,29 @@ function drawGuestSlots(ts) {
       maxHpValue: slot.metrics.maxHp,
       hatKey: null,
     });
+    // D13.4 — aim arrow for the guest slot. Mirrors the host slot-0
+    // triangle drawn near script.js:4759. Hidden when the slot has no
+    // current target so guests don't see a stray arrow during downtime.
+    const aim = slot.aim;
+    if (aim && aim.hasTarget && body) {
+      const drift = Math.sin(ts * 0.01) * 0.8;
+      const radius = body.r || 14;
+      const dist = radius + AIM_ARROW_OFFSET + drift;
+      const cx = body.x + Math.cos(aim.angle) * dist;
+      const cy = body.y + Math.sin(aim.angle) * dist;
+      const triH = AIM_TRI_SIDE * 0.8660254;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(aim.angle);
+      ctx.fillStyle = C.getRgba(C.green, 0.6);
+      ctx.beginPath();
+      ctx.moveTo((triH * 2) / 3, 0);
+      ctx.lineTo(-(triH / 3), AIM_TRI_SIDE / 2);
+      ctx.lineTo(-(triH / 3), -(AIM_TRI_SIDE / 2));
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
   }
 }
 
@@ -4065,6 +4117,31 @@ function update(dt,ts){
         }
         sparks(b.x,b.y,C.ghost,5,45);
         bullets.splice(i,1);continue;
+      }
+      // D13.2 — slot-1+ grey absorb (coop guest pickup). Slot 0 owns the
+      // host-side absorb path above (with all its boon hooks). Extra slots
+      // get a simple absorb: per-slot maxCharge clamp, per-slot absorbRange,
+      // no host-only timer state (no _barrierPulse / _chainMagnet bonuses).
+      // Iterates ascending slot id so the order is deterministic.
+      if(playerSlots.length > 1){
+        let absorbedSlot = false;
+        for(let si=1; si<playerSlots.length; si++){
+          const gs = playerSlots[si];
+          const gb = gs && gs.body;
+          if(!gb || ((gs.metrics && gs.metrics.hp) || 0) <= 0) continue;
+          if((gb.deadAt || 0) > 0) continue;
+          const gAbsR = (gb.r || 14) + 5 + ((gs.upg && gs.upg.absorbRange) || 0);
+          if(Math.hypot(b.x - gb.x, b.y - gb.y) < gAbsR + b.r){
+            const cap = (gs.upg && gs.upg.maxCharge) || 1;
+            const gain = (gs.upg && gs.upg.absorbValue) || 1;
+            gs.metrics.charge = Math.min(cap, (gs.metrics.charge || 0) + gain);
+            sparks(b.x, b.y, C.ghost, 5, 45);
+            bullets.splice(i, 1);
+            absorbedSlot = true;
+            break;
+          }
+        }
+        if(absorbedSlot) continue;
       }
       // Absorb Orbs: grey bullets near any alive orbit sphere are absorbed
       if(UPG.absorbOrbs && UPG.orbitSphereTier>0){

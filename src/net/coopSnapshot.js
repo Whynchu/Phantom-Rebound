@@ -122,6 +122,18 @@ function encodeSlot(src, idx) {
     shieldT: num(src.shieldT ?? 0, 'slots[' + idx + '].shieldT'),
     stillTimer: num(src.stillTimer ?? 0, 'slots[' + idx + '].stillTimer'),
     alive: !!src.alive,
+    // D13.1 — incremented by host on respawn so the applier can force-anchor
+    // a predicted body even when death+respawn happen in a single host tick
+    // (alive flag never flips in that case, so aliveEdge alone misses it).
+    respawnSeq: u32(src.respawnSeq ?? 0, 'slots[' + idx + '].respawnSeq'),
+    // D13.3 — wobble timer for hurt animation. Carried over the wire so the
+    // guest's render of its own slot 1 reacts to host-applied damage with
+    // the same distort effect the host shows.
+    distort: num(src.distort ?? 0, 'slots[' + idx + '].distort'),
+    // D13.4 — whether the slot currently has an auto-aim target. Drives the
+    // aim arrow render in drawGuestSlots; without this every guest slot
+    // would show a triangle even when there are no enemies.
+    hasTarget: !!src.hasTarget,
   };
 }
 

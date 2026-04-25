@@ -139,7 +139,13 @@ function applySlot(snapSlot, prevSnapSlot, slot, alpha, opts) {
   const currAlive = snapSlot.alive ? 1 : 0;
   const aliveEdge = prevAlive !== null && prevAlive !== currAlive;
   const roomChanged = !!(opts && opts.roomChanged);
-  const forceAnchor = !prevSnapSlot || aliveEdge || roomChanged;
+  // D13.1 — same-tick death+respawn never flips the alive flag because
+  // respawnGuestSlot restores hp before the snapshot serializes. Track an
+  // explicit respawnSeq on the body and treat any change as a re-anchor.
+  const prevRespawn = prevSnapSlot ? (prevSnapSlot.respawnSeq | 0) : null;
+  const currRespawn = (snapSlot.respawnSeq | 0);
+  const respawnEdge = prevRespawn !== null && prevRespawn !== currRespawn;
+  const forceAnchor = !prevSnapSlot || aliveEdge || roomChanged || respawnEdge;
   const writeBody = !skipBody || forceAnchor;
   const body = (typeof slot.getBody === 'function') ? slot.getBody() : (slot.body || null);
   if (body && writeBody) {
@@ -167,6 +173,9 @@ function applySlot(snapSlot, prevSnapSlot, slot, alpha, opts) {
     // applied, even when body position is owned by local prediction —
     // these flags gate the prediction loop (don't move while dead).
     body.invincible = snapSlot.invulnT || 0;
+    // D13.3 — distort wobble for hurt animation. Pulls from curr so the
+    // guest sees the same hit-flicker the host renders for slot 1.
+    body.distort = snapSlot.distort || 0;
     if (!snapSlot.alive) {
       if ((body.deadAt ?? 0) === 0) body.deadAt = 1;
     } else {
@@ -188,6 +197,8 @@ function applySlot(snapSlot, prevSnapSlot, slot, alpha, opts) {
     } else {
       slot.aim.angle = snapSlot.aimAngle || 0;
     }
+    // D13.4 — discrete: drives the aim-arrow render gate in drawGuestSlots.
+    slot.aim.hasTarget = !!snapSlot.hasTarget;
   }
 }
 
@@ -201,6 +212,12 @@ export function createSnapshotApplier({
   // Aim, hp, charge, invulnT, alive flag, maxHp, maxCharge are still applied
   // from snapshot every frame — host remains authoritative on those.
   predictedSlotId = null,
+  // D13.3 — optional callback fired ONCE per fresh snapshot (not per render
+  // frame) when a slot's hp dropped relative to the previous snapshot. Lets
+  // the renderer spawn local-only damage numbers + sparks without putting
+  // those visual events on the wire. Signature:
+  //   onSlotDamage({ slotId, damage, x, y })
+  onSlotDamage = null,
 } = {}) {
   // Buffer: prev/curr each hold { snapshot, recvAtMs }. Newest applied
   // snapshot is `curr`; the one just before it is `prev`. Older snapshots
@@ -264,6 +281,35 @@ export function createSnapshotApplier({
           shift = true;
         }
         if (shift) {
+          // D13.3 — detect hp drops between the outgoing prev (current
+          // `curr`) and the incoming snapshot. Fire onSlotDamage once per
+          // detected drop. Gated on `shift` so each snapshot triggers at
+          // most one notification per slot, regardless of how many render
+          // frames re-apply the same `curr`.
+          if (typeof onSlotDamage === 'function' && curr && curr.snapshot && Array.isArray(curr.snapshot.slots) && Array.isArray(snapshot.slots)) {
+            const prevById = new Map();
+            for (let i = 0; i < curr.snapshot.slots.length; i++) {
+              const ps = curr.snapshot.slots[i];
+              if (ps && Number.isFinite(ps.id)) prevById.set(ps.id | 0, ps);
+            }
+            for (let i = 0; i < snapshot.slots.length; i++) {
+              const cs = snapshot.slots[i];
+              if (!cs || !Number.isFinite(cs.id)) continue;
+              const ps = prevById.get(cs.id | 0);
+              if (!ps) continue;
+              const drop = (ps.hp || 0) - (cs.hp || 0);
+              if (drop > 0) {
+                try {
+                  onSlotDamage({
+                    slotId: cs.id | 0,
+                    damage: drop,
+                    x: cs.x,
+                    y: cs.y,
+                  });
+                } catch (_) {}
+              }
+            }
+          }
           prev = curr;
           curr = { snapshot, recvAtMs: Number.isFinite(recvAtMs) ? recvAtMs : 0 };
           lastAppliedSeq = seq;
