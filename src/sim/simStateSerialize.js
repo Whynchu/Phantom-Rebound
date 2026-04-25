@@ -90,24 +90,27 @@ export function restoreState(liveState, snapshot) {
 
   // Field-by-field restore for top-level primitives and nested objects.
   // This preserves object identity for any object already referenced elsewhere.
+  // All field restorations are defensive: only restore if the field exists in both.
 
-  liveState.tick = snapshot.tick;
-  liveState.timeMs = snapshot.timeMs;
-  liveState.seed = snapshot.seed;
-  liveState.rngState = snapshot.rngState;
+  if (snapshot.tick !== undefined) liveState.tick = snapshot.tick;
+  if (snapshot.timeMs !== undefined) liveState.timeMs = snapshot.timeMs;
+  if (snapshot.seed !== undefined) liveState.seed = snapshot.seed;
+  if (snapshot.rngState !== undefined) liveState.rngState = snapshot.rngState;
 
   // World state (preserve identity if possible, otherwise reassign).
   if (liveState.world && snapshot.world) {
-    liveState.world.w = snapshot.world.w;
-    liveState.world.h = snapshot.world.h;
-    liveState.world.obstacles.length = 0;
-    liveState.world.obstacles.push(...snapshot.world.obstacles);
+    if (snapshot.world.w !== undefined) liveState.world.w = snapshot.world.w;
+    if (snapshot.world.h !== undefined) liveState.world.h = snapshot.world.h;
+    if (Array.isArray(liveState.world.obstacles) && Array.isArray(snapshot.world.obstacles)) {
+      liveState.world.obstacles.length = 0;
+      liveState.world.obstacles.push(...snapshot.world.obstacles);
+    }
   } else if (snapshot.world) {
     liveState.world = { ...snapshot.world };
   }
 
   // Slots (preserve slot objects, restore their fields).
-  if (Array.isArray(snapshot.slots)) {
+  if (Array.isArray(snapshot.slots) && Array.isArray(liveState.slots)) {
     // Resize slot array if needed (shouldn't happen in normal flow, but be safe).
     while (liveState.slots.length < snapshot.slots.length) {
       // This shouldn't fire; slots are pre-allocated in createSimState.
@@ -126,74 +129,102 @@ export function restoreState(liveState, snapshot) {
       const liveSlot = liveState.slots[i];
 
       // Body fields.
-      liveSlot.body.x = snapshotSlot.body.x;
-      liveSlot.body.y = snapshotSlot.body.y;
-      liveSlot.body.vx = snapshotSlot.body.vx;
-      liveSlot.body.vy = snapshotSlot.body.vy;
-      liveSlot.body.r = snapshotSlot.body.r;
-      liveSlot.body.alive = snapshotSlot.body.alive;
+      if (snapshotSlot.body && liveSlot.body) {
+        if (snapshotSlot.body.x !== undefined) liveSlot.body.x = snapshotSlot.body.x;
+        if (snapshotSlot.body.y !== undefined) liveSlot.body.y = snapshotSlot.body.y;
+        if (snapshotSlot.body.vx !== undefined) liveSlot.body.vx = snapshotSlot.body.vx;
+        if (snapshotSlot.body.vy !== undefined) liveSlot.body.vy = snapshotSlot.body.vy;
+        if (snapshotSlot.body.r !== undefined) liveSlot.body.r = snapshotSlot.body.r;
+        if (snapshotSlot.body.alive !== undefined) liveSlot.body.alive = snapshotSlot.body.alive;
+      }
 
       // Metrics fields.
-      liveSlot.metrics.hp = snapshotSlot.metrics.hp;
-      liveSlot.metrics.maxHp = snapshotSlot.metrics.maxHp;
-      liveSlot.metrics.charge = snapshotSlot.metrics.charge;
-      liveSlot.metrics.fireT = snapshotSlot.metrics.fireT;
-      liveSlot.metrics.stillTimer = snapshotSlot.metrics.stillTimer;
-      liveSlot.metrics.prevStill = snapshotSlot.metrics.prevStill;
-      liveSlot.metrics.aimAngle = snapshotSlot.metrics.aimAngle;
-      liveSlot.metrics.aimHasTarget = snapshotSlot.metrics.aimHasTarget;
+      if (snapshotSlot.metrics && liveSlot.metrics) {
+        if (snapshotSlot.metrics.hp !== undefined) liveSlot.metrics.hp = snapshotSlot.metrics.hp;
+        if (snapshotSlot.metrics.maxHp !== undefined) liveSlot.metrics.maxHp = snapshotSlot.metrics.maxHp;
+        if (snapshotSlot.metrics.charge !== undefined) liveSlot.metrics.charge = snapshotSlot.metrics.charge;
+        if (snapshotSlot.metrics.fireT !== undefined) liveSlot.metrics.fireT = snapshotSlot.metrics.fireT;
+        if (snapshotSlot.metrics.stillTimer !== undefined) liveSlot.metrics.stillTimer = snapshotSlot.metrics.stillTimer;
+        if (snapshotSlot.metrics.prevStill !== undefined) liveSlot.metrics.prevStill = snapshotSlot.metrics.prevStill;
+        if (snapshotSlot.metrics.aimAngle !== undefined) liveSlot.metrics.aimAngle = snapshotSlot.metrics.aimAngle;
+        if (snapshotSlot.metrics.aimHasTarget !== undefined) liveSlot.metrics.aimHasTarget = snapshotSlot.metrics.aimHasTarget;
+      }
 
       // UPG — just assign the whole object (boons are immutable once picked).
-      liveSlot.upg = { ...snapshotSlot.upg };
+      if (snapshotSlot.upg) {
+        liveSlot.upg = { ...snapshotSlot.upg };
+      }
 
       // Shields and orbState arrays.
-      liveSlot.shields.length = 0;
-      liveSlot.shields.push(...snapshotSlot.shields);
-      liveSlot.orbState.fireTimers.length = 0;
-      liveSlot.orbState.fireTimers.push(...snapshotSlot.orbState.fireTimers);
-      liveSlot.orbState.cooldowns.length = 0;
-      liveSlot.orbState.cooldowns.push(...snapshotSlot.orbState.cooldowns);
+      if (Array.isArray(liveSlot.shields) && Array.isArray(snapshotSlot.shields)) {
+        liveSlot.shields.length = 0;
+        liveSlot.shields.push(...snapshotSlot.shields);
+      }
+      if (snapshotSlot.orbState && liveSlot.orbState) {
+        if (Array.isArray(liveSlot.orbState.fireTimers) && Array.isArray(snapshotSlot.orbState.fireTimers)) {
+          liveSlot.orbState.fireTimers.length = 0;
+          liveSlot.orbState.fireTimers.push(...snapshotSlot.orbState.fireTimers);
+        }
+        if (Array.isArray(liveSlot.orbState.cooldowns) && Array.isArray(snapshotSlot.orbState.cooldowns)) {
+          liveSlot.orbState.cooldowns.length = 0;
+          liveSlot.orbState.cooldowns.push(...snapshotSlot.orbState.cooldowns);
+        }
+      }
     }
   }
 
-  // Entity arrays (bullets, enemies).
-  liveState.bullets.length = 0;
-  liveState.bullets.push(...snapshot.bullets);
-  liveState.enemies.length = 0;
-  liveState.enemies.push(...snapshot.enemies);
+  // Entity arrays (bullets, enemies) — only restore if they exist in both.
+  if (liveState.bullets && snapshot.bullets && Array.isArray(liveState.bullets) && Array.isArray(snapshot.bullets)) {
+    liveState.bullets.length = 0;
+    liveState.bullets.push(...snapshot.bullets);
+  }
+  if (liveState.enemies && snapshot.enemies && Array.isArray(liveState.enemies) && Array.isArray(snapshot.enemies)) {
+    liveState.enemies.length = 0;
+    liveState.enemies.push(...snapshot.enemies);
+  }
 
   // Run state (preserve run object identity, restore its fields).
   if (liveState.run && snapshot.run) {
-    liveState.run.roomIndex = snapshot.run.roomIndex;
-    liveState.run.roomPhase = snapshot.run.roomPhase;
-    liveState.run.roomTimer = snapshot.run.roomTimer;
-    liveState.run.score = snapshot.run.score;
-    liveState.run.kills = snapshot.run.kills;
+    if (snapshot.run.roomIndex !== undefined) liveState.run.roomIndex = snapshot.run.roomIndex;
+    if (snapshot.run.roomPhase !== undefined) liveState.run.roomPhase = snapshot.run.roomPhase;
+    if (snapshot.run.roomTimer !== undefined) liveState.run.roomTimer = snapshot.run.roomTimer;
+    if (snapshot.run.score !== undefined) liveState.run.score = snapshot.run.score;
+    if (snapshot.run.kills !== undefined) liveState.run.kills = snapshot.run.kills;
     // scoreBreakdown is a referenced object; copy its fields.
     if (liveState.run.scoreBreakdown && snapshot.run.scoreBreakdown) {
-      liveState.run.scoreBreakdown.kills = snapshot.run.scoreBreakdown.kills;
-      liveState.run.scoreBreakdown.overkill = snapshot.run.scoreBreakdown.overkill;
-      liveState.run.scoreBreakdown.rooms = snapshot.run.scoreBreakdown.rooms;
-      liveState.run.scoreBreakdown.bonus = snapshot.run.scoreBreakdown.bonus;
+      if (snapshot.run.scoreBreakdown.kills !== undefined) liveState.run.scoreBreakdown.kills = snapshot.run.scoreBreakdown.kills;
+      if (snapshot.run.scoreBreakdown.overkill !== undefined) liveState.run.scoreBreakdown.overkill = snapshot.run.scoreBreakdown.overkill;
+      if (snapshot.run.scoreBreakdown.rooms !== undefined) liveState.run.scoreBreakdown.rooms = snapshot.run.scoreBreakdown.rooms;
+      if (snapshot.run.scoreBreakdown.bonus !== undefined) liveState.run.scoreBreakdown.bonus = snapshot.run.scoreBreakdown.bonus;
     }
-    liveState.run.gameOver = snapshot.run.gameOver;
-    liveState.run.paused = snapshot.run.paused;
-    liveState.run.pendingBoonQueue.length = 0;
-    liveState.run.pendingBoonQueue.push(...snapshot.run.pendingBoonQueue);
-    liveState.run.boonHistory.length = 0;
-    liveState.run.boonHistory.push(...snapshot.run.boonHistory);
-    liveState.run.legendaryRejectedIds.length = 0;
-    liveState.run.legendaryRejectedIds.push(...snapshot.run.legendaryRejectedIds);
-    liveState.run.legendaryRoomsSinceReject = { ...snapshot.run.legendaryRoomsSinceReject };
+    if (snapshot.run.gameOver !== undefined) liveState.run.gameOver = snapshot.run.gameOver;
+    if (snapshot.run.paused !== undefined) liveState.run.paused = snapshot.run.paused;
+    if (Array.isArray(liveState.run.pendingBoonQueue) && Array.isArray(snapshot.run.pendingBoonQueue)) {
+      liveState.run.pendingBoonQueue.length = 0;
+      liveState.run.pendingBoonQueue.push(...snapshot.run.pendingBoonQueue);
+    }
+    if (Array.isArray(liveState.run.boonHistory) && Array.isArray(snapshot.run.boonHistory)) {
+      liveState.run.boonHistory.length = 0;
+      liveState.run.boonHistory.push(...snapshot.run.boonHistory);
+    }
+    if (Array.isArray(liveState.run.legendaryRejectedIds) && Array.isArray(snapshot.run.legendaryRejectedIds)) {
+      liveState.run.legendaryRejectedIds.length = 0;
+      liveState.run.legendaryRejectedIds.push(...snapshot.run.legendaryRejectedIds);
+    }
+    if (snapshot.run.legendaryRoomsSinceReject) {
+      liveState.run.legendaryRoomsSinceReject = { ...snapshot.run.legendaryRoomsSinceReject };
+    }
   }
 
   // ID counters.
-  liveState.nextEnemyId = snapshot.nextEnemyId;
-  liveState.nextBulletId = snapshot.nextBulletId;
+  if (snapshot.nextEnemyId !== undefined) liveState.nextEnemyId = snapshot.nextEnemyId;
+  if (snapshot.nextBulletId !== undefined) liveState.nextBulletId = snapshot.nextBulletId;
 
   // Effect queue.
-  liveState.effectQueue.length = 0;
-  liveState.effectQueue.push(...snapshot.effectQueue);
+  if (liveState.effectQueue && snapshot.effectQueue && Array.isArray(liveState.effectQueue) && Array.isArray(snapshot.effectQueue)) {
+    liveState.effectQueue.length = 0;
+    liveState.effectQueue.push(...snapshot.effectQueue);
+  }
 }
 
 /**
