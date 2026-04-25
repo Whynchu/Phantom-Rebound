@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.66', label: 'D18.16 - guest prediction wall-wedge fix' };
+const VERSION = { num: '1.20.67', label: 'D18.16a - both-dead gameover + iPhone fade' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

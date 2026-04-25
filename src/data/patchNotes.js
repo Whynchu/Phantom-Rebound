@@ -2,6 +2,15 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.67',
+      label: 'D18.16a: BOTH-DEAD GAMEOVER + IPHONE FADE',
+      summary: ['Two playtest bugs from the spectator-on-death system. (1) If the host died first into spectator state, then the guest also died, the run never ended — both ghosts walked around forever with no end-screen. (2) On iPhone Safari, the dead-spectator 30% alpha fade did not actually apply to the body sprite — both the guest viewing themselves and the host viewing the dead guest saw a full-opacity ghost where the desktop correctly showed translucency.'],
+      highlights: [
+        'Both-dead end-of-run fix: applyContactDamageToGuestSlot and applyDangerDamageToGuestSlot were calling handleSlotDeathInCoop(slot) but throwing away its return value. handleSlotDeathInCoop already returns true when no live coop slots remain (the host slot-0 path correctly fires gameOver from this signal via playerSlot0DiedOrGameOver). The slot-1 paths now mirror that pattern: `if (nextHp <= 0 && handleSlotDeathInCoop(slot)) gameOver()`. With this in place, host-then-guest death sequences now correctly terminate the run and surface the coop end-of-run screen.',
+        'iPhone spectator fade fix: the 30% alpha was applied at the call site as ctx.save() → globalAlpha=0.3 → drawGhostSprite() → ctx.restore(). On desktop Chrome this worked. On iOS Safari, the outer globalAlpha sometimes failed to propagate through nested ctx.save/restore + shadowBlur + roundRect operations inside drawGhostSprite, leaving the sprite at full opacity. Fix: drawGhostSprite now accepts a bodyAlpha parameter (default 1) and applies it inside its own save/restore block via globalAlpha *= bodyAlpha. Both render paths (drawGhost for local player, drawGuestSlots for partner) now pass bodyAlpha:0.3 when isSpectator and let the function manage its own canvas state. Determinism canary 11/11; 24 suites pass.',
+      ]
+    },
+  {
       version: '1.20.66',
       label: 'D18.16: GUEST PREDICTION TIGHTENED',
       summary: ['Coop guests reported their character felt "sloppy" / "not locked-in" on their own device, even when network latency to the host was clearly fast (controlling the guest device while watching the host\'s screen showed instant input response — confirming network was fine, render was wrong). Root cause: the prediction reconciler was fighting itself near walls. Three tuning fixes that should make guest movement feel close to host-quality.'],

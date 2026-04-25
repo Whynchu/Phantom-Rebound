@@ -30,6 +30,16 @@ export function drawGhostSprite(ctx, ts, {
   // or the smile-eyes pulse. Used by coop spectator render so dead
   // partners look sad while still walking around.
   forceFrown = false,
+  // D18.16 — multiplicative alpha applied to the entire body+HP bar
+  // render. Hoisted INSIDE drawGhostSprite so the inner save() captures
+  // it before any nested save/restore inside the body, and the inner
+  // restore() at the end guarantees the outer canvas state returns to
+  // exactly what it was. iOS Safari was the canary here: setting
+  // globalAlpha at the call site and relying on it to propagate through
+  // drawGhostSprite's own save/restore + roundRect + shadowBlur calls
+  // was unreliable (PC Chrome fine, iOS Safari sometimes lost the alpha
+  // mid-draw), leaving spectators rendered at 100% on iPhone.
+  bodyAlpha = 1,
 } = {}) {
   const p = playerState;
   if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
@@ -63,6 +73,15 @@ export function drawGhostSprite(ctx, ts, {
   const size = p.r * 1.18 + chargeFrac * 3.9 - deathFrac * 1.2;
 
   ctx.save();
+  // D18.16 — apply bodyAlpha INSIDE our save/restore so it's bulletproof
+  // against iOS Safari quirks where outer globalAlpha sometimes failed
+  // to propagate through nested save/restore + shadowBlur + roundRect
+  // operations. Multiplying lets stacked transparencies compose if the
+  // caller has its own alpha set. The inner restore() at function end
+  // returns the canvas to exactly the state on entry.
+  if (bodyAlpha !== 1) {
+    ctx.globalAlpha = (ctx.globalAlpha || 1) * bodyAlpha;
+  }
   if ((p.distort || 0) > 0 || gameState === 'dying') {
     ctx.translate(p.x, p.y + wobble);
     const deathScale = gameState === 'dying' ? 1 + deathFrac * 0.22 - popFrac * 1.1 : 1;

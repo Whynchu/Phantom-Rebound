@@ -2905,7 +2905,7 @@ function applyContactDamageToGuestSlot(slot, damage) {
   body.distort = 0.35;
   spawnDmgNumber(body.x, body.y, damage, C.danger);
   sparks(body.x, body.y, C.danger, 10, 90);
-  if (nextHp <= 0) handleSlotDeathInCoop(slot);
+  if (nextHp <= 0 && handleSlotDeathInCoop(slot)) gameOver();
 }
 
 function applyDangerDamageToGuestSlot(slot, damage, color) {
@@ -2917,7 +2917,12 @@ function applyDangerDamageToGuestSlot(slot, damage, color) {
   body.distort = 0.3;
   spawnDmgNumber(body.x, body.y, damage, color || C.danger);
   sparks(body.x, body.y, C.danger, 8, 70);
-  if (nextHp <= 0) handleSlotDeathInCoop(slot);
+  // D18.16 — slot 1 death paths previously discarded the
+  // handleSlotDeathInCoop return. If host (slot 0) died first into
+  // spectator state, then guest (slot 1) died, countLiveCoopSlots()
+  // correctly returned 0, but nobody fired gameOver — run hung
+  // forever with both ghosts walking around.
+  if (nextHp <= 0 && handleSlotDeathInCoop(slot)) gameOver();
 }
 
 // D18.15 — coop spectator-on-death system. When a player dies in a coop
@@ -3161,8 +3166,6 @@ function drawGuestSlots(ts) {
       const blinkVisible = invuln <= 0 || Math.floor(ts / 90) % 2 === 0;
       if (!blinkVisible) continue;
     }
-    if (isSpectator) ctx.save();
-    if (isSpectator) ctx.globalAlpha = 0.3;
     drawGhostSprite(ctx, ts, {
       playerState: body,
       chargeValue: isSpectator ? 0 : slot.metrics.charge,
@@ -3175,10 +3178,13 @@ function drawGuestSlots(ts) {
       hpValue: isSpectator ? 0 : slot.metrics.hp,
       maxHpValue: slot.metrics.maxHp,
       forceFrown: isSpectator,
+      // D18.16 — internal alpha (set inside drawGhostSprite's save/restore)
+      // so iOS Safari can't lose it through nested canvas state changes.
+      bodyAlpha: isSpectator ? 0.3 : 1,
       hatKey: coopPartnerHatKey || null,
       colorScheme: coopPartnerColorKey ? getColorSchemeForKey(coopPartnerColorKey) : null,
     });
-    if (isSpectator) { ctx.restore(); continue; }
+    if (isSpectator) continue;
     // D13.4 — aim arrow for the guest slot. Mirrors the host slot-0
     // triangle drawn near script.js:4759. Hidden when the slot has no
     // current target so guests don't see a stray arrow during downtime.
@@ -6476,8 +6482,6 @@ function drawGhost(ts){
   const sps = (slotUpg && slotUpg.sps) || UPG.sps;
   const heavyMult = (slotUpg && slotUpg.heavyRoundsFireMult) || 1;
   const shotInterval = 1 / (sps * 2 * heavyMult);
-  if (isSpectator) ctx.save();
-  if (isSpectator) ctx.globalAlpha = 0.3;
   drawGhostSprite(ctx, ts, {
     playerState: body,
     chargeValue: isSpectator ? 0 : chargeValue,
@@ -6487,9 +6491,9 @@ function drawGhost(ts){
     hpValue: isSpectator ? 0 : hpValue,
     maxHpValue,
     forceFrown: isSpectator,
+    bodyAlpha: isSpectator ? 0.3 : 1,
     hatKey: playerHat,
   });
-  if (isSpectator) ctx.restore();
 }
 
 function drawStartGhostPreview(ts = performance.now()) {
