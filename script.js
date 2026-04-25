@@ -149,6 +149,7 @@ import {
 import { createSnapshotApplier } from './src/net/snapshotApplier.js';
 import { createPredictionReconciler } from './src/net/predictionReconciler.js';
 import { createBulletLocalAdvance, PREDICTABLE_STATES as BULLET_PREDICTABLE_STATES } from './src/net/bulletLocalAdvance.js';
+import { createGreyLagComp } from './src/net/greyLagComp.js';
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
 import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
 import {
@@ -181,6 +182,7 @@ import {
   particles,
   clearParticles,
   spawnSparks,
+  spawnMuzzleStreak,
   spawnBlueDissipateBurst,
   spawnPayloadExplosion,
 } from './src/systems/particles.js';
@@ -981,6 +983,13 @@ let onlineGuestSlot1Installed = false;
 // applier's snapshot-lerp path. Null outside online guest runs.
 let guestBulletLocalAdvance = null;
 let lastBulletReconciledSnapshotSeq = null;
+// D19.3 — host-side grey-pickup lag compensation. Records each grey bullet's
+// recent positions per sim tick on the host. When a non-host slot's pickup
+// check runs, the host augments the current-position overlap test with a
+// historical-position overlap test (~6 ticks back, ~100 ms) so guest's
+// snapshot-delayed view of the grey lines up with where it counted as
+// "touched." Null on solo and on guest devices.
+let hostGreyLagComp = null;
 // Phase D5e — guest-side prediction reconciler. Records local input frames
 // per tick and replays them from authoritative state to compute drift
 // corrections. Null outside online guest runs. Plus a tracker for the
@@ -1232,6 +1241,11 @@ function teardownCoopInputUplink() {
   }
   guestBulletLocalAdvance = null;
   lastBulletReconciledSnapshotSeq = null;
+  // D19.3: tear down host grey lag-comp tracker.
+  if (hostGreyLagComp) {
+    try { hostGreyLagComp.clear(); } catch (_) {}
+  }
+  hostGreyLagComp = null;
   // Phase D5e: tear down reconciler + correction tracker.
   guestPredictionReconciler = null;
   lastReconciledSnapshotSeq = null;
@@ -2747,6 +2761,12 @@ function installOnlineCoopHostSlot1(remoteRing) {
     logger: (msg, err) => { try { console.warn('[coop] ' + msg, err || ''); } catch (_) {} },
   });
   onlineHostSlot1Installed = true;
+  // D19.3 — arm host-side grey lag-comp when slot 1 (the guest) is on-line.
+  // Solo + host-without-guest never instantiate this; no determinism risk.
+  try {
+    hostGreyLagComp = createGreyLagComp({});
+    console.info('[coop] host grey lag-comp armed');
+  } catch (_) { hostGreyLagComp = null; }
   try { console.info('[coop] online host slot 1 installed (remote-input adapter)'); } catch (_) {}
   // D18.7 — announce our color to guest. Safe to call before guest's slot
   // install; guest will echo back so we learn theirs in turn.
@@ -5000,6 +5020,23 @@ function update(dt,ts){
             if (next > interval) next = interval;
           } else if (hasTarget && next >= interval) {
             next = next % interval;
+            // D19.2 — guest muzzle prediction. The wrap edge above is
+            // exactly when host's updateGuestFire would call firePlayer
+            // for this slot. Emit cosmetic muzzle VFX (sparks + a short
+            // directional streak in the aim direction) so pressing fire
+            // feels instant on guest. The actual bullet still arrives
+            // ~RTT later via snapshot+local-advance — no predicted bullet
+            // is spawned here, so there's no rollback risk and no chance
+            // of a phantom bullet that never matches an auth shot.
+            // Gated to slot 1 (the guest's own player); slot 0 is the
+            // host's body — predicting their muzzle would risk drift
+            // between guest's mirrored-charge clock and host's real one.
+            if (sl.id === 1 && body && sl.aim) {
+              try {
+                spawnSparks(body.x, body.y, C.green, 4, 55);
+                spawnMuzzleStreak(body.x, body.y, sl.aim.angle || 0, C.green);
+              } catch (_) {}
+            }
           } else if (!hasTarget && next > interval) {
             // still + no target: cap (host wouldn't fire either)
             next = interval;
@@ -5526,6 +5563,14 @@ function update(dt,ts){
   const absorbR = player.r + 5 + UPG.absorbRange + (_barrierPulseTimer > 0 ? UPG.absorbRange + 40 : 0) + (_chainMagnetTimer > 0 ? UPG.absorbRange + 30 : 0);
   const decayMS = DECAY_BASE + UPG.decayBonus;
 
+  // D19.3 — host grey lag-comp: snapshot every grey's pre-update position so
+  // the guest-slot pickup check below can match against where the guest's
+  // delayed view actually drew the orb. Solo and host-without-guest leave
+  // hostGreyLagComp null; this no-ops in that case.
+  if (hostGreyLagComp) {
+    try { hostGreyLagComp.record(bullets, simTick); } catch (_) {}
+  }
+
   for(let i=bullets.length-1;i>=0;i--){
     const b=bullets[i];
     if(!b || typeof b !== 'object'){
@@ -5713,7 +5758,17 @@ function update(dt,ts){
           if(!gb || ((gs.metrics && gs.metrics.hp) || 0) <= 0) continue;
           if((gb.deadAt || 0) > 0) continue;
           const gAbsR = (gb.r || 14) + 5 + ((gs.upg && gs.upg.absorbRange) || 0);
-          if(Math.hypot(b.x - gb.x, b.y - gb.y) < gAbsR + b.r){
+          // D19.3 — accept a hit if the body overlaps the grey at its
+          // current position OR at its position ~6 ticks ago (≈100 ms).
+          // Guests render greys at host-now-renderDelayMs, so when their
+          // body visually touches the orb on screen, the grey has since
+          // drifted forward on the host. The historic check forgives that
+          // drift. Solo unaffected (hostGreyLagComp is null).
+          const overlapNow = Math.hypot(b.x - gb.x, b.y - gb.y) < gAbsR + b.r;
+          const overlapHistoric = !overlapNow && hostGreyLagComp
+            ? hostGreyLagComp.wasNearHistoric(b.id, simTick, gb.x, gb.y, gAbsR)
+            : false;
+          if(overlapNow || overlapHistoric){
             const cap = (gs.upg && gs.upg.maxCharge) || 1;
             const gain = (gs.upg && gs.upg.absorbValue) || 1;
             gs.metrics.charge = Math.min(cap, (gs.metrics.charge || 0) + gain);

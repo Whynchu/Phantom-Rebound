@@ -31,6 +31,32 @@ export function spawnSparks(x, y, col, n = 6, spd = 80) {
   }
 }
 
+// D19.2 — directional muzzle streak. Used by guest's predicted-fire VFX so
+// the moment the local fireT-wrap fires (host would call firePlayer here),
+// a quick cone of particles spurts forward along the aim angle. Cosmetic
+// only — no collision, no authority. Lifespan ~120 ms aligns with the gap
+// between predicted muzzle and the auth bullet appearing in the next
+// snapshot, so it visually hands off to the real bullet without a gap.
+export function spawnMuzzleStreak(x, y, ang, col, n = 5) {
+  const room = Math.min(n, MAX_PARTICLES - particles.length);
+  const baseSpeed = 260;
+  for (let i = 0; i < room; i++) {
+    const spread = (Math.random() - 0.5) * 0.32;
+    const a = ang + spread;
+    const s = baseSpeed * (0.65 + Math.random() * 0.55);
+    const fwd = Math.random() * 6;
+    particles.push({
+      x: x + Math.cos(ang) * fwd,
+      y: y + Math.sin(ang) * fwd,
+      vx: Math.cos(a) * s,
+      vy: Math.sin(a) * s,
+      col,
+      life: 0.55,
+      decay: 4.6 + Math.random(),
+    });
+  }
+}
+
 export function spawnBlueDissipateBurst(x, y, colorFn) {
   const room = Math.min(12, MAX_PARTICLES - particles.length);
   for (let i = 0; i < room; i++) {
