@@ -4875,6 +4875,7 @@ function init() {
   _vampiricRestoresThisRoom = runtimeTimers.vampiricRestoresThisRoom;
   _killSustainHealedThisRoom = runtimeTimers.killSustainHealedThisRoom;
   _colossusShockwaveCd = runtimeTimers.colossusShockwaveCd;
+  _volatileOrbGlobalCooldown = runtimeTimers.volatileOrbGlobalCooldown;
   _orbFireTimers=[]; _orbCooldown=[];
   boonHistory=[]; pendingLegendary=null; legendaryOffered=false;
   legendaryRejectedIds=[]; legendaryRoomsSinceRejection={}; // R0.5 — reset to plain array/object

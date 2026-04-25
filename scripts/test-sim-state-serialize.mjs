@@ -151,10 +151,129 @@ test('serialize(snapshot).length is reasonable (< 100KB for typical state)', () 
     state.enemies.push({ id: i, x: Math.random() * 512, y: Math.random() * 768, hp: 100 });
   }
   state.run.boonHistory = Array(30).fill('test-boon');
-  
+
   const json = serialize(state);
   console.log(`  (state size: ${Math.round(json.length / 1024)} KB)`);
   assert.ok(json.length < 100 * 1024, 'state too large');
+});
+
+// R0.4 step 1 — schema completeness for slot timers + body transients.
+// These fields are critical for rollback because:
+//   - body.invincible/distort tick down per dt; resim must see the exact
+//     pre-tick value or hits register on different ticks.
+//   - body.phaseWalkOverlapMs/IdleMs are accumulated across substeps;
+//     wrong values trigger ejection on the wrong frame.
+//   - slot.timers.* gate boon procs (barrier pulses, absorb combos,
+//     chain magnet, slip cooldown, colossus shockwave, volatile orb).
+test('createSimState populates slot.timers schema', () => {
+  const state = createSimState({ seed: 1, slotCount: 1 });
+  const t = state.slots[0].timers;
+  assert.ok(t, 'slots[0].timers exists');
+  for (const key of [
+    'barrierPulseTimer', 'slipCooldown',
+    'absorbComboCount', 'absorbComboTimer',
+    'chainMagnetTimer', 'echoCounter',
+    'vampiricRestoresThisRoom', 'killSustainHealedThisRoom',
+    'colossusShockwaveCd', 'volatileOrbGlobalCooldown',
+  ]) {
+    assert.equal(t[key], 0, `timers.${key} initialised to 0`);
+  }
+});
+
+test('createSimState populates body transient combat fields', () => {
+  const state = createSimState({ seed: 1, slotCount: 1 });
+  const b = state.slots[0].body;
+  assert.equal(b.invincible, 0);
+  assert.equal(b.distort, 0);
+  assert.equal(b.phaseWalkOverlapMs, 0);
+  assert.equal(b.phaseWalkIdleMs, 0);
+  assert.equal(b.coopSpectating, false);
+});
+
+test('restoreState round-trips slot.timers fields', () => {
+  const state = createSimState({ seed: 1, slotCount: 1 });
+  const t = state.slots[0].timers;
+  t.barrierPulseTimer = 234;
+  t.slipCooldown = 1100;
+  t.absorbComboCount = 3;
+  t.absorbComboTimer = 850;
+  t.chainMagnetTimer = 600;
+  t.echoCounter = 4;
+  t.vampiricRestoresThisRoom = 2;
+  t.killSustainHealedThisRoom = 5;
+  t.colossusShockwaveCd = 1.25;
+  t.volatileOrbGlobalCooldown = 0.4;
+  const timersIdentity = state.slots[0].timers;
+
+  const snap = snapshotState(state);
+  // Mutate live state away from the snapshot.
+  for (const k of Object.keys(t)) t[k] = 0;
+
+  restoreState(state, snap);
+  // Identity preserved.
+  assert.equal(state.slots[0].timers, timersIdentity, 'timers object identity preserved');
+  // Values restored.
+  assert.equal(t.barrierPulseTimer, 234);
+  assert.equal(t.slipCooldown, 1100);
+  assert.equal(t.absorbComboCount, 3);
+  assert.equal(t.absorbComboTimer, 850);
+  assert.equal(t.chainMagnetTimer, 600);
+  assert.equal(t.echoCounter, 4);
+  assert.equal(t.vampiricRestoresThisRoom, 2);
+  assert.equal(t.killSustainHealedThisRoom, 5);
+  assert.equal(t.colossusShockwaveCd, 1.25);
+  assert.equal(t.volatileOrbGlobalCooldown, 0.4);
+});
+
+test('restoreState round-trips body transient combat fields', () => {
+  const state = createSimState({ seed: 1, slotCount: 1 });
+  const b = state.slots[0].body;
+  b.invincible = 1.4;
+  b.distort = 0.6;
+  b.phaseWalkOverlapMs = 432;
+  b.phaseWalkIdleMs = 88;
+  b.coopSpectating = true;
+  const bodyIdentity = state.slots[0].body;
+
+  const snap = snapshotState(state);
+  b.invincible = 0;
+  b.distort = 0;
+  b.phaseWalkOverlapMs = 0;
+  b.phaseWalkIdleMs = 0;
+  b.coopSpectating = false;
+
+  restoreState(state, snap);
+  assert.equal(state.slots[0].body, bodyIdentity, 'body object identity preserved');
+  assert.equal(b.invincible, 1.4);
+  assert.equal(b.distort, 0.6);
+  assert.equal(b.phaseWalkOverlapMs, 432);
+  assert.equal(b.phaseWalkIdleMs, 88);
+  assert.equal(b.coopSpectating, true);
+});
+
+test('restoreState handles legacy slot without timers field', () => {
+  // Simulate a stale liveState (e.g., from before schema bump). Resim
+  // should still adopt the snapshot timers without throwing.
+  const state = createSimState({ seed: 1, slotCount: 1 });
+  delete state.slots[0].timers;
+  const snap = snapshotState(createSimState({ seed: 2, slotCount: 1 }));
+  snap.slots[0].timers.barrierPulseTimer = 999;
+  restoreState(state, snap);
+  assert.ok(state.slots[0].timers, 'timers field added');
+  assert.equal(state.slots[0].timers.barrierPulseTimer, 999);
+});
+
+test('resetSimState clears slot.timers and body transients', () => {
+  const state = createSimState({ seed: 1, slotCount: 1 });
+  state.slots[0].timers.barrierPulseTimer = 999;
+  state.slots[0].timers.volatileOrbGlobalCooldown = 0.5;
+  state.slots[0].body.invincible = 2;
+  state.slots[0].body.coopSpectating = true;
+  resetSimState(state, { seed: 7 });
+  assert.equal(state.slots[0].timers.barrierPulseTimer, 0);
+  assert.equal(state.slots[0].timers.volatileOrbGlobalCooldown, 0);
+  assert.equal(state.slots[0].body.invincible, 0);
+  assert.equal(state.slots[0].body.coopSpectating, false);
 });
 
 console.log('');

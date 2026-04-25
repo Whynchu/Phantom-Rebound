@@ -136,6 +136,15 @@ export function restoreState(liveState, snapshot) {
         if (snapshotSlot.body.vy !== undefined) liveSlot.body.vy = snapshotSlot.body.vy;
         if (snapshotSlot.body.r !== undefined) liveSlot.body.r = snapshotSlot.body.r;
         if (snapshotSlot.body.alive !== undefined) liveSlot.body.alive = snapshotSlot.body.alive;
+        // Transient combat state (post-hit invuln, distort, phase-walk timers).
+        // These MUST roll back so a re-sim through a hit produces the same
+        // visual & gameplay state. coopSpectating gates the dt-decrements;
+        // also round-trip.
+        if (snapshotSlot.body.invincible !== undefined) liveSlot.body.invincible = snapshotSlot.body.invincible;
+        if (snapshotSlot.body.distort !== undefined) liveSlot.body.distort = snapshotSlot.body.distort;
+        if (snapshotSlot.body.phaseWalkOverlapMs !== undefined) liveSlot.body.phaseWalkOverlapMs = snapshotSlot.body.phaseWalkOverlapMs;
+        if (snapshotSlot.body.phaseWalkIdleMs !== undefined) liveSlot.body.phaseWalkIdleMs = snapshotSlot.body.phaseWalkIdleMs;
+        if (snapshotSlot.body.coopSpectating !== undefined) liveSlot.body.coopSpectating = snapshotSlot.body.coopSpectating;
       }
 
       // Metrics fields.
@@ -153,6 +162,26 @@ export function restoreState(liveState, snapshot) {
       // UPG — just assign the whole object (boons are immutable once picked).
       if (snapshotSlot.upg) {
         liveSlot.upg = { ...snapshotSlot.upg };
+      }
+
+      // Per-slot timers (boon/combat cadence). These must roll back or
+      // re-sim through a tick will produce different damage windows,
+      // shockwave cooldowns, orb fires, etc. Field-by-field copy
+      // preserves liveSlot.timers identity.
+      if (snapshotSlot.timers && liveSlot.timers) {
+        if (snapshotSlot.timers.barrierPulseTimer !== undefined) liveSlot.timers.barrierPulseTimer = snapshotSlot.timers.barrierPulseTimer;
+        if (snapshotSlot.timers.slipCooldown !== undefined) liveSlot.timers.slipCooldown = snapshotSlot.timers.slipCooldown;
+        if (snapshotSlot.timers.absorbComboCount !== undefined) liveSlot.timers.absorbComboCount = snapshotSlot.timers.absorbComboCount;
+        if (snapshotSlot.timers.absorbComboTimer !== undefined) liveSlot.timers.absorbComboTimer = snapshotSlot.timers.absorbComboTimer;
+        if (snapshotSlot.timers.chainMagnetTimer !== undefined) liveSlot.timers.chainMagnetTimer = snapshotSlot.timers.chainMagnetTimer;
+        if (snapshotSlot.timers.echoCounter !== undefined) liveSlot.timers.echoCounter = snapshotSlot.timers.echoCounter;
+        if (snapshotSlot.timers.vampiricRestoresThisRoom !== undefined) liveSlot.timers.vampiricRestoresThisRoom = snapshotSlot.timers.vampiricRestoresThisRoom;
+        if (snapshotSlot.timers.killSustainHealedThisRoom !== undefined) liveSlot.timers.killSustainHealedThisRoom = snapshotSlot.timers.killSustainHealedThisRoom;
+        if (snapshotSlot.timers.colossusShockwaveCd !== undefined) liveSlot.timers.colossusShockwaveCd = snapshotSlot.timers.colossusShockwaveCd;
+        if (snapshotSlot.timers.volatileOrbGlobalCooldown !== undefined) liveSlot.timers.volatileOrbGlobalCooldown = snapshotSlot.timers.volatileOrbGlobalCooldown;
+      } else if (snapshotSlot.timers && !liveSlot.timers) {
+        // Live slot was created before timers field existed — adopt snapshot copy.
+        liveSlot.timers = { ...snapshotSlot.timers };
       }
 
       // Shields and orbState arrays.

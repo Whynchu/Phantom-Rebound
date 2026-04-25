@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.85',
+      label: 'R0.4 STEP 1 — SIMSTATE SCHEMA + RESTORE COVERAGE FOR SLOT TIMERS',
+      summary: ['Pre-extraction groundwork for R0.4. Before carving more of update() into helpers, the SimState schema and restoreState pipeline now own all the slot-level scalars rollback needs to round-trip: 10 boon/combat timers (barrier pulse, slip cooldown, absorb combo count + timer, chain magnet, echo counter, vampiric/kill-sustain per-room counters, colossus shockwave, volatile orb global cooldown) and 5 body transient fields (invincible, distort, phaseWalkOverlapMs, phaseWalkIdleMs, coopSpectating). All purely additive — closure lets in script.js are still the runtime truth, so determinism canary 13/13 stays byte-identical. Wiring the lets to read/write through simState is a separate follow-up.'],
+      highlights: [
+        'src/sim/simState.js — createSlot() now allocates a frozen-shape `timers` object with all 10 slot-level scalars (annotated with their tick units: barrier/slip/chain/absorb-combo are ms-decremented; colossus/volatile-orb are second-decremented) and 5 body transient combat fields. resetSimState() clears each one with a defensive guard for slots that predate the schema bump.',
+        'src/sim/simStateSerialize.js — restoreState() body branch now restores invincible/distort/phaseWalkOverlapMs/phaseWalkIdleMs/coopSpectating. New timers branch restores the 10 timer fields field-by-field, preserving the live timers object identity (so any future bridge holding a ref stays valid). Falls back to copy-construction if the live slot was created before timers existed.',
+        'src/core/runState.js — createInitialRuntimeTimers() now includes volatileOrbGlobalCooldown: 0 (rubber-duck flagged this gap; it was missing from the structured run-init bundle). script.js init copies it into the closure let so re-runs zero it deterministically alongside the other timers.',
+        'scripts/test-sim-state-serialize.mjs — six new tests (14/14 total). Asserts createSimState populates all new fields at 0/false; restoreState round-trips both timers and body transients while preserving object identity; legacy slots without timers field are migrated cleanly; resetSimState clears them.',
+        'Test pass: determinism canary 13/13, player movement 18/18, sim-state 68/68, sim-state-serialize 14/14. Production unchanged — rollback path still dormant behind ?rollback=1 with a no-op simStep.',
+        'Why this comes before more helper extraction: rubber-duck pass identified that extracting timer helpers without first wiring restoreState would silently break rollback (the canary tests modules in isolation, not full-loop replay). Schema + restore coverage first means the data is safe to migrate; the actual let → simState data-flow rewrite (~76 sites) is a mechanical follow-up that can be done in one pass with confidence.',
+      ]
+    },
+  {
       version: '1.20.84',
       label: 'R0.4 CHUNKS 1-2 — PLAYER MOVEMENT + SUBSTEP EXTRACTED',
       summary: ['First two chunks of R0.4 (sim step carving) land. The player\'s joystick→velocity mapping and the substep position-integration loop with phase-walk obstacle handling are now in src/sim/playerMovement.js as pure helpers, called from update() in two lines instead of ~30. No behavior change: determinism canary 13/13 still byte-identical; production gameplay unchanged. 18 new unit tests lock in the math so any future refactor (or rollback resim) matches the live game exactly.'],

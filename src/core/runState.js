@@ -49,6 +49,12 @@ function createInitialRuntimeTimers() {
     vampiricRestoresThisRoom: 0,
     killSustainHealedThisRoom: 0,
     colossusShockwaveCd: 0,
+    // R0.4 step 1 (rubber-duck fix): this was missing from the
+    // structured run-init bundle, which left _volatileOrbGlobalCooldown
+    // un-reset across runs (it relied on the bare-field assignment in
+    // script.js). Adding it here closes the gap so re-init zeroes it
+    // alongside the other timers.
+    volatileOrbGlobalCooldown: 0,
   };
 }
 

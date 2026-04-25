@@ -184,6 +184,15 @@ export function createSlot(index, baseHp = DEFAULT_BASE_PLAYER_HP) {
       vy: 0,
       r: 14,
       alive: true,
+      // Transient combat state — must roll back with body so resim
+      // re-applies post-hit invuln + distort timers correctly. coopSpectating
+      // gates whether dt-decrements apply (skipped while a teammate
+      // is spectating), so it must round-trip too.
+      invincible: 0,
+      distort: 0,
+      phaseWalkOverlapMs: 0,
+      phaseWalkIdleMs: 0,
+      coopSpectating: false,
     },
     metrics: {
       hp: baseHp,
@@ -196,6 +205,28 @@ export function createSlot(index, baseHp = DEFAULT_BASE_PLAYER_HP) {
       aimHasTarget: false,
     },
     upg: {},
+    // Per-slot scalar timers/counters. These are the slot-local
+    // boon/combat cadence timers that today live as `_xxx` closure
+    // lets in script.js (see slot0Timers in script.js:1262). Schema
+    // lives here so rollback snapshot/restore covers them.
+    //
+    // Units note (see rubber-duck R0.4 critique): some timers tick in
+    // ms (decremented by dt*1000 in update()), others in seconds
+    // (decremented by dt). Don't normalize — the consumers expect the
+    // existing units. Mark each here so future migration doesn't
+    // unify them by accident.
+    timers: {
+      barrierPulseTimer: 0,           // ms
+      slipCooldown: 0,                // ms
+      absorbComboCount: 0,            // count
+      absorbComboTimer: 0,            // ms (resets count on expire)
+      chainMagnetTimer: 0,            // ms
+      echoCounter: 0,                 // count
+      vampiricRestoresThisRoom: 0,    // count
+      killSustainHealedThisRoom: 0,   // count
+      colossusShockwaveCd: 0,         // s
+      volatileOrbGlobalCooldown: 0,   // s
+    },
     // Per-shield runtime state. Each entry: { hardened: bool, cooldown: number }.
     // Length matches active shield count (0–8).
     shields: [],
@@ -226,6 +257,11 @@ export function resetSimState(state, { seed = 1, baseHp = DEFAULT_BASE_PLAYER_HP
     slot.body.x = 0; slot.body.y = 0;
     slot.body.vx = 0; slot.body.vy = 0;
     slot.body.alive = true;
+    slot.body.invincible = 0;
+    slot.body.distort = 0;
+    slot.body.phaseWalkOverlapMs = 0;
+    slot.body.phaseWalkIdleMs = 0;
+    slot.body.coopSpectating = false;
     slot.metrics.hp = baseHp;
     slot.metrics.maxHp = baseHp;
     slot.metrics.charge = 0;
@@ -235,6 +271,23 @@ export function resetSimState(state, { seed = 1, baseHp = DEFAULT_BASE_PLAYER_HP
     slot.metrics.aimAngle = -Math.PI * 0.5;
     slot.metrics.aimHasTarget = false;
     slot.upg = {};
+    if (!slot.timers) slot.timers = {
+      barrierPulseTimer: 0, slipCooldown: 0,
+      absorbComboCount: 0, absorbComboTimer: 0,
+      chainMagnetTimer: 0, echoCounter: 0,
+      vampiricRestoresThisRoom: 0, killSustainHealedThisRoom: 0,
+      colossusShockwaveCd: 0, volatileOrbGlobalCooldown: 0,
+    };
+    slot.timers.barrierPulseTimer = 0;
+    slot.timers.slipCooldown = 0;
+    slot.timers.absorbComboCount = 0;
+    slot.timers.absorbComboTimer = 0;
+    slot.timers.chainMagnetTimer = 0;
+    slot.timers.echoCounter = 0;
+    slot.timers.vampiricRestoresThisRoom = 0;
+    slot.timers.killSustainHealedThisRoom = 0;
+    slot.timers.colossusShockwaveCd = 0;
+    slot.timers.volatileOrbGlobalCooldown = 0;
     slot.shields.length = 0;
     slot.orbState.fireTimers.length = 0;
     slot.orbState.cooldowns.length = 0;
