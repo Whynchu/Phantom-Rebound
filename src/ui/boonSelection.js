@@ -29,9 +29,15 @@ function renderActiveBoons(upg) {
   }
 }
 
-function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSelect, pendingLegendary = null, onLegendaryAccept = null, onLegendaryReject = null, cardsContainer = document.getElementById('up-cards'), panel = document.getElementById('s-up') }) {
-  let pool = pickBoonChoices(upg, hp, maxHp, pendingLegendary && onLegendaryAccept ? 2 : 3);
-  let remainingRerolls = rerolls;
+function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSelect, pendingLegendary = null, onLegendaryAccept = null, onLegendaryReject = null, boonsOverride = null, cardsContainer = document.getElementById('up-cards'), panel = document.getElementById('s-up') }) {
+  // Coop D14 — boonsOverride lets the caller supply an explicit list of boon
+  // objects (used by the online-coop handshake to keep host/guest picker UIs
+  // in sync without depending on simRng position). When set, rerolls are
+  // hidden because the choice list is host-authoritative.
+  let pool = Array.isArray(boonsOverride) && boonsOverride.length > 0
+    ? boonsOverride.slice()
+    : pickBoonChoices(upg, hp, maxHp, pendingLegendary && onLegendaryAccept ? 2 : 3);
+  let remainingRerolls = (boonsOverride && boonsOverride.length > 0) ? 0 : rerolls;
   const healBoon = createHealBoon(upg);
   const toggleBtn = document.getElementById('btn-up-active');
   const activePanel = document.getElementById('up-active-panel');
@@ -154,6 +160,7 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
     updateRerollCard();
     rerollCard.onclick = () => {
       if(remainingRerolls <= 0 || panel.classList.contains('screen-leaving')) return;
+      if(boonsOverride) return; // D14: reroll disabled when caller supplies a fixed pool
       remainingRerolls--;
       onReroll();
       pool = pickBoonChoices(upg, hp, maxHp, pendingLegendary && onLegendaryAccept ? 2 : 3);

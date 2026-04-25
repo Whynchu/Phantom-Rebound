@@ -25,7 +25,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { C, ROOM_SCRIPTS, BOSS_ROOMS, DECAY_BASE, M, VERSION } from './src/data/gameData.js';
-import { CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, getPayloadBlastRadius, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
+import { BOONS, CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, getPayloadBlastRadius, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, pickBoonChoices, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots, getEnemyDefinition } from './src/entities/enemyTypes.js';
 import {
   resolveEnemySeparation,
@@ -1127,15 +1127,76 @@ function teardownCoopInputUplink() {
   }
 }
 
-// Phase D10 — multi-room boon handshake state. Host enters the boon phase
-// when a room clears, broadcasts `coop-boon-start`, runs the regular
-// showUpgrades() flow, then on resume mirrors its UPG onto guest slot 1's
-// UPG and broadcasts `coop-room-advance`. Guests render a "PARTNER PICKING"
-// overlay during the phase and clear it on advance. v1: team boons (host
-// picks for both) — per-peer picker is a future iteration.
+// Phase D10 — multi-room boon handshake state. D14 (v1.20.46) overhauls
+// this from team-boons (host picks for both) to per-peer picks: host picks
+// for slot 0 from the full pool; guest picks for slot 1 from a slot-1-safe
+// whitelist (boons whose effects are purely numeric mutations of slot.upg
+// fields consumed by firePlayer / collisions, not global hooks). Both peers
+// apply each pick locally to keep slot UPGs in sync. Resume gates on both
+// picks complete OR an AFK timeout (host auto-resolves slot 1).
 let activeCoopSession = null;
 let onlineCoopBoonPhase = null;
 let coopGuestWaitOverlayEl = null;
+
+// D14 — per-phase pick tracking. phaseId is roomIndex at the moment the
+// host enters the boon phase (room transitions are 1:1 with phases). Both
+// peers tag every coop-boon-* message with phaseId so out-of-order or
+// late-arriving picks from the previous phase are rejected.
+let currentBoonPhaseId = null;
+let pendingCoopBoonPicks = { hostDone: false, guestDone: false };
+// Buffer for picks that arrive before this peer has entered the phase
+// (e.g. host's own coop-boon-pick reaches a slow-network guest before that
+// guest has processed coop-boon-start). Single-slot per slotId is enough
+// because each peer picks once per phase.
+const coopBoonPickBuffer = new Map(); // key: phaseId-slotId, val: payload
+let coopBoonAfkTimer = null;
+const COOP_BOON_AFK_TIMEOUT_MS = 60000;
+
+function isOnlineCoopBoonPhaseActive() {
+  return !!onlineCoopBoonPhase;
+}
+
+// D14 — slot-1-safe boon whitelist. These boons mutate ONLY slot.upg
+// numeric fields that firePlayer / damage-application / charge math already
+// read off slot.upg directly, so they work correctly when applied to slot 1
+// in isolation. Anything that hooks global state (player.shields,
+// _barrierPulseTimer, room-clear regen, kill-attribution, gravityWell2,
+// titan/mini player size, mirror/burst shields, escalation, EMP, predator,
+// blood pact, phase dash, mirror tide, etc.) is excluded from slot 1 in
+// v1 — slot 1 still benefits from slot 0 picks of those (which run on
+// host's player), it just can't directly choose them. A future per-slot
+// boon-hook refactor (deferred) will expand this whitelist.
+const SLOT1_SAFE_BOON_NAMES = new Set([
+  'Rapid Fire', 'Ring Blast', 'Backshot', 'Snipe Shot', 'Twin Lance',
+  'Bigger Bullets', 'Faster Bullets', 'Critical Hit',
+  'Ricochet', 'Homing', 'Pierce',
+  'Quick Harvest', 'Decay Extension', 'Capacity Boost', 'Deep Reserve',
+  'Wider Absorb', 'Long Reach', 'Kinetic Harvest', 'Steady Aim',
+  'Ghost Velocity', 'Extra Life',
+]);
+
+function getSlot1SafeBoonPool() {
+  return BOONS.filter((b) => b && SLOT1_SAFE_BOON_NAMES.has(b.name));
+}
+
+// D14 — boon IDs are stable indices into the BOONS array. Names are NOT
+// safe wire identifiers because at least one base name is duplicated
+// (`Gravity Well` appears twice — see boonDefinitions.js). Index is stable
+// across both peers when their bundle versions match (we already gate
+// version mismatches at coop session handshake).
+function boonIdFromBoon(boon) {
+  if (!boon) return -1;
+  // Evolved boons aren't in BOONS — their evolvesFrom base is. The pickers
+  // pass base boons into onSelect; getEvolvedBoon is consulted at apply
+  // time. So indexOf on BOONS is sufficient for the wire ID.
+  return BOONS.indexOf(boon);
+}
+
+function boonFromId(id) {
+  const i = id | 0;
+  if (i < 0 || i >= BOONS.length) return null;
+  return BOONS[i];
+}
 
 function showCoopGuestWaitOverlay(text) {
   try {
@@ -1158,9 +1219,10 @@ function hideCoopGuestWaitOverlay() {
   } catch (_) {}
 }
 
-// Sync host's UPG into slot 1's UPG (mutates in place — slot.upg is a
-// const closure ref, can't be reassigned). UPG is data-only (primitives +
-// boonSelectionOrder array) so a JSON deep clone is safe and complete.
+// Sync host's UPG into slot 1's UPG (legacy team-boon mirror). Kept for
+// compatibility with the pre-D14 path on initial slot-1 install when no
+// boons have been applied yet, but the per-room mirror call has been
+// removed in resumePlayAfterBoons (D14 — slot 1 evolves independently).
 function mirrorHostUpgToSlot1() {
   try {
     const slot1 = playerSlots[1];
@@ -1175,30 +1237,273 @@ function mirrorHostUpgToSlot1() {
   }
 }
 
-function isOnlineCoopBoonPhaseActive() {
-  return !!onlineCoopBoonPhase;
+// D14 — pure helper: apply a base boon (by id) to the given slot's upg/hp,
+// resolving any active evolution. Used on the receiving peer when the
+// other peer broadcasts coop-boon-pick.
+function applyBoonByIdToSlot(boon, slotIndex) {
+  if (!boon) return;
+  if (slotIndex === 0) {
+    const state = { hp, maxHp };
+    const evolved = getEvolvedBoon(boon, UPG);
+    evolved.apply(UPG, state);
+    syncRunChargeCapacity();
+    hp = state.hp;
+    maxHp = state.maxHp;
+    try { (UPG.boonSelectionOrder = UPG.boonSelectionOrder || []).push(evolved.name); } catch (_) {}
+    syncPlayerScale();
+  } else {
+    const slot = playerSlots[slotIndex];
+    if (!slot) return;
+    const state = { hp: slot.metrics.hp, maxHp: slot.metrics.maxHp };
+    const evolved = getEvolvedBoon(boon, slot.upg);
+    evolved.apply(slot.upg, state);
+    slot.metrics.hp = state.hp;
+    slot.metrics.maxHp = state.maxHp;
+    try { (slot.upg.boonSelectionOrder = slot.upg.boonSelectionOrder || []).push(evolved.name); } catch (_) {}
+  }
+}
+
+// D14 — broadcast our own pick to the other peer.
+function sendCoopBoonPick(slotId, boonId) {
+  try {
+    if (!activeCoopSession || typeof activeCoopSession.sendGameplay !== 'function') return;
+    activeCoopSession.sendGameplay({
+      kind: 'coop-boon-pick',
+      phaseId: currentBoonPhaseId,
+      slotId,
+      boonId,
+    });
+  } catch (err) {
+    try { console.warn('[coop] coop-boon-pick send failed', err); } catch (_) {}
+  }
+}
+
+// D14 — local callback fired from the picker UI's onSelect for online coop
+// peers. Returns true when the caller should NOT call resumePlayAfterBoons
+// directly (we'll resume after both picks land or AFK timeout fires).
+function onLocalBoonPickedOnline(slotId, boon) {
+  const isHost = isCoopHost && isCoopHost();
+  const isGuest = isCoopGuest && isCoopGuest();
+  if (!isHost && !isGuest) return false;
+  if (currentBoonPhaseId == null) return false;
+  const id = boonIdFromBoon(boon);
+  if (id < 0) return false;
+  if (isHost) {
+    pendingCoopBoonPicks.hostDone = true;
+    sendCoopBoonPick(0, id);
+    tryResumeCoopBoonPhase();
+    return true;
+  }
+  // Guest:
+  pendingCoopBoonPicks.guestDone = true;
+  sendCoopBoonPick(1, id);
+  showCoopGuestWaitOverlay('WAITING FOR HOST…');
+  return true;
+}
+
+// D14 — host-side legendary picks don't ship over the wire (slot 1 has no
+// legendaries v1) but the host still needs to gate room advance on guest's
+// pick. Returns true when caller should NOT advance directly.
+function markHostBoonDoneIfOnline() {
+  if (!(isCoopHost && isCoopHost())) return false;
+  if (currentBoonPhaseId == null) return false;
+  pendingCoopBoonPicks.hostDone = true;
+  // Notify guest that host picked (boonId=-1 means "host legendary, no
+  // mirror needed"). Guest treats this as host-done only.
+  try {
+    if (activeCoopSession && typeof activeCoopSession.sendGameplay === 'function') {
+      activeCoopSession.sendGameplay({
+        kind: 'coop-boon-pick',
+        phaseId: currentBoonPhaseId,
+        slotId: 0,
+        boonId: -1,
+      });
+    }
+  } catch (_) {}
+  tryResumeCoopBoonPhase();
+  return true;
+}
+
+function tryResumeCoopBoonPhase() {
+  if (!(isCoopHost && isCoopHost())) return;
+  if (!pendingCoopBoonPicks.hostDone || !pendingCoopBoonPicks.guestDone) return;
+  if (coopBoonAfkTimer) {
+    try { clearTimeout(coopBoonAfkTimer); } catch (_) {}
+    coopBoonAfkTimer = null;
+  }
+  resumePlayAfterBoons();
 }
 
 function enterOnlineCoopBoonPhaseHost() {
   onlineCoopBoonPhase = { roomIndex };
+  currentBoonPhaseId = roomIndex | 0;
+  pendingCoopBoonPicks = { hostDone: false, guestDone: false };
+  // Compute slot-1 choices on host so both peers render the same list.
+  // pickBoonChoices uses simRng which can drift between host and guest, so
+  // shipping explicit ids over the wire is the safe play.
+  let slot1BoonIds = [];
+  try {
+    const slot1 = playerSlots[1];
+    if (slot1) {
+      const safePool = getSlot1SafeBoonPool().filter((b) => {
+        try { return !b.requires || b.requires(slot1.upg); } catch (_) { return false; }
+      });
+      // Random-shuffle the safe pool with simRng and take 3. We bypass
+      // pickBoonChoices' tag-balancing because the whitelist is small and
+      // the tag distribution is heavily skewed (mostly UTILITY/OFFENSE).
+      const shuffled = safePool.slice();
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = (Math.random() * (i + 1)) | 0;
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      slot1BoonIds = shuffled.slice(0, 3).map(boonIdFromBoon).filter((id) => id >= 0);
+    }
+  } catch (err) {
+    try { console.warn('[coop] slot1 choice computation failed', err); } catch (_) {}
+  }
   try {
     if (activeCoopSession && typeof activeCoopSession.sendGameplay === 'function') {
-      activeCoopSession.sendGameplay({ kind: 'coop-boon-start', roomIndex });
+      activeCoopSession.sendGameplay({
+        kind: 'coop-boon-start',
+        roomIndex,
+        phaseId: currentBoonPhaseId,
+        slot1BoonIds,
+      });
     }
   } catch (err) {
     try { console.warn('[coop] coop-boon-start send failed', err); } catch (_) {}
+  }
+  // AFK timeout: if guest hasn't picked after 60s, auto-resolve to the
+  // first option in slot1BoonIds (deterministic, no surprise) and apply on
+  // host. Guest will see a coop-boon-pick echo when host applies + still
+  // resume on coop-room-advance.
+  if (slot1BoonIds.length > 0) {
+    coopBoonAfkTimer = setTimeout(() => {
+      if (pendingCoopBoonPicks.guestDone) return;
+      try { console.warn('[coop] guest AFK on boon pick — auto-resolving slot 1'); } catch (_) {}
+      const fallbackId = slot1BoonIds[0];
+      const boon = boonFromId(fallbackId);
+      if (boon) applyBoonByIdToSlot(boon, 1);
+      pendingCoopBoonPicks.guestDone = true;
+      // Tell guest we picked for them (so its slot1.upg stays in sync).
+      sendCoopBoonPick(1, fallbackId);
+      tryResumeCoopBoonPhase();
+    }, COOP_BOON_AFK_TIMEOUT_MS);
   }
   showUpgrades();
 }
 
 function handleCoopBoonStartGuest(payload) {
+  const phaseId = (payload && payload.phaseId != null) ? (payload.phaseId | 0) : ((payload && payload.roomIndex) | 0);
   onlineCoopBoonPhase = { roomIndex: (payload && payload.roomIndex) | 0 };
-  showCoopGuestWaitOverlay('PARTNER PICKING A BOON…');
+  currentBoonPhaseId = phaseId;
+  pendingCoopBoonPicks = { hostDone: false, guestDone: false };
+  const slot1 = playerSlots[1];
+  if (!slot1) {
+    showCoopGuestWaitOverlay('PARTNER PICKING A BOON…');
+    return;
+  }
+  // Resolve the choice list shipped from host.
+  const ids = Array.isArray(payload && payload.slot1BoonIds) ? payload.slot1BoonIds : [];
+  const choices = ids.map(boonFromId).filter(Boolean);
+  if (choices.length === 0) {
+    // Host couldn't compute a list (e.g. slot 1 missing or bug). Show wait
+    // overlay; host will eventually broadcast coop-room-advance.
+    showCoopGuestWaitOverlay('PARTNER PICKING A BOON…');
+    return;
+  }
+  // Freeze guest sim to mirror host's pause — without this, guest's
+  // predicted body keeps moving while the picker is open and snaps later.
+  gstate = 'upgrade';
+  try { cancelAnimationFrame(raf); } catch (_) {}
+  try { hideCoopGuestWaitOverlay(); } catch (_) {}
+  try {
+    showBoonSelection({
+      upg: slot1.upg,
+      hp: slot1.metrics.hp,
+      maxHp: slot1.metrics.maxHp,
+      rerolls: 0,
+      onReroll: null,
+      boonsOverride: choices,
+      onSelect: (boon) => {
+        try {
+          const state = { hp: slot1.metrics.hp, maxHp: slot1.metrics.maxHp };
+          const evolved = getEvolvedBoon(boon, slot1.upg);
+          evolved.apply(slot1.upg, state);
+          slot1.metrics.hp = state.hp;
+          slot1.metrics.maxHp = state.maxHp;
+          try { (slot1.upg.boonSelectionOrder = slot1.upg.boonSelectionOrder || []).push(evolved.name); } catch (_) {}
+        } catch (err) {
+          try { console.warn('[coop] guest boon apply failed', err); } catch (_) {}
+        }
+        document.getElementById('s-up').classList.add('off');
+        onLocalBoonPickedOnline(1, boon);
+      },
+    });
+  } catch (err) {
+    try { console.warn('[coop] guest picker open failed', err); } catch (_) {}
+    showCoopGuestWaitOverlay('PARTNER PICKING A BOON…');
+  }
+  // Drain any buffered picks from the host that arrived before us.
+  drainBufferedCoopBoonPicks();
+}
+
+// D14 — handle a coop-boon-pick from the OTHER peer.
+function handleCoopBoonPickIncoming(payload, role) {
+  if (!payload) return;
+  const phaseId = (payload.phaseId | 0);
+  const slotId = (payload.slotId | 0);
+  const boonId = (payload.boonId | 0);
+  if (currentBoonPhaseId == null || phaseId !== currentBoonPhaseId) {
+    // Either we haven't entered the phase yet (buffer it for drain) or
+    // it's stale (drop). Use phaseId as the staleness gate: only buffer
+    // if it's >= our currentBoonPhaseId or we have no phase yet.
+    if (currentBoonPhaseId == null || phaseId > currentBoonPhaseId) {
+      coopBoonPickBuffer.set(phaseId + ':' + slotId, payload);
+    }
+    return;
+  }
+  const boon = boonFromId(boonId);
+  if (role === 'host' && slotId === 1) {
+    if (boon) applyBoonByIdToSlot(boon, 1);
+    pendingCoopBoonPicks.guestDone = true;
+    tryResumeCoopBoonPhase();
+  } else if (role === 'guest' && slotId === 0) {
+    // boonId=-1 sentinel = host-side legendary pick (no mirror). Otherwise
+    // mirror normal slot-0 pick onto guest's local UPG.
+    if (boon) applyBoonByIdToSlot(boon, 0);
+    pendingCoopBoonPicks.hostDone = true;
+  }
+}
+
+function drainBufferedCoopBoonPicks() {
+  if (currentBoonPhaseId == null) return;
+  const role = (isCoopHost && isCoopHost()) ? 'host' : ((isCoopGuest && isCoopGuest()) ? 'guest' : null);
+  if (!role) return;
+  for (const [key, payload] of Array.from(coopBoonPickBuffer.entries())) {
+    if ((payload.phaseId | 0) === currentBoonPhaseId) {
+      coopBoonPickBuffer.delete(key);
+      handleCoopBoonPickIncoming(payload, role);
+    } else if ((payload.phaseId | 0) < currentBoonPhaseId) {
+      coopBoonPickBuffer.delete(key);
+    }
+  }
 }
 
 function handleCoopRoomAdvanceGuest() {
   onlineCoopBoonPhase = null;
+  currentBoonPhaseId = null;
+  pendingCoopBoonPicks = { hostDone: false, guestDone: false };
   hideCoopGuestWaitOverlay();
+  // If the picker was still open (e.g. AFK timeout fired on host), close
+  // it. Then unfreeze guest sim if we paused for the picker.
+  try { document.getElementById('s-up').classList.add('off'); } catch (_) {}
+  if (gstate === 'upgrade') {
+    gstate = 'playing';
+    lastT = performance.now();
+    simAccumulatorMs = 0;
+    try { raf = requestAnimationFrame(loop); } catch (_) {}
+  }
 }
 
 // Phase D4: deterministic-ish unique run identifier. Used as the snapshot
@@ -1351,6 +1656,12 @@ function installCoopInputUplink(armedCoop) {
     if (payload.kind === 'coop-room-advance' && role === 'guest') {
       try { handleCoopRoomAdvanceGuest(); } catch (err) {
         try { console.warn('[coop] coop-room-advance handler error', err); } catch (_) {}
+      }
+      return;
+    }
+    if (payload.kind === 'coop-boon-pick') {
+      try { handleCoopBoonPickIncoming(payload, role); } catch (err) {
+        try { console.warn('[coop] coop-boon-pick handler error', err); } catch (_) {}
       }
       return;
     }
@@ -2698,14 +3009,12 @@ function spawnGreyDrops(x,y,ts,count=getEnemyGreyDropCount()) {
 }
 
 function resumePlayAfterBoons() {
-  // Phase D10 — multi-room boon handshake. Online host: at this point the
-  // host has applied a boon to its own UPG. Mirror the full UPG state onto
-  // slot 1's UPG so the guest's slot fires with matching boons (team-boons
-  // model — per-peer picks are a future iteration), then broadcast the
-  // room-advance hint so the guest's "PARTNER PICKING…" overlay clears even
-  // before the next snapshot lands.
+  // Phase D10/D14 — multi-room boon handshake. Online host: when both peers
+  // have picked their boon (or AFK auto-resolved), advance the room. Slot 1's
+  // UPG evolves independently from per-peer picks — no mirror call. Broadcast
+  // coop-room-advance so guest's picker / wait overlay clears even before the
+  // next snapshot lands.
   if (onlineCoopBoonPhase && isCoopHost && isCoopHost()) {
-    mirrorHostUpgToSlot1();
     try {
       if (activeCoopSession && typeof activeCoopSession.sendGameplay === 'function') {
         activeCoopSession.sendGameplay({ kind: 'coop-room-advance', roomIndex: roomIndex + 1 });
@@ -2714,6 +3023,12 @@ function resumePlayAfterBoons() {
       try { console.warn('[coop] coop-room-advance send failed', err); } catch (_) {}
     }
     onlineCoopBoonPhase = null;
+    currentBoonPhaseId = null;
+    pendingCoopBoonPicks = { hostDone: false, guestDone: false };
+    if (coopBoonAfkTimer) {
+      try { clearTimeout(coopBoonAfkTimer); } catch (_) {}
+      coopBoonAfkTimer = null;
+    }
   }
   startRoom(roomIndex + 1);
   gstate = 'playing';
@@ -2789,6 +3104,7 @@ function showUpgrades() {
       UPG._boonAppliedForRoom = roomIndex + 1;
       saveRunState();
       if (advanceCoopBoonQueue()) return;
+      if (markHostBoonDoneIfOnline()) return;
       resumePlayAfterBoons();
     },
     onLegendaryReject: (leg) => {
@@ -2798,6 +3114,7 @@ function showUpgrades() {
       boonHistory.push('Reject-' + leg.name);
       document.getElementById('s-up').classList.add('off');
       if (advanceCoopBoonQueue()) return;
+      if (markHostBoonDoneIfOnline()) return;
       resumePlayAfterBoons();
     },
     onSelect: (boon) => {
@@ -2819,6 +3136,7 @@ function showUpgrades() {
       UPG._boonAppliedForRoom = roomIndex + 1;
       saveRunState();
       if (advanceCoopBoonQueue()) return;
+      if (onLocalBoonPickedOnline(0, boon)) return;
       resumePlayAfterBoons();
     },
   });
