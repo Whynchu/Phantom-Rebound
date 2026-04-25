@@ -21,6 +21,7 @@ export function createPauseController({
   setMenuChromeVisible,
   openLeaderboard,
   openPatchNotes,
+  onExitToMenu = null,
   doc = document,
 } = {}) {
   const pausePanel = doc.getElementById('pause-panel');
@@ -98,6 +99,14 @@ export function createPauseController({
     // tap looks broken; then any subsequent boon click leaks pause-button
     // visibility back over the menu chrome.
     try { doc.getElementById('s-up')?.classList.add('off'); } catch (_) {}
+    // D18.3 — also tear down any active coop run state. Without this, an
+    // exit-to-menu during a coop run leaves the snapshot applier, input
+    // uplink, rematch listener, and AFK timer alive — they'd then fight
+    // any subsequent solo run for control of playerSlots[1] / activeCoopSession,
+    // wedging the start screen until app restart.
+    if (typeof onExitToMenu === 'function') {
+      try { onExitToMenu(); } catch (_) {}
+    }
     setMenuChromeVisible(true);
     doc.getElementById('s-start').classList.remove('off');
     if (btnPatchNotes) btnPatchNotes.style.display = 'inline-flex';

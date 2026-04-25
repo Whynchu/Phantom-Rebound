@@ -875,6 +875,12 @@ let latestRemoteSnapshotSeq = null;
 // Phase D5c — wall-clock receive time of the latest snapshot. Used by the
 // applier's interpolation buffer as the curr-snapshot timestamp on shift.
 let latestRemoteSnapshotRecvAtMs = 0;
+// D18.3 — disconnect watchdog. Guest only. If we've received at least one
+// snapshot but then go silent for COOP_WATCHDOG_TIMEOUT_MS, the transport is
+// dead; trip once, toast, and run unified teardown so the run doesn't sit
+// frozen and leak listeners into the menu.
+const COOP_WATCHDOG_TIMEOUT_MS = 4000;
+let coopWatchdogTripped = false;
 // Phase D4.5: host-side processor that tracks the highest sim-tick for
 // which the host has actually consumed a remote-input frame (for slot 1).
 // `null` outside online host runs. Powers `lastProcessedInputSeq[1]` on
@@ -1125,6 +1131,64 @@ function teardownCoopInputUplink() {
     coopWorldPinned = false;
     try { syncWorldFromCanvas(); } catch (_) {}
   }
+}
+
+// D18.3 — Unified coop teardown. Always-safe to call from any exit path
+// (game-over, leaveCoopGame, pause→menu, watchdog trip, transport error,
+// defensive start-screen entry). Idempotent: every step is null-guarded so
+// double-calls are no-ops. Centralizing here prevents the "menu can't
+// start solo without an app restart" leak class — historically each exit
+// path cleaned up a different subset of state and one missing dispose
+// would zombify the next solo run.
+function teardownCoopRunFully(reason) {
+  try { if (reason) console.info('[coop] teardown:', reason); } catch (_) {}
+  // Rematch listener + session refs (post-game lobby state).
+  try { disposeCoopRematchSession(); } catch (_) {}
+  // Active coop run (uplink / applier / broadcaster / slot 1 / world pin /
+  // wait overlay / boon-phase). teardownCoopInputUplink is already
+  // idempotent and handles the bulk of the live-run state.
+  try { teardownCoopInputUplink(); } catch (_) {}
+  // AFK timer + boon-phase tracking that lives outside teardownCoopInputUplink.
+  if (coopBoonAfkTimer) {
+    try { clearTimeout(coopBoonAfkTimer); } catch (_) {}
+    coopBoonAfkTimer = null;
+  }
+  currentBoonPhaseId = null;
+  pendingCoopBoonPicks = { hostDone: false, guestDone: false };
+  try { coopBoonPickBuffer.clear(); } catch (_) {}
+  // Coop run-state module (consumePendingCoopRun guards isCoopRun()).
+  try { clearCoopRun(); } catch (_) {}
+  // Reset watchdog so a future run starts clean.
+  coopWatchdogTripped = false;
+  latestRemoteSnapshotRecvAtMs = 0;
+  // Hide coop-only UI overlays.
+  try { hideCoopGuestWaitOverlay(); } catch (_) {}
+}
+
+// D18.3 — fire once when guest's transport goes silent. Shows a brief
+// banner via the wait overlay (already a fullscreen-friendly element),
+// runs unified teardown, and returns the user to the start screen.
+function tripCoopDisconnectWatchdog() {
+  if (coopWatchdogTripped) return;
+  coopWatchdogTripped = true;
+  try { console.warn('[coop] disconnect watchdog tripped'); } catch (_) {}
+  try { showCoopGuestWaitOverlay('CONNECTION LOST · returning to menu'); } catch (_) {}
+  // Auto-dismiss the overlay + run teardown after a short visible delay so
+  // the user reads the message rather than seeing the menu blink in.
+  setTimeout(() => {
+    try { hideCoopGuestWaitOverlay(); } catch (_) {}
+    try { cancelAnimationFrame(raf); } catch (_) {}
+    teardownCoopRunFully('disconnect-watchdog');
+    gstate = 'start';
+    try { setMenuChromeVisible(true); } catch (_) {}
+    try { document.getElementById('s-start')?.classList.remove('off'); } catch (_) {}
+    try { document.getElementById('s-up')?.classList.add('off'); } catch (_) {}
+    try { document.getElementById('s-go')?.classList.add('off'); } catch (_) {}
+    try { document.getElementById('s-go-coop')?.classList.add('off'); } catch (_) {}
+    try { document.getElementById('s-coop-lobby')?.classList.add('off'); } catch (_) {}
+    try { btnPause.style.display = 'none'; } catch (_) {}
+    try { btnPatchNotes.style.display = 'inline-flex'; } catch (_) {}
+  }, 1200);
 }
 
 // Phase D10 — multi-room boon handshake state. D14 (v1.20.46) overhauls
@@ -1752,12 +1816,14 @@ function startCoopRematchRun(seed) {
 }
 
 function leaveCoopGame() {
-  // Notify partner so their UI updates, then tear down the rematch context
-  // and return to the start screen. The lobby will create a fresh transport
+  // Notify partner so their UI updates, then tear down EVERYTHING and
+  // return to the start screen. The lobby will create a fresh transport
   // on next open.
   broadcastCoopLeave();
-  disposeCoopRematchSession();
-  try { clearCoopRun(); } catch (_) {}
+  // D18.3 — single call replaces the previous disposeCoopRematchSession +
+  // clearCoopRun pair. Idempotent and covers AFK timer + boon-phase state +
+  // wait overlay + watchdog reset + any zombie applier/uplink/slot1.
+  teardownCoopRunFully('leave-coop-game');
   hideCoopGameOverScreen();
   setMenuChromeVisible(true);
   try { startScreen?.classList.remove('off'); } catch (_) {}
@@ -3600,6 +3666,9 @@ const pauseControls = createPauseController({
   setMenuChromeVisible: (v) => setMenuChromeVisible(v),
   openLeaderboard: () => openLeaderboardScreen(),
   openPatchNotes: () => setPatchNotesOpen(true),
+  // D18.3 — unified coop teardown so exit-to-menu during a coop run never
+  // leaks listeners/timers into the menu chrome.
+  onExitToMenu: () => teardownCoopRunFully('pause-exit-to-menu'),
 });
 const pauseGame = pauseControls.pauseGame;
 const resumeGame = pauseControls.resumeGame;
@@ -3875,6 +3944,18 @@ function loop(ts){
     // Order: AFTER sim ticks (host's update path is a no-op on guest), and
     // BEFORE draw, so this frame's render reflects the interpolated state.
     if (guestSnapshotApplier && latestRemoteSnapshot) {
+      // D18.3 — disconnect watchdog. If we've received at least one snapshot
+      // (recvAtMs > 0) but it's older than the timeout, the host's transport
+      // is dead. Trip once, run unified teardown. Skipped while no snapshots
+      // have arrived yet (initial connection) so a slow handshake doesn't
+      // bounce us back to the menu prematurely.
+      if (
+        !coopWatchdogTripped &&
+        latestRemoteSnapshotRecvAtMs > 0 &&
+        (frameStartTs - latestRemoteSnapshotRecvAtMs) > COOP_WATCHDOG_TIMEOUT_MS
+      ) {
+        tripCoopDisconnectWatchdog();
+      }
       try {
         const result = guestSnapshotApplier.apply(latestRemoteSnapshot, {
           enemies,

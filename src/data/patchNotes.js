@@ -2,6 +2,18 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.50',
+      label: 'D18.3: COOP UNIFIED TEARDOWN + DISCONNECT WATCHDOG',
+      summary: ['Bug class: when a coop run ended abnormally (transport silently dropped, host backgrounded, render error), the guest sat frozen with no signal — and the runtime\'s listeners + timers (snapshot applier, input uplink, rematch session, AFK boon timer) lingered as zombies. Tapping "Main Menu" then trying to start a fresh solo run wedged the start screen because those zombies fought the new run for control of playerSlots[1] and activeCoopSession. The user had to restart the app to recover.'],
+      highlights: [
+        'Added teardownCoopRunFully(reason) — one always-call function that disposes rematch listener+session, calls teardownCoopInputUplink (applier/broadcaster/slot 1/world pin/wait overlay), clears coopBoonAfkTimer + currentBoonPhaseId + pendingCoopBoonPicks + coopBoonPickBuffer, calls clearCoopRun(), and resets the watchdog. Idempotent — every step is null-guarded so double-calls are safe.',
+        'Disconnect watchdog (guest-only): tracks latestRemoteSnapshotRecvAtMs (already populated by the snapshot ingest path). In the RAF loop, if frameStartTs - latestRemoteSnapshotRecvAtMs > 4000ms AND we\'ve received at least one snapshot, fires once: shows a "CONNECTION LOST · returning to menu" overlay, then after a 1.2s read delay cancels RAF, runs unified teardown, and returns the user to the start screen with menu chrome restored (s-start visible, s-up/s-go/s-go-coop/s-coop-lobby hidden, pause button hidden, patch-notes button visible).',
+        'Wired exit-to-menu through unified teardown: pauseController accepts a new optional onExitToMenu callback; script.js wires it to teardownCoopRunFully(\'pause-exit-to-menu\'). Now an in-coop pause→Main Menu always cleans up before showing the menu.',
+        'Refactored leaveCoopGame to call teardownCoopRunFully instead of the previous disposeCoopRematchSession + clearCoopRun pair, picking up AFK-timer + boon-phase + watchdog cleanup that the old path missed.',
+        'Tests: all 24 suites green; determinism canary 11/11 byte-identical (no sim-path changes).',
+      ]
+    },
+  {
       version: '1.20.49',
       label: 'D18.2: GUEST LOCAL-SLOT AIM TRIANGLE + INVULN BLINK FROM LOCAL DATA',
       summary: ['Bug: on the online guest, the player blink, payload-ring indicator, and aim triangle were all sourced from slot-0 globals (player.x/y, player.invincible, playerAimAngle, playerAimHasTarget). On a guest, slot 0 is the HOST, so the guest saw the host\'s aim arrow anchored to the host\'s body — never their own. The body blink was also gated on the host\'s invuln, so it would flicker when the host was hit instead of when the guest was hit.'],
