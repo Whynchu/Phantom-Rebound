@@ -155,7 +155,7 @@ import { createBulletSpawnDetector } from './src/net/bulletSpawnDetector.js';
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
 import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
 import { setupRollback, teardownRollback, coordinatorStep } from './src/net/rollbackIntegration.js';
-import { applyJoystickVelocity } from './src/sim/playerMovement.js';
+import { applyJoystickVelocity, tickBodyPosition } from './src/sim/playerMovement.js';
 import {
   showRoomClearOverlay,
   showBossDefeatedOverlay,
@@ -5440,34 +5440,15 @@ function update(dt,ts){
 
   // ── Player movement — virtual joystick (R0.4 chunk 1: extracted to src/sim/playerMovement.js)
   applyJoystickVelocity(player, joy, BASE_SPD, JOY_DEADZONE, joyMax, roomPhase !== 'intro');
-  const playerTravel = Math.hypot(player.vx, player.vy) * dt;
-  const playerSteps = Math.min(10, Math.max(1, Math.ceil(playerTravel / 8)));
-  const playerStepDt = dt / playerSteps;
-  const playerIsMoving = Math.hypot(player.vx, player.vy) > 12;
-  for(let step = 0; step < playerSteps; step++){
-    player.x=Math.max(M+player.r,Math.min(W-M-player.r,player.x+player.vx*playerStepDt));
-    player.y=Math.max(M+player.r,Math.min(H-M-player.r,player.y+player.vy*playerStepDt));
-    if(!UPG.phaseWalk) {
-      resolveEntityObstacleCollisions(player);
-      player.phaseWalkOverlapMs = 0;
-      player.phaseWalkIdleMs = 0;
-    } else if(isEntityOverlappingObstacle(player)) {
-      player.phaseWalkOverlapMs += playerStepDt * 1000;
-      if(playerIsMoving) player.phaseWalkIdleMs = 0;
-      else player.phaseWalkIdleMs += playerStepDt * 1000;
-      if(
-        player.phaseWalkOverlapMs >= PHASE_WALK_MAX_OVERLAP_MS
-        || player.phaseWalkIdleMs >= PHASE_WALK_IDLE_EJECT_MS
-      ) {
-        ejectEntityFromObstacles(player);
-        player.phaseWalkOverlapMs = 0;
-        player.phaseWalkIdleMs = 0;
-      }
-    } else {
-      player.phaseWalkOverlapMs = 0;
-      player.phaseWalkIdleMs = 0;
-    }
-  }
+  // R0.4 chunk 2: substep position integration with phase-walk obstacle handling.
+  tickBodyPosition(player, dt, { W, H, M }, {
+    phaseWalk: !!UPG.phaseWalk,
+    phaseWalkMaxOverlapMs: PHASE_WALK_MAX_OVERLAP_MS,
+    phaseWalkIdleEjectMs: PHASE_WALK_IDLE_EJECT_MS,
+    resolveCollisions: resolveEntityObstacleCollisions,
+    isOverlapping: isEntityOverlappingObstacle,
+    eject: ejectEntityFromObstacles,
+  });
   if(player.invincible>0 && !player.coopSpectating)player.invincible-=dt;
   if(player.distort>0)player.distort-=dt;
   updateGuestSlotMovement(dt, W, H);
