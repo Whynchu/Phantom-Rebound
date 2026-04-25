@@ -85,22 +85,37 @@ function createPredictionReconciler({
   // Returns the corrected { x, y, vx, vy } at `toTick`. If toTick <= fromTick,
   // returns auth state unchanged. Inputs at missing ticks are treated as
   // inactive — same as a still player.
-  function replay(authState, fromTick, toTick, dt, bodyR = 0) {
+  //
+  // D19.6b — `speedOverride` (optional 6th arg) lets the caller pass the
+  // CURRENT speedMult-derived speed at replay time, so a guest who just
+  // picked up Ghost Velocity replays accurately. Falls back to the
+  // construction-time `speedPerSecond`. Note: the override is constant
+  // across the replay window — boon-application mid-replay would be
+  // mis-replayed, but the window is only 3-6 ticks (50-100 ms) and boon
+  // picks are rare enough that this is acceptable.
+  function replay(authState, fromTick, toTick, dt, bodyR = 0, speedOverride = null, resolveCollision = null) {
     if (!authState || typeof authState.x !== 'number') return null;
     if (!Number.isFinite(dt) || dt <= 0) {
       throw new Error('replay: dt must be > 0');
     }
+    const spd = (Number.isFinite(speedOverride) && speedOverride > 0) ? speedOverride : speedPerSecond;
     let x = authState.x;
     let y = authState.y;
     let vx = authState.vx || 0;
     let vy = authState.vy || 0;
     if (toTick <= fromTick) return { x, y, vx, vy };
 
+    // D19.6c — reusable scratch entity for the optional collision callback.
+    // Caller's resolveCollision({x,y,r}) is expected to mutate x/y in-place
+    // (matching script.js resolveEntityObstacleCollisions API). Reused
+    // across the replay loop to avoid per-tick allocations.
+    const scratch = (typeof resolveCollision === 'function') ? { x: 0, y: 0, r: bodyR } : null;
+
     for (let tick = (fromTick >>> 0) + 1; tick <= (toTick >>> 0); tick++) {
       const f = readAt(tick);
       if (f && f.active) {
-        vx = f.dx * speedPerSecond * f.t;
-        vy = f.dy * speedPerSecond * f.t;
+        vx = f.dx * spd * f.t;
+        vy = f.dy * spd * f.t;
       } else {
         vx = 0;
         vy = 0;
@@ -112,6 +127,20 @@ function createPredictionReconciler({
         else if (x > worldBounds.right - bodyR) x = worldBounds.right - bodyR;
         if (y < worldBounds.top + bodyR) y = worldBounds.top + bodyR;
         else if (y > worldBounds.bottom - bodyR) y = worldBounds.bottom - bodyR;
+      }
+      // D19.6c — obstacle-aware replay. When a collision-resolver callback
+      // is provided, run it after world-bounds clamp on each tick so the
+      // replay path tracks the same wall-slide behavior the live prediction
+      // does. Without this, replay produced physically impossible
+      // correction targets near walls/corners — the wedge flag was just
+      // damage control for that gap.
+      if (scratch) {
+        scratch.x = x;
+        scratch.y = y;
+        scratch.r = bodyR;
+        try { resolveCollision(scratch); } catch (_) {}
+        x = scratch.x;
+        y = scratch.y;
       }
     }
     return { x, y, vx, vy };

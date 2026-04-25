@@ -2327,7 +2327,14 @@ function installCoopInputUplink(armedCoop) {
       sendGameplay: (msg) => session.sendGameplay(msg),
       sequencer: coopSnapshotSequencer,
       runId: currentRunId,
-      ticksPerSnapshot: 4,
+      // D19.6a — bump 4 → 3 (15 Hz → 20 Hz). Earlier claims of "20 Hz"
+      // in code comments and patch notes were incorrect; verified
+      // ticksPerSnapshot was still 4 at v1.20.70. The +33% send rate
+      // is acceptable per the 2026-04-25 user decision ("shoot for 3
+      // immediately"). renderDelayMs stays at 70 ms — that's now ~1.4×
+      // the 50 ms snapshot interval, still buffering >1 full interval
+      // for smooth interpolation but ~17 ms more current.
+      ticksPerSnapshot: 3,
       getState: collectHostSnapshotState,
       logger: (msg, err) => { try { console.warn('[coop] ' + msg, err || ''); } catch (_) {} },
     });
@@ -2343,10 +2350,11 @@ function installCoopInputUplink(armedCoop) {
     // don't thrash the entity arrays at 60 Hz against a 10 Hz feed.
     guestSnapshotApplier = createSnapshotApplier({
       enemyTypeDefs: ENEMY_TYPES,
-      // D12 — render at -70ms instead of -100ms. Snapshots now arrive every
-      // 67ms (15 Hz) so 70ms still buffers slightly more than one full
-      // interval, preserving smooth interpolation while making the guest's
-      // view of the host ~30ms more current.
+      // D12 — render delay buffers snapshot interpolation. With D19.6a
+      // bumping snapshot rate to 20 Hz (50 ms interval), 70 ms still
+      // buffers >1 full interval (~1.4×), preserving smooth lerp while
+      // making the guest's view of the host ~17 ms more current than
+      // the prior 15 Hz feed.
       renderDelayMs: 70,
       // Phase D5d — guest's own slot 1 is locally predicted. The applier
       // skips continuous body x/y/vx/vy writes for slot id 1 so the
@@ -2902,7 +2910,7 @@ function updateOnlineGuestPrediction(dt) {
       });
     } catch (_) {}
   }
-  const SPD = 165 * GLOBAL_SPEED_LIFT;
+  const SPD = 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (slot.upg?.speedMult || 1));
   if (active) { body.vx = dx * SPD * t; body.vy = dy * SPD * t; }
   else { body.vx = 0; body.vy = 0; }
   // D18.16 — measure expected vs actual travel to detect obstacle wedge.
@@ -2939,7 +2947,16 @@ function updateGuestSlotMovement(dt, W, H) {
     if (!slot || !slot.input) continue;
     const body = slot.body;
     const { dx, dy, t, active } = slot.input.moveVector();
-    const SPD = 165 * GLOBAL_SPEED_LIFT;
+    // D19.6b — honor slot.upg.speedMult on slot 1+ host-side movement.
+    // Previously this used bare 165*GLOBAL_SPEED_LIFT, which silently
+    // ignored Ghost Velocity (a slot-1-safe boon) and any other
+    // speedMult-affecting boon, so the guest's body moved at base speed
+    // even when the boon should have made them faster. Cap matches
+    // slot 0's at script.js:5217 (Math.min(2.5, ...)). Other slot-0-only
+    // movement modifiers (titanSlow, bloodRushMult, lateBloomMoveMods.speed)
+    // are intentionally NOT applied here — those touch UPG-only runtime
+    // state that isn't mirrored to slot 1.
+    const SPD = 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (slot.upg?.speedMult || 1));
     if (active) { body.vx = dx * SPD * t; body.vy = dy * SPD * t; }
     else { body.vx = 0; body.vy = 0; }
     body.x = Math.max(M + body.r, Math.min(W - M - body.r, body.x + body.vx * dt));
@@ -4845,12 +4862,22 @@ function loop(ts){
               ) {
                 const toTick = simTick | 0;
                 if (toTick >= fromTick) {
+                  // D19.6b — pass current slot speedMult-derived speed so
+                  // a guest with Ghost Velocity replays at the right speed.
+                  const slotUpg = slot1 && slot1.upg;
+                  const replaySpeed = 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (slotUpg?.speedMult || 1));
+                  // D19.6c — collision-aware replay: each replayed tick
+                  // resolves against current room obstacles so corrected
+                  // targets respect walls/corners. resolveEntityObstacleCollisions
+                  // mutates the entity in-place (matches reconciler API).
                   const corrected = guestPredictionReconciler.replay(
                     { x: authSlot.x, y: authSlot.y, vx: authSlot.vx, vy: authSlot.vy },
                     fromTick | 0,
                     toTick,
                     SIM_STEP_SEC,
                     body.r || 0,
+                    replaySpeed,
+                    resolveEntityObstacleCollisions,
                   );
                   if (corrected) {
                     const ex = corrected.x - body.x;

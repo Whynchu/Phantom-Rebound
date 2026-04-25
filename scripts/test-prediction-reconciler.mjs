@@ -183,5 +183,58 @@ const DT = 1 / 60;
   ok('snapshot-interval: y unchanged', r.y === 300);
 }
 
+// D19.6b — speedOverride lets caller pass a per-replay speed (e.g.
+// after Ghost Velocity boon raises the guest's speedMult).
+{
+  const rec = createPredictionReconciler({ speedPerSecond: 100 });
+  for (let t = 1; t <= 5; t++) {
+    rec.record({ tick: t, dx: 1, dy: 0, t: 1, active: true });
+  }
+  const baseline = rec.replay({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 5, DT);
+  ok('speedOverride: baseline matches construction speed', near(baseline.x, 5 * 100 * DT));
+  const fast = rec.replay({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 5, DT, 0, 200);
+  ok('speedOverride: 200 doubles travel', near(fast.x, 5 * 200 * DT));
+  const slow = rec.replay({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 5, DT, 0, 50);
+  ok('speedOverride: 50 halves travel', near(slow.x, 5 * 50 * DT));
+  // Falsy/invalid override falls through to construction speed.
+  const fallback = rec.replay({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 5, DT, 0, null);
+  ok('speedOverride: null falls back to construction speed', near(fallback.x, 5 * 100 * DT));
+  const zeroFallback = rec.replay({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 5, DT, 0, 0);
+  ok('speedOverride: 0 falls back (treated as invalid)', near(zeroFallback.x, 5 * 100 * DT));
+  const negFallback = rec.replay({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 5, DT, 0, -50);
+  ok('speedOverride: negative falls back', near(negFallback.x, 5 * 100 * DT));
+}
+
+// D19.6c — resolveCollision callback runs per replay tick and may mutate
+// the entity x/y in-place (matching script.js resolveEntityObstacleCollisions).
+{
+  const rec = createPredictionReconciler({ speedPerSecond: 100 });
+  for (let t = 1; t <= 5; t++) rec.record({ tick: t, dx: 1, dy: 0, t: 1, active: true });
+
+  // No callback → bit-identical to baseline.
+  const noCb = rec.replay({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 5, DT);
+  ok('resolveCollision: omitted leaves replay unchanged', near(noCb.x, 5 * 100 * DT));
+
+  // Callback that clamps x to a wall at x=2 → final x must be ≤2.
+  let calls = 0;
+  const wall = (e) => { calls++; if (e.x > 2) e.x = 2; };
+  const clamped = rec.replay({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 5, DT, 0, null, wall);
+  ok('resolveCollision: per-tick clamp pins x at wall', near(clamped.x, 2));
+  ok('resolveCollision: callback invoked once per replayed tick', calls === 5);
+
+  // Sliding: input is diagonal, callback only blocks x — y still advances.
+  const rec2 = createPredictionReconciler({ speedPerSecond: 100 });
+  for (let t = 1; t <= 5; t++) rec2.record({ tick: t, dx: 0.7071, dy: 0.7071, t: 1, active: true });
+  const slideWall = (e) => { if (e.x > 1) e.x = 1; };
+  const slid = rec2.replay({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 5, DT, 0, null, slideWall);
+  ok('resolveCollision: slide x clamps at wall', near(slid.x, 1));
+  ok('resolveCollision: slide y still advances', slid.y > 0.5);
+
+  // Throwing callback must not crash replay (try/catch swallows).
+  const boom = () => { throw new Error('boom'); };
+  const survived = rec.replay({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 5, DT, 0, null, boom);
+  ok('resolveCollision: throwing callback does not break replay', survived && Number.isFinite(survived.x));
+}
+
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail === 0 ? 0 : 1);
