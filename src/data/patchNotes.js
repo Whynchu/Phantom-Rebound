@@ -2,6 +2,18 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.53',
+      label: 'D18.7: GUEST MOVEMENT RESTORE + PARTNER COLOR SYNC',
+      summary: ['Two playtest regressions: (1) v1.20.52\'s D18.6 cosmetic-tick refactor accidentally removed the updateOnlineGuestPrediction(dt) call from the guest update gate, so the guest body stopped moving at all on its own screen — only host snapshots could move it (and they only re-anchor on death/respawn, not continuously). (2) Player color choice never crossed the network: each peer rendered both ghosts in its own locally-chosen palette, so the host saw the guest as the host\'s color and vice versa — the user picked pink as host, guest saw the host as the guest\'s color, host saw the guest as pink. Backwards from the intent.'],
+      highlights: [
+        'Restored updateOnlineGuestPrediction(dt) inside the guest update gate, immediately before the new D18.6 cosmetic-tick block. Prediction runs first (so the joystick adapter advances the local body this frame), then cosmetics decay, then the early-return. Solo / host paths untouched.',
+        'New coop-color gameplay message: each peer broadcasts its colorKey on slot install (host on slot 1 install, guest on slot 1 install) and on every local color change via the existing phantom:player-color-change event hook. Receiver stores it on coopPartnerColorKey + auto-echoes back its own key on first receive so a late slot-install doesn\'t miss the handshake. Cleared by teardownCoopRunFully so a new coop run re-handshakes from scratch.',
+        'drawGhostSprite gained an optional `colorScheme: { hex, light, dark }` parameter. When passed, all reads that previously hit the global C palette (C.green, C.ghost, C.greenRgb, C.ghostBodyRgb, C.getRgba(C.green,...)) use the override instead — body fill, ghost glow, charge-ring color, eye shimmer, HP-bar color. When omitted (solo / local player), reads from C exactly as before — byte-identical canary preserved.',
+        'drawGuestSlots now passes getColorSchemeForKey(coopPartnerColorKey) to drawGhostSprite for the partner ghost. Falls back to null (= legacy C reads) until the handshake completes, so the very first frames after coop start still render something rather than blanking out. Local player\'s drawGhost is unchanged: its own ghost still uses the local C palette which is already the player\'s chosen color.',
+        'Tests: all 24 suites green; determinism canary 11/11 byte-identical (color override defaults to null; render math falls through to existing C reads on the solo/canary path).',
+      ]
+    },
+  {
       version: '1.20.52',
       label: 'D18.6: GUEST COSMETIC TICK + CHARGE RING + ORB FADE + AFK 30S RANDOM + WATCHDOG GATING',
       summary: ['Playtester report bundle on the online-coop guest: (1) charge rings around either player never animated on the guest screen even at full charge; (2) collected grey orbs sat at full alpha and never faded out; (3) when the guest was hit by a projectile the bullet + damage number froze in place at the hit location forever; (4) sitting on the boon picker for ~30s booted everyone with a "disconnected" message even when the network was fine. Root causes were a single shared theme: the guest\'s update() early-returns and never ticks particles/dmgNumbers/shockwaves/payloadCooldownMs, the snapshot wire format intentionally omits cosmetic-only fields (fireT, decayStart) which the guest then never re-derived locally, and the disconnect watchdog ticked unconditionally even when the host had legitimately stopped emitting snapshots during the boon picker.'],

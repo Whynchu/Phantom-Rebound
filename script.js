@@ -304,6 +304,9 @@ window.addEventListener('phantom:player-color-change', (event) => {
   const colorKey = event.detail?.key || getPlayerColor();
   writeText(PLAYER_COLOR_KEY, colorKey);
   refreshThemeBoundUi();
+  // D18.7 — re-announce our color to the coop partner so they see the
+  // change immediately, not just on next run start. No-op if not in coop.
+  try { sendCoopLocalColor(); } catch (_) {}
 });
 
 window.addEventListener('phantom:color-assist-change', (event) => {
@@ -902,6 +905,15 @@ const guestGreyDecayStartByBulletId = new Map();
 // without ticking locally the ring stays empty on the guest screen even
 // when its slot is fully charged. Reset to 0 when charge drops < 1.
 const guestLocalFireTBySlotId = new Map();
+// D18.7 — partner color sync. Each peer broadcasts its chosen color key
+// once on coop run start (and again on local color change) via a
+// 'coop-color' gameplay message. The other peer stores it here, and
+// drawGuestSlots passes the corresponding scheme to drawGhostSprite so
+// the partner ghost renders in the partner's chosen color. `null` outside
+// coop or before the partner's first message arrives → falls back to the
+// local C palette (legacy behavior). Reset by teardownCoopRunFully.
+let coopPartnerColorKey = null;
+let coopLocalColorAnnounced = false;
 // Phase D4.5: host-side processor that tracks the highest sim-tick for
 // which the host has actually consumed a remote-input frame (for slot 1).
 // `null` outside online host runs. Powers `lastProcessedInputSeq[1]` on
@@ -1185,6 +1197,9 @@ function teardownCoopRunFully(reason) {
   // D18.6 — clear guest-only render-side maps so a future run starts fresh.
   try { guestGreyDecayStartByBulletId.clear(); } catch (_) {}
   try { guestLocalFireTBySlotId.clear(); } catch (_) {}
+  // D18.7 — clear partner color so the next coop run re-handshakes.
+  coopPartnerColorKey = null;
+  coopLocalColorAnnounced = false;
   // Hide coop-only UI overlays.
   try { hideCoopGuestWaitOverlay(); } catch (_) {}
 }
@@ -1363,6 +1378,21 @@ function sendCoopBoonPick(slotId, boonId) {
     });
   } catch (err) {
     try { console.warn('[coop] coop-boon-pick send failed', err); } catch (_) {}
+  }
+}
+
+// D18.7 — broadcast our local player-color key to the partner so their
+// drawGuestSlots can render us in the right scheme. Idempotent: safe to
+// call multiple times (e.g. on slot install + on every color change).
+function sendCoopLocalColor() {
+  try {
+    if (!activeCoopSession || typeof activeCoopSession.sendGameplay !== 'function') return;
+    const colorKey = getPlayerColor();
+    if (!colorKey) return;
+    activeCoopSession.sendGameplay({ kind: 'coop-color', colorKey });
+    coopLocalColorAnnounced = true;
+  } catch (err) {
+    try { console.warn('[coop] coop-color send failed', err); } catch (_) {}
   }
 }
 
@@ -2019,6 +2049,22 @@ function installCoopInputUplink(armedCoop) {
       }
       return;
     }
+    if (payload.kind === 'coop-color') {
+      // D18.7 — partner announced their color key. Store + force a redraw
+      // by stamping the slot record (drawGuestSlots reads from this global
+      // each frame so no further plumbing is needed). Echo our color back
+      // when we haven't yet, so a late-joining peer always learns ours
+      // even if their announce raced ahead of our slot install.
+      try {
+        if (typeof payload.colorKey === 'string') {
+          coopPartnerColorKey = payload.colorKey;
+        }
+        if (!coopLocalColorAnnounced) sendCoopLocalColor();
+      } catch (err) {
+        try { console.warn('[coop] coop-color handler error', err); } catch (_) {}
+      }
+      return;
+    }
     if (payload.kind === 'coop-game-over' && role === 'guest') {
       // D12.2 — host died → end the run on guest too. Without this, the
       // guest sits on the last snapshot pose indefinitely. We mirror score
@@ -2285,6 +2331,9 @@ function installOnlineCoopHostSlot1(remoteRing) {
   });
   onlineHostSlot1Installed = true;
   try { console.info('[coop] online host slot 1 installed (remote-input adapter)'); } catch (_) {}
+  // D18.7 — announce our color to guest. Safe to call before guest's slot
+  // install; guest will echo back so we learn theirs in turn.
+  try { sendCoopLocalColor(); } catch (_) {}
 }
 
 // Phase D5b: install online guest slot 1 — the LOCAL guest's own player body
@@ -2323,6 +2372,9 @@ function installOnlineCoopGuestSlot1() {
   }));
   onlineGuestSlot1Installed = true;
   try { console.info('[coop] online guest slot 1 installed (placeholder body)'); } catch (_) {}
+  // D18.7 — announce our color to host (and through host's echo, the host
+  // will reciprocate so we render the host in their chosen scheme).
+  try { sendCoopLocalColor(); } catch (_) {}
 }
 
 
@@ -2601,6 +2653,11 @@ function drawGuestSlots(ts) {
       hpValue: slot.metrics.hp,
       maxHpValue: slot.metrics.maxHp,
       hatKey: null,
+      // D18.7 — render the partner in their chosen color, not ours. We
+      // know it from the coop-color handshake; if it hasn't arrived yet,
+      // fall back to the local C palette (legacy behavior) — null tells
+      // drawGhostSprite to read C.green/C.ghost.
+      colorScheme: coopPartnerColorKey ? getColorSchemeForKey(coopPartnerColorKey) : null,
     });
     // D13.4 — aim arrow for the guest slot. Mirrors the host slot-0
     // triangle drawn near script.js:4759. Hidden when the slot has no
@@ -4204,6 +4261,11 @@ function update(dt,ts){
     // response. Applier (predictedSlotId:1) won't clobber body x/y/vx/vy
     // continuously, but will still re-anchor on death/respawn/runId reset.
     // Aim, hp, charge, invulnT continue to come from snapshot.
+    if (onlineGuestSlot1Installed) {
+      try { updateOnlineGuestPrediction(dt); } catch (err) {
+        try { console.warn('[coop] guest prediction error', err); } catch (_) {}
+      }
+    }
     // D18.6 — tick guest-local cosmetics. Without this, particles +
     // dmgNumbers + shockwaves + payloadCooldownMs are spawned (via the
     // applier's onSlotDamage callback at hit time) but never decay/fade,
