@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.52',
+      label: 'D18.6: GUEST COSMETIC TICK + CHARGE RING + ORB FADE + AFK 30S RANDOM + WATCHDOG GATING',
+      summary: ['Playtester report bundle on the online-coop guest: (1) charge rings around either player never animated on the guest screen even at full charge; (2) collected grey orbs sat at full alpha and never faded out; (3) when the guest was hit by a projectile the bullet + damage number froze in place at the hit location forever; (4) sitting on the boon picker for ~30s booted everyone with a "disconnected" message even when the network was fine. Root causes were a single shared theme: the guest\'s update() early-returns and never ticks particles/dmgNumbers/shockwaves/payloadCooldownMs, the snapshot wire format intentionally omits cosmetic-only fields (fireT, decayStart) which the guest then never re-derived locally, and the disconnect watchdog ticked unconditionally even when the host had legitimately stopped emitting snapshots during the boon picker.'],
+      highlights: [
+        'Guest cosmetic tick: particles, dmgNumbers, shockwaves, and payloadCooldownMs are now ticked on the guest before its update() early-return — math is byte-identical to the host\'s tick block lower in update(). Result: damage numbers float up and fade, hit sparks dissipate, and bullets no longer freeze at the hit location on the guest screen.',
+        'Charge ring animation on guest: the snapshot intentionally omits slot.metrics.fireT (cosmetic-only), so the firing-ring on both slots used to render empty even when fully charged. The guest now ticks fireT locally per slot when its charge is at max, resetting to 0 when charge drops below max. Both the local guest\'s ring (drawGhost) and the partner ring (drawGuestSlots) animate again.',
+        'Grey orb fade on guest: snapshots also omit bullet.decayStart. Without it the bullet renderer\'s age math collapses to NaN and the orbs stay at full alpha. Added a guest-only Map<bulletId, simNowMs> that stamps decayStart on first sight of a grey bullet and removes the entry on state transitions or bullet-removal so the map can\'t grow unbounded. Re-stamps if a bullet ever re-enters grey.',
+        'Boon AFK auto-resolve is now 30s (was 60s) and picks RANDOMLY from slot 1\'s offered ids (was deterministic [0]). True-disconnect detection is reserved for the watchdog; an inattentive player just gets a random boon and the run continues.',
+        'Watchdog timeout 4s → 30s + boon-phase gating: COOP_WATCHDOG_TIMEOUT_MS bumped to 30000 because the previous 4s threshold was too aggressive for any real-world transient stall. More importantly, the watchdog now skips entirely while the boon-phase / upgrade gstate is active, since the host intentionally cancels its RAF and stops emitting snapshots between rooms — that pause is no longer mistaken for a dropped transport.',
+        'Tests: all 24 suites green; determinism canary 11/11 byte-identical (all changes are guest-render-only or coop-only constants — no sim-path mutations).',
+      ]
+    },
+  {
       version: '1.20.51',
       label: 'D18.4: DESKTOP CANVAS PINNED TO PHONE WIDTH',
       summary: ['Playtester report: in solo and coop, the PC canvas was visibly wider left-to-right than the phone canvas, making the arena feel "drastically oversized" relative to the phone reference. Cause: the resize() cap was 380→400 wider than typical phone viewports — most phones hit the `viewportWidth - 16` rail (~374-380) while desktops always hit the 400 rail. World size scales with canvas, so the arena itself was larger on PC.'],

@@ -885,8 +885,23 @@ let latestRemoteSnapshotRecvAtMs = 0;
 // snapshot but then go silent for COOP_WATCHDOG_TIMEOUT_MS, the transport is
 // dead; trip once, toast, and run unified teardown so the run doesn't sit
 // frozen and leak listeners into the menu.
-const COOP_WATCHDOG_TIMEOUT_MS = 4000;
+// D18.6 — bumped to 30s. The user only ever wants a "true" disconnect (lost
+// internet for 30s+ or app closed) to bail. The watchdog is also gated off
+// during boon-phase / upgrade gstate, where the host intentionally cancels
+// its RAF loop and stops emitting snapshots until both peers pick.
+const COOP_WATCHDOG_TIMEOUT_MS = 30000;
 let coopWatchdogTripped = false;
+// D18.6 — guest-only local map: per-bullet decayStart (in simNowMs frame)
+// for grey-state pickups. The wire format omits decayStart, so without
+// stamping it locally the bullet renderer's age math collapses to NaN and
+// orbs sit at full alpha forever instead of fading out the way they do on
+// host. Pruned per snapshot apply to bound memory.
+const guestGreyDecayStartByBulletId = new Map();
+// D18.6 — guest-only local fireT for animating each slot's fire-ready ring
+// when fully charged. The wire format omits fireT to save bandwidth, so
+// without ticking locally the ring stays empty on the guest screen even
+// when its slot is fully charged. Reset to 0 when charge drops < 1.
+const guestLocalFireTBySlotId = new Map();
 // Phase D4.5: host-side processor that tracks the highest sim-tick for
 // which the host has actually consumed a remote-input frame (for slot 1).
 // `null` outside online host runs. Powers `lastProcessedInputSeq[1]` on
@@ -1167,6 +1182,9 @@ function teardownCoopRunFully(reason) {
   // Reset watchdog so a future run starts clean.
   coopWatchdogTripped = false;
   latestRemoteSnapshotRecvAtMs = 0;
+  // D18.6 — clear guest-only render-side maps so a future run starts fresh.
+  try { guestGreyDecayStartByBulletId.clear(); } catch (_) {}
+  try { guestLocalFireTBySlotId.clear(); } catch (_) {}
   // Hide coop-only UI overlays.
   try { hideCoopGuestWaitOverlay(); } catch (_) {}
 }
@@ -1220,7 +1238,7 @@ let pendingCoopBoonPicks = { hostDone: false, guestDone: false };
 // because each peer picks once per phase.
 const coopBoonPickBuffer = new Map(); // key: phaseId-slotId, val: payload
 let coopBoonAfkTimer = null;
-const COOP_BOON_AFK_TIMEOUT_MS = 60000;
+const COOP_BOON_AFK_TIMEOUT_MS = 30000;
 
 function isOnlineCoopBoonPhaseActive() {
   return !!onlineCoopBoonPhase;
@@ -1443,15 +1461,18 @@ function enterOnlineCoopBoonPhaseHost() {
   } catch (err) {
     try { console.warn('[coop] coop-boon-start send failed', err); } catch (_) {}
   }
-  // AFK timeout: if guest hasn't picked after 60s, auto-resolve to the
-  // first option in slot1BoonIds (deterministic, no surprise) and apply on
-  // host. Guest will see a coop-boon-pick echo when host applies + still
-  // resume on coop-room-advance.
+  // AFK timeout: if guest hasn't picked after COOP_BOON_AFK_TIMEOUT_MS (D18.6:
+  // 30s, was 60s), auto-resolve to a RANDOM choice from slot1BoonIds and apply
+  // on host. Guest will see a coop-boon-pick echo when host applies + still
+  // resume on coop-room-advance. A true network disconnect is handled by the
+  // 30s watchdog; this AFK path is for "player just isn't paying attention"
+  // and should never disconnect — the run continues with a random pick.
   if (slot1BoonIds.length > 0) {
     coopBoonAfkTimer = setTimeout(() => {
       if (pendingCoopBoonPicks.guestDone) return;
-      try { console.warn('[coop] guest AFK on boon pick — auto-resolving slot 1'); } catch (_) {}
-      const fallbackId = slot1BoonIds[0];
+      const pickIdx = Math.floor(Math.random() * slot1BoonIds.length);
+      const fallbackId = slot1BoonIds[pickIdx];
+      try { console.warn('[coop] guest AFK on boon pick — auto-resolving slot 1 with random pick', { pickIdx, fallbackId }); } catch (_) {}
       const boon = boonFromId(fallbackId);
       if (boon) applyBoonByIdToSlot(boon, 1);
       pendingCoopBoonPicks.guestDone = true;
@@ -3955,8 +3976,15 @@ function loop(ts){
       // is dead. Trip once, run unified teardown. Skipped while no snapshots
       // have arrived yet (initial connection) so a slow handshake doesn't
       // bounce us back to the menu prematurely.
+      // D18.6 — also skipped while we're in the boon-phase / upgrade gstate
+      // because the host intentionally cancels its RAF + stops emitting
+      // snapshots until both peers pick. A 30s timeout is plenty long for a
+      // real network drop, but unconditional ticking here would still trip
+      // on a fast boon picker if either peer takes >30s.
+      const inBoonOrUpgrade = (currentBoonPhaseId !== null) || (gstate === 'upgrade');
       if (
         !coopWatchdogTripped &&
+        !inBoonOrUpgrade &&
         latestRemoteSnapshotRecvAtMs > 0 &&
         (frameStartTs - latestRemoteSnapshotRecvAtMs) > COOP_WATCHDOG_TIMEOUT_MS
       ) {
@@ -4051,6 +4079,44 @@ function loop(ts){
             }
           }
         }
+        // D18.6 — stamp decayStart on grey bullets locally. The wire format
+        // does NOT carry decayStart (it's a render-only value on host); the
+        // bullet renderer's age math collapses to NaN without it and orbs
+        // never fade out on guest. We track when each grey bullet id was
+        // first seen and write it back so the renderer can compute alpha
+        // identically to host. Also GC entries whose bullet ids are no
+        // longer present so the map can't grow unbounded across rooms.
+        try {
+          const liveIds = new Set();
+          for (let bi = 0; bi < bullets.length; bi++) {
+            const b = bullets[bi];
+            if (!b) continue;
+            const id = b.id;
+            if (id == null) continue;
+            liveIds.add(id);
+            if (b.state === 'grey') {
+              let stamp = guestGreyDecayStartByBulletId.get(id);
+              if (stamp == null) {
+                stamp = simNowMs;
+                guestGreyDecayStartByBulletId.set(id, stamp);
+              }
+              b.decayStart = stamp;
+            } else {
+              // Re-arm: a bullet that exits grey should re-stamp on next
+              // grey transition. Drop any prior stamp.
+              if (guestGreyDecayStartByBulletId.has(id)) {
+                guestGreyDecayStartByBulletId.delete(id);
+              }
+            }
+          }
+          if (guestGreyDecayStartByBulletId.size > 0) {
+            for (const id of guestGreyDecayStartByBulletId.keys()) {
+              if (!liveIds.has(id)) guestGreyDecayStartByBulletId.delete(id);
+            }
+          }
+        } catch (decayErr) {
+          try { console.warn('[coop] grey-decay stamp error', decayErr); } catch (_) {}
+        }
       } catch (err) {
         try { console.warn('[coop] snapshot apply error', err); } catch (_) {}
       }
@@ -4138,10 +4204,57 @@ function update(dt,ts){
     // response. Applier (predictedSlotId:1) won't clobber body x/y/vx/vy
     // continuously, but will still re-anchor on death/respawn/runId reset.
     // Aim, hp, charge, invulnT continue to come from snapshot.
-    if (onlineGuestSlot1Installed) {
-      try { updateOnlineGuestPrediction(dt); } catch (err) {
-        try { console.warn('[coop] guest prediction error', err); } catch (_) {}
+    // D18.6 — tick guest-local cosmetics. Without this, particles +
+    // dmgNumbers + shockwaves + payloadCooldownMs are spawned (via the
+    // applier's onSlotDamage callback at hit time) but never decay/fade,
+    // freezing the bullet+number at the hit location forever. This block
+    // mirrors the host's tick block at ~5350 below; identical math so guest
+    // and host see the same visual lifetimes.
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vx *= Math.pow(.84, dt * 60); p.vy *= Math.pow(.84, dt * 60);
+      p.life -= p.decay * dt;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (let i = dmgNumbers.length - 1; i >= 0; i--) {
+      const d = dmgNumbers[i];
+      d.y -= 40 * dt;
+      d.life -= 1.8 * dt;
+      if (d.life <= 0) dmgNumbers.splice(i, 1);
+    }
+    for (let i = shockwaves.length - 1; i >= 0; i--) {
+      const s = shockwaves[i];
+      s.r += (s.maxR - s.r) * Math.min(1, dt * 4.5);
+      s.life -= dt * 1.4;
+      if (s.life <= 0 || s.r >= s.maxR - 0.5) shockwaves.splice(i, 1);
+    }
+    if (payloadCooldownMs > 0) payloadCooldownMs = Math.max(0, payloadCooldownMs - dt * 1000);
+    // D18.6 — animate per-slot fire-ready ring locally on guest. Snapshots
+    // omit fireT (intentional, cosmetic-only on host), so without ticking
+    // here the charge ring sits empty even when the slot is fully charged.
+    // Reset to 0 on charge<1 so the ring starts from the top of the cycle
+    // each time the slot crests full charge.
+    try {
+      for (let si = 0; si < playerSlots.length; si++) {
+        const sl = playerSlots[si];
+        if (!sl) continue;
+        const m = sl.metrics;
+        if (!m) continue;
+        const maxC = m.maxCharge || 1;
+        const chargeFrac = (m.charge || 0) / maxC;
+        if (chargeFrac < 1) {
+          m.fireT = 0;
+          guestLocalFireTBySlotId.set(sl.id, 0);
+        } else {
+          const prev = guestLocalFireTBySlotId.get(sl.id) || 0;
+          const next = prev + dt;
+          guestLocalFireTBySlotId.set(sl.id, next);
+          m.fireT = next;
+        }
       }
+    } catch (fireErr) {
+      try { console.warn('[coop] guest fireT tick error', fireErr); } catch (_) {}
     }
     return;
   }
