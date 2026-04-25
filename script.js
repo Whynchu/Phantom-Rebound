@@ -451,7 +451,13 @@ function resize() {
     syncWorldFromCanvas();
   };
 
-  const maxWidthByViewport = Math.min(400, viewportWidth - 16);
+  // D18.4 (2026-04-26): pin canvas reference width to 380 (matches phone
+  // viewport minus 16px gutter on iPhone 14 Pro Max class devices). Prior
+  // cap of 400 made desktop canvases ~7% wider than typical phones, which
+  // playtesters reported as a "drastically oversized" arena. The CSS
+  // #wrap rule mirrors this cap. Phones below 396 CSS px are unaffected
+  // because they hit the `viewportWidth - 16` cap first.
+  const maxWidthByViewport = Math.min(380, viewportWidth - 16);
   setCanvasSize(maxWidthByViewport);
 
   const wrapGap = parseFloat(getComputedStyle(wrap).gap) || 0;

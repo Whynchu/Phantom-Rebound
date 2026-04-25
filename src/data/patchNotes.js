@@ -2,6 +2,16 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.51',
+      label: 'D18.4: DESKTOP CANVAS PINNED TO PHONE WIDTH',
+      summary: ['Playtester report: in solo and coop, the PC canvas was visibly wider left-to-right than the phone canvas, making the arena feel "drastically oversized" relative to the phone reference. Cause: the resize() cap was 380→400 wider than typical phone viewports — most phones hit the `viewportWidth - 16` rail (~374-380) while desktops always hit the 400 rail. World size scales with canvas, so the arena itself was larger on PC.'],
+      highlights: [
+        'Lowered canvas width cap from 400 to 380 in both script.js resize() and styles.css #wrap rule. iPhone 14 Pro Max-class devices (430 CSS px) and desktops now both render at 380 CSS px wide; smaller phones (≤396 CSS px) are unaffected because they hit the `viewportWidth - 16` cap first.',
+        'Net effect: desktop canvas is now within ~3 CSS px of typical phone canvas — visually identical. World dimensions match across devices, so entity placement, spawn coords, and HUD spacing render the same regardless of form factor.',
+        'Tests: all 24 suites green; determinism canary 11/11 (world size is canvas-derived but the resize() cap is a render-only ceiling, not a sim parameter).',
+      ]
+    },
+  {
       version: '1.20.50',
       label: 'D18.3: COOP UNIFIED TEARDOWN + DISCONNECT WATCHDOG',
       summary: ['Bug class: when a coop run ended abnormally (transport silently dropped, host backgrounded, render error), the guest sat frozen with no signal — and the runtime\'s listeners + timers (snapshot applier, input uplink, rematch session, AFK boon timer) lingered as zombies. Tapping "Main Menu" then trying to start a fresh solo run wedged the start screen because those zombies fought the new run for control of playerSlots[1] and activeCoopSession. The user had to restart the app to recover.'],
