@@ -238,6 +238,83 @@ export function createSlot(index, baseHp = DEFAULT_BASE_PLAYER_HP) {
   };
 }
 
+/* -------------------------------------------------------------------------
+ * R0.4 SLOT-0 PARITY AUDIT (recorded 2026-04-25 alongside step 5 / clock seam)
+ * -------------------------------------------------------------------------
+ * Before any of the deferred bullet regions (B/C/D/E in script.js update())
+ * can be carved into hostSimStep, the legacy `player` shape (src/core/runState.js
+ * createInitialPlayerState) and the sim slot shape above must reach parity.
+ * Today they diverge in four ways. Doc kept inline so the next session sees
+ * it in the same file as the schema it constrains.
+ *
+ *   GAP 1 — death/pop visuals on body. runState.player carries:
+ *           deadAt, popAt, deadPop (bool), deadPulse.
+ *           simState.createSlot().body has none of these. They feed the
+ *           hit-stop + death "pop" animation drained by the renderer; if
+ *           we carve hits into sim before adding them, the death visual
+ *           will silently desync on resim. Fix: add the four fields to
+ *           body, init to 0/false, snapshot/restore by virtue of the
+ *           existing body deep-clone path (no other change needed).
+ *
+ *   GAP 2 — shields location. runState.player.shields is on the body in
+ *           legacy code (player.shields). simState keeps shields one
+ *           level up (slot.shields) outside slot.body. Region E (shield
+ *           collision) iterates `player.shields` — a generic carve-out
+ *           that iterates state.slots[i].body.shields would miss them.
+ *           Fix: introduce a small adaptor (`getSlotShields(slot)`) that
+ *           always reads slot.shields, keep the legacy body.shields write
+ *           in sync until the legacy player object is retired.
+ *
+ *   GAP 3 — runtime stat fields not on slot. runState.player owns
+ *           score/kills/charge/fireT/stillTimer/prevStill/hp/maxHp/
+ *           runElapsedMs/gameOverShown/boonRerolls/damagelessRooms/
+ *           tookDamageThisRoom/lastStallSpawnAt/enemyIdSeq/bossClears.
+ *           Some (hp/maxHp/charge/fireT/stillTimer/prevStill) live on
+ *           slot.metrics here — round-trip works. Others (runElapsedMs,
+ *           damagelessRooms, tookDamageThisRoom, enemyIdSeq, bossClears)
+ *           are run-scope and should move to state-level (alongside
+ *           state.tick/state.timeMs), NOT per-slot. enemyIdSeq is the
+ *           critical one — bullet/enemy carve-outs need a deterministic
+ *           id source; today script.js bumps a closure variable.
+ *
+ *   GAP 4 — out-of-sim ring buffers. Region C (grey absorb) reads
+ *           hostGreyLagComp (src/net/greyLagComp.js) which is a host-only
+ *           ring buffer NOT part of simState. That region cannot be
+ *           carved until the lag-comp data is either (a) moved into sim
+ *           (rollback-safe but wider blast radius), or (b) the lag-comp
+ *           lookup is moved to a post-sim resolution pass and the sim
+ *           emits an "absorb candidate" event.
+ *
+ * EFFECT-QUEUE CONTRACT — the four deferred regions need these events on
+ * state.effectQueue (drained on commit by the renderer; suppressed during
+ * resim so cosmetic effects don't double-fire):
+ *
+ *   Region B (bounce dispatch): 'sparks', 'burstBlueDissipate',
+ *     'eliteBulletStageAdvanced', 'triangleBurstSpawned',
+ *     'splitOutputBulletsSpawned', 'payloadBlast'.
+ *
+ *   Region C (grey absorb): 'sparks' (greyAbsorbSparks variant),
+ *     'chargeGain' (with absorbValue + reason='orbAbsorb'),
+ *     'orbCooldownStarted'.
+ *
+ *   Region D (volatile orbs): 'volatileOrbDetonated' (carries position
+ *     + radius + damage), 'sparks'.
+ *
+ *   Region E (shield collision): 'shieldHit' (carries shield index +
+ *     hardened flag), 'mirrorReflectionSpawned' (uses
+ *     buildMirrorShieldReflectionSpec output), 'shieldBurstSpawned'
+ *     (uses buildShieldBurstSpec), 'barrierPulseStarted',
+ *     'aegisTitanCdShared', 'telemetry.shieldBlocks++' (telemetry must
+ *     route through commit-phase, NOT inside sim).
+ *
+ * Telemetry rule: any counter visible to the player (runs / kills /
+ * shieldBlocks / damageTaken) is a commit-phase concern. Sim emits the
+ * event; the rollback coordinator's "tick committed" handler increments
+ * the counter exactly once. Otherwise resim N times = counter incremented
+ * N+1 times.
+ * ----------------------------------------------------------------------- */
+
+
 /**
  * Reset a sim state in place to a fresh-run starting position WITHOUT
  * reallocating it. Used between runs to avoid garbage. Preserves the

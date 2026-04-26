@@ -18,9 +18,16 @@
  *     integration with substeps + phase-walk obstacle handling).
  *   - R0.4 step 3: post-movement deterministic decrements (body transients,
  *     shield array sync, slot timer block, volatile orb cooldowns).
+ *   - R0.4 step 5 (clock seam): state.tick and state.timeMs advance per call.
+ *     Reads world dims from state.world.{w,h} with legacy state.worldW/H
+ *     fallback for callers that haven't migrated yet. Required prerequisite
+ *     for any bullet/enemy carve-out: those regions read `ts` for decay,
+ *     expireAt, orb/shield rotation, mirror cooldowns. Sourcing that from
+ *     state.timeMs (vs. performance.now) is what makes them rollback-safe.
  *
  * Pending:
- *   - R0.4 step 4: bullets / enemies / collisions.
+ *   - R0.4 step 4: bullets / enemies / collisions (deferred — see
+ *     plan.md "R0.4 hard carve-outs" for the exact prerequisites).
  */
 import { applyJoystickVelocity, tickBodyPosition } from './playerMovement.js';
 import { tickPostMovementTimers } from './postMovementTick.js';
@@ -37,7 +44,8 @@ const FALSE_FN = () => false;
  *
  * opts fields (with defaults):
  *   baseSpeed=200, deadzone=0.15, joyMax=60, gate=true,
- *   worldW=state.worldW||800, worldH=state.worldH||600, margin=16,
+ *   worldW=state.world.w||state.worldW||800,
+ *   worldH=state.world.h||state.worldH||600, margin=16,
  *   phaseWalk=false, phaseWalkMaxOverlapMs=500, phaseWalkIdleEjectMs=250,
  *   resolveCollisions=noop, isOverlapping=()=>false, eject=noop.
  */
@@ -46,8 +54,15 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   const deadzone = opts.deadzone != null ? opts.deadzone : 0.15;
   const joyMax = opts.joyMax != null ? opts.joyMax : 60;
   const gate = opts.gate !== false;
-  const worldW = opts.worldW != null ? opts.worldW : (state.worldW || 800);
-  const worldH = opts.worldH != null ? opts.worldH : (state.worldH || 600);
+  // R0.4 step 5: prefer state.world.{w,h} (the canonical sim shape); fall
+  // back to legacy state.worldW/H so older callers don't regress.
+  const stateWorld = state.world || {};
+  const worldW = opts.worldW != null
+    ? opts.worldW
+    : (stateWorld.w || state.worldW || 800);
+  const worldH = opts.worldH != null
+    ? opts.worldH
+    : (stateWorld.h || state.worldH || 600);
   const margin = opts.margin != null ? opts.margin : 16;
   const phaseOpts = {
     phaseWalk: !!opts.phaseWalk,
@@ -96,6 +111,15 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
       }
     );
   }
+
+  // R0.4 step 5: advance the deterministic sim clock LAST, after all per-tick
+  // logic above has read the pre-tick values. Bullet/enemy carve-outs landing
+  // later will read state.timeMs at the TOP of their region (matching the
+  // legacy update() which captures `ts = performance.now()` at the top of the
+  // frame), so post-increment keeps semantics aligned: the tick that just ran
+  // saw timeMs=N; the next tick will see timeMs=N+dtMs.
+  if (typeof state.tick === 'number') state.tick = (state.tick | 0) + 1;
+  if (typeof state.timeMs === 'number') state.timeMs += dt * 1000;
 }
 
 export default hostSimStep;

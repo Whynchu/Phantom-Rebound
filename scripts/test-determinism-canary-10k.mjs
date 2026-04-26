@@ -98,9 +98,14 @@ function runCanary(ticks) {
 // run this test, copy the printed values, and update these constants in the
 // SAME commit. Any unexpected drift will fail the test.
 const EXPECTED = {
-  tick100:   '3c52927b7116f55cb5264c9630cd672f9ecb8a91edda8a747da4967c9647deac',
-  tick5000:  'a6b66f785778ab65b6ddc02fe00dd0809f7c9d6fcbb688c5582485d5a27f09ec',
-  tick10000: 'dbb322e3d8a1eed20c7b5554f412b02f57bc03bfb8eadcdaf813a8e168b3b32d',
+  // Re-pinned in v1.20.98 when hostSimStep started advancing state.tick and
+  // state.timeMs (R0.4 step 5 — clock seam). Prior baselines (v1.20.94) were
+  // computed when the sim clock was frozen at 0; bumping the seam shifts the
+  // hashes by exactly the per-tick clock advancement (sim math itself is
+  // unchanged). Parallel run-A == run-B continues to pass.
+  tick100:   'b07f81ecf28309e260d104f94334e2387831a3b055d290e6be9073d4dc0fbad4',
+  tick5000:  'a4fe5a1d3c94f1a5d2a5026b2b4877336ee05e7e80fd3b127541057e96235fbc',
+  tick10000: 'ba27cc13e13fbe96eb1c4527f2fc31ba9e3c8ba1182ac018dc8254eaaeb49f4f',
 };
 
 test('R0.6: 10000-tick canary state hash matches baseline', () => {
