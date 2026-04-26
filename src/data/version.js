@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.94', label: 'R0.6 + R1: 10k determinism canary + state round-trip parity tests' };
+const VERSION = { num: '1.20.95', label: 'R0.5 cross-engine determinism: Fisher-Yates shuffle replaces random-comparator sort' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

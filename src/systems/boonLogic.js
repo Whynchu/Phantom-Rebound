@@ -209,12 +209,28 @@ function getActiveBoonEntries(upg) {
   return entries;
 }
 
+// Fisher–Yates shuffle using simRng. Replaces `.sort(() => simRng.next() - 0.5)`
+// which is NOT deterministic across engines — V8's TimSort calls the comparator a
+// variable number of times depending on input order, so two peers running the
+// same seed but different engine versions could produce different orderings.
+// Fisher–Yates touches each slot exactly once and consumes a fixed number of RNG
+// values, so it is byte-deterministic across any engine that runs the same JS.
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(simRng.next() * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
 function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
   const available = BOONS.filter((boon) => boonHasEffect(boon, upg, hp, maxHp));
   const byTag = {
-    OFFENSE: available.filter((boon) => boon.tag === 'OFFENSE').sort(() => simRng.next() - 0.5),
-    UTILITY: available.filter((boon) => boon.tag === 'UTILITY').sort(() => simRng.next() - 0.5),
-    SURVIVE: available.filter((boon) => boon.tag === 'SURVIVE').sort(() => simRng.next() - 0.5),
+    OFFENSE: shuffleInPlace(available.filter((boon) => boon.tag === 'OFFENSE')),
+    UTILITY: shuffleInPlace(available.filter((boon) => boon.tag === 'UTILITY')),
+    SURVIVE: shuffleInPlace(available.filter((boon) => boon.tag === 'SURVIVE')),
   };
   const picks = [];
   for(const tag of ['OFFENSE', 'UTILITY', 'SURVIVE']) {
@@ -225,9 +241,9 @@ function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
     }
   }
   if(picks.length < choiceCount) {
-    const remaining = [...available]
-      .filter((boon) => !picks.includes(boon))
-      .sort(() => simRng.next() - 0.5);
+    const remaining = shuffleInPlace(
+      [...available].filter((boon) => !picks.includes(boon)),
+    );
     while(picks.length < choiceCount && remaining.length > 0) picks.push(remaining.shift());
   }
   return picks;
