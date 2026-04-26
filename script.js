@@ -4603,6 +4603,11 @@ function dispatchSimEffects(effects) {
   if (!effects || effects.length === 0) return;
   const threat = getThreatPalette();
   const playerCol = getPlayerColorScheme().hex;
+  const colorForSlot = (slotIndex) => (
+    Number.isInteger(slotIndex)
+      ? getCoopPlayerColorForSlot(slotIndex)
+      : playerCol
+  ) || playerCol;
   for (const fx of effects) {
     const x = fx.x ?? 0;
     const y = fx.y ?? 0;
@@ -4614,11 +4619,33 @@ function dispatchSimEffects(effects) {
         sparks(x, y, C.danger, 10, 85);
         break;
       case 'output.enemyHit':
-        if (Number.isFinite(fx.damage)) spawnDmgNumber(x, y, fx.damage, playerCol);
-        sparks(x, y, playerCol, 5, 55);
+        if (Number.isFinite(fx.damage)) spawnDmgNumber(x, y, fx.damage, colorForSlot(fx.slotIndex));
+        sparks(x, y, colorForSlot(fx.slotIndex), 5, 55);
         break;
       case 'output.enemyKilled':
         sparks(x, y, threat.elite.hex, 14, 95);
+        break;
+      case 'orbit.enemyHit':
+        if (Number.isFinite(fx.damage)) spawnDmgNumber(x, y, fx.damage, colorForSlot(fx.slotIndex));
+        sparks(x, y, colorForSlot(fx.slotIndex), 4, 45);
+        break;
+      case 'orbit.enemyKilled':
+        sparks(x, y, threat.elite.hex, 14, 95);
+        break;
+      case 'shield.hit':
+        sparks(x, y, fx.hitKind === 'temperedAbsorb' ? C.shieldEnhanced : C.shieldActive, 8, 60);
+        break;
+      case 'volatileOrb.hit':
+        sparks(x, y, colorForSlot(fx.slotIndex), 10, 80);
+        break;
+      case 'danger.voidBlock':
+        sparks(x, y, C.lifelineEffect, 12, 100);
+        break;
+      case 'danger.slipstream':
+        sparks(x, y, C.ghost, 4, 45);
+        break;
+      case 'danger.mirrorTide':
+        sparks(x, y, threat.elite.hex, 12, 120);
         break;
       case 'danger.lifelineTriggered':
         sparks(x, y, C.lifelineEffect, 16, 100);
@@ -4630,7 +4657,12 @@ function dispatchSimEffects(effects) {
         sparks(x, y, '#fbbf24', 4, 100);
         break;
       case 'output.volatileBurst':
-        sparks(x, y, playerCol, 8, 100);
+        sparks(x, y, colorForSlot(fx.slotIndex), 8, 100);
+        break;
+      case 'grey.absorbEffect':
+        sparks(x, y, fx.color || C.ghost, fx.count || 5, fx.size || 45);
+        break;
+      case 'slot.chargeGain':
         break;
       default:
         break;

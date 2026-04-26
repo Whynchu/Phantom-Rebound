@@ -117,6 +117,8 @@ function resolveDangerHits(state, opts = {}) {
           slotIndex: si,
           bulletId: bullet.id,
           chargeGain: slipstream.chargeGain,
+          x: bullet.x,
+          y: bullet.y,
         });
       }
     }
@@ -309,6 +311,8 @@ function applyMirrorTide(state, slot, hit, bullet, opts) {
     slotIndex: slot.index || 0,
     bulletId: bullet.id,
     reflectAngle: hit.reflectAngle,
+    x: body.x,
+    y: body.y,
   });
 }
 

@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.131',
+      label: 'R4 EFFECT DESCRIPTOR AUDIT',
+      summary: ['Rollback committed-effect dispatch now handles shield, orbit, volatile-orb, grey absorb, mirror tide, void block, and slipstream descriptors.'],
+      highlights: [
+        'Committed hit and burst descriptors now carry slot attribution so rollback damage numbers use the correct player color.',
+      ]
+    },
+  {
       version: '1.20.130',
       label: 'R3 TWO-SLOT GUARDS',
       summary: ['Rollback integration now covers slotCount=2 / slot-1 local mapping, and snapshots round-trip bullets, enemies, and effectQueue.'],

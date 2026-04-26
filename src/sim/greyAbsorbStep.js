@@ -151,7 +151,8 @@ function emitChargeGain(state, opts, slotIndex, amount, source) {
 function emitGreyEffects(state, result, opts) {
   if (!opts.queueEffects || !Array.isArray(state?.effectQueue)) return;
   for (const fx of result.effects || []) {
-    emit(state, 'grey.absorbEffect', fx);
+    const { kind: _helperKind, ...payload } = fx || {};
+    emit(state, 'grey.absorbEffect', payload);
   }
 }
 

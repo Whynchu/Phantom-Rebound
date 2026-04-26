@@ -41,11 +41,15 @@ console.log('\n=== dangerHitDispatch tests ===\n');
   state.slots[0].upg.voidZoneTimer = 1500;
   state.bullets.push({ id: 8, state: 'danger', x: 105, y: 100, vx: 0, vy: 0, r: 5 });
 
-  const hits = resolveDangerHits(state);
+  const hits = resolveDangerHits(state, { queueEffects: true });
 
   assert.equal(hits, 1);
   assert.equal(state.bullets.length, 0);
   assert.equal(state.slots[0].metrics.hp, 100);
+  assert.deepEqual(
+    state.effectQueue.find((fx) => fx.kind === 'danger.voidBlock'),
+    { kind: 'danger.voidBlock', slotIndex: 0, bulletId: 8, x: 105, y: 100 },
+  );
   console.log('PASS void block removes bullet without damage');
 }
 
@@ -80,7 +84,7 @@ console.log('\n=== dangerHitDispatch tests ===\n');
   state.slots[0].upg.denseDamageMult = 1.5;
   state.bullets.push({ id: 10, state: 'danger', x: 105, y: 100, vx: 30, vy: 0, r: 5 });
 
-  const hits = resolveDangerHits(state);
+  const hits = resolveDangerHits(state, { queueEffects: true });
 
   assert.equal(hits, 1);
   assert.equal(state.bullets.length, 1);
@@ -88,7 +92,24 @@ console.log('\n=== dangerHitDispatch tests ===\n');
   assert.equal(state.bullets[0].id, 20);
   assert.equal(state.bullets[0].dmg, 3);
   assert.equal(state.slots[0].metrics.hp, 100);
+  assert.equal(state.effectQueue.some((fx) => fx.kind === 'danger.mirrorTide' && fx.x === 100 && fx.y === 100), true);
   console.log('PASS mirror tide converts danger hit into output reflection');
+}
+
+{
+  const state = makeState();
+  state.slots[0].upg.slipTier = 1;
+  state.slots[0].upg.slipChargeGain = 0.5;
+  state.slots[0].timers.slipCooldown = 0;
+  state.bullets.push({ id: 11, state: 'danger', x: 100, y: 122, vx: 0, vy: 0, r: 3 });
+
+  const hits = resolveDangerHits(state, { queueEffects: true });
+
+  assert.equal(hits, 0);
+  assert.equal(state.bullets.length, 1);
+  assert.equal(state.slots[0].metrics.charge, 0.5);
+  assert.equal(state.effectQueue.some((fx) => fx.kind === 'danger.slipstream' && fx.x === 100 && fx.y === 122), true);
+  console.log('PASS slipstream near-miss queues positioned descriptor');
 }
 
 console.log('\nAll dangerHitDispatch tests passed.\n');

@@ -45,6 +45,8 @@ function makeState(overrides = {}) {
   assert.equal(state.bullets.length, 0);
   assert.equal(state.slots[0].metrics.charge, 1);
   assert.equal(state.effectQueue.some((e) => e.kind === 'slot.chargeGain'), true);
+  assert.equal(state.effectQueue.some((e) => e.kind === 'grey.absorbEffect'), true);
+  assert.equal(state.effectQueue.some((e) => e.kind === 'sparks'), false);
 }
 
 {

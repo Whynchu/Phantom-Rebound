@@ -73,7 +73,8 @@ console.log('\n=== outputHitDispatch tests ===\n');
   assert.equal(state.run.score, 51);
   assert.equal(state.run.scoreBreakdown.kills, 50);
   assert.equal(state.run.scoreBreakdown.overkill, 1);
-  assert.equal(state.effectQueue.some((fx) => fx.kind === 'output.enemyKilled'), true);
+  assert.equal(state.effectQueue.some((fx) => fx.kind === 'output.enemyKilled' && fx.slotIndex === 0), true);
+  assert.equal(state.effectQueue.some((fx) => fx.kind === 'output.enemyHit' && fx.slotIndex === 0), true);
   console.log('PASS output kill updates score, kills, and overkill');
 }
 
@@ -119,12 +120,13 @@ console.log('\n=== outputHitDispatch tests ===\n');
   state.bullets.push(outputBullet({ dmg: 1, pierceLeft: 1 }));
   state.enemies.push(enemy({ hp: 5 }));
 
-  resolveOutputHits(state, { spawnGreyDropsOnKill: false });
+  resolveOutputHits(state, { queueEffects: true, spawnGreyDropsOnKill: false });
 
   assert.equal(state.bullets.length, 5);
   assert.equal(state.bullets.filter((b) => b.state === 'output').length, 5);
   assert.equal(state.bullets[0].id, 1);
   assert.equal(state.bullets.slice(1).every((b) => b.expireAt === 2100), true);
+  assert.equal(state.effectQueue.some((fx) => fx.kind === 'output.volatileBurst' && fx.slotIndex === 0), true);
   console.log('PASS volatile rounds spawn deterministic radial output burst');
 }
 

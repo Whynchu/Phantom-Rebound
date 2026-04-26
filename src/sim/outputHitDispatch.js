@@ -57,6 +57,7 @@ function resolveOutputHits(state, opts = {}) {
       enemy.hp = hit.enemyHpAfterHit;
       hits++;
       emitEffect(state, opts, 'output.enemyHit', {
+        slotIndex: ownerSlot?.index ?? (Number.isInteger(bullet.ownerId) ? bullet.ownerId : 0),
         bulletId: bullet.id,
         enemyId,
         damage: hit.damage,
@@ -93,7 +94,12 @@ function resolveOutputHits(state, opts = {}) {
             expireAt: ts + 1600,
             ownerId: bullet.ownerId || 0,
           });
-          emitEffect(state, opts, 'output.volatileBurst', { bulletId: bullet.id, x: bullet.x, y: bullet.y });
+          emitEffect(state, opts, 'output.volatileBurst', {
+            slotIndex: ownerSlot?.index ?? (Number.isInteger(bullet.ownerId) ? bullet.ownerId : 0),
+            bulletId: bullet.id,
+            x: bullet.x,
+            y: bullet.y,
+          });
         }
       } else {
         removeBullet = true;
@@ -169,6 +175,7 @@ function awardEnemyKill(state, enemy, ownerSlot, bullet, opts) {
   }
   applyEnemyKillRewards(state, ownerSlot, enemy, bullet, opts);
   emitEffect(state, opts, 'output.enemyKilled', {
+    slotIndex: ownerSlot?.index ?? (Number.isInteger(bullet.ownerId) ? bullet.ownerId : 0),
     enemyId: enemy.eid ?? enemy.id ?? null,
     scoreGain: points,
     x: enemy.x,
