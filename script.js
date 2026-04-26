@@ -223,6 +223,7 @@ import {
   detectBulletNearMiss,
   tickGreyBulletDecay,
 } from './src/systems/bulletRuntime.js';
+import { dispatchBulletBounce } from './src/sim/bulletBounceDispatch.js';
 import {
   resolveOutputEnemyHit,
 } from './src/systems/outputHit.js';
@@ -5968,46 +5969,56 @@ function update(dt,ts){
     });
 
     if(bounced){
-      if(b.state==='danger'){
-        burstBlueDissipate(b.x, b.y);
-        const dangerBounce = resolveDangerBounceState(b, ts);
-        if(dangerBounce.kind === 'elite-stage'){
-          applyEliteBulletStage(b, dangerBounce.nextEliteStage);
-          sparks(b.x, b.y, b.eliteColor, 4, 40);
-        } else if(dangerBounce.kind === 'triangle-burst'){
-          spawnTriangleBurst(b.x, b.y, b.vx, b.vy);
-          bullets.splice(i,1);continue;
-        } else if(dangerBounce.kind === 'convert-grey'){
-          sparks(b.x,b.y,C.grey,4,35);
+      // R0.4 step 6: bounce dispatch carved into src/sim/bulletBounceDispatch.js.
+      // The pure dispatcher returns {effects, removeSourceBullet, skipRestOfFrame,
+      // followUp}. Effects are translated back to the legacy side-effect calls
+      // here in caller-land; the descriptor shape matches the effect-queue
+      // contract documented in src/sim/simState.js so a future commit-phase
+      // resolver can replace this translator without changing the dispatcher.
+      const bounceResult = dispatchBulletBounce(b, ts, {
+        splitShot: UPG.splitShot,
+        splitShotEvolved: UPG.splitShotEvolved,
+        phantomRebound: UPG.phantomRebound,
+        bounceTier: UPG.bounceTier,
+        colors: { grey: C.grey, ghost: C.ghost },
+      });
+      for(let ei = 0; ei < bounceResult.effects.length; ei++){
+        const ef = bounceResult.effects[ei];
+        if(ef.kind === 'burstBlueDissipate'){
+          burstBlueDissipate(ef.x, ef.y);
+        } else if(ef.kind === 'eliteStageAdvanced'){
+          applyEliteBulletStage(b, ef.stage);
+        } else if(ef.kind === 'sparks'){
+          // colorSource='eliteColor' resolves AFTER applyEliteBulletStage has
+          // mutated b.eliteColor — descriptor ordering pins this invariant.
+          const color = ef.color != null
+            ? ef.color
+            : (ef.colorSource === 'eliteColor' ? b.eliteColor : C.grey);
+          sparks(ef.x, ef.y, color, ef.count, ef.size);
         }
-      } else if(b.state==='output'){
-        const outputBounce = resolveOutputBounceState(b, {
-          splitShot: UPG.splitShot,
-          splitShotEvolved: UPG.splitShotEvolved,
-        });
-        if(outputBounce.kind === 'split'){
-          const splitNow=simNowMs;
+      }
+      const fu = bounceResult.followUp;
+      if(fu){
+        if(fu.kind === 'split'){
           spawnSplitOutputBullets({
             bullets,
             sourceBullet: b,
-            splitDeltas: outputBounce.splitDeltas,
-            damageFactor: outputBounce.splitDamageFactor,
-            expireAt: splitNow + 2000,
+            splitDeltas: fu.splitDeltas,
+            damageFactor: fu.splitDamageFactor,
+            expireAt: simNowMs + fu.lifetimeMs,
             fallbackBloodPactHealCap: getBloodPactHealCap(),
           });
-        } else if(outputBounce.removeBullet) {
-          // Phantom Rebound: convert to grey charge bullet instead of removing
-          if(UPG.phantomRebound && UPG.bounceTier > 0) {
-            b.state = 'grey';
-            b.decayStart = ts;
-            sparks(b.x, b.y, C.ghost, 6, 50);
-            continue;
-          } else {
-            triggerPayloadBlast(b, enemies, ts);
-            bullets.splice(i,1);
-            continue;
-          }
+        } else if(fu.kind === 'triangle-burst'){
+          spawnTriangleBurst(fu.x, fu.y, fu.vx, fu.vy);
+        } else if(fu.kind === 'payload-blast'){
+          triggerPayloadBlast(b, enemies, ts);
         }
+      }
+      if(bounceResult.removeSourceBullet){
+        bullets.splice(i, 1);
+      }
+      if(bounceResult.skipRestOfFrame){
+        continue;
       }
     }
 
