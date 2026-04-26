@@ -25,16 +25,15 @@
  *     expireAt, orb/shield rotation, mirror cooldowns. Sourcing that from
  *     state.timeMs (vs. performance.now) is what makes them rollback-safe.
  *
- * Pending:
- *   - R0.4 step 4: bullets / enemies / collisions (deferred — see
- *     plan.md "R0.4 hard carve-outs" for the exact prerequisites).
+ *   - R3.3: enemy combat state (movement archetypes, fire timers, projectile
+ *     spawn, siphon charge drain) during rollback resim.
  */
 import { applyJoystickVelocity, tickBodyPosition } from './playerMovement.js';
 import { tickPostMovementTimers } from './postMovementTick.js';
 import { tickBulletsKinematic } from './bulletKinematic.js';
-import { tickEnemiesKinematic } from './enemyKinematic.js';
 import { resolveDangerHits } from './dangerHitDispatch.js';
 import { resolveOutputHits } from './outputHitDispatch.js';
+import { tickEnemyCombat } from './enemyCombatStep.js';
 
 const NOOP = () => {};
 const FALSE_FN = () => false;
@@ -116,12 +115,13 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
     );
   }
 
-  // R2 — kinematic resim: advance bullet positions + wall bounce + expiry
+  // R3.3 — enemy combat resim: movement archetypes + fire cadence/projectiles.
+  tickEnemyCombat(state, dt, opts);
+  // R2 — kinematic resim: advance bullet positions + wall bounce + expiry.
+  // Enemy bullets spawned above move during the same tick, matching script.js.
   tickBulletsKinematic(state, dt);
   // R3.1 — combat resim: danger projectiles can damage player slots.
   resolveDangerHits(state, opts);
-  // R2 — kinematic resim: advance enemy positions toward nearest player
-  tickEnemiesKinematic(state, dt);
   // R3.2 — combat resim: output projectiles can damage/kill enemies.
   resolveOutputHits(state, opts);
 

@@ -2,6 +2,22 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.110',
+      label: 'COOP GUEST POSITION PRIORITY',
+      summary: ['Guest input frames now include the guest\'s locally displayed body position, and the host prioritizes that fresh position for slot-1 movement so pickups match what the guest sees.'],
+      highlights: [
+        'Continued R3 rollback work with deterministic enemy combat resim: enemy fire timers, windups, projectile spawns, and siphon charge drain now replay through hostSimStep.',
+      ]
+    },
+  {
+      version: '1.20.109',
+      label: 'R3 ENEMY COMBAT RESIM',
+      summary: ['Added rollback-owned enemy combat stepping so resim now covers enemy fire timers, windups, projectile spawns, rusher/siphon movement, and siphon charge drain.'],
+      highlights: [
+        'Added focused enemy combat resim tests and wired hostSimStep to use the deterministic enemy combat path instead of the old nearest-player kinematic approximation.',
+      ]
+    },
+  {
       version: '1.20.108',
       label: 'ROLLBACK INPUT DRIFT FIX',
       summary: ['Wired rollback input frames through the gameplay channel with kind:\'rollback-input\' so peers stop predicting remote movement indefinitely.'],

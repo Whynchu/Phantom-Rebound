@@ -22,6 +22,7 @@ function createCoopInputSync({
   sendGameplay,
   localAdapter,
   localSlotIndex,
+  localPositionProvider = null,
   batchSize = 4,
   logger = null,
 } = {}) {
@@ -37,13 +38,21 @@ function createCoopInputSync({
   let receivedCount = 0;
 
   function quantizeFrame(tick, vec) {
-    return {
+    const frame = {
       tick: tick >>> 0,
       dx: Math.max(-127, Math.min(127, Math.round(vec.dx * 127))),
       dy: Math.max(-127, Math.min(127, Math.round(vec.dy * 127))),
       t: Math.max(0, Math.min(255, Math.round(vec.t * 255))),
       still: vec.active ? 0 : 1,
     };
+    if (typeof localPositionProvider === 'function') {
+      const pos = localPositionProvider();
+      if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+        frame.x = Math.round(pos.x * 10) / 10;
+        frame.y = Math.round(pos.y * 10) / 10;
+      }
+    }
+    return frame;
   }
 
   function doFlush(frames) {

@@ -78,6 +78,31 @@ function pushSimGreyBullet(state, {
   return bullet;
 }
 
+function pushSimDangerBullet(state, {
+  x,
+  y,
+  angle,
+  speed,
+  radius = 4.5,
+  extras = {},
+} = {}) {
+  if (!state || !Array.isArray(state.bullets)) return null;
+  const bullet = {
+    id: nextSimBulletId(state),
+    x,
+    y,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    state: 'danger',
+    r: radius,
+    decayStart: null,
+    bounces: 0,
+    ...extras,
+  };
+  state.bullets.push(bullet);
+  return bullet;
+}
+
 function spawnSimRadialOutputBurst(state, {
   x,
   y,
@@ -152,6 +177,7 @@ export {
   nextSimBulletId,
   pushSimOutputBullet,
   pushSimGreyBullet,
+  pushSimDangerBullet,
   spawnSimRadialOutputBurst,
   spawnSimGreyDrops,
   nextSimRandom,

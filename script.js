@@ -2575,6 +2575,10 @@ function installCoopInputUplink(armedCoop) {
     sendGameplay: (msg) => session.sendGameplay(msg),
     localAdapter: createHostInputAdapter(joy),
     localSlotIndex,
+    localPositionProvider: () => {
+      const slot = playerSlots[localSlotIndex];
+      return slot && slot.body ? slot.body : null;
+    },
     // D12 — was 8 (133 ms input lag); 4 cuts the latency in half (~67 ms)
     // while staying well under the Supabase 20 msg/s rate cap (15 msg/s).
     batchSize: 4,
@@ -3254,7 +3258,7 @@ function updateGuestSlotMovement(dt, W, H) {
     const slot = playerSlots[i];
     if (!slot || !slot.input) continue;
     const body = slot.body;
-    const { dx, dy, t, active } = slot.input.moveVector();
+    const { dx, dy, t, active, x: remoteX, y: remoteY } = slot.input.moveVector();
     // D19.6b — honor slot.upg.speedMult on slot 1+ host-side movement.
     // Previously this used bare 165*GLOBAL_SPEED_LIFT, which silently
     // ignored Ghost Velocity (a slot-1-safe boon) and any other
@@ -3267,8 +3271,17 @@ function updateGuestSlotMovement(dt, W, H) {
     const SPD = 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (slot.upg?.speedMult || 1));
     if (active) { body.vx = dx * SPD * t; body.vy = dy * SPD * t; }
     else { body.vx = 0; body.vy = 0; }
-    body.x = Math.max(M + body.r, Math.min(W - M - body.r, body.x + body.vx * dt));
-    body.y = Math.max(M + body.r, Math.min(H - M - body.r, body.y + body.vy * dt));
+    // D19.7 — guest body position has priority. Movement intent alone can put
+    // the host's slot-1 body several ticks away from where the guest sees
+    // themselves, making friendly pickups miss. Fresh input frames now carry
+    // the guest's locally displayed position; use it directly when available.
+    if (Number.isFinite(remoteX) && Number.isFinite(remoteY)) {
+      body.x = Math.max(M + body.r, Math.min(W - M - body.r, remoteX));
+      body.y = Math.max(M + body.r, Math.min(H - M - body.r, remoteY));
+    } else {
+      body.x = Math.max(M + body.r, Math.min(W - M - body.r, body.x + body.vx * dt));
+      body.y = Math.max(M + body.r, Math.min(H - M - body.r, body.y + body.vy * dt));
+    }
     resolveEntityObstacleCollisions(body);
     // D12.4 — kinetic charge gain for guest slots while moving, mirroring
     // slot 0's flow at script.js:3541. Only fires when the host has the

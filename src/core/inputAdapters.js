@@ -130,6 +130,8 @@ function createRemoteInputAdapter(ringBuffer, { getCurrentTick, staleTickThresho
         t: frame.t / 255,
         active: frame.still === 0,
         stale: false,
+        x: Number.isFinite(frame.x) ? frame.x : null,
+        y: Number.isFinite(frame.y) ? frame.y : null,
       };
     },
     isStill() {

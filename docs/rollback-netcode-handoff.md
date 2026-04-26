@@ -1,6 +1,6 @@
 # Rollback Netcode — Codex Handoff Document
 
-**Current version:** v1.20.108
+**Current version:** v1.20.110
 **Branch:** `coop` on `experimental-origin` (`Whynchu/Phantom-Rebound-Experimental`)  
 **Last updated:** 2026-04-26
 
@@ -48,7 +48,7 @@ and D-series coop are unaffected.
 | **R0.6** | 10k-tick determinism canary (`scripts/test-determinism-canary-10k.mjs`) | ✅ Done |
 | **R1** | Wire `coordinatorStep` into game loop (`skipSimStepOnForward`) | ✅ Done (v1.20.105) |
 | **R2** | Bullet + enemy kinematic resim in `hostSimStep` | ✅ Done (v1.20.106) |
-| **R3** | Hit detection + combat during resim; delete D-series | ⏳ In progress (v1.20.108 input drift fix + slot-1 bridge) |
+| **R3** | Hit detection + combat during resim; delete D-series | ⏳ In progress (v1.20.110 guest position priority + enemy combat resim) |
 | **R4** | Polish: pause/intro/boon-select safety; disconnect; buffer tuning | ⬜ Pending |
 | **R5** | Beta, stress, ship | ⬜ Pending |
 
@@ -91,7 +91,7 @@ while (simAccumulatorMs >= SIM_STEP_MS) {
    - Post-movement timers: `tickPostMovementTimers`
    - **R2: Bullet kinematics**: `tickBulletsKinematic` (advance + wall bounce + expiry)
   - **R3.1: Danger projectile combat**: `resolveDangerHits` (HP, invuln, phase dash, mirror tide, EMP/lifeline basics)
-  - **R2: Enemy kinematics**: `tickEnemiesKinematic` (move toward nearest player)
+  - **R3.3: Enemy combat**: `tickEnemyCombat` (AI movement archetypes, windup/fire timers, projectile spawns, siphon charge drain)
   - **R3.2: Output projectile combat**: `resolveOutputHits` (enemy HP/death, pierce, score/kills, grey drops)
   - Clock advance: `state.tick++`, `state.timeMs += dt * 1000`
 
@@ -147,11 +147,12 @@ Quantization (`_quantizeJoy`) prevents float drift from causing spurious rollbac
 
 | File | Purpose |
 |------|---------|
-| `src/sim/hostSimStep.js` | Pure deterministic sim: player movement → bullet kinematics → enemy kinematics → clock |
+| `src/sim/hostSimStep.js` | Pure deterministic sim: player movement → bullet kinematics → enemy combat → clock |
 | `src/sim/playerMovement.js` | `applyJoystickVelocity`, `tickBodyPosition` |
 | `src/sim/postMovementTick.js` | `tickPostMovementTimers` — shield sync, slot timers, orb cooldowns |
 | `src/sim/bulletKinematic.js` | `tickBulletsKinematic` — advance + wall bounce + expiry (R2) |
 | `src/sim/enemyKinematic.js` | `tickEnemiesKinematic` — move toward nearest player (R2) |
+| `src/sim/enemyCombatStep.js` | `tickEnemyCombat` — rollback-owned enemy AI/fire cadence/projectile spawns (R3.3) |
 | `src/sim/dangerHitDispatch.js` | `resolveDangerHits` — danger projectile vs slot HP/boon outcomes (R3.1) |
 | `src/sim/outputHitDispatch.js` | `resolveOutputHits` — output projectile vs enemy HP/kill/score outcomes (R3.2) |
 | `src/sim/simProjectiles.js` | Sim-owned output/grey projectile factories for rollback replay |
@@ -223,10 +224,10 @@ rollback will silently fail (or throw). Add a serialization sanity test if in do
 gracefully (null check). Coop sessions need `slotCount: 2` — this is wired at session init
 but not yet tested end-to-end with rollback.
 
-### Gap 4: Enemy AI state not resimmed
-`tickEnemiesKinematic` only moves enemies in a straight line toward the player. It does NOT
-tick fire timers, windup state, or siphon behaviour. After a rollback, enemies may fire at
-slightly wrong moments. Acceptable for R2; R3 will add `stepEnemyCombatState` to resim.
+### Gap 4: Enemy contact / orbit combat is still partial
+Enemy AI movement, fire timers, windups, projectile spawns, disruptor cooldown, and siphon
+charge drain now resim through `tickEnemyCombat`. Rusher contact damage and orbit-sphere
+enemy contact are still not fully mirrored in `hostSimStep`; those remain R3 follow-up work.
 
 ---
 

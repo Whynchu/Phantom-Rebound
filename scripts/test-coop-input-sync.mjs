@@ -231,6 +231,21 @@ test('inputSync: sent message shape is {kind:"input", slot, frames:[...]}', () =
   assert.ok(f.still === 0 || f.still === 1);
 });
 
+test('inputSync: optional local position is stamped onto frames', () => {
+  const sent = [];
+  const sync = createCoopInputSync({
+    sendGameplay: (msg) => sent.push(msg),
+    localAdapter: makeMockAdapter(0, 1, 0.8, true),
+    localSlotIndex: 1,
+    localPositionProvider: () => ({ x: 123.456, y: 78.91 }),
+    batchSize: 1,
+  });
+  sync.sampleFrame(7);
+  const f = sent[0].frames[0];
+  assert.equal(f.x, 123.5);
+  assert.equal(f.y, 78.9);
+});
+
 // ---------------------------------------------------------------------------
 // Ingest / dispatch tests (5)
 // ---------------------------------------------------------------------------
@@ -352,6 +367,17 @@ test('remote adapter: moveVector() with frame dequantized correctly (within ±0.
   assert.ok(Math.abs(v.dy - (-0.6)) < 0.01, `dy=${v.dy} not close to -0.6`);
   assert.ok(Math.abs(v.t - 0.75) < 0.01, `t=${v.t} not close to 0.75`);
   assert.equal(v.active, true);
+  assert.equal(v.x, null);
+  assert.equal(v.y, null);
+});
+
+test('remote adapter: position stamp propagates when present', () => {
+  const rb = createRemoteInputBuffer();
+  rb.push({ tick: 30, dx: 0, dy: 0, t: 0, still: 1, x: 321.4, y: 222.2 });
+  const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => 30 });
+  const v = adapter.moveVector();
+  assert.equal(v.x, 321.4);
+  assert.equal(v.y, 222.2);
 });
 
 test('remote adapter: isStill() matches frame.still', () => {
