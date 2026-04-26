@@ -53,11 +53,22 @@ export class RollbackCoordinator {
     if (typeof sendInput !== 'function') throw new Error('RollbackCoordinator: sendInput required');
     if (typeof onRemoteInput !== 'function') throw new Error('RollbackCoordinator: onRemoteInput required');
 
+    // R4: enforce config invariant. The ring buffer must hold at least one
+    // pre-divergence snapshot (the rewind target) plus maxRollbackTicks worth
+    // of resim frames; otherwise getAtTick() during _rollbackAndResim will
+    // miss and the resim is silently skipped.
+    if (bufferCapacity < maxRollbackTicks + 1) {
+      throw new Error(
+        `RollbackCoordinator: bufferCapacity (${bufferCapacity}) must be >= maxRollbackTicks + 1 (${maxRollbackTicks + 1})`
+      );
+    }
+
     this.simState = simState;
     this.simStep = simStep;
     this.localSlotIndex = localSlotIndex;
     this.remoteSlotIndex = 1 - localSlotIndex;
     this.sendInput = sendInput;
+    this.bufferCapacity = bufferCapacity;
     this.maxRollbackTicks = maxRollbackTicks;
     this.logger = logger;
 
@@ -79,10 +90,24 @@ export class RollbackCoordinator {
     this.remoteInputHistory = []; // [tick] → input (actual received)
     this.remotePredictions = [];  // [tick] → predicted input
 
-    // Register for remote input arrival
-    onRemoteInput((remoteInputEvent) => {
+    // R4 telemetry
+    this._stats = {
+      rollbacksPerformed: 0,
+      maxRollbackDepthSeen: 0,
+      predictionMisses: 0,
+      remoteFramesReceived: 0,
+      lateRemoteFrames: 0,        // arrived after currentTick → triggered rollback path
+      pendingRemoteFrames: 0,     // arrived before currentTick reached them (normal)
+    };
+    this._lastReceivedRemoteTick = -1;
+
+    // R4 listener disposal: capture any unsubscribe handle the registrar
+    // returns so dispose() can detach cleanly. Older callers return undefined,
+    // which is fine — we just have nothing to detach.
+    const unsub = onRemoteInput((remoteInputEvent) => {
       this._onRemoteInputArrived(remoteInputEvent);
     });
+    this._remoteUnsub = typeof unsub === 'function' ? unsub : null;
   }
 
   /**
@@ -129,6 +154,25 @@ export class RollbackCoordinator {
     });
 
     this.currentTick++;
+
+    // R4: bounded history. Once we're past the rollback window, the entry
+    // at (currentTick - bufferCapacity - 1) can never be referenced again
+    // because rollback can't reach that far. Drop it to keep memory bounded
+    // for long sessions. `delete` keeps the array sparse (no dense holes).
+    const pruneTick = this.currentTick - this.bufferCapacity - 1;
+    if (pruneTick >= 0) {
+      delete this.localInputHistory[pruneTick];
+      delete this.remoteInputHistory[pruneTick];
+      delete this.remotePredictions[pruneTick];
+    }
+
+    // R4: stall status. Once we've seen at least one remote input, flag
+    // stalled when the freshest remote is older than the rollback window —
+    // continuing to predict past this point will fall outside what rollback
+    // can correct. Caller can use this to pause UI / show "waiting for peer".
+    const stalled = this._lastReceivedRemoteTick >= 0 &&
+      (this.currentTick - 1 - this._lastReceivedRemoteTick) > this.maxRollbackTicks;
+    return { stalled };
   }
 
   /**
@@ -151,12 +195,17 @@ export class RollbackCoordinator {
 
     // Store the actual input
     this.remoteInputHistory[tick] = remoteInput;
+    this._stats.remoteFramesReceived++;
+    if (tick > this._lastReceivedRemoteTick) this._lastReceivedRemoteTick = tick;
 
     // Check if we already simmed this tick with a prediction
     if (tick >= this.currentTick) {
       // Input arrived before we reached that tick; normal case for network buffering
+      this._stats.pendingRemoteFrames++;
       return;
     }
+
+    this._stats.lateRemoteFrames++;
 
     // We've already simmed past this tick with a prediction.
     // Compare the actual input against the prediction we recorded.
@@ -165,6 +214,7 @@ export class RollbackCoordinator {
     const matchesPrediction = this._inputsEqual(remoteInput, predictedInput);
     this.logger?.(`_onRemoteInputArrived: tick=${tick}, predicted=${JSON.stringify(predictedInput)}, actual=${JSON.stringify(remoteInput)}, matches=${matchesPrediction}`);
     if (!matchesPrediction) {
+      this._stats.predictionMisses++;
       // Divergence detected! Rollback and resim.
       this._rollbackAndResim(tick);
     }
@@ -225,6 +275,10 @@ export class RollbackCoordinator {
     this.logger?.(
       `RollbackCoordinator: rolled back ${rollbackDepth} ticks from divergence at tick ${divergenceTick}`
     );
+    this._stats.rollbacksPerformed++;
+    if (rollbackDepth > this._stats.maxRollbackDepthSeen) {
+      this._stats.maxRollbackDepthSeen = rollbackDepth;
+    }
   }
 
   /**
@@ -257,9 +311,59 @@ export class RollbackCoordinator {
     return {
       currentTick: this.currentTick,
       bufferSize: this.buffer.size(),
-      localInputCount: this.localInputHistory.length,
-      remoteInputCount: this.remoteInputHistory.length,
-      pendingPredictions: this.remotePredictions.filter(p => p).length,
+      localInputCount: this._countLive(this.localInputHistory),
+      remoteInputCount: this._countLive(this.remoteInputHistory),
+      pendingPredictions: this._countLive(this.remotePredictions),
     };
+  }
+
+  /**
+   * R4: number of ticks since the freshest received remote input.
+   * Returns Infinity if no remote input has ever been received.
+   * Used by callers (and step()'s stalled flag) to gauge prediction risk.
+   */
+  getRemoteAgeTicks() {
+    if (this._lastReceivedRemoteTick < 0) return Infinity;
+    return Math.max(0, this.currentTick - 1 - this._lastReceivedRemoteTick);
+  }
+
+  /**
+   * R4: telemetry snapshot. Counters accumulate over the coordinator's
+   * lifetime; sizes reflect current state.
+   */
+  getStats() {
+    return {
+      ...this._stats,
+      currentTick: this.currentTick,
+      bufferCapacity: this.bufferCapacity,
+      maxRollbackTicks: this.maxRollbackTicks,
+      lastReceivedRemoteTick: this._lastReceivedRemoteTick,
+      remoteAgeTicks: this.getRemoteAgeTicks(),
+      historySize: {
+        local: this._countLive(this.localInputHistory),
+        remote: this._countLive(this.remoteInputHistory),
+        predictions: this._countLive(this.remotePredictions),
+      },
+    };
+  }
+
+  /**
+   * R4: detach the remote-input listener and drop references.
+   * Safe to call multiple times. After dispose(), step() should not be
+   * invoked — the coordinator is effectively dead.
+   */
+  dispose() {
+    if (this._remoteUnsub) {
+      try { this._remoteUnsub(); } catch (err) {
+        this.logger?.('RollbackCoordinator: dispose unsub failed', err);
+      }
+      this._remoteUnsub = null;
+    }
+  }
+
+  _countLive(arr) {
+    let n = 0;
+    for (let i = 0; i < arr.length; i++) if (arr[i]) n++;
+    return n;
   }
 }

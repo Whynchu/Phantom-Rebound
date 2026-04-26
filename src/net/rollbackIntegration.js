@@ -93,6 +93,9 @@ export function setSimStep(simStepFn) {
  */
 export function teardownRollback() {
   if (rollbackCoordinator) {
+    try { rollbackCoordinator.dispose?.(); } catch (err) {
+      console.warn('[rollback] dispose failed', err);
+    }
     console.log('[rollback] Coordinator torn down');
     rollbackCoordinator = null;
   }
