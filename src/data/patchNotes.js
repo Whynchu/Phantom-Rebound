@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.126',
+      label: 'R3 VOLATILE ORB PARITY',
+      summary: ['Rollback resim now handles Volatile Orbs removing danger bullets and starting per-orb/shared cooldowns during replay.'],
+      highlights: [
+        'Added focused volatile-orb rollback tests while keeping the 10k determinism canary and sim replay harness green.',
+      ]
+    },
+  {
       version: '1.20.125',
       label: 'R3 SHIELD PARITY',
       summary: ['Rollback resim now handles shield collision gameplay mutations: danger bullets can be blocked, reflected, tempered, burst, and barrier-pulse during replay.'],
