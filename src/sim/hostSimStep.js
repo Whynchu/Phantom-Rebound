@@ -16,12 +16,14 @@
  * Currently wired:
  *   - R0.4 chunks 1+2: player movement (joystick → velocity, position
  *     integration with substeps + phase-walk obstacle handling).
+ *   - R0.4 step 3: post-movement deterministic decrements (body transients,
+ *     shield array sync, slot timer block, volatile orb cooldowns).
  *
  * Pending:
- *   - R0.4 step 3: timer/shield/orb tick block.
  *   - R0.4 step 4: bullets / enemies / collisions.
  */
 import { applyJoystickVelocity, tickBodyPosition } from './playerMovement.js';
+import { tickPostMovementTimers } from './postMovementTick.js';
 
 const NOOP = () => {};
 const FALSE_FN = () => false;
@@ -62,6 +64,18 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
     const joy0 = slot0Input && slot0Input.joy;
     applyJoystickVelocity(slot0.body, joy0, baseSpeed, deadzone, joyMax, gate);
     tickBodyPosition(slot0.body, dt, world, phaseOpts);
+    tickPostMovementTimers(
+      slot0.body,
+      slot0.shields,
+      slot0.timers,
+      slot0.orbState && slot0.orbState.cooldowns,
+      dt,
+      {
+        shieldTier: (slot0.upg && slot0.upg.shieldTier) | 0,
+        shieldTempered: !!(slot0.upg && slot0.upg.shieldTempered),
+        colossusActive: !!(slot0.upg && slot0.upg.colossus),
+      }
+    );
   }
 
   const slot1 = state.slots && state.slots[1];
@@ -69,6 +83,18 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
     const joy1 = slot1Input && slot1Input.joy;
     applyJoystickVelocity(slot1.body, joy1, baseSpeed, deadzone, joyMax, gate);
     tickBodyPosition(slot1.body, dt, world, phaseOpts);
+    tickPostMovementTimers(
+      slot1.body,
+      slot1.shields,
+      slot1.timers,
+      slot1.orbState && slot1.orbState.cooldowns,
+      dt,
+      {
+        shieldTier: (slot1.upg && slot1.upg.shieldTier) | 0,
+        shieldTempered: !!(slot1.upg && slot1.upg.shieldTempered),
+        colossusActive: !!(slot1.upg && slot1.upg.colossus),
+      }
+    );
   }
 }
 

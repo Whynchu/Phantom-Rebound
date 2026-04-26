@@ -156,6 +156,7 @@ import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js'
 import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
 import { setupRollback, teardownRollback, coordinatorStep } from './src/net/rollbackIntegration.js';
 import { applyJoystickVelocity, tickBodyPosition } from './src/sim/playerMovement.js';
+import { tickPostMovementTimers } from './src/sim/postMovementTick.js';
 import {
   showRoomClearOverlay,
   showBossDefeatedOverlay,
@@ -5449,25 +5450,22 @@ function update(dt,ts){
     isOverlapping: isEntityOverlappingObstacle,
     eject: ejectEntityFromObstacles,
   });
-  if(player.invincible>0 && !player.coopSpectating)player.invincible-=dt;
-  if(player.distort>0)player.distort-=dt;
+  // R0.4 step 3 — post-movement deterministic decrements (body transients,
+  // shield array sync, slot timer block, volatile orb global cooldown,
+  // per-orb cooldown loop) extracted to src/sim/postMovementTick.js.
+  tickPostMovementTimers(player, player.shields, slot0Timers, _orbCooldown, dt, {
+    shieldTier: UPG.shieldTier,
+    shieldTempered: !!UPG.shieldTempered,
+    colossusActive: !!UPG.colossus,
+  });
   updateGuestSlotMovement(dt, W, H);
   tickGuestSlotTimers(dt);
 
-  // ── Shields — sync count to tier, tick cooldowns
-  while(player.shields.length < UPG.shieldTier) player.shields.push({cooldown:0, hardened: !!UPG.shieldTempered, mirrorCooldown:-9999});
+  // Shield cooldown tick (separate helper). runBoonHook touches only UPG.*
+  // cooldowns, not slot timers/orb cooldowns, so its order vs the helper
+  // above is behavior-irrelevant (verified in src/systems/boonHooks.js).
   tickShieldCooldowns(player.shields, dt, UPG.shieldTempered);
-  if(slot0Timers.barrierPulseTimer>0) slot0Timers.barrierPulseTimer-=dt*1000;
-  if(slot0Timers.absorbComboTimer>0){ slot0Timers.absorbComboTimer-=dt*1000; if(slot0Timers.absorbComboTimer<=0){slot0Timers.absorbComboCount=0;} }
-  if(slot0Timers.chainMagnetTimer>0) slot0Timers.chainMagnetTimer-=dt*1000;
-  if(slot0Timers.slipCooldown>0) slot0Timers.slipCooldown-=dt*1000;
-  if(UPG.colossus && slot0Timers.colossusShockwaveCd>0) slot0Timers.colossusShockwaveCd-=dt;
   runBoonHook('onTick', { UPG, dt, ts, slot: playerSlots[0] || null });
-  // Volatile Orb cooldowns — per-orb recharge plus a brief shared detonation lockout
-  if(slot0Timers.volatileOrbGlobalCooldown > 0) slot0Timers.volatileOrbGlobalCooldown = Math.max(0, slot0Timers.volatileOrbGlobalCooldown - dt);
-  for(let si=0;si<_orbCooldown.length;si++){
-    if(_orbCooldown[si]>0) _orbCooldown[si]=Math.max(0,_orbCooldown[si]-dt);
-  }
   // ── Room state machine
   roomTimer += dt*1000;
   if(gstate === 'playing') runElapsedMs += dt * 1000;

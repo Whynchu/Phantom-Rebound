@@ -52,7 +52,7 @@ function makeInputStream(seed, ticks) {
   return inputs;
 }
 
-function makeFreshState() {
+function makeFreshState(opts = {}) {
   const state = createSimState({
     seed: 42,
     worldW: 800,
@@ -65,11 +65,31 @@ function makeFreshState() {
   state.slots[1].body.x = 600;
   state.slots[1].body.y = 300;
   state.slots[1].body.r = 14;
+  if (opts.exerciseTimers) {
+    // Pre-load each slot with non-zero timer values + UPG flags so the
+    // R0.4 step 3 helper (tickPostMovementTimers) actually exercises every
+    // branch (decrements, clamps, shield-grow, absorbCombo expiry, etc.).
+    for (const slot of state.slots) {
+      slot.body.invincible = 0.5;
+      slot.body.distort = 0.3;
+      slot.timers.barrierPulseTimer = 250;
+      slot.timers.slipCooldown = 180;
+      slot.timers.absorbComboTimer = 90;
+      slot.timers.absorbComboCount = 4;
+      slot.timers.chainMagnetTimer = 120;
+      slot.timers.colossusShockwaveCd = 0.6;
+      slot.timers.volatileOrbGlobalCooldown = 0.4;
+      slot.upg.shieldTier = 3;
+      slot.upg.shieldTempered = true;
+      slot.upg.colossus = true;
+      slot.orbState.cooldowns.push(0.5, 0.3, 0.1);
+    }
+  }
   return state;
 }
 
-function runReplay(seed, ticks, opts) {
-  const state = makeFreshState();
+function runReplay(seed, ticks, opts, stateOpts) {
+  const state = makeFreshState(stateOpts);
   const inputsA = makeInputStream(seed, ticks);
   const inputsB = makeInputStream(seed ^ 0xa5a5a5a5, ticks);
   const trace = [];
@@ -156,6 +176,26 @@ test('replay: longer run (1800 ticks ≈ 30s) stays byte-identical', () => {
   const b = runReplay(54321, ticks);
   for (let i = 0; i < ticks; i++) {
     if (a[i] !== b[i]) throw new Error(`30s replay diverged at tick ${i}`);
+  }
+});
+
+test('replay: timer/shield/orb branches stay byte-identical (R0.4 step 3)', () => {
+  // Pre-loads per-slot timers + UPG flags so tickPostMovementTimers'
+  // every branch (body transients, shield grow, ms timer block,
+  // colossus s tick, absorbCombo expiry, volatile orb clamp, per-orb
+  // loop) executes during replay. Two identical runs must remain
+  // byte-identical end-to-end.
+  const ticks = 600;
+  const a = runReplay(31337, ticks, {}, { exerciseTimers: true });
+  const b = runReplay(31337, ticks, {}, { exerciseTimers: true });
+  for (let i = 0; i < ticks; i++) {
+    if (a[i] !== b[i]) throw new Error(`step-3 replay diverged at tick ${i}`);
+  }
+  // Sanity: the trace evolves through the timer ramp (not stuck on a
+  // single state).
+  const distinct = new Set(a);
+  if (distinct.size < 30) {
+    throw new Error(`step-3 timers not exercised: only ${distinct.size} distinct states`);
   }
 });
 
