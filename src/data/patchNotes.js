@@ -2,6 +2,14 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.108',
+      label: 'ROLLBACK INPUT DRIFT FIX',
+      summary: ['Wired rollback input frames through the gameplay channel with kind:\'rollback-input\' so peers stop predicting remote movement indefinitely.'],
+      highlights: [
+        'Bridged online coop slot 1 into simState before rollback setup and disabled the legacy guest reconciler while rollback is active to avoid dueling corrections.',
+      ]
+    },
+  {
       version: '1.20.107',
       label: 'R3 COMBAT RESIM SLICE',
       summary: ['Rollback R3 now resimulates core combat outcomes: danger bullets can damage player slots and output bullets can damage or kill enemies during rollback replay.'],

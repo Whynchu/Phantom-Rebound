@@ -1,6 +1,6 @@
 # Rollback Netcode — Codex Handoff Document
 
-**Current version:** v1.20.107
+**Current version:** v1.20.108
 **Branch:** `coop` on `experimental-origin` (`Whynchu/Phantom-Rebound-Experimental`)  
 **Last updated:** 2026-04-26
 
@@ -48,7 +48,7 @@ and D-series coop are unaffected.
 | **R0.6** | 10k-tick determinism canary (`scripts/test-determinism-canary-10k.mjs`) | ✅ Done |
 | **R1** | Wire `coordinatorStep` into game loop (`skipSimStepOnForward`) | ✅ Done (v1.20.105) |
 | **R2** | Bullet + enemy kinematic resim in `hostSimStep` | ✅ Done (v1.20.106) |
-| **R3** | Hit detection + combat during resim; delete D-series | ⏳ In progress (v1.20.107 core danger/output slice) |
+| **R3** | Hit detection + combat during resim; delete D-series | ⏳ In progress (v1.20.108 input drift fix + slot-1 bridge) |
 | **R4** | Polish: pause/intro/boon-select safety; disconnect; buffer tuning | ⬜ Pending |
 | **R5** | Beta, stress, ship | ⬜ Pending |
 
@@ -78,7 +78,7 @@ while (simAccumulatorMs >= SIM_STEP_MS) {
 2. Predicts remote input (repeat-last or neutral).
 3. **Does NOT call simStep** (`skipSimStepOnForward: true`) — `update()` already advanced state.
 4. Snapshots current state into the ring buffer (16 ticks deep).
-5. Sends local input frame to peer via transport.
+5. Sends local input frame to peer via `{ kind:'rollback-input', frame }`.
 6. On remote input arrival (via `_onRemoteInputArrived`): if predicted ≠ actual → `_rollbackAndResim`.
 
 ### Rollback + Resim (`_rollbackAndResim`)
@@ -102,6 +102,7 @@ while (simAccumulatorMs >= SIM_STEP_MS) {
 | `simState` field | Live variable | How bridged |
 |---|---|---|
 | `simState.slots[0].body` | `player` object | getter/setter |
+| `simState.slots[1].body` | online coop `playerSlots[1].body` | getter/setter when `?rollback=1` |
 | `simState.bullets` | `bullets[]` array | direct assignment (`simState.bullets = bullets`) |
 | `simState.enemies` | `enemies[]` array | direct assignment |
 | `simState.run.score` | `score` | getter/setter |

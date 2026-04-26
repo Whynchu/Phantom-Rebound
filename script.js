@@ -114,7 +114,7 @@ import { renderPatchNotesPanel } from './src/ui/patchNotes.js';
 import { createPanelManager } from './src/ui/panelManager.js';
 import { createPauseController } from './src/ui/pauseController.js';
 import { simRng, parseSeedParam, setRngState } from './src/systems/seededRng.js';
-import { createSimState } from './src/sim/simState.js';
+import { createSimState, createSlot } from './src/sim/simState.js';
 import { showGameOverScreen, renderScoreBreakdown } from './src/ui/gameOver.js';
 import { bullets, enemies, shockwaves, spawnQueue, scoreBreakdown, resetScoreBreakdown } from './src/core/gameState.js';
 import { runBoonHook } from './src/systems/boonHooks.js';
@@ -1838,6 +1838,55 @@ function mirrorHostUpgToSlot1() {
   }
 }
 
+function copyObjectInPlace(target, source) {
+  if (!target || !source || typeof target !== 'object' || typeof source !== 'object') return;
+  for (const k of Object.keys(target)) delete target[k];
+  Object.assign(target, source);
+}
+
+// R3.2 — rollback restores `simState.slots[1]`, while the D-series online
+// slot wrapper exposes a frozen getter-only facade. Bridge slot 1 to the live
+// online body/upg so rollback resim corrects the same object the renderer uses.
+function ensureRollbackSlot1Bridge() {
+  if (!ROLLBACK_ENABLED) return;
+  const playerSlot = playerSlots[1];
+  if (!playerSlot) return;
+  while (simState.slots.length <= 1) {
+    simState.slots.push(createSlot(simState.slots.length, BASE_PLAYER_HP));
+  }
+  const simSlot = simState.slots[1];
+  if (!simSlot) return;
+  if (!simSlot.__onlineCoopBridge) {
+    let fallbackBody = playerSlot.body || createInitialPlayerState(WORLD_W, WORLD_H);
+    let fallbackUpg = playerSlot.upg || getDefaultUpgrades();
+    Object.defineProperty(simSlot, 'body', {
+      configurable: true,
+      enumerable: true,
+      get() { return (playerSlots[1] && playerSlots[1].body) || fallbackBody; },
+      set(value) {
+        const live = playerSlots[1] && playerSlots[1].body;
+        if (live && value && typeof value === 'object') Object.assign(live, value);
+        else fallbackBody = value;
+      },
+    });
+    Object.defineProperty(simSlot, 'upg', {
+      configurable: true,
+      enumerable: true,
+      get() { return (playerSlots[1] && playerSlots[1].upg) || fallbackUpg; },
+      set(value) {
+        const live = playerSlots[1] && playerSlots[1].upg;
+        if (live && value && typeof value === 'object') copyObjectInPlace(live, value);
+        else fallbackUpg = value;
+      },
+    });
+    simSlot.__onlineCoopBridge = true;
+  }
+  simSlot.metrics = playerSlot.metrics || simSlot.metrics;
+  simSlot.timers = playerSlot.timers || simSlot.timers;
+  simSlot.aim = playerSlot.aim || simSlot.aim;
+  simSlot.shields = (playerSlot.body && playerSlot.body.shields) || simSlot.shields || [];
+}
+
 // D14 — pure helper: apply a base boon (by id) to the given slot's upg/hp,
 // resolving any active evolution. Used on the receiving peer when the
 // other peer broadcasts coop-boon-pick.
@@ -2531,46 +2580,6 @@ function installCoopInputUplink(armedCoop) {
     batchSize: 4,
   });
 
-  // R3 — rollback coordinator (experimental). When ROLLBACK_ENABLED, initialize
-  // the coordinator for input-based deterministic sim. R1 wiring: hostSimStep is
-  // now the resim function; the forward path still uses update() (skipSimStepOnForward).
-  if (ROLLBACK_ENABLED) {
-    try {
-      setupRollback(
-        simState,
-        localSlotIndex,
-        async (frame) => {
-          // Route coordinator output through existing transport.
-          // frame is { tick, slot, dx, dy, active, mag } — flat joy fields.
-          try { await session.sendGameplay({ type: 'coop-input', frame }); } catch (_) {}
-        },
-        (callback) => {
-          // Register coordinator with existing input handler.
-          // TODO: connect to coopInputSync.onRemoteInput when available
-        },
-        {
-          simStep: hostSimStep,
-          simStepOpts: {
-            get worldW() { return simState.world && simState.world.w ? simState.world.w : (W || 800); },
-            get worldH() { return simState.world && simState.world.h ? simState.world.h : (H || 600); },
-            baseSpeed: BASE_SPD,
-            deadzone: JOY_DEADZONE,
-            joyMax,
-            get gate() { return roomPhase !== 'intro'; },
-            get phaseWalk() { return !!UPG.phaseWalk; },
-            get bossDamageMultiplier() { return currentBossDamageMultiplier || 1; },
-            resolveCollisions: resolveEntityObstacleCollisions,
-            isOverlapping: isEntityOverlappingObstacle,
-            eject: ejectEntityFromObstacles,
-          },
-          logging: true,
-        }
-      );
-      console.info('[coop] rollback coordinator armed (R1: hostSimStep for resim)');
-    } catch (err) {
-      try { console.warn('[coop] rollback setup failed:', err); } catch (_) {}
-    }
-  }
   // Phase D4: host-only snapshot broadcaster. Emits a full state snapshot
   // every 4 sim ticks (60 Hz / 4 = 15 Hz, D12 — was 6/10 Hz). Combined with
   // guest's 4-frame input batch (~15 msg/s) each peer stays within the
@@ -2647,12 +2656,12 @@ function installCoopInputUplink(armedCoop) {
     // or replay drifts by construction. World bounds default to current
     // WORLD_W/WORLD_H; updated whenever the room/world resizes via the
     // existing world-space recomputation path.
-    guestPredictionReconciler = createPredictionReconciler({
+    guestPredictionReconciler = ROLLBACK_ENABLED ? null : createPredictionReconciler({
       speedPerSecond: 165 * GLOBAL_SPEED_LIFT,
       worldBounds: { left: M, right: WORLD_W - M, top: M, bottom: WORLD_H - M },
     });
     lastReconciledSnapshotSeq = null;
-    try { console.info('[coop] guest prediction reconciler armed'); } catch (_) {}
+    try { if (!ROLLBACK_ENABLED) console.info('[coop] guest prediction reconciler armed'); } catch (_) {}
     // D19.1 — bullet local-advance pool, guest only. Wall margin & world
     // bounds match host's bullet bounce constants exactly so reconcile
     // thresholds reflect real divergence rather than constant offset.
@@ -2665,6 +2674,46 @@ function installCoopInputUplink(armedCoop) {
     // D19.4 — bullet spawn detector for any-owner muzzle flashes.
     guestBulletSpawnDetector = createBulletSpawnDetector({});
     try { console.info('[coop] guest bullet spawn detector armed'); } catch (_) {}
+  }
+  ensureRollbackSlot1Bridge();
+  // R3 — rollback coordinator (experimental). Slot 1 must be installed before
+  // setup so the coordinator snapshots/restores the same live body rendered by
+  // the D-series coop path.
+  if (ROLLBACK_ENABLED) {
+    try {
+      setupRollback(
+        simState,
+        localSlotIndex,
+        async (frame) => {
+          try { await session.sendGameplay({ kind: 'rollback-input', frame }); } catch (_) {}
+        },
+        (callback) => session.onGameplay((ev) => {
+          const payload = ev && ev.payload;
+          if (!payload || payload.kind !== 'rollback-input') return;
+          if (payload.frame) callback(payload.frame);
+        }),
+        {
+          simStep: hostSimStep,
+          simStepOpts: {
+            get worldW() { return simState.world && simState.world.w ? simState.world.w : (W || 800); },
+            get worldH() { return simState.world && simState.world.h ? simState.world.h : (H || 600); },
+            baseSpeed: BASE_SPD,
+            deadzone: JOY_DEADZONE,
+            joyMax,
+            get gate() { return roomPhase !== 'intro'; },
+            get phaseWalk() { return !!UPG.phaseWalk; },
+            get bossDamageMultiplier() { return currentBossDamageMultiplier || 1; },
+            resolveCollisions: resolveEntityObstacleCollisions,
+            isOverlapping: isEntityOverlappingObstacle,
+            eject: ejectEntityFromObstacles,
+          },
+          logging: true,
+        }
+      );
+      console.info('[coop] rollback coordinator armed (R1: hostSimStep for resim)');
+    } catch (err) {
+      try { console.warn('[coop] rollback setup failed:', err); } catch (_) {}
+    }
   }
   // Ingest any gameplay payload that is an input frame from the peer.
   // coopSession.onGameplay delivers { payload, from, ts } envelopes — we must
@@ -5123,6 +5172,7 @@ function loop(ts){
           const snap = latestRemoteSnapshot;
           const snapSeq = snap && snap.snapshotSeq;
           if (
+            !ROLLBACK_ENABLED &&
             guestPredictionReconciler &&
             snap &&
             Number.isFinite(snapSeq) &&

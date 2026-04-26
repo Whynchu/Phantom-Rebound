@@ -75,6 +75,27 @@ test('Coordinator collects local input', () => {
   teardownRollback();
 });
 
+// Test 2b: Remote registrar delivery path
+test('Remote registrar forwards rollback-input frames', () => {
+  const state = createSimState({ slotCount: 2 });
+  let remoteInputCallback = null;
+  const sentInputs = [];
+
+  setupRollback(
+    state,
+    0,
+    async (frame) => { sentInputs.push({ kind: 'rollback-input', frame }); },
+    (cb) => { remoteInputCallback = cb; return () => { remoteInputCallback = null; }; }
+  );
+
+  assert.strictEqual(typeof remoteInputCallback, 'function', 'remote input callback should register');
+  coordinatorStep({ joy: { dx: 10, dy: 0, active: true, mag: 10 } }, 1 / 60);
+  remoteInputCallback({ tick: 0, slot: 1, dx: -10, dy: 0, active: true, mag: 10 });
+
+  assert.strictEqual(sentInputs[0].kind, 'rollback-input', 'wire payload should use kind dispatch');
+  teardownRollback();
+});
+
 // Test 3: Multiple peers with coordinated input
 test('Two coordinators exchange inputs', () => {
   const state0 = createSimState({ slotCount: 2 });
