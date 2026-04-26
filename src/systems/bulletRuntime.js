@@ -117,10 +117,68 @@ function applyBulletHoming(bullet, enemies, dt, opts = {}) {
   return true;
 }
 
+/**
+ * Apply gravity-well steering to a single danger bullet. Pure helper —
+ * mutates bullet.vx, bullet.vy, and bullet.gravityWellBaseSpeed in place.
+ * No RNG, no audio.
+ *
+ * Original lives in script.js update() bullet loop. Carved out as part of
+ * R0.4 step 4b. Behavior:
+ *   - If bullet is within 96 units of the player AND UPG.gravityWell is on,
+ *     bullet enters the field. baseSpeed is captured if not already set.
+ *   - In-field, bullet decelerates exponentially toward 55% of baseSpeed
+ *     (floor 40). Out-of-field with a captured baseSpeed, bullet recovers
+ *     toward baseSpeed (floor 40). The exponential pull rate uses
+ *     `1 - pow(0.16, dt)` in-field, `1 - pow(0.08, dt)` out-of-field.
+ *   - Once recovery is within 2 units of target, baseSpeed is cleared.
+ *
+ * Skip: bullet not in 'danger' state. Returns false in that case.
+ *
+ * @param {object} bullet              - bullet object (mutated)
+ * @param {{x:number,y:number}} target - reference body (player)
+ * @param {number} dt                  - timestep, seconds
+ * @param {object} opts
+ * @param {boolean} [opts.gravityWell=false]
+ * @param {number}  [opts.range=96]
+ * @returns {boolean} true if processed, false if skipped
+ */
+function applyDangerGravityWell(bullet, target, dt, opts = {}) {
+  if (!bullet || bullet.state !== 'danger') return false;
+  if (!target) return false;
+
+  const gravityWell = !!opts.gravityWell;
+  const range = opts.range != null ? opts.range : 96;
+
+  const gdist = Math.hypot(bullet.x - target.x, bullet.y - target.y);
+  const inField = gravityWell && gdist < range;
+  const currentSpeed = Math.hypot(bullet.vx, bullet.vy);
+
+  if (inField && !bullet.gravityWellBaseSpeed) {
+    bullet.gravityWellBaseSpeed = Math.max(40, currentSpeed);
+  }
+
+  if ((inField || bullet.gravityWellBaseSpeed) && currentSpeed > 0.0001) {
+    const targetSpeed = inField
+      ? Math.max(40, bullet.gravityWellBaseSpeed * 0.55)
+      : Math.max(40, bullet.gravityWellBaseSpeed);
+    const pull = 1 - Math.pow(inField ? 0.16 : 0.08, dt);
+    const nextSpeed = currentSpeed + (targetSpeed - currentSpeed) * pull;
+    bullet.vx = (bullet.vx / currentSpeed) * nextSpeed;
+    bullet.vy = (bullet.vy / currentSpeed) * nextSpeed;
+    if (!inField && Math.abs(nextSpeed - targetSpeed) < 2) {
+      delete bullet.gravityWellBaseSpeed;
+    }
+  } else if (!inField && bullet.gravityWellBaseSpeed) {
+    delete bullet.gravityWellBaseSpeed;
+  }
+  return true;
+}
+
 export {
   shouldExpireOutputBullet,
   shouldRemoveBulletOutOfBounds,
   resolveDangerBounceState,
   resolveOutputBounceState,
   applyBulletHoming,
+  applyDangerGravityWell,
 };

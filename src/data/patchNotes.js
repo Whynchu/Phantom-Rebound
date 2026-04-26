@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.90',
+      label: 'R0.4 STEP 4B — DANGER BULLET GRAVITY-WELL STEERING EXTRACTED',
+      summary: ['Second slice of R0.4 step 4. The 22-line block in script.js update() that handled gravityWell deceleration/recovery for danger bullets is now applyDangerGravityWell on src/systems/bulletRuntime.js. Pure deterministic math: enter-field captures baseSpeed, in-field exponential pull toward 55% of baseSpeed (floor 40), out-of-field recovery toward baseSpeed (floor 40), baseSpeed cleared once recovery is within 2 units of target. No RNG, no audio, no allocations. 15 unit tests cover entry/exit, floor clamping, asymptotic behavior, direction preservation, multiple in/out cycles, stationary bullet (no NaN), null-safety, custom range. All sim/rollback suites green.'],
+      highlights: [
+        'src/systems/bulletRuntime.js — applyDangerGravityWell(bullet, target, dt, opts). Skip on non-danger state (returns false). opts: { gravityWell: bool, range: number=96 }. Mutates bullet.vx, bullet.vy, bullet.gravityWellBaseSpeed in place. Preserves bullet direction (only magnitude changes).',
+        'script.js update() — 22-line gravityWell block (formerly inline in the bullet integration loop, between homing and substep movement) replaced by one applyDangerGravityWell call passing UPG.gravityWell through opts. The conditional `if(b.state===\'danger\')` guard preserved at the call site to keep the cost ~zero for non-danger bullets.',
+        'scripts/test-bullet-gravity-well.mjs — 15 tests. State-skip, flag-off (no field), entry captures baseSpeed, in-field deceleration with 40 floor, asymptote-to-floor over 600 ticks, out-of-field recovery to baseSpeed (within 2-unit tolerance — matches the helper\'s clear-on-converge contract), repeated in/out cycles, direction preservation (atan2 unchanged), 60-tick determinism, stationary bullet (no NaN), null-safety, custom range parameter.',
+        'Test pass: determinism canary, sim-state, sim-state-serialize, sim-replay, player movement, post-movement-tick, bullet-homing, bullet-gravity-well (new), rollback buffer/coordinator/integration, systems, bullet-ids/local-advance/spawn-detector, snapshot shield/orb sync — all green. R3.2 two-peer harness regression unchanged from prior state.',
+        'Slicing strategy continues: each clean inner block of the bullet loop becomes a single-responsibility helper with unit-test coverage. Next candidates: substep position integration + wall-bounce (lines ~5969-5982, depends on resolveBulletObstacleCollision callback), then near-miss detection, then bounce-resolution effects (already partially extracted).',
+        'Production unchanged: helper is byte-equivalent to the original inline block. Rollback resim path still dormant in production (?rollback=1 flag). When step 4 fully lands, the entire bullet loop body will be a sequence of pure helper calls that hostSimStep can drive directly.',
+      ]
+    },
+  {
       version: '1.20.89',
       label: 'R0.4 STEP 4A — BULLET HOMING STEER EXTRACTED TO PURE HELPER',
       summary: ['First slice of R0.4 step 4 (bullets/enemies/collisions). The bullet-loop block that steers homing output bullets toward the nearest enemy is now a pure helper, applyBulletHoming, on src/systems/bulletRuntime.js (alongside the existing shouldExpireOutputBullet / shouldRemoveBulletOutOfBounds / resolveDangerBounceState / resolveOutputBounceState helpers). 12 lines lifted out of script.js update() with no behavior change. Approach matches the rubber-duck-validated pattern: small, single-responsibility extractions with unit-test coverage, rather than one giant step-4 push that risks silent desync. Each future bullet-loop slice (wall collision, danger collision, output collision, out-of-bounds cleanup) can land the same way.'],

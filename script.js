@@ -218,6 +218,7 @@ import {
   resolveDangerBounceState,
   resolveOutputBounceState,
   applyBulletHoming,
+  applyDangerGravityWell,
 } from './src/systems/bulletRuntime.js';
 import {
   resolveOutputEnemyHit,
@@ -5944,26 +5945,11 @@ function update(dt,ts){
     }
 
     if(b.state==='danger'){
-      const gdist=Math.hypot(b.x-player.x,b.y-player.y);
-      const inGravityField = Boolean(UPG.gravityWell && gdist < 96);
-      const currentSpeed = Math.hypot(b.vx, b.vy);
-      if(inGravityField && !b.gravityWellBaseSpeed){
-        b.gravityWellBaseSpeed = Math.max(40, currentSpeed);
-      }
-      if((inGravityField || b.gravityWellBaseSpeed) && currentSpeed > 0.0001){
-        const targetSpeed = inGravityField
-          ? Math.max(40, b.gravityWellBaseSpeed * 0.55)
-          : Math.max(40, b.gravityWellBaseSpeed);
-        const pull = 1 - Math.pow(inGravityField ? 0.16 : 0.08, dt);
-        const nextSpeed = currentSpeed + (targetSpeed - currentSpeed) * pull;
-        b.vx = (b.vx / currentSpeed) * nextSpeed;
-        b.vy = (b.vy / currentSpeed) * nextSpeed;
-        if(!inGravityField && Math.abs(nextSpeed - targetSpeed) < 2){
-          delete b.gravityWellBaseSpeed;
-        }
-      } else if(!inGravityField && b.gravityWellBaseSpeed){
-        delete b.gravityWellBaseSpeed;
-      }
+      // R0.4 step 4b: gravity-well steering extracted to bulletRuntime.applyDangerGravityWell
+      applyDangerGravityWell(b, player, dt, {
+        gravityWell: !!UPG.gravityWell,
+        range: 96,
+      });
     }
 
     let bounced=false;
