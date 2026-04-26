@@ -1175,17 +1175,16 @@ let guestBoonRerolls = 1;
 let damagelessRooms = 0;
 let tookDamageThisRoom = false;
 let lastStallSpawnAt = -99999;
-let _barrierPulseTimer = 0;
-let _slipCooldown = 0;
-let _absorbComboCount = 0, _absorbComboTimer = 0;
-let _chainMagnetTimer = 0;
-let _echoCounter = 0;
-let _vampiricRestoresThisRoom = 0;
-let _killSustainHealedThisRoom = 0;
-let _colossusShockwaveCd = 0;
+// R0.4 step 1.5 — slot timers now live in simState.slots[0].timers (the
+// rollback-canonical location). The previous closure lets were aliased
+// here as a transition step; this commit removes them entirely. All
+// reads/writes go through slot0Timers, which is a thin getter/setter
+// proxy onto simState.slots[0].timers so existing call sites keep
+// working unchanged. Identity of the underlying timers object is
+// preserved across resetSimState/restoreState (R0.4 step 1), so the
+// proxy always reads the current canonical value.
 let _orbFireTimers = [];
 let _orbCooldown = [];
-let _volatileOrbGlobalCooldown = 0;
 let boonHistory = [];
 let pendingLegendary = null;
 let legendaryOffered = false;
@@ -1245,7 +1244,7 @@ let currentBossDamageMultiplier = 1;
 
 // ── PLAYER SLOT 0 BRIDGE (Phase C2a) ─────────────────────────────────────────
 // Slot 0 = host. For solo play and pre-C2b callsites, everything still reads
-// the legacy singletons (`player`, `UPG`, `score`, `_slipCooldown`, ...). The
+// the legacy singletons (`player`, `UPG`, `score`, `slot0Timers.slipCooldown`, ...). The
 // slot exposes LIVE getters/setters so future slot-aware code can route
 // through `slot.metrics.score` etc. without forcing a big-bang refactor.
 // When C2b migrates callsites slot-by-slot, this bridge keeps solo working.
@@ -1260,16 +1259,16 @@ const slot0Metrics = Object.freeze({
   get maxHp() { return maxHp; }, set maxHp(v) { maxHp = v; },
 });
 const slot0Timers = Object.freeze({
-  get barrierPulseTimer() { return _barrierPulseTimer; }, set barrierPulseTimer(v) { _barrierPulseTimer = v; },
-  get slipCooldown() { return _slipCooldown; }, set slipCooldown(v) { _slipCooldown = v; },
-  get absorbComboCount() { return _absorbComboCount; }, set absorbComboCount(v) { _absorbComboCount = v; },
-  get absorbComboTimer() { return _absorbComboTimer; }, set absorbComboTimer(v) { _absorbComboTimer = v; },
-  get chainMagnetTimer() { return _chainMagnetTimer; }, set chainMagnetTimer(v) { _chainMagnetTimer = v; },
-  get echoCounter() { return _echoCounter; }, set echoCounter(v) { _echoCounter = v; },
-  get vampiricRestoresThisRoom() { return _vampiricRestoresThisRoom; }, set vampiricRestoresThisRoom(v) { _vampiricRestoresThisRoom = v; },
-  get killSustainHealedThisRoom() { return _killSustainHealedThisRoom; }, set killSustainHealedThisRoom(v) { _killSustainHealedThisRoom = v; },
-  get colossusShockwaveCd() { return _colossusShockwaveCd; }, set colossusShockwaveCd(v) { _colossusShockwaveCd = v; },
-  get volatileOrbGlobalCooldown() { return _volatileOrbGlobalCooldown; }, set volatileOrbGlobalCooldown(v) { _volatileOrbGlobalCooldown = v; },
+  get barrierPulseTimer() { return simState.slots[0].timers.barrierPulseTimer; }, set barrierPulseTimer(v) { simState.slots[0].timers.barrierPulseTimer = v; },
+  get slipCooldown() { return simState.slots[0].timers.slipCooldown; }, set slipCooldown(v) { simState.slots[0].timers.slipCooldown = v; },
+  get absorbComboCount() { return simState.slots[0].timers.absorbComboCount; }, set absorbComboCount(v) { simState.slots[0].timers.absorbComboCount = v; },
+  get absorbComboTimer() { return simState.slots[0].timers.absorbComboTimer; }, set absorbComboTimer(v) { simState.slots[0].timers.absorbComboTimer = v; },
+  get chainMagnetTimer() { return simState.slots[0].timers.chainMagnetTimer; }, set chainMagnetTimer(v) { simState.slots[0].timers.chainMagnetTimer = v; },
+  get echoCounter() { return simState.slots[0].timers.echoCounter; }, set echoCounter(v) { simState.slots[0].timers.echoCounter = v; },
+  get vampiricRestoresThisRoom() { return simState.slots[0].timers.vampiricRestoresThisRoom; }, set vampiricRestoresThisRoom(v) { simState.slots[0].timers.vampiricRestoresThisRoom = v; },
+  get killSustainHealedThisRoom() { return simState.slots[0].timers.killSustainHealedThisRoom; }, set killSustainHealedThisRoom(v) { simState.slots[0].timers.killSustainHealedThisRoom = v; },
+  get colossusShockwaveCd() { return simState.slots[0].timers.colossusShockwaveCd; }, set colossusShockwaveCd(v) { simState.slots[0].timers.colossusShockwaveCd = v; },
+  get volatileOrbGlobalCooldown() { return simState.slots[0].timers.volatileOrbGlobalCooldown; }, set volatileOrbGlobalCooldown(v) { simState.slots[0].timers.volatileOrbGlobalCooldown = v; },
 });
 const slot0Aim = Object.freeze({
   get angle() { return playerAimAngle; }, set angle(v) { playerAimAngle = v; },
@@ -1704,7 +1703,7 @@ function isOnlineCoopBoonPhaseActive() {
 // numeric fields that firePlayer / damage-application / charge math already
 // read off slot.upg directly, so they work correctly when applied to slot 1
 // in isolation. Anything that hooks global state (player.shields,
-// _barrierPulseTimer, room-clear regen, kill-attribution, gravityWell2,
+// slot0Timers.barrierPulseTimer, room-clear regen, kill-attribution, gravityWell2,
 // titan/mini player size, mirror/burst shields, escalation, EMP, predator,
 // blood pact, phase dash, mirror tide, etc.) is excluded from slot 1 in
 // v1 — slot 1 still benefits from slot 0 picks of those (which run on
@@ -3628,12 +3627,12 @@ function applyKillSustainHeal(amount, source) {
   const result = applyKillSustainHealValue({
     amount,
     roomIndex: roomIndex || 0,
-    healedThisRoom: _killSustainHealedThisRoom,
+    healedThisRoom: slot0Timers.killSustainHealedThisRoom,
     healPlayer,
     source,
     config: KILL_SUSTAIN_CAP_CONFIG,
   });
-  _killSustainHealedThisRoom = result.healedThisRoom;
+  slot0Timers.killSustainHealedThisRoom = result.healedThisRoom;
   return result.applied;
 }
 
@@ -3767,10 +3766,10 @@ function beginWaveIntro(nextWaveIndex) {
 
 function startRoom(idx) {
   tookDamageThisRoom = false;
-  _vampiricRestoresThisRoom = 0;
-  _killSustainHealedThisRoom = 0;
+  slot0Timers.vampiricRestoresThisRoom = 0;
+  slot0Timers.killSustainHealedThisRoom = 0;
   _orbFireTimers = []; _orbCooldown = [];
-  _volatileOrbGlobalCooldown = 0;
+  slot0Timers.volatileOrbGlobalCooldown = 0;
   runBoonHook('onRoomStart', { UPG, slot: playerSlots[0] || null });
   roomIndex = idx;
   bossClears = 0;
@@ -4866,16 +4865,16 @@ function init() {
   playerAimHasTarget = false;
   player = createInitialPlayerState(WORLD_W, WORLD_H);
   installPlayerSlot0();
-  _barrierPulseTimer = runtimeTimers.barrierPulseTimer;
-  _slipCooldown = runtimeTimers.slipCooldown;
-  _absorbComboCount = runtimeTimers.absorbComboCount;
-  _absorbComboTimer = runtimeTimers.absorbComboTimer;
-  _chainMagnetTimer = runtimeTimers.chainMagnetTimer;
-  _echoCounter = runtimeTimers.echoCounter;
-  _vampiricRestoresThisRoom = runtimeTimers.vampiricRestoresThisRoom;
-  _killSustainHealedThisRoom = runtimeTimers.killSustainHealedThisRoom;
-  _colossusShockwaveCd = runtimeTimers.colossusShockwaveCd;
-  _volatileOrbGlobalCooldown = runtimeTimers.volatileOrbGlobalCooldown;
+  slot0Timers.barrierPulseTimer = runtimeTimers.barrierPulseTimer;
+  slot0Timers.slipCooldown = runtimeTimers.slipCooldown;
+  slot0Timers.absorbComboCount = runtimeTimers.absorbComboCount;
+  slot0Timers.absorbComboTimer = runtimeTimers.absorbComboTimer;
+  slot0Timers.chainMagnetTimer = runtimeTimers.chainMagnetTimer;
+  slot0Timers.echoCounter = runtimeTimers.echoCounter;
+  slot0Timers.vampiricRestoresThisRoom = runtimeTimers.vampiricRestoresThisRoom;
+  slot0Timers.killSustainHealedThisRoom = runtimeTimers.killSustainHealedThisRoom;
+  slot0Timers.colossusShockwaveCd = runtimeTimers.colossusShockwaveCd;
+  slot0Timers.volatileOrbGlobalCooldown = runtimeTimers.volatileOrbGlobalCooldown;
   _orbFireTimers=[]; _orbCooldown=[];
   boonHistory=[]; pendingLegendary=null; legendaryOffered=false;
   legendaryRejectedIds=[]; legendaryRoomsSinceRejection={}; // R0.5 — reset to plain array/object
@@ -5458,14 +5457,14 @@ function update(dt,ts){
   // ── Shields — sync count to tier, tick cooldowns
   while(player.shields.length < UPG.shieldTier) player.shields.push({cooldown:0, hardened: !!UPG.shieldTempered, mirrorCooldown:-9999});
   tickShieldCooldowns(player.shields, dt, UPG.shieldTempered);
-  if(_barrierPulseTimer>0) _barrierPulseTimer-=dt*1000;
-  if(_absorbComboTimer>0){ _absorbComboTimer-=dt*1000; if(_absorbComboTimer<=0){_absorbComboCount=0;} }
-  if(_chainMagnetTimer>0) _chainMagnetTimer-=dt*1000;
-  if(_slipCooldown>0) _slipCooldown-=dt*1000;
-  if(UPG.colossus && _colossusShockwaveCd>0) _colossusShockwaveCd-=dt;
+  if(slot0Timers.barrierPulseTimer>0) slot0Timers.barrierPulseTimer-=dt*1000;
+  if(slot0Timers.absorbComboTimer>0){ slot0Timers.absorbComboTimer-=dt*1000; if(slot0Timers.absorbComboTimer<=0){slot0Timers.absorbComboCount=0;} }
+  if(slot0Timers.chainMagnetTimer>0) slot0Timers.chainMagnetTimer-=dt*1000;
+  if(slot0Timers.slipCooldown>0) slot0Timers.slipCooldown-=dt*1000;
+  if(UPG.colossus && slot0Timers.colossusShockwaveCd>0) slot0Timers.colossusShockwaveCd-=dt;
   runBoonHook('onTick', { UPG, dt, ts, slot: playerSlots[0] || null });
   // Volatile Orb cooldowns — per-orb recharge plus a brief shared detonation lockout
-  if(_volatileOrbGlobalCooldown > 0) _volatileOrbGlobalCooldown = Math.max(0, _volatileOrbGlobalCooldown - dt);
+  if(slot0Timers.volatileOrbGlobalCooldown > 0) slot0Timers.volatileOrbGlobalCooldown = Math.max(0, slot0Timers.volatileOrbGlobalCooldown - dt);
   for(let si=0;si<_orbCooldown.length;si++){
     if(_orbCooldown[si]>0) _orbCooldown[si]=Math.max(0,_orbCooldown[si]-dt);
   }
@@ -5710,7 +5709,7 @@ function update(dt,ts){
           const rusherAftermath = resolvePostHitAftermath({
             hitResult: rusherHit,
             upgrades: UPG,
-            colossusShockwaveCd: _colossusShockwaveCd,
+            colossusShockwaveCd: slot0Timers.colossusShockwaveCd,
             enableShockwave: true,
             shouldTriggerLastStand: rusherHit.shouldTriggerLastStand,
             playerX: player.x,
@@ -5720,7 +5719,7 @@ function update(dt,ts){
             bloodPactHealCap: getBloodPactHealCap(),
           });
           if(rusherAftermath.triggerColossusShockwave){
-            _colossusShockwaveCd = rusherAftermath.nextColossusShockwaveCd;
+            slot0Timers.colossusShockwaveCd = rusherAftermath.nextColossusShockwaveCd;
             convertNearbyDangerBulletsToGrey({
               bullets,
               originX: player.x,
@@ -5911,7 +5910,7 @@ function update(dt,ts){
   }
 
   // ── Bullets
-  const absorbR = player.r + 5 + UPG.absorbRange + (_barrierPulseTimer > 0 ? UPG.absorbRange + 40 : 0) + (_chainMagnetTimer > 0 ? UPG.absorbRange + 30 : 0);
+  const absorbR = player.r + 5 + UPG.absorbRange + (slot0Timers.barrierPulseTimer > 0 ? UPG.absorbRange + 40 : 0) + (slot0Timers.chainMagnetTimer > 0 ? UPG.absorbRange + 30 : 0);
   const decayMS = DECAY_BASE + UPG.decayBonus;
 
   // D19.3 — host grey lag-comp: snapshot every grey's pre-update position so
@@ -6056,11 +6055,11 @@ function update(dt,ts){
         gainCharge(absorbGain, 'greyAbsorb');
         // Resonant Absorb
         if(UPG.resonantAbsorb){
-          _absorbComboTimer=1500;
-          _absorbComboCount++;
-          if(_absorbComboCount>=3){
+          slot0Timers.absorbComboTimer=1500;
+          slot0Timers.absorbComboCount++;
+          if(slot0Timers.absorbComboCount>=3){
             gainCharge(UPG.absorbValue * (UPG.surgeHarvest ? 1.0 : 0.5), 'resonantAbsorb');
-            _absorbComboCount=0;
+            slot0Timers.absorbComboCount=0;
           }
         }
         // Refraction: fire weak homing shot from absorbed grey bullet
@@ -6091,7 +6090,7 @@ function update(dt,ts){
         }
         // Chain Magnet
         if(UPG.chainMagnetTier>0){
-          _chainMagnetTimer=700+(UPG.chainMagnetTier-1)*350;
+          slot0Timers.chainMagnetTimer=700+(UPG.chainMagnetTier-1)*350;
         }
         sparks(b.x,b.y,C.ghost,5,45);
         bullets.splice(i,1);continue;
@@ -6160,7 +6159,7 @@ function update(dt,ts){
     }
 
     // Volatile Orbs: a danger bullet near any alive orbit sphere destroys the sphere + bullet
-    if(b.state==='danger' && UPG.volatileOrbs && UPG.orbitSphereTier>0 && _volatileOrbGlobalCooldown<=0){
+    if(b.state==='danger' && UPG.volatileOrbs && UPG.orbitSphereTier>0 && slot0Timers.volatileOrbGlobalCooldown<=0){
       syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
       let orbHit=false;
       for(let si=0;si<UPG.orbitSphereTier;si++){
@@ -6179,7 +6178,7 @@ function update(dt,ts){
         const orbHitR = getOrbVisualRadius() + 2;
         if(Math.hypot(b.x-sx,b.y-sy)<b.r+orbHitR){
           _orbCooldown[si] = VOLATILE_ORB_COOLDOWN;
-          _volatileOrbGlobalCooldown = VOLATILE_ORB_SHARED_COOLDOWN;
+          slot0Timers.volatileOrbGlobalCooldown = VOLATILE_ORB_SHARED_COOLDOWN;
           sparks(sx,sy,C.green,10,80);
           bullets.splice(i,1); orbHit=true; break;
         }
@@ -6257,7 +6256,7 @@ function update(dt,ts){
             // Barrier Pulse: +2 charge + magnet pulse
             if(UPG.barrierPulse){
               gainCharge(2, 'barrierPulse');
-              _barrierPulseTimer=800;
+              slot0Timers.barrierPulseTimer=800;
             }
             const cd = getShieldCooldown();
             s.cooldown = cd; s.maxCooldown = cd;
@@ -6375,7 +6374,7 @@ function update(dt,ts){
         const directHitAftermath = resolvePostHitAftermath({
           hitResult: dangerHit,
           upgrades: UPG,
-          colossusShockwaveCd: _colossusShockwaveCd,
+          colossusShockwaveCd: slot0Timers.colossusShockwaveCd,
           enableShockwave: true,
           shouldTriggerLastStand: Boolean(UPG.lastStand && dangerHit.lifelineTriggered),
           playerX: player.x,
@@ -6385,7 +6384,7 @@ function update(dt,ts){
           bloodPactHealCap: getBloodPactHealCap(),
         });
         if(directHitAftermath.triggerColossusShockwave){
-          _colossusShockwaveCd = directHitAftermath.nextColossusShockwaveCd;
+          slot0Timers.colossusShockwaveCd = directHitAftermath.nextColossusShockwaveCd;
           convertNearbyDangerBulletsToGrey({
             bullets,
             originX: player.x,
@@ -6412,11 +6411,11 @@ function update(dt,ts){
         bullet: b,
         player,
         upgrades: UPG,
-        slipCooldown: _slipCooldown,
+        slipCooldown: slot0Timers.slipCooldown,
       });
       if(slipstream.shouldTrigger){
         gainCharge(slipstream.chargeGain, 'slipstream');
-        _slipCooldown = slipstream.nextSlipCooldown;
+        slot0Timers.slipCooldown = slipstream.nextSlipCooldown;
       }
     }
 
