@@ -80,6 +80,27 @@ export class RollbackBuffer {
   }
 
   /**
+   * Replace the state and inputs stored for a specific tick. Used by the
+   * rollback coordinator after a resim so subsequent rollbacks rewind to
+   * the corrected state, not the stale predicted state. Returns true if the
+   * snapshot was found and updated, false otherwise.
+   *
+   * @param {number} targetTick
+   * @param {object} simState - Live simState (will be deep-cloned)
+   * @param {object} worldInputs
+   * @param {object} slot1Inputs
+   * @returns {boolean}
+   */
+  replaceAtTick(targetTick, simState, worldInputs, slot1Inputs) {
+    const snap = this.buffer.find(s => s.tick === targetTick);
+    if (!snap) return false;
+    snap.state = snapshotState(simState);
+    snap.worldInputs = { ...worldInputs };
+    snap.slot1Inputs = { ...slot1Inputs };
+    return true;
+  }
+
+  /**
    * Find the first tick where worldInputs or slot1Inputs differ from predictions.
    * Used to detect where rollback should start.
    *

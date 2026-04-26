@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.95', label: 'R0.5 cross-engine determinism: Fisher-Yates shuffle replaces random-comparator sort' };
+const VERSION = { num: '1.20.96', label: 'R2 finish: two-peer rollback harness green; rollback prediction + buffer-update bugs fixed' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

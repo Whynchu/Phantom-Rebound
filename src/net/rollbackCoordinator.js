@@ -102,7 +102,11 @@ export class RollbackCoordinator {
       // Predict: repeat-last or neutral
       const lastRemote = this.remoteInputHistory[this.currentTick - 1];
       remoteInput = lastRemote ? { ...lastRemote } : this._neutralInput();
-      this.remotePredictions[this.currentTick] = true;
+      // Store the actual predicted input so we can compare correctly when
+      // the real remote input arrives. Earlier code stored `true` here,
+      // which made _onRemoteInputArrived assume we always predicted neutral
+      // — causing a spurious rollback even when repeat-last was correct.
+      this.remotePredictions[this.currentTick] = { ...remoteInput };
     }
 
     // Prepare slot inputs in world/slot1 order
@@ -155,18 +159,8 @@ export class RollbackCoordinator {
     }
 
     // We've already simmed past this tick with a prediction.
-    // Check if the actual input matches what we predicted for this tick.
-    let predictedInput;
-    if (this.remotePredictions[tick]) {
-      // We predicted neutral
-      predictedInput = this._neutralInput();
-    } else if (tick > 0 && this.remoteInputHistory[tick - 1]) {
-      // We predicted repeat-last
-      predictedInput = this.remoteInputHistory[tick - 1];
-    } else {
-      // No previous input; predicted neutral
-      predictedInput = this._neutralInput();
-    }
+    // Compare the actual input against the prediction we recorded.
+    const predictedInput = this.remotePredictions[tick] ?? this._neutralInput();
 
     const matchesPrediction = this._inputsEqual(remoteInput, predictedInput);
     this.logger?.(`_onRemoteInputArrived: tick=${tick}, predicted=${JSON.stringify(predictedInput)}, actual=${JSON.stringify(remoteInput)}, matches=${matchesPrediction}`);
@@ -215,6 +209,17 @@ export class RollbackCoordinator {
 
       this.logger?.(`_rollbackAndResim: tick ${tick}: s0=${JSON.stringify(slot0Input)}, s1=${JSON.stringify(slot1Input)}`);
       this.simStep(this.simState, slot0Input, slot1Input, 1 / 60); // Assume 60 Hz
+
+      // Persist the corrected snapshot back into the buffer so that future
+      // rollbacks rewind to the post-resim state, not the stale prediction.
+      // Without this, a second divergence at tick T+1 would restore the
+      // OLD predicted state at tick T and re-introduce the prediction error.
+      this.buffer.replaceAtTick(tick, this.simState, slot0Input, slot1Input);
+
+      // Clear the prediction marker for this tick — we now have authoritative
+      // data, so this slot in remotePredictions is no longer relevant. (The
+      // matching remoteInputHistory[tick] entry was already set by the caller.)
+      this.remotePredictions[tick] = null;
     }
 
     this.logger?.(

@@ -1,24 +1,30 @@
 #!/usr/bin/env node
 /**
- * Test: Rollback Two-Peer Offline Harness (R3.2)
- * 
- * **NOTE: This test is a work-in-progress.**
- * 
- * The challenge: In a synchronous test harness, achieving true zero-latency input
- * delivery between peers during the same tick is impossible without restructuring
- * how the coordinators step. Current implementation shows that inputs are received
- * with 1-tick latency, which is actually correct for network scenarios.
- * 
- * When properly deployed on real network channels, the async sendInput/onRemoteInput
- * callbacks will naturally buffer inputs, and the rollback mechanism will handle
- * divergences correctly when late-arriving inputs mismatch predictions.
- * 
- * This test suite exists to validate the basic mechanics (input delivery, storage,
- * divergence detection) but the full two-peer state synchronization test should
- * be validated via integration tests or real network playtest rather than offline
- * sync assumptions.
- * 
- * Keeps existing test structure for future refinement.
+ * Test: Rollback Two-Peer Offline Harness (R3.2 / R2 finish)
+ *
+ * Drives two RollbackCoordinator instances against each other through a
+ * synchronous step+deliver loop. Each tick:
+ *   1. Both peers step locally with predicted-remote inputs.
+ *   2. After both have stepped, each peer's local input is delivered to
+ *      the OTHER peer's remote-input callback (modeling 1-tick network
+ *      latency — the realistic minimum).
+ *   3. The receiving coordinator detects prediction divergence, rewinds,
+ *      and resims with the now-authoritative remote input.
+ *
+ * After all ticks, both peers must hold byte-identical sim state. This is
+ * the property real coop netcode depends on.
+ *
+ * Originally failed because (a) the harness wired each peer's local input
+ * back to the SAME peer's remote callback instead of crossing them, and
+ * (b) RollbackCoordinator's prediction tracking + buffer-update logic had
+ * two latent bugs surfaced by this harness:
+ *   - remotePredictions stored a boolean, so divergence detection always
+ *     compared against neutral input regardless of what was actually
+ *     predicted (caused spurious rollback on every tick).
+ *   - _rollbackAndResim never wrote the post-resim state back to the ring
+ *     buffer, so subsequent rollbacks rewound to the stale predicted
+ *     state and re-introduced the prediction error.
+ * Both fixed in v1.20.96 alongside the harness wiring fix.
  */
 
 import assert from 'assert';
@@ -133,12 +139,15 @@ function createSyncTwoPeerHarness() {
       // Step coordinator 1 (guest) — this also queues its input
       coordinator1.step(guestInput, 1/60);
 
-      // NOW deliver both inputs to their respective peers
-      if (peer0PendingInput && peer0RemoteInputCb) {
-        peer0RemoteInputCb(peer0PendingInput);
+      // NOW deliver each peer's local input to the OTHER peer's remote callback.
+      // peer0PendingInput came from coordinator0.sendInput — i.e. host's local input
+      // bound for the guest. So it must be delivered to coordinator1's onRemoteInput,
+      // not coordinator0's. The original code fed inputs back to the sender.
+      if (peer0PendingInput && peer1RemoteInputCb) {
+        peer1RemoteInputCb(peer0PendingInput);
       }
-      if (peer1PendingInput && peer1RemoteInputCb) {
-        peer1RemoteInputCb(peer1PendingInput);
+      if (peer1PendingInput && peer0RemoteInputCb) {
+        peer0RemoteInputCb(peer1PendingInput);
       }
     },
 
