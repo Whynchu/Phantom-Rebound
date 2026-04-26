@@ -1915,15 +1915,12 @@ function applyBoonByIdToSlot(boon, slotIndex) {
 }
 
 // D14 — broadcast our own pick to the other peer.
-function sendCoopBoonPick(slotId, boonId) {
+function sendCoopBoonPick(slotId, boonId, extra) {
   try {
     if (!activeCoopSession || typeof activeCoopSession.sendGameplay !== 'function') return;
-    activeCoopSession.sendGameplay({
-      kind: 'coop-boon-pick',
-      phaseId: currentBoonPhaseId,
-      slotId,
-      boonId,
-    });
+    activeCoopSession.sendGameplay(
+      Object.assign({ kind: 'coop-boon-pick', phaseId: currentBoonPhaseId, slotId, boonId }, extra || {})
+    );
   } catch (err) {
     try { console.warn('[coop] coop-boon-pick send failed', err); } catch (_) {}
   }
@@ -1976,7 +1973,12 @@ function onLocalBoonPickedOnline(slotId, boon) {
     // applied it locally). Host's own legendary-reject path also uses -1.
     if (isGuest) {
       pendingCoopBoonPicks.guestDone = true;
-      sendCoopBoonPick(1, -1);
+      // Ship the post-heal HP so host can sync slot1 before revivePartialHpSpectators
+      // fires. Without this the host's slot1.metrics.hp stays 0, revive gives only
+      // the 25% floor, and the next snapshot overwrites the locally-healed value.
+      const slot1 = playerSlots[1];
+      const resultHp = (slot1 && slot1.metrics) ? (slot1.metrics.hp | 0) : undefined;
+      sendCoopBoonPick(1, -1, resultHp != null ? { resultHp } : undefined);
       showCoopGuestWaitOverlay('WAITING FOR HOST…');
       return true;
     }
@@ -2199,6 +2201,15 @@ function handleCoopBoonPickIncoming(payload, role) {
   const boon = boonFromId(boonId);
   if (role === 'host' && slotId === 1) {
     if (boon) applyBoonByIdToSlot(boon, 1);
+    // D20.3 — guest's local-only picks (e.g. Recover/heal) ship boonId=-1 plus
+    // an optional resultHp field. Sync slot1 HP here so revivePartialHpSpectators
+    // stacks on top of the heal instead of only applying the 25% floor.
+    if (!boon && payload.resultHp != null) {
+      try {
+        const slot1 = playerSlots[1];
+        if (slot1 && slot1.metrics) slot1.metrics.hp = Math.max(0, payload.resultHp | 0);
+      } catch (_) {}
+    }
     pendingCoopBoonPicks.guestDone = true;
     tryResumeCoopBoonPhase();
   } else if (role === 'guest' && slotId === 0) {

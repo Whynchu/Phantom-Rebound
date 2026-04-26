@@ -2,6 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.119',
+      label: 'D20.3 RECOVER HEAL SYNC',
+      summary: ['Fixed Recover (heal) boon not applying HP when guest was dead at end of last round. Root cause: the heal boon is created dynamically and is not in the BOONS array, so the -1 sentinel sent to the host carried no HP information. The host\'s slot1.metrics.hp stayed at 0, so revivePartialHpSpectators only gave the 25% revive floor, and the next snapshot then wrote that floor value onto the guest\'s screen. The boon-pick payload now carries resultHp when boonId=-1 is sent; the host syncs slot1.metrics.hp before reviving so the heal value stacks on top of (or exceeds) the 25% floor as intended.'],
+      highlights: [
+        'D20.3: local-only boon picks (boonId=-1) now include resultHp in the wire payload.',
+        'D20.3: host handleCoopBoonPickIncoming syncs slot1.metrics.hp from resultHp before revive fires.',
+        'Recover (heal) boon now correctly restores HP for a guest who was dead at end of previous round.',
+      ]
+    },
+  {
       version: '1.20.118',
       label: 'D20.2 GUEST FEEL + BOON FIX',
       summary: ['Three guest coop bugs fixed. (1) Joystick feel mismatch: the drift-anchor correction (tickJoystick) was only called in the host path; guests felt slightly looser when making wide sweeping movements. Guest path now calls tickJoystick at the same phase gates. (2) READY/GO and intro lockout: guests saw "READY?" but never "GO!" before the round started, and could move freely during the intro countdown. Guest now shows "GO!" briefly on the intro→spawning transition (matching host timing), and guest local prediction is gated to zero velocity during intro phase. (3) Recover boon crash: selecting the Recover (heal) card as guest sent no completion signal to the host, leaving the boon phase permanently open. The heal boon is not in the BOONS array so boonIdFromBoon returned -1; the phase-complete path was silently abandoned. Guest now sends a -1 sentinel (same as host legendary reject) so the host marks guest-done and the run advances.'],
