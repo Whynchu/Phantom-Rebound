@@ -2,6 +2,17 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.94',
+      label: 'R0.6 + R1 — 10K DETERMINISM CANARY + STATE ROUND-TRIP PARITY',
+      summary: ['Determinism infrastructure milestone. Two new test gates lock in correctness guarantees that future R0.4 carve-outs and R2 rollback core depend on. R0.6 adds scripts/test-determinism-canary-10k.mjs: a 10000-tick scripted run with deterministic LCG inputs through hostSimStep, hashed at three checkpoints (tick 100, 5000, 10000) against hardcoded SHA-256 baselines pinned in the test file. Any future change that alters byte-level sim output will fail this gate. R1 adds two round-trip parity tests to scripts/test-sim-state-serialize.mjs: (a) snapshot a state, restoreState into a fresh struct, run one hostSimStep tick from each; serialized results must be byte-identical. (b) snapshot at tick N, both branches run M=100 ticks; final states must match. This is the property rollback resim depends on. All 20 sim/rollback suites green. No behavioral change.'],
+      highlights: [
+        'scripts/test-determinism-canary-10k.mjs — NEW. 10k-tick canary, seed 0xC0FFEE, two-slot reference state with pre-loaded timers/UPG to exercise post-movement branches. Self-bootstrapping (placeholder mode validates run-A == run-B; pinned mode locks against drift). Hashes pinned: tick100=3c52..., tick5000=a6b6..., tick10000=dbb3....',
+        'scripts/test-sim-state-serialize.mjs — added 2 R1 round-trip tests. First test verifies snapshot+restore yields a state that resimulates identically to live for one tick. Second test verifies both branches stay aligned across 100 ticks. Both use top-level await to import hostSimStep without breaking the synchronous test() wrapper.',
+        'Determinism guarantees now triple-redundant: per-module unit tests + test-sim-replay 1800-tick black-box parity + test-determinism-canary-10k pinned-baseline drift gate. R2 rollback core can now be built with confidence.',
+        'No production code changes. Tests are CI/manual-run only. Helper signatures unchanged. R0.4 carve-out work resumes after this.',
+      ]
+    },
+  {
       version: '1.20.93',
       label: 'R0.4 STEP 4E — GREY BULLET DECAY + EXPIRY EXTRACTED',
       summary: ['Fifth slice of R0.4 step 4. The 2-line block in script.js update() that handled grey-state bullet decay (frame-rate-independent 0.97^(dt*60) velocity multiplier plus decayStart/decayMS expiry check) is now tickGreyBulletDecay on src/systems/bulletRuntime.js. Pure helper returning { expired, skipped }. Caller still owns the bullets.splice + continue control flow because that pattern is tightly coupled to the loop, but the decision math is now a deterministic helper. The bounce-state effect dispatch block (sparks, splice, blast triggers, control flow exits) was deemed too coupled to local closures for a clean extraction this round and is deferred. 21 unit tests cover null/state filtering, exact expiry threshold, decay math precision, dt=0 and large-dt cases, sign preservation on negative velocity, asymptotic decay over 600 ticks, determinism, and result shape. All sim/rollback suites green.'],

@@ -276,6 +276,111 @@ test('resetSimState clears slot.timers and body transients', () => {
   assert.equal(state.slots[0].body.coopSpectating, false);
 });
 
+// R1 round-trip parity: serialize a state, deserialize a fresh copy via
+// snapshotState+restoreState, simulate one hostSimStep tick from each,
+// and assert the resulting serialized states are byte-identical. This is
+// the property rollback actually depends on: a state restored from the
+// ring buffer must resimulate the same trajectory as the live state would.
+const { hostSimStep } = await import('../src/sim/hostSimStep.js');
+
+test('R1 round-trip: serialize → restore → 1 tick == live → 1 tick (byte-identical)', () => {
+  // Build a non-trivial state with timers + UPG flags + slot data, so the
+  // tick exercises real branches in hostSimStep / tickPostMovementTimers.
+  const live = createSimState({ seed: 31337, worldW: 800, worldH: 600, slotCount: 2 });
+  live.slots[0].body.x = 200; live.slots[0].body.y = 300; live.slots[0].body.r = 14;
+  live.slots[1].body.x = 600; live.slots[1].body.y = 300; live.slots[1].body.r = 14;
+  for (const slot of live.slots) {
+    slot.body.invincible = 0.5;
+    slot.body.distort = 0.3;
+    slot.timers.barrierPulseTimer = 250;
+    slot.timers.slipCooldown = 180;
+    slot.timers.absorbComboTimer = 90;
+    slot.timers.absorbComboCount = 4;
+    slot.timers.chainMagnetTimer = 120;
+    slot.timers.colossusShockwaveCd = 0.6;
+    slot.timers.volatileOrbGlobalCooldown = 0.4;
+    slot.upg.shieldTier = 3;
+    slot.upg.shieldTempered = true;
+    slot.upg.colossus = true;
+    slot.orbState.cooldowns.push(0.5, 0.3, 0.1);
+  }
+  live.tick = 1234;
+  live.run.score = 5678;
+  live.run.kills = 9;
+  live.run.roomIndex = 17;
+  live.run.boonHistory.push('Long Reach', 'Bigger Bullets');
+
+  // Snapshot live, then deserialize it into a separate state object.
+  const snap = snapshotState(live);
+  const restored = createSimState({ seed: 999, worldW: 800, worldH: 600, slotCount: 2 });
+  restoreState(restored, snap);
+
+  // Identical input on both branches.
+  const slot0Input = { joy: { dx: 0.6, dy: -0.8, mag: 50, active: true } };
+  const slot1Input = { joy: { dx: -0.5, dy: 0.5, mag: 30, active: true } };
+  const dt = 1 / 60;
+
+  hostSimStep(live, slot0Input, slot1Input, dt);
+  hostSimStep(restored, slot0Input, slot1Input, dt);
+
+  const liveJson = serialize(live);
+  const restoredJson = serialize(restored);
+  assert.equal(liveJson, restoredJson, 'restored state diverges from live after one tick');
+});
+
+// R1 round-trip extended: snapshot at tick N, advance live to tick N+M,
+// then restore + advance restored from N to N+M with same inputs. Final
+// states must be byte-identical (this is exactly what rollback resim does).
+test('R1 round-trip: snapshot at N, both advance M ticks, traces match', () => {
+  const dt = 1 / 60;
+
+  function freshState() {
+    const s = createSimState({ seed: 42, worldW: 800, worldH: 600, slotCount: 2 });
+    s.slots[0].body.x = 200; s.slots[0].body.y = 300; s.slots[0].body.r = 14;
+    s.slots[1].body.x = 600; s.slots[1].body.y = 300; s.slots[1].body.r = 14;
+    return s;
+  }
+
+  // Drive a deterministic input stream from a small LCG (mirrors test-sim-replay).
+  let rngState = 0xC0FFEE;
+  const nextInput = () => {
+    rngState = (Math.imul(rngState, 1664525) + 1013904223) >>> 0;
+    const u = (rngState & 0xffffff) / 0xffffff;
+    return {
+      joy: { dx: Math.cos(u * Math.PI * 2), dy: Math.sin(u * Math.PI * 2), mag: u * 60, active: true },
+    };
+  };
+
+  const N = 20; // snapshot point
+  const M = 100; // additional ticks
+
+  // Pre-roll a single live state to tick N, capture inputs we used.
+  const live = freshState();
+  const inputs0 = []; const inputs1 = [];
+  for (let i = 0; i < N + M; i++) {
+    inputs0.push(nextInput()); inputs1.push(nextInput());
+  }
+  for (let i = 0; i < N; i++) hostSimStep(live, inputs0[i], inputs1[i], dt);
+
+  // Snapshot at tick N.
+  const snap = snapshotState(live);
+  const liveSnapJson = serialize(live);
+
+  // Advance live to N+M.
+  for (let i = N; i < N + M; i++) hostSimStep(live, inputs0[i], inputs1[i], dt);
+  const liveFinalJson = serialize(live);
+
+  // Restore into a fresh state and advance the same M ticks.
+  const restored = freshState();
+  restoreState(restored, snap);
+  // Sanity: snapshot restoration must produce an identical state to the live snapshot.
+  assert.equal(serialize(restored), liveSnapJson, 'restored state at snapshot point != live state at snapshot point');
+  for (let i = N; i < N + M; i++) hostSimStep(restored, inputs0[i], inputs1[i], dt);
+  const restoredFinalJson = serialize(restored);
+
+  assert.equal(liveFinalJson, restoredFinalJson, 'snapshot-restore-resim diverged from live trajectory');
+});
+
 console.log('');
 console.log(`SimState serialize tests: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

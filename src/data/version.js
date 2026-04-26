@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.93', label: 'R0.4 step 4e: grey bullet decay + expiry extracted to pure helper' };
+const VERSION = { num: '1.20.94', label: 'R0.6 + R1: 10k determinism canary + state round-trip parity tests' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;
