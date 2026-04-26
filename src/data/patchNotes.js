@@ -2,6 +2,17 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.135',
+      label: 'R0.4-A/C/D: ROOM STATE + PLAYER FIRE IN HOSTSIMSTEP',
+      summary: ['R0.4-A: Room state machine (intro/spawn/fight/clear) and R0.4-C/D: Player auto-fire (fireT, kinetic charge, bullet spawn) are now wired into hostSimStep for rollback-safe resim.'],
+      highlights: [
+        'src/sim/roomStateStep.js: tickRoomState() drives intro/spawn/fight/clear transitions + enemy spawn using pure roomRuntime.js functions.',
+        'src/sim/playerFireStep.js: tickPlayerFire() advances fireT, kinetic charge, auto-target pick, bullet volley spawn via pushSimOutputBullet.',
+        'src/sim/simState.js: added missing run-scope fields (roomIntroTimer, spawnQueue, activeWaveIndex, currentRoomMaxOnScreen, currentRoomIsBoss, escortMaxCount, escortRespawnTimer, escortType, reinforceTimer, bossAlive, roomClearTimer).',
+        'All 74 tests green.',
+      ]
+    },
+  {
       version: '1.20.134',
       label: 'DR-0: REMOTE INPUT PROCESSOR + SPAWN DETECTOR RETIRED',
       summary: ['Two more D-series modules removed: hostRemoteInputProcessor (input ack ring buffer) and bulletSpawnDetector (remote muzzle flashes). Rollback coordinator owns input delivery. Muzzle flashes for remote bullets will return via effectQueue in R0.4.'],

@@ -41,6 +41,8 @@ import { resolveVolatileOrbHits } from './volatileOrbStep.js';
 import { resolveOrbitSphereContactHits } from './orbitSphereContactStep.js';
 import { resolveGreyAbsorbs } from './greyAbsorbStep.js';
 import { resolveChargedOrbFires } from './chargedOrbStep.js';
+import { tickPlayerFire } from './playerFireStep.js';
+import { tickRoomState } from './roomStateStep.js';
 
 const NOOP = () => {};
 const FALSE_FN = () => false;
@@ -123,6 +125,11 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   }
 
   // R3.3 — enemy combat resim: movement archetypes + fire cadence/projectiles.
+  // R0.4-A: Room state machine — advances phase, spawns enemies.
+  if (opts.spawnEnemy && state.run) {
+    tickRoomState(state, dt, opts);
+  }
+
   tickEnemyCombat(state, dt, opts);
   // R3 parity — charged orbs spend charge and fire output bullets during combat.
   resolveChargedOrbFires(state, slot0Input, { ...opts, dt });
@@ -144,6 +151,12 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   resolveOrbitSphereContactHits(state, opts);
   // R3.2 — combat resim: output projectiles can damage/kill enemies.
   resolveOutputHits(state, opts);
+
+  // R0.4-C/D: Player auto-fire — advances fireT, kinetic charge, spawns output bullets.
+  {
+    const combatActive = state.run?.roomPhase === 'spawning' || state.run?.roomPhase === 'fighting';
+    tickPlayerFire(state, slot0Input, slot1Input, dt, { ...opts, combatActive });
+  }
 
   // R0.4 step 5: advance the deterministic sim clock LAST, after all per-tick
   // logic above has read the pre-tick values. Bullet/enemy carve-outs landing

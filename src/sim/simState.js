@@ -156,6 +156,18 @@ export function createSimState({
       tookDamageThisRoom: false, // resets to false at room start
       lastStallSpawnAt: -99999,  // roomTimer value when last stall-spawn fired
       bossClears: 0,         // count of boss rooms cleared
+      // R0.4-A: Room state machine fields
+      roomIntroTimer: 0,         // ms since room intro started
+      roomClearTimer: 0,         // ms since room entered clear phase
+      spawnQueue: [],            // pending spawn entries {waveIndex,spawnAt,t,isBoss,bossScale}
+      activeWaveIndex: 0,        // which wave index is currently deploying
+      currentRoomMaxOnScreen: 12, // max enemies on screen for this room
+      currentRoomIsBoss: false,  // is this a boss room
+      escortMaxCount: 0,         // max boss escort count
+      escortRespawnTimer: 0,     // ms timer for boss escort respawning
+      escortType: null,          // string type name for boss escort
+      reinforceTimer: 0,         // ms timer for reinforcement trickle
+      bossAlive: false,          // is the boss alive
     },
 
     // ── Sequence counters ────────────────────────────────────────
@@ -466,6 +478,19 @@ export function resetSimState(state, { seed = 1, baseHp = DEFAULT_BASE_PLAYER_HP
   state.run.tookDamageThisRoom = false;
   state.run.lastStallSpawnAt = -99999;
   state.run.bossClears = 0;
+  // R0.4-A: Room state machine fields reset at run start.
+  state.run.roomIntroTimer = 0;
+  state.run.roomClearTimer = 0;
+  if (!state.run.spawnQueue) state.run.spawnQueue = [];
+  else state.run.spawnQueue.length = 0;
+  state.run.activeWaveIndex = 0;
+  state.run.currentRoomMaxOnScreen = 12;
+  state.run.currentRoomIsBoss = false;
+  state.run.escortMaxCount = 0;
+  state.run.escortRespawnTimer = 0;
+  state.run.escortType = null;
+  state.run.reinforceTimer = 0;
+  state.run.bossAlive = false;
   state.nextEnemyId = 1;
   state.nextBulletId = 1;
   state.effectQueue.length = 0;
