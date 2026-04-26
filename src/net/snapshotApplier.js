@@ -249,6 +249,10 @@ export function createSnapshotApplier({
   // those visual events on the wire. Signature:
   //   onSlotDamage({ slotId, damage, x, y })
   onSlotDamage = null,
+  // Same visual-only callback for enemy HP drops. Guests do not run the
+  // host's bullet collision path, so this reconstructs damage numbers from
+  // authoritative snapshot HP deltas.
+  onEnemyDamage = null,
 } = {}) {
   // Buffer: prev/curr each hold { snapshot, recvAtMs }. Newest applied
   // snapshot is `curr`; the one just before it is `prev`. Older snapshots
@@ -336,6 +340,30 @@ export function createSnapshotApplier({
                     damage: drop,
                     x: cs.x,
                     y: cs.y,
+                  });
+                } catch (_) {}
+              }
+            }
+          }
+          if (typeof onEnemyDamage === 'function' && curr && curr.snapshot && Array.isArray(curr.snapshot.enemies) && Array.isArray(snapshot.enemies)) {
+            const prevEnemiesById = new Map();
+            for (let i = 0; i < curr.snapshot.enemies.length; i++) {
+              const pe = curr.snapshot.enemies[i];
+              if (pe && Number.isFinite(pe.id)) prevEnemiesById.set(pe.id | 0, pe);
+            }
+            for (let i = 0; i < snapshot.enemies.length; i++) {
+              const ce = snapshot.enemies[i];
+              if (!ce || !Number.isFinite(ce.id)) continue;
+              const pe = prevEnemiesById.get(ce.id | 0);
+              if (!pe) continue;
+              const drop = (pe.hp || 0) - (ce.hp || 0);
+              if (drop > 0) {
+                try {
+                  onEnemyDamage({
+                    enemyId: ce.id | 0,
+                    damage: drop,
+                    x: ce.x,
+                    y: ce.y - (ce.r || 12),
                   });
                 } catch (_) {}
               }

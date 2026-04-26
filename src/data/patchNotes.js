@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.111',
+      label: 'DAMAGE VARIANCE FEEDBACK',
+      summary: ['Player shots now roll deterministic RPG-style damage variance per bullet instead of showing strictly static/incremental values.'],
+      highlights: [
+        'Coop guests now reconstruct enemy damage numbers from authoritative enemy HP drops in snapshots, so enemy hits from both peers show floating damage feedback.',
+      ]
+    },
+  {
       version: '1.20.121',
       label: 'D20.5 GUEST SIMTICK SYNC FIX',
       summary: ['Fixed a bug where the guest player would appear frozen on the host\'s screen after approximately 20 rooms of coop play. Root cause: the host\'s RAF loop starts ~100–200ms before the coop-room-advance message reaches the guest, causing the host simTick to advance faster than the guest\'s simTick. This gap accumulates by ~6–12 ticks per room transition. After 10–20 rooms the gap exceeds the 60-tick STALE_TICK_THRESHOLD, so consumeUpTo(hostSimTick - 60) on the host trims ALL incoming guest input frames, making the guest appear frozen while the guest device continues to feel responsive locally. The fix: the host now embeds its current simTick in the coop-room-advance packet, and the guest resets its simTick to match on receipt, keeping the tick references in sync at every room boundary.'],

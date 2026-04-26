@@ -1839,7 +1839,8 @@ test('player fire helpers build lane offsets, shot plan, and volley specs determ
     getBloodPactHealCap: () => 9,
     now: 1000,
     random: (() => {
-      const rolls = [0.4, 0.8, 0.2];
+      const neutralDamageRoll = (1 - 0.88) / (1.14 - 0.88);
+      const rolls = [0.4, neutralDamageRoll, 0.8, neutralDamageRoll, 0.2, neutralDamageRoll];
       let idx = 0;
       return () => rolls[idx++];
     })(),

@@ -2692,6 +2692,16 @@ function installCoopInputUplink(armedCoop) {
           sparks(x, y, '#ff6b9b', 8, 70);
         } catch (_) {}
       },
+      onEnemyDamage: ({ damage, x, y }) => {
+        try {
+          const dmg = Math.max(1, Math.round(damage));
+          const col = coopPartnerColorKey
+            ? (getColorSchemeForKey(coopPartnerColorKey)?.hex || getPlayerColorScheme().hex)
+            : getPlayerColorScheme().hex;
+          spawnDmgNumber(x, y, dmg, col);
+          sparks(x, y, col, 4, 50);
+        } catch (_) {}
+      },
       resolveColors: (type) => {
         try {
           const def = getEnemyDefinition(type);
@@ -4511,6 +4521,8 @@ function firePlayer(slot, tx, ty) {
         now: eNow,
         ownerId,
         random: () => 1,
+        damageVarianceMin: 1,
+        damageVarianceMax: 1,
       });
       echoSpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
       const shotsEchoRoom = telemetryController.getCurrentRoom();

@@ -58,6 +58,8 @@ function buildPlayerVolleySpecs({
   now,
   ownerId = 0,
   random = () => simRng.next(),
+  damageVarianceMin = 0.88,
+  damageVarianceMax = 1.14,
 } = {}) {
   const volleySpecs = [];
   const selectedShots = shots.slice(0, availableShots);
@@ -66,6 +68,8 @@ function buildPlayerVolleySpecs({
     const sideX = Math.cos(angle + Math.PI / 2) * shot.offset;
     const sideY = Math.sin(angle + Math.PI / 2) * shot.offset;
     const crit = random() < (upg.critChance || 0);
+    const varianceSpan = Math.max(0, damageVarianceMax - damageVarianceMin);
+    const damageVariance = damageVarianceMin + random() * varianceSpan;
     const scaledRadius = baseRadius * overloadSizeScale;
     volleySpecs.push({
       x: player.x + sideX,
@@ -77,7 +81,7 @@ function buildPlayerVolleySpecs({
       pierceLeft: getPierceLeft(shot) + (shot.isSpreadExtra ? (upg.spreadShotPierceBonus || 0) : 0),
       homing: (upg.homingTier || 0) > 0,
       crit,
-      dmg: baseDamage * overchargeBonus * overloadBonus * (shot.isSpreadExtra ? (upg.spreadShotDamageMult || 1) : 1),
+      dmg: baseDamage * damageVariance * overchargeBonus * overloadBonus * (shot.isSpreadExtra ? (upg.spreadShotDamageMult || 1) : 1),
       expireAt: now + lifeMs,
       ownerId,
       extras: {

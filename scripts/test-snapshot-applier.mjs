@@ -494,5 +494,31 @@ function snap(overrides = {}) {
   ok('default: slot 1 body x clobbered by snapshot', t.slotsById[1].body.x === 350);
 }
 
+// 25. onEnemyDamage fires once per fresh snapshot hp drop.
+{
+  const events = [];
+  const ap = createSnapshotApplier({
+    enemyTypeDefs: ENEMY_DEFS,
+    resolveColors: colorResolver,
+    renderDelayMs: 100,
+    onEnemyDamage: (ev) => events.push(ev),
+  });
+  const t = freshTarget();
+  ap.apply(snap({
+    snapshotSeq: 1,
+    enemies: [{ id: 9, x: 50, y: 70, vx: 0, vy: 0, hp: 5, maxHp: 5, r: 12, type: 'chaser', fT: 0, fRate: 0 }],
+  }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ap.apply(snap({
+    snapshotSeq: 2,
+    enemies: [{ id: 9, x: 55, y: 75, vx: 0, vy: 0, hp: 2, maxHp: 5, r: 12, type: 'chaser', fT: 0, fRate: 0 }],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 200 });
+  ap.apply(snap({
+    snapshotSeq: 2,
+    enemies: [{ id: 9, x: 55, y: 75, vx: 0, vy: 0, hp: 2, maxHp: 5, r: 12, type: 'chaser', fT: 0, fRate: 0 }],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 250 });
+  ok('enemy-damage: one event for one fresh hp drop', events.length === 1);
+  ok('enemy-damage: reports drop amount', events[0] && events[0].damage === 3);
+}
+
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail === 0 ? 0 : 1);
