@@ -156,6 +156,7 @@ import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js'
 import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
 import { setupRollback, teardownRollback, coordinatorStep } from './src/net/rollbackIntegration.js';
 import { hostSimStep } from './src/sim/hostSimStep.js';
+import { drain as drainSimEffectQueue } from './src/sim/effectQueue.js';
 import { applyJoystickVelocity, tickBodyPosition } from './src/sim/playerMovement.js';
 import { tickPostMovementTimers } from './src/sim/postMovementTick.js';
 import {
@@ -2711,7 +2712,7 @@ function installCoopInputUplink(armedCoop) {
             isOverlapping: isEntityOverlappingObstacle,
             eject: ejectEntityFromObstacles,
             // R4: enable effectQueue so resim ticks can push visual/audio
-            // descriptors; drain in committed-tick path (TODO R4 drain wire-up).
+            // descriptors; drained in the game loop before coordinatorStep snapshots.
             queueEffects: true,
           },
           logging: true,
@@ -4457,6 +4458,48 @@ function burstBlueDissipate(x, y) {
   spawnBlueDissipateBurst(x, y, (a) => C.getRgba(threat.danger.light, a));
 }
 
+// R4: dispatch effect descriptors produced by hostSimStep during rollback resim.
+// Only fires for corrected (post-rollback) ticks — non-rollback ticks leave the
+// queue empty because skipSimStepOnForward=true skips hostSimStep on the forward path.
+function dispatchSimEffects(effects) {
+  if (!effects || effects.length === 0) return;
+  const threat = getThreatPalette();
+  const playerCol = getPlayerColorScheme().hex;
+  for (const fx of effects) {
+    const x = fx.x ?? 0;
+    const y = fx.y ?? 0;
+    switch (fx.kind) {
+      case 'danger.directHit':
+      case 'danger.phaseDashHit':
+      case 'contact.rusherHit':
+        if (Number.isFinite(fx.damage)) spawnDmgNumber(x, y, fx.damage, threat.danger.hex);
+        sparks(x, y, C.danger, 10, 85);
+        break;
+      case 'output.enemyHit':
+        if (Number.isFinite(fx.damage)) spawnDmgNumber(x, y, fx.damage, playerCol);
+        sparks(x, y, playerCol, 5, 55);
+        break;
+      case 'output.enemyKilled':
+        sparks(x, y, threat.elite.hex, 14, 95);
+        break;
+      case 'danger.lifelineTriggered':
+        sparks(x, y, C.lifelineEffect, 16, 100);
+        break;
+      case 'danger.colossusShockwave':
+        sparks(x, y, threat.advanced.hex, 14, 120);
+        break;
+      case 'danger.empRemovedBullet':
+        sparks(x, y, '#fbbf24', 4, 100);
+        break;
+      case 'output.volatileBurst':
+        sparks(x, y, playerCol, 8, 100);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
 function spawnGreyDrops(x,y,ts,count=getEnemyGreyDropCount()) {
   spawnGreyDropsValue({
     bullets,
@@ -5080,6 +5123,16 @@ function loop(ts){
       // for remote-input divergence (triggering hostSimStep-based resim if needed).
       // Gated by ROLLBACK_ENABLED so there is zero cost in solo / D-series runs.
       if (ROLLBACK_ENABLED) {
+        // R4: drain effectQueue before coordinator snapshots state, so the snapshot
+        // has an empty queue. Any effects here came from async rollback corrections
+        // (the _onRemoteInputArrived callback fires between rAF frames, not inside
+        // this accumulator loop — JS is single-threaded so this is safe).
+        try {
+          const _fx = drainSimEffectQueue(simState);
+          if (_fx.length > 0) dispatchSimEffects(_fx);
+        } catch (err) {
+          try { console.warn('[rollback] effect drain error', err); } catch (_) {}
+        }
         try {
           coordinatorStep({
             joy: {

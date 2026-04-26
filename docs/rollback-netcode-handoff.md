@@ -49,7 +49,7 @@ and D-series coop are unaffected.
 | **R1** | Wire `coordinatorStep` into game loop (`skipSimStepOnForward`) | ✅ Done (v1.20.105) |
 | **R2** | Bullet + enemy kinematic resim in `hostSimStep` | ✅ Done (v1.20.106) |
 | **R3** | Hit detection + combat during resim; delete D-series | ⏳ In progress (v1.20.113 — R3.4 rusher contact resim complete; orbit sphere contact deferred) |
-| **R4** | Polish: pause/intro/boon-select safety; disconnect; buffer tuning | ⬜ Pending |
+| **R4** | Polish: effectQueue drain, pause/intro/boon-select safety; disconnect; buffer tuning | ⏳ In progress (v1.20.114 — effectQueue drain wired) |
 | **R5** | Beta, stress, ship | ⬜ Pending |
 
 ---
@@ -206,10 +206,9 @@ node scripts/test-determinism-canary-10k.mjs
 
 ### Gap 1: Combat resim is partial
 `hostSimStep` now resolves core danger projectile hits, output bullet enemy hits, and rusher
-contact damage during rollback replay. Still pending:
+contact damage during rollback replay. The effectQueue drain is wired (v1.20.114). Still pending:
 - Orb contact damage during resim (orbit sphere enemy contact)
 - Full kill-reward parity beyond score/kills, Blood Pact, volatile burst, and grey drops
-- Commit-phase draining for effectQueue descriptors (queueEffects now true; drain wiring is R4)
 
 ### Gap 2: `simState.bullets` / `simState.enemies` are shared references
 When `snapshotState(simState)` calls `structuredClone`, it deep-clones the bullet and enemy
@@ -337,6 +336,7 @@ setupRollback(simState, localSlotIndex, sendFn, registerFn, {
 ## Commit History (R-series)
 
 ```
+v1.20.114  R4: effectQueue drain wired — dispatchSimEffects routes rollback corrections to sparks/dmg numbers
 v1.20.113  Ghost transparency iOS fix (offscreen compositing canvas) + queueEffects wired
 v1.20.112  Patch notes syntax error fix; limited to 50 most recent entries
 v1.20.111  R3.4: resolveRusherContactHits — contact invuln order invariant (6 new tests)

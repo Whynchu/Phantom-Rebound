@@ -2,6 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.114',
+      label: 'R4 EFFECTQUEUE DRAIN',
+      summary: ['Rollback corrective effects (damage numbers, sparks) now fire correctly after a resim. Effect descriptors queued by hostSimStep during rollback are drained and dispatched to visual/audio handlers each tick before the coordinator snapshots state.'],
+      highlights: [
+        'R4 drain: drainSimEffectQueue() + dispatchSimEffects() wired in the game loop before coordinatorStep() snapshots state.',
+        'danger.directHit / contact.rusherHit → damage number + sparks; output.enemyHit → damage number + sparks; output.enemyKilled → death sparks; lifeline/shockwave/EMP/volatile effects all route to matching handlers.',
+        'Snapshots now always have an empty effectQueue so rollback buffer entries are not inflated with stale descriptors.',
+      ]
+    },
+  {
       version: '1.20.113',
       label: 'GHOST TRANSPARENCY FIX',
       summary: ['Fixed ghost transparency on iOS Safari — spectator/dead-partner ghosts now correctly render at 30% opacity on iPhone. Also wired queueEffects in the rollback simStepOpts so combat resim can queue visual/audio descriptors for future R4 drain wiring.'],

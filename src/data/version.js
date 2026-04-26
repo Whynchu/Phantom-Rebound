@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.113', label: 'GHOST TRANSPARENCY FIX + QUEUEEFFECTS' };
+const VERSION = { num: '1.20.114', label: 'R4 EFFECTQUEUE DRAIN WIRED' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;
