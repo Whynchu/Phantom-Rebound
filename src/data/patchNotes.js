@@ -2,6 +2,17 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.116',
+      label: 'R4 HOST NO-ROLLBACK FIX',
+      summary: ['Fixed guest position being choppy on the host device. The host rollback coordinator was triggering resim corrections for slot 1 (guest), but hostSimStep is a partial simulation that does not include the D-series remoteX/Y position snap that drives slot 1 in the live forward path. These corrections systematically diverged from the actual position, causing visible snapping on every direction change. The host coordinator now acts as a snapshot/input-sender only — it never triggers rollback corrections for slot 1. Slot 1 position on the host remains exclusively driven by D-series (ring buffer + remoteX/Y snap), which is smooth.'],
+      highlights: [
+        'R4-fix: host coordinator onRemoteInput is now a no-op — no rollback corrections applied to slot 1 on host device.',
+        'Host coordinator still snapshots state and sends its own inputs to the guest peer (rollback-input payloads) unchanged.',
+        'Guest coordinator still subscribes to host rollback-input — guest-side rollback unaffected.',
+        'Root cause: hostSimStep lacks remoteX/Y override; resim positions diverged from D-series forward path on every direction change → snapping.',
+      ]
+    },
+  {
       version: '1.20.115',
       label: 'R4 PAUSE-INTRO SAFETY',
       summary: ['Rollback coordinator now only runs during active combat phases (spawning/fighting). Coordinator is skipped during room intro transitions, preventing intro-phase snapshots from polluting the rollback buffer with pre-combat state. coordinatorStep() now returns the stall status from the coordinator so callers can detect when the remote input age exceeds the max rollback window.'],

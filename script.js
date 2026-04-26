@@ -2692,11 +2692,20 @@ function installCoopInputUplink(armedCoop) {
         async (frame) => {
           try { await session.sendGameplay({ kind: 'rollback-input', frame }); } catch (_) {}
         },
-        (callback) => session.onGameplay((ev) => {
-          const payload = ev && ev.payload;
-          if (!payload || payload.kind !== 'rollback-input') return;
-          if (payload.frame) callback(payload.frame);
-        }),
+        // R4-fix: HOST coordinator must not rollback-correct slot 1 position.
+        // hostSimStep is a partial sim (remoteX/Y snap lives only in update());
+        // any resim correction diverges from the D-series forward path and
+        // produces the "choppy guest position on host" symptom. Host coordinator
+        // still snapshots state and sends host inputs to the guest; it just
+        // never applies rollback corrections for slot 1. GUEST coordinator
+        // continues to subscribe to host 'rollback-input' payloads unchanged.
+        role === 'host'
+          ? (_cb) => () => {}
+          : (callback) => session.onGameplay((ev) => {
+              const payload = ev && ev.payload;
+              if (!payload || payload.kind !== 'rollback-input') return;
+              if (payload.frame) callback(payload.frame);
+            }),
         {
           simStep: hostSimStep,
           simStepOpts: {
