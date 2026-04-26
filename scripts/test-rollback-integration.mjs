@@ -134,17 +134,44 @@ test('Two coordinators exchange inputs', () => {
 // Test 4: SetSimStep updates coordinator
 test('setSimStep updates coordinator function', () => {
   const state = createSimState();
-  let mockSimStepCalled = false;
-
-  const mockSimStep = (st, s0, s1, dt) => {
-    mockSimStepCalled = true;
-  };
+  const mockSimStep = () => {};
 
   setupRollback(state, 0, async () => {}, (cb) => {});
   setSimStep(mockSimStep);
-  
-  // After R0.4, simStep would be called; for now it's just stored
+
   assert.ok(true, 'setSimStep accepted');
+
+  teardownRollback();
+});
+
+// Test 4b: Two-slot rollback mapping survives slot-1 local sessions.
+test('Rollback integration handles slotCount=2 and slot-1 local mapping', () => {
+  const state = createSimState({ slotCount: 2 });
+  state.slots[0].body.x = 100;
+  state.slots[1].body.y = 200;
+
+  let remoteInputCallback = null;
+  const sentInputs = [];
+  const mockSimStep = (st, s0, s1, dt) => {
+    if (s0?.joy?.active && s0.joy.dx < 0) st.slots[0].body.x += 1;
+    if (s1?.joy?.active && s1.joy.dy < 0) st.slots[1].body.y += 10;
+  };
+
+  setupRollback(
+    state,
+    1,
+    async (frame) => { sentInputs.push(frame); },
+    (cb) => { remoteInputCallback = cb; return () => { remoteInputCallback = null; }; },
+    { simStep: mockSimStep },
+  );
+
+  coordinatorStep({ joy: { dx: 0, dy: -1, active: true, mag: 60 } }, 1 / 60);
+  coordinatorStep({ joy: { dx: 0, dy: -1, active: true, mag: 60 } }, 1 / 60);
+  remoteInputCallback({ tick: 0, slot: 0, dx: -1, dy: 0, active: true, mag: 60 });
+
+  assert.strictEqual(sentInputs.length, 2, 'local frames should be queued for send');
+  assert.strictEqual(state.slots[0].body.x, 101, 'slot 0 should resim from late remote input');
+  assert.strictEqual(state.slots[1].body.y, 220, 'slot 1 should remain mapped to the local player');
 
   teardownRollback();
 });

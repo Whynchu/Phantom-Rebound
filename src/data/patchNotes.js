@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.130',
+      label: 'R3 TWO-SLOT GUARDS',
+      summary: ['Rollback integration now covers slotCount=2 / slot-1 local mapping, and snapshots round-trip bullets, enemies, and effectQueue.'],
+      highlights: [
+        'Kill reward resim now preserves live sanguine burst speed and blood-pact cap constants.',
+      ]
+    },
+  {
       version: '1.20.129',
       label: 'R3 CHARGED ORB + KILL REWARD PARITY',
       summary: ['Rollback resim now fires charged orbs and applies output-kill reward side effects deterministically.'],

@@ -11,6 +11,7 @@ import { applyKillSustainHeal } from '../systems/sustain.js';
 import { applyKillUpgradeState, buildKillRewardActions, resolveEnemyKillEffects } from '../systems/killRewards.js';
 import { nextSimRandom, pushSimGreyBullet, spawnSimRadialOutputBurst } from './simProjectiles.js';
 
+const GLOBAL_SPEED_LIFT = 1.55;
 const DEFAULT_KILL_SUSTAIN_CAP_CONFIG = {
   baseHealCap: 14,
   perRoomHealCap: 0.22,
@@ -46,8 +47,8 @@ function applyEnemyKillRewards(state, slot, enemy, bullet, opts = {}) {
     playerY: slot.body?.y ?? enemy.y,
     ts,
     upgrades: upg,
-    globalSpeedLift: opts.globalSpeedLift ?? 1,
-    bloodPactHealCap: opts.bloodPactHealCap ?? 0,
+    globalSpeedLift: opts.globalSpeedLift ?? GLOBAL_SPEED_LIFT,
+    bloodPactHealCap: opts.bloodPactHealCap ?? getBloodPactHealCap(upg),
     random: () => nextSimRandom(state),
   });
 
@@ -130,6 +131,10 @@ function gainSlotCharge(slot, amount) {
   const maxCharge = Math.max(1, slot.metrics.maxCharge || slot.upg?.maxCharge || 1);
   slot.metrics.charge = Math.min(maxCharge, before + Math.max(0, amount || 0));
   return slot.metrics.charge - before;
+}
+
+function getBloodPactHealCap(upg) {
+  return 1 + (upg?.bloodMoon ? 1 : 0);
 }
 
 export {

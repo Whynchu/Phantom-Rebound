@@ -482,6 +482,52 @@ test('R1 round-trip: snapshot at N, both advance M ticks, traces match', () => {
   assert.equal(liveFinalJson, restoredFinalJson, 'snapshot-restore-resim diverged from live trajectory');
 });
 
+// R1 guard: bullets, enemies, and effectQueue must survive snapshot + restore
+// without collapsing the two-slot structure or losing live array identity.
+test('R1 guard: bullets/enemies/effectQueue round-trip with slotCount=2', () => {
+  const live = createSimState({ seed: 2024, worldW: 640, worldH: 480, slotCount: 2 });
+  live.slots[0].body.x = 111;
+  live.slots[1].body.y = 222;
+  live.bullets.push({
+    id: 71,
+    state: 'output',
+    x: 10,
+    y: 20,
+    vx: 1,
+    vy: 2,
+    r: 5,
+    hitIds: new Set([99]),
+  });
+  live.enemies.push({
+    eid: 33,
+    x: 300,
+    y: 200,
+    r: 10,
+    hp: 9,
+    maxHp: 12,
+    pts: 17,
+  });
+  live.effectQueue.push({ kind: 'test.effect', x: 7, y: 8 });
+
+  const snap = snapshotState(live);
+  const restored = createSimState({ seed: 1, worldW: 640, worldH: 480, slotCount: 2 });
+  const restoredBulletsRef = restored.bullets;
+  const restoredEnemiesRef = restored.enemies;
+  const restoredEffectsRef = restored.effectQueue;
+  restoreState(restored, snap);
+
+  assert.equal(restored.slots.length, 2, 'two-slot structure must survive restore');
+  assert.strictEqual(restored.slots[0].body.x, 111);
+  assert.strictEqual(restored.slots[1].body.y, 222);
+  assert.strictEqual(restored.bullets, restoredBulletsRef, 'live bullets array identity must be preserved');
+  assert.strictEqual(restored.enemies, restoredEnemiesRef, 'live enemies array identity must be preserved');
+  assert.strictEqual(restored.effectQueue, restoredEffectsRef, 'live effectQueue identity must be preserved');
+  assert.strictEqual(restored.bullets.length, 1);
+  assert.strictEqual(restored.enemies.length, 1);
+  assert.strictEqual(restored.effectQueue.length, 1);
+  assert.strictEqual(restored.bullets[0].hitIds instanceof Set, true, 'Set fields must survive structuredClone snapshotting');
+});
+
 console.log('');
 console.log(`SimState serialize tests: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

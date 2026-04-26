@@ -39,6 +39,7 @@ function makeKillState() {
   state.slots[0].upg.finalForm = true;
   state.slots[0].upg.crimsonHarvest = true;
   state.slots[0].upg.sanguineBurst = true;
+  state.slots[0].upg.sanguineKillCount = 7;
   state.slots[0].upg.pierceTier = 1;
   state.slots[0].upg.bounceTier = 0;
   state.slots[0].upg.homingTier = 0;
@@ -106,9 +107,12 @@ console.log('\n=== rollback combat rewards tests ===\n');
   assert.equal(state.slots[0].metrics.hp, 14);
   assert.equal(state.slots[0].metrics.charge, 1.75);
   assert.equal(state.slots[0].timers.killSustainHealedThisRoom, 12);
-  assert.equal(state.bullets.length, 5);
-  assert.equal(state.bullets.filter((b) => b.state === 'output').length, 1);
+  assert.equal(state.bullets.length, 11);
+  assert.equal(state.bullets.filter((b) => b.state === 'output').length, 7);
   assert.equal(state.bullets.filter((b) => b.state === 'grey').length, 4);
+  const burstBullet = state.bullets.find((b) => b !== state.bullets[0] && b.state === 'output');
+  assert.ok(burstBullet, 'sanguine burst bullet should exist');
+  assert.ok(Math.abs(Math.hypot(burstBullet.vx, burstBullet.vy) - 341) < 0.001, 'sanguine burst speed should inherit GLOBAL_SPEED_LIFT');
   console.log('PASS output kill applies reward heals, charge, and bonus spawns');
 }
 
