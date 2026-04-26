@@ -224,6 +224,7 @@ import {
   tickGreyBulletDecay,
 } from './src/systems/bulletRuntime.js';
 import { dispatchBulletBounce } from './src/sim/bulletBounceDispatch.js';
+import { detectVolatileOrbHit } from './src/sim/volatileOrbDispatch.js';
 import {
   resolveOutputEnemyHit,
 } from './src/systems/outputHit.js';
@@ -6141,32 +6142,35 @@ function update(dt,ts){
       }
     }
 
-    // Volatile Orbs: a danger bullet near any alive orbit sphere destroys the sphere + bullet
+    // Volatile Orbs: a danger bullet near any alive orbit sphere destroys the sphere + bullet.
+    // R0.4 step 7: collision logic carved into src/sim/volatileOrbDispatch.js.
     if(b.state==='danger' && UPG.volatileOrbs && UPG.orbitSphereTier>0 && slot0Timers.volatileOrbGlobalCooldown<=0){
       syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
-      let orbHit=false;
-      for(let si=0;si<UPG.orbitSphereTier;si++){
-        if(_orbCooldown[si]>0) continue;
-        const orbitSlot = getOrbitSlotPosition({
-          index: si,
-          orbitSphereTier: UPG.orbitSphereTier,
-          ts,
-          rotationSpeed: ORBIT_ROTATION_SPD,
-          radius: getOrbitRadius(),
-          originX: player.x,
-          originY: player.y,
-        });
-        const sx=orbitSlot.x;
-        const sy=orbitSlot.y;
-        const orbHitR = getOrbVisualRadius() + 2;
-        if(Math.hypot(b.x-sx,b.y-sy)<b.r+orbHitR){
-          _orbCooldown[si] = VOLATILE_ORB_COOLDOWN;
-          slot0Timers.volatileOrbGlobalCooldown = VOLATILE_ORB_SHARED_COOLDOWN;
-          sparks(sx,sy,C.green,10,80);
-          bullets.splice(i,1); orbHit=true; break;
+      const orbResult = detectVolatileOrbHit(b, {
+        orbCooldowns: _orbCooldown,
+        orbitSphereTier: UPG.orbitSphereTier,
+        ts,
+        rotationSpeed: ORBIT_ROTATION_SPD,
+        radius: getOrbitRadius(),
+        originX: player.x,
+        originY: player.y,
+        orbHitRadius: getOrbVisualRadius() + 2,
+        sparksColor: C.green,
+        sparksCount: 10,
+        sparksSize: 80,
+        orbCooldownValue: VOLATILE_ORB_COOLDOWN,
+        globalCooldownValue: VOLATILE_ORB_SHARED_COOLDOWN,
+      });
+      if(orbResult.hitIndex >= 0){
+        _orbCooldown[orbResult.hitIndex] = orbResult.orbCooldownValue;
+        slot0Timers.volatileOrbGlobalCooldown = orbResult.globalCooldownValue;
+        for(let ei = 0; ei < orbResult.effects.length; ei++){
+          const ef = orbResult.effects[ei];
+          if(ef.kind === 'sparks') sparks(ef.x, ef.y, ef.color, ef.count, ef.size);
         }
+        if(orbResult.removeSourceBullet) bullets.splice(i, 1);
+        if(orbResult.skipRestOfFrame) continue;
       }
-      if(orbHit) continue;
     }
 
     if(b.state==='danger' && player.shields.length>0){
