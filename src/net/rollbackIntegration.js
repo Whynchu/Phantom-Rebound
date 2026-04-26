@@ -74,7 +74,19 @@ export function setupRollback(
     localSlotIndex,
     sendInput: sendInputFn,
     onRemoteInput: registerRemoteInputFn,
+    // R4.2 — Buffer tuning rationale:
+    //   maxRollbackTicks = 8:  At 60 Hz, 8 ticks ≈ 133 ms.  This comfortably
+    //     covers a 100 ms round-trip on a typical consumer connection (50 ms
+    //     one-way) plus ~30 ms of processing/batching headroom.  Going higher
+    //     increases resim cost per divergence; going lower risks missing late
+    //     frames on a congested link, forcing full state desync.
+    //   bufferCapacity = 16:  Must be > maxRollbackTicks (enforced in
+    //     RollbackCoordinator constructor).  16 = 2× the rollback window,
+    //     giving the ring buffer enough slack to store the rewind target (tick
+    //     divergenceTick - 1) even when the resim replays all 8 subsequent
+    //     ticks.  Lower values risk getAtTick() misses on deeper rollbacks.
     maxRollbackTicks: 8,
+    bufferCapacity: 16,
     skipSimStepOnForward: true,   // update() already advances state — no double-advance
     logger: logging ? (msg) => console.log('[rollback]', msg) : null,
   });
@@ -135,6 +147,25 @@ export function coordinatorStep(localInput, dt) {
 }
 
 /**
+ * R4.2: Snapshot of rollback telemetry for diagnostics.
+ * Returns null when no coordinator is active (solo / D-series).
+ */
+export function getRollbackStats() {
+  if (!rollbackCoordinator) return null;
+  try { return rollbackCoordinator.getStats(); } catch (_) { return null; }
+}
+
+/**
+ * R4.2: Whether the coordinator is currently stalled (remote input age
+ * exceeds maxRollbackTicks).  Returns false when no coordinator is active.
+ */
+export function isRollbackStalled() {
+  if (!rollbackCoordinator) return false;
+  try { return rollbackCoordinator.getRemoteAgeTicks() > rollbackCoordinator.maxRollbackTicks; }
+  catch (_) { return false; }
+}
+
+/**
  * Placeholder simStep until R0.4 carves out the real one.
  * Currently a no-op; game loop still uses inline update() logic.
  * 
@@ -152,5 +183,7 @@ export default {
   setSimStep,
   teardownRollback,
   coordinatorStep,
+  getRollbackStats,
+  isRollbackStalled,
   get rollbackCoordinator() { return rollbackCoordinator; },
 };

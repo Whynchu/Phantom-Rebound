@@ -154,7 +154,7 @@ import { createGreyLagComp } from './src/net/greyLagComp.js';
 import { createBulletSpawnDetector } from './src/net/bulletSpawnDetector.js';
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
 import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
-import { setupRollback, teardownRollback, coordinatorStep } from './src/net/rollbackIntegration.js';
+import { setupRollback, teardownRollback, coordinatorStep, getRollbackStats, isRollbackStalled } from './src/net/rollbackIntegration.js';
 import { hostSimStep } from './src/sim/hostSimStep.js';
 import { drain as drainSimEffectQueue } from './src/sim/effectQueue.js';
 import { applyJoystickVelocity, tickBodyPosition } from './src/sim/playerMovement.js';
@@ -1471,8 +1471,9 @@ function teardownCoopInputUplink() {
     try { coopInputSync.dispose(); } catch (_) {}
     coopInputSync = null;
   }
-  // R3 — tear down rollback coordinator
+  // R3 — tear down rollback coordinator + R4.2 dismiss stall indicator
   try { teardownRollback(); } catch (_) {}
+  try { hideRollbackStallIndicator(); } catch (_) {}
   if (coopSnapshotBroadcaster) {
     try { coopSnapshotBroadcaster.dispose(); } catch (_) {}
     coopSnapshotBroadcaster = null;
@@ -1860,7 +1861,61 @@ function hideCoopGuestWaitOverlay() {
   } catch (_) {}
 }
 
-// Sync host's UPG into slot 1's UPG (legacy team-boon mirror). Kept for
+function hideCoopGuestWaitOverlay() {
+  try {
+    if (coopGuestWaitOverlayEl) coopGuestWaitOverlayEl.style.display = 'none';
+  } catch (_) {}
+}
+
+// ── R4.2: Rollback stall indicator ───────────────────────────────────────────
+// Small unobtrusive corner badge shown mid-gameplay when the rollback
+// coordinator has been predicting for > maxRollbackTicks without receiving
+// a real remote input.  Hides automatically when remote input resumes.
+// Only rendered when ROLLBACK_ENABLED; no DOM cost on the normal path.
+let _rollbackStallEl = null;
+
+function showRollbackStallIndicator() {
+  if (typeof document === 'undefined' || !document.body) return;
+  if (!_rollbackStallEl) {
+    _rollbackStallEl = document.createElement('div');
+    Object.assign(_rollbackStallEl.style, {
+      position: 'fixed',
+      top: '8px',
+      right: '8px',
+      background: 'rgba(255,180,0,0.85)',
+      color: '#111',
+      fontFamily: 'monospace',
+      fontSize: '11px',
+      padding: '3px 7px',
+      borderRadius: '4px',
+      zIndex: '9999',
+      pointerEvents: 'none',
+      letterSpacing: '0.06em',
+      display: 'none',
+    });
+    _rollbackStallEl.textContent = '⟳ SYNC…';
+    document.body.appendChild(_rollbackStallEl);
+  }
+  _rollbackStallEl.style.display = 'block';
+}
+
+function hideRollbackStallIndicator() {
+  if (_rollbackStallEl) _rollbackStallEl.style.display = 'none';
+}
+
+// R4.2: Expose rollback telemetry to the console for real-device debugging
+// when ?rollback=1 is active.  Call window.__rbdiag() in DevTools to inspect.
+if (typeof window !== 'undefined') {
+  window.__rbdiag = () => {
+    const stats = getRollbackStats();
+    if (!stats) { console.info('[rollback] no coordinator active'); return; }
+    console.table(stats);
+    return stats;
+  };
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+
 // compatibility with the pre-D14 path on initial slot-1 install when no
 // boons have been applied yet, but the per-room mirror call has been
 // removed in resumePlayAfterBoons (D14 — slot 1 evolves independently).
@@ -5322,6 +5377,9 @@ function loop(ts){
             }, SIM_STEP_SEC);
             if (_stepResult && _stepResult.stalled) {
               try { console.warn('[rollback] coordinator stalled — remote input age exceeds maxRollbackTicks'); } catch (_) {}
+              try { showRollbackStallIndicator(); } catch (_) {}
+            } else {
+              try { hideRollbackStallIndicator(); } catch (_) {}
             }
           } catch (err) {
             try { console.warn('[rollback] coordinatorStep error', err); } catch (_) {}

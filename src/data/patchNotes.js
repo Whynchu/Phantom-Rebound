@@ -2,7 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
-      version: '1.20.131',
+      version: '1.20.132',
+      label: 'R4.2 STALL INDICATOR + BUFFER TUNING',
+      summary: ['Rollback coordinator now shows a small "⟳ SYNC…" badge when remote input age exceeds the rollback window, and hides it when sync resumes.'],
+      highlights: [
+        'Buffer constants documented: maxRollbackTicks=8 (≈133ms at 60Hz), bufferCapacity=16 (2× window for ring-buffer safety).',
+        'window.__rbdiag() console helper exposes coordinator telemetry for real-device debugging.',
+        'Stall indicator is dismissed on coordinator teardown.',
+      ]
+    },
+  {
       label: 'R4 EFFECT DESCRIPTOR AUDIT',
       summary: ['Rollback committed-effect dispatch now handles shield, orbit, volatile-orb, grey absorb, mirror tide, void block, and slipstream descriptors.'],
       highlights: [
