@@ -8,41 +8,71 @@ import { drawGhostHatLayer } from './hatRenderer.js';
 import { getHatHeightMultiplier } from '../../data/hats.js';
 import { BASE_PLAYER_HP, GAME_OVER_ANIM_MS } from '../../data/constants.js';
 
-export function drawGhostSprite(ctx, ts, {
-  playerState,
-  chargeValue,
-  maxChargeValue,
-  fireProgress,
-  gameState,
-  hpValue,
-  maxHpValue,
-  hatKey,
-  basePlayerHp = BASE_PLAYER_HP,
-  idleStill = false,
-  // D18.7 — optional per-instance color override. When present, all reads
-  // that previously hit the global C palette (player/ghost colors) use
-  // this scheme instead. Solo / local-player paths leave this undefined →
-  // C.green/C.ghost behavior unchanged → byte-identical canary.
-  // Shape: { hex, light, dark } from PLAYER_COLORS.
-  colorScheme = null,
-  // D18.15a — when true, draw the dead-frown arc (mirrors the gameState
-  // 'dying' frown at line 131) without triggering the death pop animation
-  // or the smile-eyes pulse. Used by coop spectator render so dead
-  // partners look sad while still walking around.
-  forceFrown = false,
-  // D18.16 — multiplicative alpha applied to the entire body+HP bar
-  // render. Hoisted INSIDE drawGhostSprite so the inner save() captures
-  // it before any nested save/restore inside the body, and the inner
-  // restore() at the end guarantees the outer canvas state returns to
-  // exactly what it was. iOS Safari was the canary here: setting
-  // globalAlpha at the call site and relying on it to propagate through
-  // drawGhostSprite's own save/restore + roundRect + shadowBlur calls
-  // was unreliable (PC Chrome fine, iOS Safari sometimes lost the alpha
-  // mid-draw), leaving spectators rendered at 100% on iPhone.
-  bodyAlpha = 1,
-} = {}) {
+// Cached offscreen canvas for compositing when bodyAlpha < 1.
+// iOS Safari resets ctx.globalAlpha when ctx.shadowBlur is set to a non-zero
+// value, so the old globalAlpha-at-top-of-save approach silently broke on iPhone
+// (spectator ghosts rendered at 100% opacity instead of 30%). The fix: render at
+// full opacity onto a cached offscreen canvas, then blit the result onto the real
+// canvas with globalAlpha=bodyAlpha in a single drawImage (no shadowBlur involved).
+let _alphaCompCanvas = null;
+let _alphaCompCtx = null;
+
+export function drawGhostSprite(ctx, ts, opts = {}) {
+  const {
+    playerState,
+    chargeValue,
+    maxChargeValue,
+    fireProgress,
+    gameState,
+    hpValue,
+    maxHpValue,
+    hatKey,
+    basePlayerHp = BASE_PLAYER_HP,
+    idleStill = false,
+    // D18.7 — optional per-instance color override. When present, all reads
+    // that previously hit the global C palette (player/ghost colors) use
+    // this scheme instead. Solo / local-player paths leave this undefined →
+    // C.green/C.ghost behavior unchanged → byte-identical canary.
+    // Shape: { hex, light, dark } from PLAYER_COLORS.
+    colorScheme = null,
+    // D18.15a — when true, draw the dead-frown arc (mirrors the gameState
+    // 'dying' frown at line 131) without triggering the death pop animation
+    // or the smile-eyes pulse. Used by coop spectator render so dead
+    // partners look sad while still walking around.
+    forceFrown = false,
+    bodyAlpha = 1,
+  } = opts;
   const p = playerState;
   if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
+
+  // D18.16 revised — iOS Safari compositing fix.
+  // iOS Safari resets ctx.globalAlpha when ctx.shadowBlur changes, so the ghost
+  // body rendered opaque on iPhone even with globalAlpha=0.3 set at the top.
+  // Work-around: draw at full opacity on a cached offscreen canvas, then blit
+  // with globalAlpha=bodyAlpha in a single drawImage (no shadowBlur involved).
+  // Assumptions: call sites use an identity/default transform when bodyAlpha < 1
+  // (verified: both spectator call sites in script.js have no active transform;
+  // the startGhostPreview caller always passes bodyAlpha=1 so never hits this path).
+  if (bodyAlpha < 1) {
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
+    if (!_alphaCompCanvas) {
+      _alphaCompCanvas = document.createElement('canvas');
+      _alphaCompCtx = _alphaCompCanvas.getContext('2d');
+    }
+    if (_alphaCompCanvas.width !== w || _alphaCompCanvas.height !== h) {
+      _alphaCompCanvas.width = w;
+      _alphaCompCanvas.height = h;
+    } else {
+      _alphaCompCtx.clearRect(0, 0, w, h);
+    }
+    drawGhostSprite(_alphaCompCtx, ts, { ...opts, bodyAlpha: 1 });
+    ctx.save();
+    ctx.globalAlpha = (ctx.globalAlpha || 1) * bodyAlpha;
+    ctx.drawImage(_alphaCompCanvas, 0, 0);
+    ctx.restore();
+    return;
+  }
   // Resolve effective player-color reads. For null colorScheme we point at
   // the live C getters so a runtime palette swap (player picked a new color
   // from the start menu) keeps animating. For an override we precompute
@@ -73,15 +103,6 @@ export function drawGhostSprite(ctx, ts, {
   const size = p.r * 1.18 + chargeFrac * 3.9 - deathFrac * 1.2;
 
   ctx.save();
-  // D18.16 — apply bodyAlpha INSIDE our save/restore so it's bulletproof
-  // against iOS Safari quirks where outer globalAlpha sometimes failed
-  // to propagate through nested save/restore + shadowBlur + roundRect
-  // operations. Multiplying lets stacked transparencies compose if the
-  // caller has its own alpha set. The inner restore() at function end
-  // returns the canvas to exactly the state on entry.
-  if (bodyAlpha !== 1) {
-    ctx.globalAlpha = (ctx.globalAlpha || 1) * bodyAlpha;
-  }
   if ((p.distort || 0) > 0 || gameState === 'dying') {
     ctx.translate(p.x, p.y + wobble);
     const deathScale = gameState === 'dying' ? 1 + deathFrac * 0.22 - popFrac * 1.1 : 1;

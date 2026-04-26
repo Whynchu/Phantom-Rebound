@@ -2710,6 +2710,9 @@ function installCoopInputUplink(armedCoop) {
             resolveCollisions: resolveEntityObstacleCollisions,
             isOverlapping: isEntityOverlappingObstacle,
             eject: ejectEntityFromObstacles,
+            // R4: enable effectQueue so resim ticks can push visual/audio
+            // descriptors; drain in committed-tick path (TODO R4 drain wire-up).
+            queueEffects: true,
           },
           logging: true,
         }

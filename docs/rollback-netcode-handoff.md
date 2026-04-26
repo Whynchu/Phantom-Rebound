@@ -1,8 +1,8 @@
 # Rollback Netcode — Codex Handoff Document
 
-**Current version:** v1.20.110
+**Current version:** v1.20.113
 **Branch:** `coop` on `experimental-origin` (`Whynchu/Phantom-Rebound-Experimental`)  
-**Last updated:** 2026-04-26
+**Last updated:** 2026-04-27
 
 ---
 
@@ -48,7 +48,7 @@ and D-series coop are unaffected.
 | **R0.6** | 10k-tick determinism canary (`scripts/test-determinism-canary-10k.mjs`) | ✅ Done |
 | **R1** | Wire `coordinatorStep` into game loop (`skipSimStepOnForward`) | ✅ Done (v1.20.105) |
 | **R2** | Bullet + enemy kinematic resim in `hostSimStep` | ✅ Done (v1.20.106) |
-| **R3** | Hit detection + combat during resim; delete D-series | ⏳ In progress (v1.20.110 guest position priority + enemy combat resim) |
+| **R3** | Hit detection + combat during resim; delete D-series | ⏳ In progress (v1.20.113 — R3.4 rusher contact resim complete; orbit sphere contact deferred) |
 | **R4** | Polish: pause/intro/boon-select safety; disconnect; buffer tuning | ⬜ Pending |
 | **R5** | Beta, stress, ship | ⬜ Pending |
 
@@ -205,12 +205,11 @@ node scripts/test-determinism-canary-10k.mjs
 ## What R3 Core Slice Still Leaves Out
 
 ### Gap 1: Combat resim is partial
-`hostSimStep` now resolves core danger projectile hits and output bullet enemy hits during
-rollback replay. Still pending:
-- Enemy contact/rusher damage during resim
-- Orb contact damage during resim
+`hostSimStep` now resolves core danger projectile hits, output bullet enemy hits, and rusher
+contact damage during rollback replay. Still pending:
+- Orb contact damage during resim (orbit sphere enemy contact)
 - Full kill-reward parity beyond score/kills, Blood Pact, volatile burst, and grey drops
-- Commit-phase draining for effectQueue descriptors
+- Commit-phase draining for effectQueue descriptors (queueEffects now true; drain wiring is R4)
 
 ### Gap 2: `simState.bullets` / `simState.enemies` are shared references
 When `snapshotState(simState)` calls `structuredClone`, it deep-clones the bullet and enemy
@@ -224,10 +223,10 @@ rollback will silently fail (or throw). Add a serialization sanity test if in do
 gracefully (null check). Coop sessions need `slotCount: 2` — this is wired at session init
 but not yet tested end-to-end with rollback.
 
-### Gap 4: Enemy contact / orbit combat is still partial
-Enemy AI movement, fire timers, windups, projectile spawns, disruptor cooldown, and siphon
-charge drain now resim through `tickEnemyCombat`. Rusher contact damage and orbit-sphere
-enemy contact are still not fully mirrored in `hostSimStep`; those remain R3 follow-up work.
+### Gap 4: Orbit-sphere contact is still partial
+Enemy AI movement, fire timers, windups, projectile spawns, disruptor cooldown, siphon
+charge drain, and rusher contact damage now resim through `hostSimStep`. Orbit-sphere
+enemy contact (the `resolveOrbitSphereContactHits` path) is deferred as R3 follow-up work.
 
 ---
 
@@ -327,6 +326,7 @@ setupRollback(simState, localSlotIndex, sendFn, registerFn, {
     resolveCollisions: resolveEntityObstacleCollisions,
     isOverlapping: isEntityOverlappingObstacle,
     eject: ejectEntityFromObstacles,
+    queueEffects: true,   // ← wired v1.20.113; drain in R4
   },
   logging: true,
 });
@@ -337,8 +337,11 @@ setupRollback(simState, localSlotIndex, sendFn, registerFn, {
 ## Commit History (R-series)
 
 ```
-a4cf519  v1.20.106 — R2: bullet + enemy kinematic resim in hostSimStep
-20e8876  v1.20.105 — R1: coordinatorStep wired into game loop (skipSimStepOnForward)
-30c711d  v1.20.104 — R0.4 step 11: Region E (shield collision) carved into pure module
+v1.20.113  Ghost transparency iOS fix (offscreen compositing canvas) + queueEffects wired
+v1.20.112  Patch notes syntax error fix; limited to 50 most recent entries
+v1.20.111  R3.4: resolveRusherContactHits — contact invuln order invariant (6 new tests)
+a4cf519    v1.20.106 — R2: bullet + enemy kinematic resim in hostSimStep
+20e8876    v1.20.105 — R1: coordinatorStep wired into game loop (skipSimStepOnForward)
+30c711d    v1.20.104 — R0.4 step 11: Region E (shield collision) carved into pure module
 ```
 (Full history: `git log --oneline experimental-origin/coop`)

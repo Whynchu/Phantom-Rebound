@@ -2,6 +2,15 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.113',
+      label: 'GHOST TRANSPARENCY FIX',
+      summary: ['Fixed ghost transparency on iOS Safari — spectator/dead-partner ghosts now correctly render at 30% opacity on iPhone. Also wired queueEffects in the rollback simStepOpts so combat resim can queue visual/audio descriptors for future R4 drain wiring.'],
+      highlights: [
+        'Fixed: iOS Safari resets ctx.globalAlpha when shadowBlur is set — ghosts were rendering fully opaque on iPhone. Now uses offscreen compositing canvas (draw at full opacity, blit at bodyAlpha) so no shadowBlur call can interfere.',
+        'queueEffects: true added to rollback simStepOpts — combat resim ticks now push effect descriptors to state.effectQueue (drained in R4).',
+      ]
+    },
+  {
       version: '1.20.112',
       label: 'PATCH NOTES FIX',
       summary: ['Fixed a JS syntax error in patch notes (unescaped quote in a string literal) that caused the panel to show "Failed to load". Also limited in-client notes to the 50 most recent updates to keep the panel fast.'],
