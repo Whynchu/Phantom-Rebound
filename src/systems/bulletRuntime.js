@@ -51,9 +51,76 @@ function resolveOutputBounceState(bullet, { splitShot = false, splitShotEvolved 
   return { kind: 'remove', removeBullet: true };
 }
 
+/**
+ * Apply homing steering to a single output bullet. Pure helper — mutates
+ * bullet.vx/vy in place. No RNG, no audio, no allocations beyond the
+ * find-nearest-enemy reduce.
+ *
+ * Original lives in script.js update() bullet loop. Carved out as part of
+ * R0.4 step 4a so the deterministic substep math can be unit-tested and
+ * driven from hostSimStep without dragging the rest of the bullet loop.
+ *
+ * Skip conditions (no-op, returns false): bullet not in 'output' state,
+ * bullet.homing falsy, enemies array empty, no enemy with finite distance.
+ *
+ * Tie-breaking: when two enemies are exactly equidistant, the first one
+ * encountered wins (Array.prototype.reduce iteration order). This matches
+ * the original behavior — do NOT change it without a determinism gate.
+ *
+ * @param {object} bullet              - bullet object (mutated)
+ * @param {Array}  enemies             - enemies array (read-only)
+ * @param {number} dt                  - timestep, seconds
+ * @param {object} opts
+ * @param {number} [opts.homingTier=1]
+ * @param {number} [opts.shotSpd=1]
+ * @param {number} [opts.snipePower=0]
+ * @param {number} [opts.globalSpeedLift=1.55]
+ * @returns {boolean} true if homing was applied, false if skipped
+ */
+function applyBulletHoming(bullet, enemies, dt, opts = {}) {
+  if (!bullet || bullet.state !== 'output' || !bullet.homing) return false;
+  if (!enemies || enemies.length === 0) return false;
+
+  const homingTier = opts.homingTier != null ? opts.homingTier : 1;
+  const shotSpd = opts.shotSpd != null ? opts.shotSpd : 1;
+  const snipePower = opts.snipePower != null ? opts.snipePower : 0;
+  const globalSpeedLift = opts.globalSpeedLift != null ? opts.globalSpeedLift : 1.55;
+
+  // Find nearest enemy (reduce keeps first-encountered on ties).
+  let best = null;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (!e) continue;
+    const d = Math.hypot(e.x - bullet.x, e.y - bullet.y);
+    if (!best || d < best.d) best = { e, d };
+  }
+  if (!best) return false;
+
+  const dx = best.e.x - bullet.x;
+  const dy = best.e.y - bullet.y;
+  const d = Math.hypot(dx, dy);
+  if (d <= 0) return false;
+
+  const homingSteer = 160 + 160 * (homingTier || 1);
+  bullet.vx += (dx / d) * homingSteer * dt;
+  bullet.vy += (dy / d) * homingSteer * dt;
+
+  // Match the launch-speed basis so homing cannot silently nerf
+  // Faster Bullets / Snipe scaling.
+  const sp = Math.hypot(bullet.vx, bullet.vy);
+  const homingSpeedMult = 1.2 + (homingTier || 1) * 0.05;
+  const maxSp = 230 * globalSpeedLift * Math.min(2.0, shotSpd) * (1 + snipePower * 0.18) * homingSpeedMult;
+  if (sp > maxSp) {
+    bullet.vx = bullet.vx / sp * maxSp;
+    bullet.vy = bullet.vy / sp * maxSp;
+  }
+  return true;
+}
+
 export {
   shouldExpireOutputBullet,
   shouldRemoveBulletOutOfBounds,
   resolveDangerBounceState,
   resolveOutputBounceState,
+  applyBulletHoming,
 };

@@ -217,6 +217,7 @@ import {
   shouldRemoveBulletOutOfBounds,
   resolveDangerBounceState,
   resolveOutputBounceState,
+  applyBulletHoming,
 } from './src/systems/bulletRuntime.js';
 import {
   resolveOutputEnemyHit,
@@ -5932,19 +5933,14 @@ function update(dt,ts){
       bullets.splice(i,1);
       continue;
     }
-    // Homing for output bullets
+    // Homing for output bullets — R0.4 step 4a: extracted to bulletRuntime.applyBulletHoming
     if(b.state==='output'&&b.homing&&enemies.length>0){
-      const tgt=enemies.reduce((bst,e)=>{const d=Math.hypot(e.x-b.x,e.y-b.y);return(!bst||d<bst.d)?{e,d}:bst;},null);
-      if(tgt){
-        const dx=tgt.e.x-b.x,dy=tgt.e.y-b.y,d=Math.hypot(dx,dy);
-        const homingSteer = 160 + 160 * (UPG.homingTier || 1);
-        b.vx+=(dx/d)*homingSteer*dt; b.vy+=(dy/d)*homingSteer*dt;
-        const sp=Math.hypot(b.vx,b.vy);
-        // Match the launch-speed basis so homing cannot silently nerf Faster Bullets/Snipe scaling.
-        const homingSpeedMult = 1.2 + (UPG.homingTier || 1) * 0.05;
-        const maxSp=230*GLOBAL_SPEED_LIFT*Math.min(2.0,UPG.shotSpd)*(1+UPG.snipePower*0.18)*homingSpeedMult;
-        if(sp>maxSp){b.vx=b.vx/sp*maxSp;b.vy=b.vy/sp*maxSp;}
-      }
+      applyBulletHoming(b, enemies, dt, {
+        homingTier: UPG.homingTier || 1,
+        shotSpd: UPG.shotSpd,
+        snipePower: UPG.snipePower,
+        globalSpeedLift: GLOBAL_SPEED_LIFT,
+      });
     }
 
     if(b.state==='danger'){
