@@ -148,8 +148,6 @@ import {
   decodeSnapshot,
 } from './src/net/coopSnapshot.js';
 import { createSnapshotApplier } from './src/net/snapshotApplier.js';
-import { createBulletLocalAdvance, PREDICTABLE_STATES as BULLET_PREDICTABLE_STATES } from './src/net/bulletLocalAdvance.js';
-import { createGreyLagComp } from './src/net/greyLagComp.js';
 
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
 
@@ -1115,12 +1113,6 @@ let onlineHostSlot1Installed = false;
 let guestSnapshotApplier = null;
 let onlineGuestSlot1Installed = false;
 // D19.1 — guest-side bullet local-advance pool. Maintains a separate pool
-// of `output`/`danger` bullets that's stepped forward each frame at host's
-// 60 Hz cadence (matching the body's predicted clock), then reconciled
-// against snapshots once per shift. `grey` and other states stay on the
-// applier's snapshot-lerp path. Null outside online guest runs.
-let guestBulletLocalAdvance = null;
-let lastBulletReconciledSnapshotSeq = null;
 
 function queueCoopEnemyDamageEvent(ev) {
   if (!activeCoopSession || !isCoopHost()) return;
@@ -1158,10 +1150,6 @@ function getCoopPlayerColorForSlot(slotId) {
 // D19.3 — host-side grey-pickup lag compensation. Records each grey bullet's
 // recent positions per sim tick on the host. When a non-host slot's pickup
 // check runs, the host augments the current-position overlap test with a
-// historical-position overlap test (~6 ticks back, ~100 ms) so guest's
-// snapshot-delayed view of the grey lines up with where it counted as
-// "touched." Null on solo and on guest devices.
-let hostGreyLagComp = null;
 // D19.4 — guest-side bullet spawn detector. Tracks every bullet id observed
 // D19.4: bullet spawn detector retired (DR-0b) — muzzle flashes for remote
 // bullets will be provided by the effectQueue once R0.4 is complete.
@@ -1459,18 +1447,7 @@ function teardownCoopInputUplink() {
   }
   // Phase D5b: tear down guest-side slot 1 + applier.
   guestSnapshotApplier = null;
-  // D19.1: tear down bullet local-advance pool + seq tracker.
-  if (guestBulletLocalAdvance) {
-    try { guestBulletLocalAdvance.clear(); } catch (_) {}
-  }
-  guestBulletLocalAdvance = null;
-  lastBulletReconciledSnapshotSeq = null;
   // D19.4: spawn detector retired (DR-0b).
-  // D19.3: tear down host grey lag-comp tracker.
-  if (hostGreyLagComp) {
-    try { hostGreyLagComp.clear(); } catch (_) {}
-  }
-  hostGreyLagComp = null;
   lastReconciledSnapshotSeq = null;
   if (onlineGuestSlot1Installed) {
     try { delete playerSlots[1]; } catch (_) {}
@@ -2774,15 +2751,6 @@ function installCoopInputUplink(armedCoop) {
     // WORLD_W/WORLD_H; updated whenever the room/world resizes via the
     // existing world-space recomputation path.
     lastReconciledSnapshotSeq = null;
-    // D19.1 — bullet local-advance pool, guest only. Wall margin & world
-    // bounds match host's bullet bounce constants exactly so reconcile
-    // thresholds reflect real divergence rather than constant offset.
-    guestBulletLocalAdvance = createBulletLocalAdvance({
-      wallMargin: M,
-      getWorldSize: () => ({ w: WORLD_W, h: WORLD_H }),
-    });
-    lastBulletReconciledSnapshotSeq = null;
-    try { console.info('[coop] guest bullet local-advance armed'); } catch (_) {}
     // D19.4 — bullet spawn detector retired (DR-0b).
     try { console.info('[coop] guest bullet spawn detector retired (DR-0b)'); } catch (_) {}
   }
@@ -2798,20 +2766,13 @@ function installCoopInputUplink(armedCoop) {
         async (frame) => {
           try { await session.sendGameplay({ kind: 'rollback-input', frame }); } catch (_) {}
         },
-        // R4-fix: HOST coordinator must not rollback-correct slot 1 position.
-        // hostSimStep is a partial sim (remoteX/Y snap lives only in update());
-        // any resim correction diverges from the D-series forward path and
-        // produces the "choppy guest position on host" symptom. Host coordinator
-        // still snapshots state and sends host inputs to the guest; it just
-        // never applies rollback corrections for slot 1. GUEST coordinator
-        // continues to subscribe to host 'rollback-input' payloads unchanged.
-        role === 'host'
-          ? (_cb) => () => {}
-          : (callback) => session.onGameplay((ev) => {
-              const payload = ev && ev.payload;
-              if (!payload || payload.kind !== 'rollback-input') return;
-              if (payload.frame) callback(payload.frame);
-            }),
+        // R0.4-H: hostSimStep now covers room state + player fire — complete enough
+        // for host coordinator to apply rollback corrections on slot 1 position.
+        (callback) => session.onGameplay((ev) => {
+          const payload = ev && ev.payload;
+          if (!payload || payload.kind !== 'rollback-input') return;
+          if (payload.frame) callback(payload.frame);
+        }),
         {
           simStep: hostSimStep,
           simStepOpts: {
@@ -2826,9 +2787,26 @@ function installCoopInputUplink(armedCoop) {
             resolveCollisions: resolveEntityObstacleCollisions,
             isOverlapping: isEntityOverlappingObstacle,
             eject: ejectEntityFromObstacles,
-            // R4: enable effectQueue so resim ticks can push visual/audio
+            // R0.4-H: enable effectQueue so resim ticks can push visual/audio
             // descriptors; drained in the game loop before coordinatorStep snapshots.
             queueEffects: true,
+            spawnEnemy: (type, isBoss, bossScale) => {
+              const enemy = createEnemy(type, {
+                width: simState.world && simState.world.w ? simState.world.w : (W || 800),
+                height: simState.world && simState.world.h ? simState.world.h : (H || 600),
+                margin: M,
+                roomIndex: simState.run ? simState.run.roomIndex : 0,
+                nextEnemyId: simState.nextEnemyId++,
+                isBoss: !!isBoss,
+                bossScale: bossScale || 1,
+                hpMultiplier: isOnlineCoopRun() ? ONLINE_COOP_ENEMY_HP_MULT : 1,
+              });
+              if (enemy.forcePurpleShots && simState.run) simState.run.roomPurpleShooterAssigned = true;
+              resolveEntityObstacleCollisions(enemy);
+              simState.enemies.push(enemy);
+            },
+            get getBossEscortRespawnMs() { return getBossEscortRespawnMs; },
+            get getReinforcementIntervalMs() { return getReinforcementIntervalMs; },
           },
           logging: true,
         }
@@ -3242,12 +3220,6 @@ function installOnlineCoopHostSlot1(remoteRing) {
   }));
   // DR-0a: hostRemoteInputProcessor retired; rollback coordinator owns input delivery.
   onlineHostSlot1Installed = true;
-  // D19.3 — arm host-side grey lag-comp when slot 1 (the guest) is on-line.
-  // Solo + host-without-guest never instantiate this; no determinism risk.
-  try {
-    hostGreyLagComp = createGreyLagComp({});
-    console.info('[coop] host grey lag-comp armed');
-  } catch (_) { hostGreyLagComp = null; }
   try { console.info('[coop] online host slot 1 installed (remote-input adapter)'); } catch (_) {}
   // D18.7 — announce our color to guest. Safe to call before guest's slot
   // install; guest will echo back so we learn theirs in turn.
@@ -5383,47 +5355,6 @@ function loop(ts){
           // Phase D5e reconciler retired (rollback resim handles guest position correction).
           const snap = latestRemoteSnapshot;
           const snapSeq = snap && snap.snapshotSeq;
-          // D19.1 — bullet local-advance reconcile. Once per fresh snapshot,
-          // age each authoritative predictable bullet ('output'/'danger')
-          // forward by (simTick - snapshotSimTick) ticks of linear+bounce
-          // motion, then snap/soft-pull/leave the local pool. Despawns any
-          // pool entry whose id no longer appears in the snapshot.
-          if (
-            guestBulletLocalAdvance &&
-            snap &&
-            Number.isFinite(snapSeq) &&
-            snapSeq !== lastBulletReconciledSnapshotSeq
-          ) {
-            try {
-              const snapSimTick = Number.isFinite(snap.snapshotSimTick) ? (snap.snapshotSimTick | 0) : (simTick | 0);
-              const ticksElapsed = (simTick | 0) - snapSimTick;
-              guestBulletLocalAdvance.reconcile(snap.bullets || [], ticksElapsed);
-              lastBulletReconciledSnapshotSeq = snapSeq;
-            } catch (bRecErr) {
-              try { console.warn('[coop] bullet reconcile error', bRecErr); } catch (_) {}
-              lastBulletReconciledSnapshotSeq = snapSeq;
-            }
-          }
-        }
-        // D19.1 — splice the local pool's predicted bullets into the
-        // render-time bullets[] array. The applier just rebuilt the array
-        // with snapshot-lerped entries for ALL bullet states. We strip
-        // out the predictable states and replace them with our locally
-        // advanced versions so they render at sim-time-now (matching the
-        // body) instead of sim-time-now-renderDelayMs.
-        if (guestBulletLocalAdvance) {
-          try {
-            for (let bi = bullets.length - 1; bi >= 0; bi--) {
-              const b = bullets[bi];
-              if (b && b.state && BULLET_PREDICTABLE_STATES.has(b.state)) {
-                bullets.splice(bi, 1);
-              }
-            }
-            const advanced = guestBulletLocalAdvance.getBullets();
-            for (let bi = 0; bi < advanced.length; bi++) bullets.push(advanced[bi]);
-          } catch (spliceErr) {
-            try { console.warn('[coop] bullet splice error', spliceErr); } catch (_) {}
-          }
         }
         // D18.6 — stamp decayStart on grey bullets locally. The wire format
         // does NOT carry decayStart (it's a render-only value on host); the
@@ -5561,15 +5492,6 @@ function update(dt,ts){
     if (onlineGuestSlot1Installed) {
       try { updateOnlineGuestPrediction(dt); } catch (err) {
         try { console.warn('[coop] guest prediction error', err); } catch (_) {}
-      }
-    }
-    // D19.1 — advance the guest's local bullet pool by dt seconds. Runs
-    // every frame so 'output'/'danger' bullets travel on the same clock
-    // as the predicted body, eliminating the body-vs-world misalignment
-    // that made grey/danger contact feel mistimed pre-D19.
-    if (guestBulletLocalAdvance) {
-      try { guestBulletLocalAdvance.advance(dt); } catch (err) {
-        try { console.warn('[coop] bullet advance error', err); } catch (_) {}
       }
     }
     // D18.6 — tick guest-local cosmetics. Without this, particles +
@@ -6152,14 +6074,6 @@ function update(dt,ts){
   const absorbR = player.r + 5 + UPG.absorbRange + (slot0Timers.barrierPulseTimer > 0 ? UPG.absorbRange + 40 : 0) + (slot0Timers.chainMagnetTimer > 0 ? UPG.absorbRange + 30 : 0);
   const decayMS = DECAY_BASE + UPG.decayBonus;
 
-  // D19.3 — host grey lag-comp: snapshot every grey's pre-update position so
-  // the guest-slot pickup check below can match against where the guest's
-  // delayed view actually drew the orb. Solo and host-without-guest leave
-  // hostGreyLagComp null; this no-ops in that case.
-  if (hostGreyLagComp) {
-    try { hostGreyLagComp.record(bullets, simTick); } catch (_) {}
-  }
-
   for(let i=bullets.length-1;i>=0;i--){
     const b=bullets[i];
     if(!b || typeof b !== 'object'){
@@ -6276,7 +6190,6 @@ function update(dt,ts){
         simNowMs,
         playerSlots,
         simTick,
-        lagComp: hostGreyLagComp,  // null in solo/resim — see greyAbsorbDispatch.js
         ts,
         ORBIT_ROTATION_SPD,
         getOrbitSlotPosition,

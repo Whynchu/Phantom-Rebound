@@ -2,6 +2,18 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.136',
+      label: 'R0.4-H + DR-1/3: COMPLETE SIMSTEP WIRING, RETIRE BULLETLOCALADVANCE + GREYLAGCOMP',
+      summary: ['R0.4-H: hostSimStep fully wired — spawnEnemy callback + getBossEscortRespawnMs/getReinforcementIntervalMs added to simStepOpts; host coordinator re-enabled for rollback corrections. DR-1: bulletLocalAdvance retired. DR-3: greyLagComp retired.'],
+      highlights: [
+        'script.js simStepOpts: spawnEnemy, getBossEscortRespawnMs, getReinforcementIntervalMs added so tickRoomState works correctly during rollback resim.',
+        'Host coordinator no-op handler removed — both peers now apply rollback corrections.',
+        'DR-1: guestBulletLocalAdvance fully removed (import, creation, reconcile, getBullets, advance) — rollback resim provides correct bullet state at 60Hz.',
+        'DR-3: hostGreyLagComp fully removed (import, creation, record, lagComp opt) — hostSimStep handles grey absorbs deterministically.',
+        'All 74 tests green.',
+      ]
+    },
+  {
       version: '1.20.135',
       label: 'R0.4-A/C/D: ROOM STATE + PLAYER FIRE IN HOSTSIMSTEP',
       summary: ['R0.4-A: Room state machine (intro/spawn/fight/clear) and R0.4-C/D: Player auto-fire (fireT, kinetic charge, bullet spawn) are now wired into hostSimStep for rollback-safe resim.'],

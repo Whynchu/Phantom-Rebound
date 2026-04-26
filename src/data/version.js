@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.135', label: 'R0.4-A/C/D: room state + player fire in hostSimStep' };
+const VERSION = { num: '1.20.136', label: 'R0.4-H + DR-1/3: complete simStep wiring, retire bulletLocalAdvance + greyLagComp' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;
