@@ -2248,11 +2248,18 @@ function drainBufferedCoopBoonPicks() {
   }
 }
 
-function handleCoopRoomAdvanceGuest() {
+function handleCoopRoomAdvanceGuest(payload) {
   onlineCoopBoonPhase = null;
   currentBoonPhaseId = null;
   pendingCoopBoonPicks = { hostDone: false, guestDone: false };
   hideCoopGuestWaitOverlay();
+  // D20.5 — sync guest simTick to host's value so accumulated per-room lag
+  // (host RAF starts before coop-room-advance reaches guest) doesn't push
+  // guestSimTick > 60 ticks behind hostSimTick, which would cause
+  // consumeUpTo(hostSimTick - 60) to trim all incoming guest input frames.
+  if (payload && payload.hostSimTick != null) {
+    simTick = payload.hostSimTick | 0;
+  }
   // If the picker was still open (e.g. AFK timeout fired on host), close
   // it. Then unfreeze guest sim if we paused for the picker.
   try { document.getElementById('s-up').classList.add('off'); } catch (_) {}
@@ -2822,7 +2829,7 @@ function installCoopInputUplink(armedCoop) {
       return;
     }
     if (payload.kind === 'coop-room-advance' && role === 'guest') {
-      try { handleCoopRoomAdvanceGuest(); } catch (err) {
+      try { handleCoopRoomAdvanceGuest(payload); } catch (err) {
         try { console.warn('[coop] coop-room-advance handler error', err); } catch (_) {}
       }
       return;
@@ -4601,7 +4608,7 @@ function resumePlayAfterBoons() {
   if (onlineCoopBoonPhase && isCoopHost && isCoopHost()) {
     try {
       if (activeCoopSession && typeof activeCoopSession.sendGameplay === 'function') {
-        activeCoopSession.sendGameplay({ kind: 'coop-room-advance', roomIndex: roomIndex + 1 });
+        activeCoopSession.sendGameplay({ kind: 'coop-room-advance', roomIndex: roomIndex + 1, hostSimTick: simTick });
       }
     } catch (err) {
       try { console.warn('[coop] coop-room-advance send failed', err); } catch (_) {}

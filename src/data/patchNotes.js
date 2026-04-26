@@ -2,6 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.121',
+      label: 'D20.5 GUEST SIMTICK SYNC FIX',
+      summary: ['Fixed a bug where the guest player would appear frozen on the host\'s screen after approximately 20 rooms of coop play. Root cause: the host\'s RAF loop starts ~100–200ms before the coop-room-advance message reaches the guest, causing the host simTick to advance faster than the guest\'s simTick. This gap accumulates by ~6–12 ticks per room transition. After 10–20 rooms the gap exceeds the 60-tick STALE_TICK_THRESHOLD, so consumeUpTo(hostSimTick - 60) on the host trims ALL incoming guest input frames, making the guest appear frozen while the guest device continues to feel responsive locally. The fix: the host now embeds its current simTick in the coop-room-advance packet, and the guest resets its simTick to match on receipt, keeping the tick references in sync at every room boundary.'],
+      highlights: [
+        'D20.5: guest input (movement) no longer freezes on the host screen after ~20 rooms.',
+        'D20.5: coop-room-advance packet now carries hostSimTick for per-room simTick synchronization.',
+        'D20.5: guest resets simTick to hostSimTick on room-advance receipt, bounding divergence to a single RTT.',
+      ]
+    },
+  {
       version: '1.20.120',
       label: 'D20.4 HOST RECOVER HANDSHAKE FIX',
       summary: ['Fixed a bug where picking the Recover (heal) boon as the HOST caused both players to be pushed into the next round without the guest getting to pick their boon. Root cause: the Recover boon is created dynamically and has no BOONS array entry, so boonIdFromBoon returns -1. The host path in onLocalBoonPickedOnline did not handle id<0, falling through to resumePlayAfterBoons() directly — bypassing the two-peer handshake. The fix: when id<0 and the caller is the host, the function now sets hostDone, sends the standard boonId=-1 no-mirror sentinel to the guest, and calls tryResumeCoopBoonPhase() (which waits for guestDone before advancing), returning true so resumePlayAfterBoons is never called directly.'],
