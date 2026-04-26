@@ -1796,12 +1796,6 @@ function hideCoopGuestWaitOverlay() {
   } catch (_) {}
 }
 
-function hideCoopGuestWaitOverlay() {
-  try {
-    if (coopGuestWaitOverlayEl) coopGuestWaitOverlayEl.style.display = 'none';
-  } catch (_) {}
-}
-
 // ── R4.2: Rollback stall indicator ───────────────────────────────────────────
 // Small unobtrusive corner badge shown mid-gameplay when the rollback
 // coordinator has been predicting for > maxRollbackTicks without receiving

@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.137',
+      label: 'HOTFIX: REMOVE DUPLICATE HIDECOOPGUESTWAITOVERLAY DECLARATION',
+      summary: ['Removed accidental duplicate function declaration of hideCoopGuestWaitOverlay introduced in v1.20.136 that caused a SyntaxError on load.'],
+      highlights: [
+        'script.js: removed duplicate hideCoopGuestWaitOverlay function (lines 1799-1803).',
+      ]
+    },
+  {
       version: '1.20.136',
       label: 'R0.4-H + DR-1/3: COMPLETE SIMSTEP WIRING, RETIRE BULLETLOCALADVANCE + GREYLAGCOMP',
       summary: ['R0.4-H: hostSimStep fully wired — spawnEnemy callback + getBossEscortRespawnMs/getReinforcementIntervalMs added to simStepOpts; host coordinator re-enabled for rollback corrections. DR-1: bulletLocalAdvance retired. DR-3: greyLagComp retired.'],
