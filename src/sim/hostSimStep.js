@@ -36,6 +36,7 @@ import { tickBulletsKinematic } from './bulletKinematic.js';
 import { resolveDangerHits, resolveRusherContactHits } from './dangerHitDispatch.js';
 import { resolveOutputHits } from './outputHitDispatch.js';
 import { tickEnemyCombat } from './enemyCombatStep.js';
+import { resolveShieldCollisions } from './shieldCollisionStep.js';
 
 const NOOP = () => {};
 const FALSE_FN = () => false;
@@ -125,6 +126,8 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   // R2 — kinematic resim: advance bullet positions + wall bounce + expiry.
   // Enemy bullets spawned above move during the same tick, matching script.js.
   tickBulletsKinematic(state, dt);
+  // R3 parity — shields block/reflect danger bullets before player damage.
+  resolveShieldCollisions(state, opts);
   // R3.1 — combat resim: danger projectiles can damage player slots.
   resolveDangerHits(state, opts);
   // R3.2 — combat resim: output projectiles can damage/kill enemies.

@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.125',
+      label: 'R3 SHIELD PARITY',
+      summary: ['Rollback resim now handles shield collision gameplay mutations: danger bullets can be blocked, reflected, tempered, burst, and barrier-pulse during replay.'],
+      highlights: [
+        'Added focused shield-collision rollback tests while keeping the 10k determinism canary green.',
+      ]
+    },
+  {
       version: '1.20.124',
       label: 'COOP ENEMY HP',
       summary: ['Online coop enemy spawns now use exactly 2x the solo HP and max HP values so two-player runs keep their intended combat durability.'],
