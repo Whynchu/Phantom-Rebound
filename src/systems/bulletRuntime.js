@@ -222,6 +222,21 @@ function detectBulletNearMiss(bullet, player, room, opts) {
   return false;
 }
 
+// R0.4 step 4e: grey bullet decay + expiry check.
+// Pure helper. Returns { expired: boolean, skipped: boolean }.
+// - skipped=true when the bullet is missing or not in grey state (caller should not act).
+// - expired=true when the bullet has lived past its decay window (caller should remove it).
+// - Otherwise applies frame-rate-independent velocity decay (0.97^(dt*60)) in place.
+function tickGreyBulletDecay(bullet, ts, dt, opts) {
+  if (!bullet || bullet.state !== 'grey') return { expired: false, skipped: true };
+  const decayMS = opts?.decayMS ?? 0;
+  if (ts - bullet.decayStart > decayMS) return { expired: true, skipped: false };
+  const decayFactor = Math.pow(0.97, dt * 60);
+  bullet.vx *= decayFactor;
+  bullet.vy *= decayFactor;
+  return { expired: false, skipped: false };
+}
+
 export {
   shouldExpireOutputBullet,
   shouldRemoveBulletOutOfBounds,
@@ -231,4 +246,5 @@ export {
   applyDangerGravityWell,
   advanceBulletWithSubsteps,
   detectBulletNearMiss,
+  tickGreyBulletDecay,
 };

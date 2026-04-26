@@ -221,6 +221,7 @@ import {
   applyDangerGravityWell,
   advanceBulletWithSubsteps,
   detectBulletNearMiss,
+  tickGreyBulletDecay,
 } from './src/systems/bulletRuntime.js';
 import {
   resolveOutputEnemyHit,
@@ -6011,8 +6012,9 @@ function update(dt,ts){
     }
 
     if(b.state==='grey'){
-      if(ts-b.decayStart>decayMS){bullets.splice(i,1);continue;}
-      b.vx*=Math.pow(.97,dt*60); b.vy*=Math.pow(.97,dt*60);
+      // R0.4 step 4e: decay + expiry extracted to bulletRuntime.tickGreyBulletDecay
+      const greyTick = tickGreyBulletDecay(b, ts, dt, { decayMS });
+      if(greyTick.expired){ bullets.splice(i,1); continue; }
       if(Math.hypot(b.x-player.x,b.y-player.y)<absorbR+b.r){
         let absorbGain = UPG.absorbValue;
         if(UPG.ghostFlow){
