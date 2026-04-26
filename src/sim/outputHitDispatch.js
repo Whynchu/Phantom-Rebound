@@ -13,6 +13,7 @@ import {
   spawnSimGreyDrops,
   spawnSimRadialOutputBurst,
 } from './simProjectiles.js';
+import { applyEnemyKillRewards } from './killRewardStep.js';
 
 const CRIT_DAMAGE_FACTOR = 2.4;
 const BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET = 1;
@@ -70,7 +71,7 @@ function resolveOutputHits(state, opts = {}) {
       }
 
       if (hit.enemyKilled) {
-        awardEnemyKill(state, enemy, opts);
+        awardEnemyKill(state, enemy, ownerSlot, bullet, opts);
         spawnKillGreyDrops(state, enemy, ownerUpg, ts, opts);
         enemies.splice(j, 1);
       }
@@ -150,7 +151,7 @@ function healOwnerSlot(slot, amount) {
   return slot.metrics.hp - before;
 }
 
-function awardEnemyKill(state, enemy, opts) {
+function awardEnemyKill(state, enemy, ownerSlot, bullet, opts) {
   const points = computeKillScore(enemy.pts, false);
   if (state.run) {
     state.run.score = (state.run.score || 0) + points;
@@ -162,10 +163,11 @@ function awardEnemyKill(state, enemy, opts) {
     if (overkill > 0) {
       state.run.score += overkill;
       if (state.run.scoreBreakdown) {
-        state.run.scoreBreakdown.overkill = (state.run.scoreBreakdown.overkill || 0) + overkill;
+      state.run.scoreBreakdown.overkill = (state.run.scoreBreakdown.overkill || 0) + overkill;
       }
     }
   }
+  applyEnemyKillRewards(state, ownerSlot, enemy, bullet, opts);
   emitEffect(state, opts, 'output.enemyKilled', {
     enemyId: enemy.eid ?? enemy.id ?? null,
     scoreGain: points,

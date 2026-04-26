@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.129',
+      label: 'R3 CHARGED ORB + KILL REWARD PARITY',
+      summary: ['Rollback resim now fires charged orbs and applies output-kill reward side effects deterministically.'],
+      highlights: [
+        'Added coverage for charged-orb timing/charge reserve plus vampiric, blood moon, corona, final-form, boss-clear, and bonus drop parity.',
+      ]
+    },
+  {
       version: '1.20.128',
       label: 'R3 GREY ABSORB PARITY',
       summary: ['Rollback resim now handles grey decay and slot/orb pickup charge deterministically.'],

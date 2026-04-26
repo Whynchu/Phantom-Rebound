@@ -40,6 +40,7 @@ import { resolveShieldCollisions } from './shieldCollisionStep.js';
 import { resolveVolatileOrbHits } from './volatileOrbStep.js';
 import { resolveOrbitSphereContactHits } from './orbitSphereContactStep.js';
 import { resolveGreyAbsorbs } from './greyAbsorbStep.js';
+import { resolveChargedOrbFires } from './chargedOrbStep.js';
 
 const NOOP = () => {};
 const FALSE_FN = () => false;
@@ -123,6 +124,8 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
 
   // R3.3 — enemy combat resim: movement archetypes + fire cadence/projectiles.
   tickEnemyCombat(state, dt, opts);
+  // R3 parity — charged orbs spend charge and fire output bullets during combat.
+  resolveChargedOrbFires(state, slot0Input, { ...opts, dt });
   // R3.4 — rusher contact damage: must run BEFORE bullet kinematics so the
   // contact invuln set here gates same-tick projectile hits in resolveDangerHits.
   resolveRusherContactHits(state, opts);
