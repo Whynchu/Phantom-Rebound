@@ -154,10 +154,14 @@ export class RollbackCoordinator {
     this.buffer.push(this.simState, slot0Input, slot1Input);
 
     // Send local input to peer
+    const wireJoy = this._quantizeJoy(localInput && localInput.joy);
     this.sendInput({
       tick: this.currentTick,
       slot: this.localSlotIndex,
-      ...localInput,
+      dx: wireJoy.dx,
+      dy: wireJoy.dy,
+      active: wireJoy.active,
+      mag: wireJoy.mag,
     }).catch((err) => {
       this.logger?.('RollbackCoordinator: sendInput failed', err);
     });
@@ -193,14 +197,16 @@ export class RollbackCoordinator {
   _onRemoteInputArrived(event) {
     // event = { tick, slot, dx?, dy?, active?, mag? } — flat joy fields for transport
     const { tick } = event;
-    const remoteInput = {
-      joy: {
-        dx:     event.dx     ?? 0,
-        dy:     event.dy     ?? 0,
-        active: event.active ?? false,
-        mag:    event.mag    ?? 0,
-      },
-    };
+    const remoteInput = event.joy
+      ? { joy: this._quantizeJoy(event.joy) }
+      : {
+          joy: {
+            dx:     event.dx     ?? 0,
+            dy:     event.dy     ?? 0,
+            active: event.active ?? false,
+            mag:    event.mag    ?? 0,
+          },
+        };
 
     // Store the actual input
     this.remoteInputHistory[tick] = remoteInput;

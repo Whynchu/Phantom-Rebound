@@ -2,6 +2,15 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.107',
+      label: 'R3 COMBAT RESIM SLICE',
+      summary: ['Rollback R3 now resimulates core combat outcomes: danger bullets can damage player slots and output bullets can damage or kill enemies during rollback replay.'],
+      highlights: [
+        'Fixed the main-menu settings button to use the real 1-bit gear icon and cache-busted lazy patch-notes loading so stale module caches do not show the failure fallback.',
+        'Updated the rollback two-peer harness and coordinator wire format so joy inputs are sent as flat quantized frames and replay parity is test-covered.',
+      ]
+    },
+  {
     version: '1.20.106',
     label: 'R2 — BULLET + ENEMY KINEMATIC RESIM IN HOSTSIMSTEP',
     summary: ['R2 milestone: after a rollback+resim, bullets and enemies are now at their correct predicted positions. tickBulletsKinematic(state, dt) advances bullet positions via advanceBulletWithSubsteps (wall bounce + substeps) and removes expired bullets silently — no hit detection, no audio, no sparks. tickEnemiesKinematic(state, dt) moves each live enemy toward the nearest slot body by e.spd*dt — no firing, no contact damage, no AI state transitions. Both functions are called from hostSimStep after player movement, before the clock advance. The solo game path is unaffected — these functions only run during rollback resim. All 9+8 new test cases green; canary UNCHANGED.'],

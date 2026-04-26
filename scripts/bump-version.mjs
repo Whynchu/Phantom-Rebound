@@ -5,12 +5,13 @@
 //   node scripts/bump-version.mjs <new-version> "<LABEL>"
 //   node scripts/bump-version.mjs 1.19.27 "NEW FEATURE"
 //
-// Updates these five places (the "hard-gate" list from agents.md):
+// Updates these version surfaces (the "hard-gate" list plus the visible fallback tag):
 //   1. src/data/version.js                 — VERSION = { num, label }
 //   2. version.json                        — { version, label }
 //   3. index.html window.__APP_BUILD__     — fallback banner
 //   4. index.html styles.css?v=...         — cache-bust query
 //   5. index.html script.js?v=...          — cache-bust query
+//   6. index.html #version-tag fallback    — visible pre-module banner
 //
 // Optionally stubs a new entry at the top of src/data/patchNotes.js when
 // --note "highlight one" --note "highlight two" is passed.
@@ -85,6 +86,13 @@ replaceOnce(
   /window\.__APP_BUILD__\s*=\s*'[^']+';/,
   `window.__APP_BUILD__ = '${version}';`,
   '__APP_BUILD__ banner',
+);
+
+replaceOnce(
+  'index.html',
+  /<div class="eyebrow" id="version-tag">\/\/ prototype v[^<]+<\/div>/,
+  `<div class="eyebrow" id="version-tag">// prototype v${version} - ${label.replace(/</g, '&lt;')}</div>`,
+  'version-tag fallback banner',
 );
 
 replaceOnce(

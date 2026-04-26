@@ -1,6 +1,6 @@
 # Rollback Netcode — Codex Handoff Document
 
-**Current version:** v1.20.106  
+**Current version:** v1.20.107
 **Branch:** `coop` on `experimental-origin` (`Whynchu/Phantom-Rebound-Experimental`)  
 **Last updated:** 2026-04-26
 
@@ -48,7 +48,7 @@ and D-series coop are unaffected.
 | **R0.6** | 10k-tick determinism canary (`scripts/test-determinism-canary-10k.mjs`) | ✅ Done |
 | **R1** | Wire `coordinatorStep` into game loop (`skipSimStepOnForward`) | ✅ Done (v1.20.105) |
 | **R2** | Bullet + enemy kinematic resim in `hostSimStep` | ✅ Done (v1.20.106) |
-| **R3** | Hit detection + combat during resim; delete D-series | ⏳ **NEXT** |
+| **R3** | Hit detection + combat during resim; delete D-series | ⏳ In progress (v1.20.107 core danger/output slice) |
 | **R4** | Polish: pause/intro/boon-select safety; disconnect; buffer tuning | ⬜ Pending |
 | **R5** | Beta, stress, ship | ⬜ Pending |
 
@@ -90,8 +90,10 @@ while (simAccumulatorMs >= SIM_STEP_MS) {
    - Player movement (slots 0 + 1): `applyJoystickVelocity` + `tickBodyPosition`
    - Post-movement timers: `tickPostMovementTimers`
    - **R2: Bullet kinematics**: `tickBulletsKinematic` (advance + wall bounce + expiry)
-   - **R2: Enemy kinematics**: `tickEnemiesKinematic` (move toward nearest player)
-   - Clock advance: `state.tick++`, `state.timeMs += dt * 1000`
+  - **R3.1: Danger projectile combat**: `resolveDangerHits` (HP, invuln, phase dash, mirror tide, EMP/lifeline basics)
+  - **R2: Enemy kinematics**: `tickEnemiesKinematic` (move toward nearest player)
+  - **R3.2: Output projectile combat**: `resolveOutputHits` (enemy HP/death, pierce, score/kills, grey drops)
+  - Clock advance: `state.tick++`, `state.timeMs += dt * 1000`
 
 ### simState Bridging (CRITICAL)
 
@@ -149,6 +151,9 @@ Quantization (`_quantizeJoy`) prevents float drift from causing spurious rollbac
 | `src/sim/postMovementTick.js` | `tickPostMovementTimers` — shield sync, slot timers, orb cooldowns |
 | `src/sim/bulletKinematic.js` | `tickBulletsKinematic` — advance + wall bounce + expiry (R2) |
 | `src/sim/enemyKinematic.js` | `tickEnemiesKinematic` — move toward nearest player (R2) |
+| `src/sim/dangerHitDispatch.js` | `resolveDangerHits` — danger projectile vs slot HP/boon outcomes (R3.1) |
+| `src/sim/outputHitDispatch.js` | `resolveOutputHits` — output projectile vs enemy HP/kill/score outcomes (R3.2) |
+| `src/sim/simProjectiles.js` | Sim-owned output/grey projectile factories for rollback replay |
 
 ### Dispatch Modules (R0.4 carve-outs, pure)
 
@@ -176,6 +181,8 @@ Quantization (`_quantizeJoy`) prevents float drift from causing spurious rollbac
 | `scripts/test-shield-hit-dispatch.mjs` | 28 tests — all shield boon paths |
 | `scripts/test-bullet-kinematic.mjs` | 9 tests — advance, wall bounce, expiry, null cleanup |
 | `scripts/test-enemy-kinematic.mjs` | 8 tests — movement toward target, dead skip, bounds clamp |
+| `scripts/test-danger-hit-dispatch.mjs` | 4 tests — direct damage, void block, phase dash, mirror tide |
+| `scripts/test-output-hit-dispatch.mjs` | 5 tests — damage, kill/score, pierce hitIds, Blood Pact, volatile burst |
 | `scripts/test-determinism-canary-10k.mjs` | 10k-tick byte-identical hash gate (MUST stay green on every change) |
 
 Run all tests with:
@@ -186,25 +193,22 @@ node scripts/test-rollback-integration.mjs
 node scripts/test-shield-hit-dispatch.mjs
 node scripts/test-bullet-kinematic.mjs
 node scripts/test-enemy-kinematic.mjs
+node scripts/test-danger-hit-dispatch.mjs
+node scripts/test-output-hit-dispatch.mjs
 node scripts/test-determinism-canary-10k.mjs
 ```
 
 ---
 
-## What R2 Left Out (Known Gaps → R3)
+## What R3 Core Slice Still Leaves Out
 
-### Gap 1: No hit detection during resim
-`hostSimStep` moves things but does not detect collisions. Specifically:
-- Danger bullets hitting the player → HP not decremented during resim
-- Enemy contact damage → not applied during resim
-- Player output bullets hitting enemies → enemies not killed during resim
-- Orb contact damage → not applied during resim
-
-**Impact:** Combat events in the 8-tick rollback window (~133ms) may be slightly replayed
-differently on each peer. Score/HP corrections arrive via the next confirmed snapshot.
-
-**Acceptable for now** under `?rollback=1` experimental flag. The positional rollback is
-visually smooth; combat divergence over 133ms is within typical network uncertainty anyway.
+### Gap 1: Combat resim is partial
+`hostSimStep` now resolves core danger projectile hits and output bullet enemy hits during
+rollback replay. Still pending:
+- Enemy contact/rusher damage during resim
+- Orb contact damage during resim
+- Full kill-reward parity beyond score/kills, Blood Pact, volatile burst, and grey drops
+- Commit-phase draining for effectQueue descriptors
 
 ### Gap 2: `simState.bullets` / `simState.enemies` are shared references
 When `snapshotState(simState)` calls `structuredClone`, it deep-clones the bullet and enemy
@@ -227,17 +231,16 @@ slightly wrong moments. Acceptable for R2; R3 will add `stepEnemyCombatState` to
 
 ## R3 — What to Implement Next
 
-R3 closes the hit-detection gap. After R3, rollback is fully correct for all combat events
-within the 8-tick window.
+R3 closes the combat gap. v1.20.107 landed the first core slice; after the remaining R3 work,
+rollback should be correct for all combat events within the 8-tick window.
 
 ### R3.1 — Player–Danger Collision During Resim
 
-Extract the danger-bullet-hits-player logic into a pure function
-`src/sim/dangerHitDispatch.js` (following the same pattern as `shieldHitDispatch.js`).
-Call it from `hostSimStep` after bullet kinematics.
+Status: core slice landed in `src/sim/dangerHitDispatch.js` and is called from `hostSimStep`
+after bullet kinematics.
 
-The dispatcher should return a descriptor: `{kind:'hit', hpDelta, invincibleSeconds, ...}`
-and the caller (hostSimStep) applies the delta to `state.slots[i].metrics.hp` etc.
+Next: fill any missing boon parity and wire commit-phase effectQueue draining if visual/audio
+descriptors are needed from rollback-corrected ticks.
 
 Key guard: only fire effects (particles, audio) on **committed** ticks (not resim ticks).
 The `state.effectQueue` is the right channel — push effects there; renderer drains only on
@@ -245,13 +248,12 @@ non-rollback ticks. `src/sim/effectQueue.js` is already wired for this.
 
 ### R3.2 — Output Bullet–Enemy Collision During Resim
 
-Extract `resolveOutputBulletVsEnemy` into `src/sim/outputHitDispatch.js`.
-Returns: `{kind:'hit', enemyIdx, hpDelta, killed, scoreGain, ...}`.
-Call from `hostSimStep` after `tickEnemiesKinematic`.
+Status: core slice landed in `src/sim/outputHitDispatch.js` and is called from `hostSimStep`
+after `tickEnemiesKinematic`.
 
-Enemy death during resim must update `e.alive = false` (or `e.dead = true`) so subsequent
-resim ticks skip the dead enemy. Score and kills delta should be accumulated on
-`state.run.score` / `state.run.kills` (bridged back to live vars via setter).
+Current behavior: enemy death splices the enemy like the live path; score and kills accumulate
+on `state.run.score` / `state.run.kills`, with script.js run-scope bridges added for rollback
+restore visibility.
 
 ### R3.3 — Delete D-Series Stack
 

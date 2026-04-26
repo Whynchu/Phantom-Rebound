@@ -726,6 +726,19 @@ body.menu-chrome-visible:not(.compact-viewport) #s-start .btn-menu-sub {
   line-height: 1;
   z-index: 2;
 }
+.settings-open-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  image-rendering: pixelated;
+  opacity: 0.92;
+  filter: brightness(0) saturate(100%) invert(92%) sepia(9%) saturate(243%) hue-rotate(73deg) brightness(94%) contrast(87%);
+  pointer-events: none;
+}
+.btn-settings-open:hover .settings-open-icon {
+  opacity: 1;
+  filter: brightness(0) saturate(100%) invert(71%) sepia(73%) saturate(430%) hue-rotate(88deg) brightness(93%) contrast(90%);
+}
 .hats-grid {
   width: 100%;
   display: grid;

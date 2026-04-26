@@ -64,16 +64,28 @@ async function asyncTest(name, fn) {
 }
 
 /**
- * Simple deterministic sim for testing: modifies slot positions based on inputs.
+ * Simple deterministic sim for testing: modifies slot positions based on joy inputs.
  * This uses official SimState fields (slots[].body.x/y) so rollback restoration works.
  */
 function testSimStep(state, slot0Input, slot1Input, dt) {
-  // Slot 0 (host) moves based on left/right
-  if (slot0Input?.left) state.slots[0].body.x += 1;
-  if (slot0Input?.right) state.slots[0].body.x -= 1;
-  // Slot 1 (guest) moves based on up/down
-  if (slot1Input?.up) state.slots[1].body.y += 1;
-  if (slot1Input?.down) state.slots[1].body.y -= 1;
+  // Slot 0 (host) moves based on horizontal joy.
+  if (slot0Input?.joy?.active && slot0Input.joy.dx < 0) state.slots[0].body.x += 1;
+  if (slot0Input?.joy?.active && slot0Input.joy.dx > 0) state.slots[0].body.x -= 1;
+  // Slot 1 (guest) moves based on vertical joy.
+  if (slot1Input?.joy?.active && slot1Input.joy.dy < 0) state.slots[1].body.y += 1;
+  if (slot1Input?.joy?.active && slot1Input.joy.dy > 0) state.slots[1].body.y -= 1;
+}
+
+function joyInput(dx, dy, active = true) {
+  return { joy: { dx, dy, active, mag: active ? 60 : 0 } };
+}
+
+function makeBoolStream(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return (s & 0x80000000) !== 0;
+  };
 }
 
 /**
@@ -174,8 +186,8 @@ asyncTest('Two-peer sync: 10 ticks, deterministic inputs', async () => {
   const harness = createSyncTwoPeerHarness();
 
   for (let tick = 0; tick < 10; tick++) {
-    const hostInput = { left: true, right: false, up: false, down: false, shoot: false };
-    const guestInput = { left: false, right: false, up: true, down: false, shoot: false };
+    const hostInput = joyInput(-1, 0);
+    const guestInput = joyInput(0, -1);
     harness.step(hostInput, guestInput);
     const state0x = harness.state0.slots[0].body.x;
     const state0y = harness.state0.slots[1].body.y;
@@ -196,13 +208,14 @@ asyncTest('Two-peer sync: 10 ticks, deterministic inputs', async () => {
 
 asyncTest('Two-peer sync: 20 ticks, varied inputs with jitter', async () => {
   const harness = createSyncTwoPeerHarness();
+  const nextBool = makeBoolStream(0xA11CE);
 
   for (let tick = 0; tick < 20; tick++) {
     // Vary inputs to test divergence handling
-    const p0 = Math.random() > 0.5;
-    const p1 = Math.random() > 0.5;
-    const hostInput = { left: p0, right: !p0, up: false, down: false, shoot: false };
-    const guestInput = { left: false, right: false, up: p1, down: !p1, shoot: false };
+    const p0 = nextBool();
+    const p1 = nextBool();
+    const hostInput = joyInput(p0 ? -1 : 1, 0);
+    const guestInput = joyInput(0, p1 ? -1 : 1);
     harness.step(hostInput, guestInput);
   }
 
@@ -217,23 +230,16 @@ asyncTest('Two-peer sync: 20 ticks, varied inputs with jitter', async () => {
 
 asyncTest('Two-peer sync: 50 ticks, high load stress', async () => {
   const harness = createSyncTwoPeerHarness();
+  const nextBool = makeBoolStream(0xBEEFBEEF);
 
   // Rapid-fire ticks with randomized input
   for (let tick = 0; tick < 50; tick++) {
-    const hostInput = {
-      left: Math.random() > 0.5,
-      right: Math.random() > 0.5,
-      up: false,
-      down: false,
-      shoot: Math.random() > 0.7,
-    };
-    const guestInput = {
-      left: false,
-      right: false,
-      up: Math.random() > 0.5,
-      down: Math.random() > 0.5,
-      shoot: Math.random() > 0.7,
-    };
+    const hostLeft = nextBool();
+    const hostRight = nextBool();
+    const guestUp = nextBool();
+    const guestDown = nextBool();
+    const hostInput = hostLeft === hostRight ? joyInput(0, 0, false) : joyInput(hostLeft ? -1 : 1, 0);
+    const guestInput = guestUp === guestDown ? joyInput(0, 0, false) : joyInput(0, guestUp ? -1 : 1);
     harness.step(hostInput, guestInput);
   }
 

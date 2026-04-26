@@ -580,7 +580,8 @@ function syncPlayerScale() {
 let _patchNotesDataPromise = null;
 function loadPatchNotesData() {
   if(!_patchNotesDataPromise) {
-    _patchNotesDataPromise = import('./src/data/patchNotes.js').catch(err => {
+    const patchNotesUrl = `./src/data/patchNotes.js?v=${encodeURIComponent(VERSION.num)}`;
+    _patchNotesDataPromise = import(patchNotesUrl).catch(err => {
       _patchNotesDataPromise = null; // allow retry on failure
       throw err;
     });
@@ -1252,6 +1253,52 @@ let reinforceTimer = 0;
 let currentRoomIsBoss = false;
 let currentRoomMaxOnScreen = 99;
 let currentBossDamageMultiplier = 1;
+
+// R3 rollback combat resim mutates these run-scope fields through simState.
+// Bridge them to the legacy lets so restoreState()/hostSimStep corrections
+// are visible to the live game loop after a rollback.
+Object.defineProperty(simState.run, 'runElapsedMs', {
+  get() { return runElapsedMs; },
+  set(v) { runElapsedMs = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'gameOverShown', {
+  get() { return gameOverShown; },
+  set(v) { gameOverShown = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'boonRerolls', {
+  get() { return boonRerolls; },
+  set(v) { boonRerolls = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'damagelessRooms', {
+  get() { return damagelessRooms; },
+  set(v) { damagelessRooms = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'tookDamageThisRoom', {
+  get() { return tookDamageThisRoom; },
+  set(v) { tookDamageThisRoom = !!v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'lastStallSpawnAt', {
+  get() { return lastStallSpawnAt; },
+  set(v) { lastStallSpawnAt = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'bossClears', {
+  get() { return bossClears; },
+  set(v) { bossClears = v; },
+  enumerable: true,
+  configurable: true,
+});
 
 // ── PLAYER SLOT 0 BRIDGE (Phase C2a) ─────────────────────────────────────────
 // Slot 0 = host. For solo play and pre-C2b callsites, everything still reads
@@ -2504,13 +2551,14 @@ function installCoopInputUplink(armedCoop) {
         {
           simStep: hostSimStep,
           simStepOpts: {
-            worldW: simState.world && simState.world.w ? simState.world.w : (W || 800),
-            worldH: simState.world && simState.world.h ? simState.world.h : (H || 600),
+            get worldW() { return simState.world && simState.world.w ? simState.world.w : (W || 800); },
+            get worldH() { return simState.world && simState.world.h ? simState.world.h : (H || 600); },
             baseSpeed: BASE_SPD,
             deadzone: JOY_DEADZONE,
             joyMax,
-            gate: roomPhase !== 'intro',
-            phaseWalk: !!UPG.phaseWalk,
+            get gate() { return roomPhase !== 'intro'; },
+            get phaseWalk() { return !!UPG.phaseWalk; },
+            get bossDamageMultiplier() { return currentBossDamageMultiplier || 1; },
             resolveCollisions: resolveEntityObstacleCollisions,
             isOverlapping: isEntityOverlappingObstacle,
             eject: ejectEntityFromObstacles,
