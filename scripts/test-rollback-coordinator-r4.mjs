@@ -127,7 +127,7 @@ console.log('\n=== RollbackCoordinator R4 Polish Tests ===\n');
 
   // Now deliver a remote input for tick 0 that diverges from the neutral prediction
   const cb = getCb();
-  cb({ tick: 0, slot: 1, left: true, right: false, up: false, down: false, shoot: false });
+  cb({ tick: 0, slot: 1, dx: 1, dy: 0, active: true, mag: 60 });
 
   const stats = coord.getStats();
   assert.strictEqual(stats.rollbacksPerformed, 1, 'one rollback');

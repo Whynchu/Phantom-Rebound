@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.105',
+      label: 'R1 — COORDINATORSTEP WIRED INTO GAME LOOP (SKIPSIMSTEPONFORWARD)',
+      summary: ['R1 milestone: the RollbackCoordinator is now called every sim tick from the game loop via coordinatorStep(). The skipSimStepOnForward=true option ensures hostSimStep is NOT called on the forward path (game loop already ran update()), preventing double-advance of live position. On remote-input divergence the coordinator still calls hostSimStep during _rollbackAndResim() to correctly replay movement. Input format migrated from digital {left,right,up,down,shoot} to analog joy format {joy:{dx,dy,active,mag}} with 2dp/1dp quantization to prevent float-drift rollbacks. All 3 test files updated; 11+9+5 tests green; 10k canary UNCHANGED.'],
+      highlights: [
+        'script.js: coordinatorStep({joy:{dx,dy,active,mag}}, SIM_STEP_SEC) added inside while(simAccumulatorMs) loop after update() — gated by ROLLBACK_ENABLED flag for zero solo cost.',
+        'rollbackCoordinator.js: skipSimStepOnForward option (default false) — when true, step() skips simStep on forward path; _rollbackAndResim() always calls it. _neutralInput()/_inputsEqual() updated for joy format. _quantizeJoy() helper added (dx/dy→2dp, mag→1dp). _onRemoteInputArrived() extracts {joy:{dx,dy,active,mag}} from flat event fields.',
+        'rollbackIntegration.js: setupRollback() signature changed from positional (…,simStep,enableLogging) to options object {simStep,simStepOpts,logging}. Wraps simStep with simStepOpts for obstacle-callback binding. Passes skipSimStepOnForward:true to coordinator.',
+        'scripts/test-rollback-coordinator.mjs: tests 5, 7, 8 updated for joy format. New test 11 asserts skipSimStepOnForward suppresses simStep on forward path but invokes it on resim.',
+        'scripts/test-rollback-coordinator-r4.mjs: test 5 remote-input callback updated to joy format for correct divergence detection.',
+        'scripts/test-rollback-integration.mjs: all setupRollback calls updated to options-object form; coordinatorStep calls updated to joy format.',
+      ]
+    },
+  {
       version: '1.20.104',
       label: 'R0.4 STEP 11 — REGION E (SHIELD COLLISION) CARVED INTO PURE MODULE',
       summary: ['Carves Region E (danger-bullet vs player-shield collision) out of the script.js bullet loop into a new pure module src/sim/shieldHitDispatch.js. The dispatcher handles all shield boon interactions: Mirror Shield reflection, Tempered Shield two-stage absorption, Shield Burst radial output, Barrier Pulse charge grant, and Aegis Titan cross-shield cooldown sharing. Critical ordering detail preserved: mirror fires before tempered check so a hardened tempered shield can also emit a reflection on its first hit. Telemetry (shieldBlocks++) returned as a data signal so the dispatcher stays pure — caller only applies it on the live commit tick, not during rollback resim. Canary hash UNCHANGED — refactor is observably equivalent.'],

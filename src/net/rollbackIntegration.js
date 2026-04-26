@@ -32,14 +32,19 @@ export let rollbackCoordinator = null;
 /**
  * Initialize rollback coordinator for a coop session.
  * Called from coopSession when both peers are ready and rollback is enabled.
- * 
+ *
  * @param {SimState} simState - The game's live simulation state
  * @param {number} localSlotIndex - 0 for host, 1 for guest
  * @param {function} sendInputFn - Send local input to peer: (frame) => Promise
  * @param {function} registerRemoteInputFn - Register callback for remote input: (cb) => void
- * @param {function} realSimStepFn - The actual deterministic sim step (added after R0.4)
- * @param {boolean} enableLogging - Log rollback events for debugging
- * 
+ * @param {object} [options] - Optional config
+ * @param {function} [options.simStep] - Real deterministic sim step. When provided the
+ *   coordinator uses it for rollback resim only (skipSimStepOnForward=true keeps the
+ *   game loop's update() as the authoritative forward path — no double-advance).
+ * @param {object}   [options.simStepOpts] - opts passed as 5th arg to simStep (worldW/H,
+ *   baseSpeed, obstacle callbacks, etc.)
+ * @param {boolean}  [options.logging] - Log rollback events for debugging
+ *
  * @returns {RollbackCoordinator} The new coordinator
  */
 export function setupRollback(
@@ -47,16 +52,21 @@ export function setupRollback(
   localSlotIndex,
   sendInputFn,
   registerRemoteInputFn,
-  realSimStepFn = null,
-  enableLogging = false
+  options = {}
 ) {
   if (rollbackCoordinator) {
     console.warn('[rollback] setupRollback called while coordinator already exists');
     return rollbackCoordinator;
   }
 
-  // Use provided simStep or placeholder
-  const simStepFn = realSimStepFn || nopSimStep;
+  const { simStep: realSimStepFn = null, simStepOpts = {}, logging = false } = options;
+
+  // Wrap realSimStepFn with opts so coordinator.step() only needs (state,s0,s1,dt).
+  // skipSimStepOnForward=true: simStep is used for resim only, not the forward step —
+  // because update() already advanced state each tick and we must not double-advance.
+  const simStepFn = realSimStepFn
+    ? (state, s0, s1, dt) => realSimStepFn(state, s0, s1, dt, simStepOpts)
+    : nopSimStep;
 
   rollbackCoordinator = new RollbackCoordinator({
     simState,
@@ -65,12 +75,13 @@ export function setupRollback(
     sendInput: sendInputFn,
     onRemoteInput: registerRemoteInputFn,
     maxRollbackTicks: 8,
-    logger: enableLogging ? (msg) => console.log('[rollback]', msg) : null,
+    skipSimStepOnForward: true,   // update() already advances state — no double-advance
+    logger: logging ? (msg) => console.log('[rollback]', msg) : null,
   });
 
   console.log(
     `[rollback] Coordinator initialized: slot ${localSlotIndex}, ` +
-    `simStep=${realSimStepFn ? 'real' : 'placeholder'}, maxRollback=8 ticks`
+    `simStep=${realSimStepFn ? 'real' : 'placeholder'}, maxRollback=8 ticks, skipForward=true`
   );
   return rollbackCoordinator;
 }

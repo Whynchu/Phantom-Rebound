@@ -155,6 +155,7 @@ import { createBulletSpawnDetector } from './src/net/bulletSpawnDetector.js';
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
 import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
 import { setupRollback, teardownRollback, coordinatorStep } from './src/net/rollbackIntegration.js';
+import { hostSimStep } from './src/sim/hostSimStep.js';
 import { applyJoystickVelocity, tickBodyPosition } from './src/sim/playerMovement.js';
 import { tickPostMovementTimers } from './src/sim/postMovementTick.js';
 import {
@@ -2484,25 +2485,40 @@ function installCoopInputUplink(armedCoop) {
   });
 
   // R3 — rollback coordinator (experimental). When ROLLBACK_ENABLED, initialize
-  // the coordinator for input-based deterministic sim. Runs in parallel with
-  // D-series snapshot path; once R0.4 carves simStep out, this becomes primary.
+  // the coordinator for input-based deterministic sim. R1 wiring: hostSimStep is
+  // now the resim function; the forward path still uses update() (skipSimStepOnForward).
   if (ROLLBACK_ENABLED) {
     try {
       setupRollback(
         simState,
         localSlotIndex,
         async (frame) => {
-          // Route coordinator output through existing transport
+          // Route coordinator output through existing transport.
+          // frame is { tick, slot, dx, dy, active, mag } — flat joy fields.
           try { await session.sendGameplay({ type: 'coop-input', frame }); } catch (_) {}
         },
         (callback) => {
-          // Register coordinator with existing input handler
+          // Register coordinator with existing input handler.
           // TODO: connect to coopInputSync.onRemoteInput when available
         },
-        null, // simStep (placeholder until R0.4)
-        true  // enable logging
+        {
+          simStep: hostSimStep,
+          simStepOpts: {
+            worldW: simState.world && simState.world.w ? simState.world.w : (W || 800),
+            worldH: simState.world && simState.world.h ? simState.world.h : (H || 600),
+            baseSpeed: BASE_SPD,
+            deadzone: JOY_DEADZONE,
+            joyMax,
+            gate: roomPhase !== 'intro',
+            phaseWalk: !!UPG.phaseWalk,
+            resolveCollisions: resolveEntityObstacleCollisions,
+            isOverlapping: isEntityOverlappingObstacle,
+            eject: ejectEntityFromObstacles,
+          },
+          logging: true,
+        }
       );
-      console.info('[coop] rollback coordinator armed');
+      console.info('[coop] rollback coordinator armed (R1: hostSimStep for resim)');
     } catch (err) {
       try { console.warn('[coop] rollback setup failed:', err); } catch (_) {}
     }
@@ -4943,6 +4959,25 @@ function loop(ts){
       if (hostRemoteInputProcessor) {
         try { hostRemoteInputProcessor.tick(simTick); } catch (err) {
           try { console.warn('[coop] remote input processor error', err); } catch (_) {}
+        }
+      }
+      // R1 — rollback coordinator input capture + snapshot (after update()).
+      // skipSimStepOnForward=true means the coordinator does NOT re-run movement
+      // here; it only records inputs, buffers a post-update snapshot, and checks
+      // for remote-input divergence (triggering hostSimStep-based resim if needed).
+      // Gated by ROLLBACK_ENABLED so there is zero cost in solo / D-series runs.
+      if (ROLLBACK_ENABLED) {
+        try {
+          coordinatorStep({
+            joy: {
+              dx:     joy.dx     || 0,
+              dy:     joy.dy     || 0,
+              active: !!joy.active,
+              mag:    joy.mag    || 0,
+            },
+          }, SIM_STEP_SEC);
+        } catch (err) {
+          try { console.warn('[rollback] coordinatorStep error', err); } catch (_) {}
         }
       }
       // Phase D4: host emits a snapshot every ticksPerSnapshot sim ticks.

@@ -1,1 +1,1 @@
-{ "version": "1.20.104", "label": "R0.4 step 11 — Region E (shield collision) carved into pure module" }
+{ "version": "1.20.105", "label": "R1 — coordinatorStep wired into game loop (skipSimStepOnForward)" }

@@ -112,13 +112,12 @@ console.log('\n=== RollbackCoordinator Tests ===\n');
   const state = createSimState({ slotCount: 2 });
   let remoteInputCallback = null;
 
-  // Custom simStep that modifies slot positions based on input
-  // left/right will add/subtract from slot 0's x; up/down to slot 1's x
+  // Custom simStep using joy format: dx < 0 → slot0 moves +1; slot1 active → +10
   function testSimStep(st, s0, s1, dt) {
-    if (s0?.left) st.slots[0].body.x += 1;
-    if (s0?.right) st.slots[0].body.x -= 1;
-    if (s1?.up) st.slots[1].body.x += 10;
-    if (s1?.down) st.slots[1].body.x -= 10;
+    if (s0?.joy?.active && s0.joy.dx < 0) st.slots[0].body.x += 1;
+    if (s0?.joy?.active && s0.joy.dx > 0) st.slots[0].body.x -= 1;
+    if (s1?.joy?.active && s1.joy.dy < 0) st.slots[1].body.x += 10;
+    if (s1?.joy?.active && s1.joy.dy > 0) st.slots[1].body.x -= 10;
   }
 
   const coordinator = new RollbackCoordinator({
@@ -131,29 +130,32 @@ console.log('\n=== RollbackCoordinator Tests ===\n');
     logger: (msg) => console.log('  [LOG]', msg),
   });
 
-  // Step forward with slot 0: left=true, slot 1: predicted neutral (no up/down)
+  const joyLeft  = { joy: { dx: -1, dy: 0, active: true,  mag: 60 } };
+  const joyUp    = { joy: { dx:  0, dy: -1, active: true,  mag: 60 } };
+
+  // Step forward with slot 0: left, slot 1: predicted neutral (no movement)
   const slot0X0 = state.slots[0].body.x;
   const slot1X0 = state.slots[1].body.x;
-  coordinator.step({ left: true, right: false, up: false, down: false, shoot: false }, 1 / 60);
+  coordinator.step(joyLeft, 1 / 60);
   // tick 0: slot 0 += 1, slot 1 += 0
   assert.strictEqual(state.slots[0].body.x, slot0X0 + 1, 'slot 0 should have moved +1');
   assert.strictEqual(state.slots[1].body.x, slot1X0, 'slot 1 should not move');
 
-  coordinator.step({ left: true, right: false, up: false, down: false, shoot: false }, 1 / 60);
+  coordinator.step(joyLeft, 1 / 60);
   // tick 1: slot 0 += 1, slot 1 += 0
   assert.strictEqual(state.slots[0].body.x, slot0X0 + 2, 'slot 0 should be at +2');
   assert.strictEqual(state.slots[1].body.x, slot1X0, 'slot 1 should still be at initial x');
 
-  // Real remote input for tick 0 arrives: slot 1 should move up=true (diverges from prediction)
+  // Real remote input for tick 0: slot 1 was moving up (dy < 0) — diverges from neutral
   console.log('  Before rollback: Slot 0 at x=' + state.slots[0].body.x + ', Slot 1 at x=' + state.slots[1].body.x);
-  remoteInputCallback({ tick: 0, slot: 1, left: false, right: false, up: true, down: false, shoot: false });
+  remoteInputCallback({ tick: 0, slot: 1, dx: 0, dy: -1, active: true, mag: 60 });
 
   // Rollback should rewind and resim:
-  //   tick 0 (real): slot 0 += 1 (left), slot 1 += 10 (up)
+  //   tick 0 (real): slot 0 += 1 (left), slot 1 += 10 (up/dy<0)
   //   tick 1: slot 0 += 1 (left), slot 1 += 0 (predicted neutral for tick 1)
-  // Final: slot 0 = X0 + 2, slot 1 = X0_remote + 10
+  // Final: slot 0 = X0 + 2, slot 1 = X0 + 10
   const expectedSlot0X = slot0X0 + 2;
-  const expectedSlot1X = slot1X0 + 10; // Only gets +10 from tick 0
+  const expectedSlot1X = slot1X0 + 10;
   console.log('  After rollback: Slot 0 at x=' + state.slots[0].body.x + ', Slot 1 at x=' + state.slots[1].body.x);
   console.log('  Expected: Slot 0 at x=' + expectedSlot0X + ', Slot 1 at x=' + expectedSlot1X);
   assert.strictEqual(state.slots[0].body.x, expectedSlot0X, `Slot 0 should be at ${expectedSlot0X}`);
@@ -193,12 +195,19 @@ console.log('\n=== RollbackCoordinator Tests ===\n');
     onRemoteInput: (cb) => { /* noop */ },
   });
 
-  const inp1 = { left: true, right: false, up: false, down: false, shoot: false };
-  const inp2 = { left: true, right: false, up: false, down: false, shoot: false };
-  const inp3 = { left: false, right: false, up: false, down: false, shoot: false };
+  // Active movement in the same direction → equal
+  const inp1 = { joy: { dx: 0.71, dy: 0,    active: true,  mag: 60 } };
+  const inp2 = { joy: { dx: 0.71, dy: 0,    active: true,  mag: 60 } };
+  // Different direction → not equal
+  const inp3 = { joy: { dx: 0,    dy: 1,    active: true,  mag: 60 } };
+  // Inactive (neutral) → equal to each other
+  const inp4 = { joy: { dx: 0.5,  dy: 0.5,  active: false, mag: 0  } };
+  const inp5 = { joy: { dx: 0,    dy: 0,    active: false, mag: 0  } };
 
-  assert(coordinator._inputsEqual(inp1, inp2));
-  assert(!coordinator._inputsEqual(inp1, inp3));
+  assert(coordinator._inputsEqual(inp1, inp2), 'same direction should be equal');
+  assert(!coordinator._inputsEqual(inp1, inp3), 'different direction should not be equal');
+  assert(coordinator._inputsEqual(inp4, inp5), 'both inactive should be equal regardless of dx/dy');
+  assert(!coordinator._inputsEqual(inp1, inp4), 'active vs inactive should not be equal');
   console.log('✓ PASS');
 }
 
@@ -215,9 +224,10 @@ console.log('\n=== RollbackCoordinator Tests ===\n');
   });
 
   const neutral = coordinator._neutralInput();
-  assert.strictEqual(neutral.left, false);
-  assert.strictEqual(neutral.right, false);
-  assert.strictEqual(neutral.shoot, false);
+  assert.ok(neutral.joy, 'neutral should have joy field');
+  assert.strictEqual(neutral.joy.active, false, 'neutral active should be false');
+  assert.strictEqual(neutral.joy.dx, 0, 'neutral dx should be 0');
+  assert.strictEqual(neutral.joy.dy, 0, 'neutral dy should be 0');
   console.log('✓ PASS');
 }
 
@@ -260,6 +270,42 @@ console.log('\n=== RollbackCoordinator Tests ===\n');
   coordinator.step({ value: 7 }, 1 / 60);
   assert.strictEqual(capturedInputs[0].s0, 0); // remote predicted as 0 goes to slot 0
   assert.strictEqual(capturedInputs[0].s1, 7); // local goes to slot 1
+  console.log('✓ PASS');
+}
+
+// Test 11: skipSimStepOnForward — simStep skipped on forward path, called on resim
+{
+  console.log('Test 11: skipSimStepOnForward skips forward simStep, uses it for resim');
+  const state = createSimState({ slotCount: 2 });
+  let simStepCalls = 0;
+  let remoteInputCallback = null;
+
+  // simStep: moves slot 1 when active
+  function movingSimStep(st, s0, s1, dt) {
+    simStepCalls++;
+    if (s1?.joy?.active) st.slots[1].body.x += 5;
+  }
+
+  const coordinator = new RollbackCoordinator({
+    simState: state,
+    simStep: movingSimStep,
+    localSlotIndex: 0,
+    sendInput: async () => {},
+    onRemoteInput: (cb) => { remoteInputCallback = cb; },
+    skipSimStepOnForward: true,
+    maxRollbackTicks: 8,
+  });
+
+  // External code (game loop / test) advances state manually
+  // simStep should NOT be called during coordinator.step()
+  const beforeCalls = simStepCalls;
+  coordinator.step({ joy: { dx: 0, dy: 0, active: false, mag: 0 } }, 1 / 60);
+  coordinator.step({ joy: { dx: 0, dy: 0, active: false, mag: 0 } }, 1 / 60);
+  assert.strictEqual(simStepCalls, beforeCalls, 'simStep should not run during forward steps');
+
+  // Remote divergence triggers resim → simStep IS called
+  remoteInputCallback({ tick: 0, slot: 1, dx: 1, dy: 0, active: true, mag: 60 });
+  assert.ok(simStepCalls > beforeCalls, 'simStep should run during resim');
   console.log('✓ PASS');
 }
 

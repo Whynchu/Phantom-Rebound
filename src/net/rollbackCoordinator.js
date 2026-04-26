@@ -43,6 +43,11 @@ export class RollbackCoordinator {
       bufferCapacity = 16,
       maxRollbackTicks = 8,
       logger = null,
+      // When true the coordinator is operating in "snapshot-only" mode: the
+      // game loop (update()) already advanced state each tick, so the forward
+      // path must NOT call simStep again or we'd double-advance. simStep is
+      // still called during _rollbackAndResim where update() is NOT running.
+      skipSimStepOnForward = false,
     } = config;
 
     if (!simState || typeof simState !== 'object') throw new Error('RollbackCoordinator: simState required');
@@ -65,6 +70,7 @@ export class RollbackCoordinator {
 
     this.simState = simState;
     this.simStep = simStep;
+    this.skipSimStepOnForward = skipSimStepOnForward;
     this.localSlotIndex = localSlotIndex;
     this.remoteSlotIndex = 1 - localSlotIndex;
     this.sendInput = sendInput;
@@ -138,8 +144,11 @@ export class RollbackCoordinator {
     const slot0Input = this.localSlotIndex === 0 ? localInput : remoteInput;
     const slot1Input = this.localSlotIndex === 1 ? localInput : remoteInput;
 
-    // Simulate forward
-    this.simStep(this.simState, slot0Input, slot1Input, dt);
+    // Simulate forward — skip when game loop's update() already did it
+    // (skipSimStepOnForward mode). simStep is still used during _rollbackAndResim.
+    if (!this.skipSimStepOnForward) {
+      this.simStep(this.simState, slot0Input, slot1Input, dt);
+    }
 
     // Snapshot state in buffer
     this.buffer.push(this.simState, slot0Input, slot1Input);
@@ -182,15 +191,15 @@ export class RollbackCoordinator {
    * @private
    */
   _onRemoteInputArrived(event) {
-    // event = { tick, slot, ...inputFields }
+    // event = { tick, slot, dx?, dy?, active?, mag? } — flat joy fields for transport
     const { tick } = event;
     const remoteInput = {
-      left: event.left ?? false,
-      right: event.right ?? false,
-      up: event.up ?? false,
-      down: event.down ?? false,
-      shoot: event.shoot ?? false,
-      // ... other input fields
+      joy: {
+        dx:     event.dx     ?? 0,
+        dy:     event.dy     ?? 0,
+        active: event.active ?? false,
+        mag:    event.mag    ?? 0,
+      },
     };
 
     // Store the actual input
@@ -283,25 +292,43 @@ export class RollbackCoordinator {
 
   /**
    * Compare two input objects for equality.
+   * Inputs use joy format: { joy: { dx, dy, active, mag } }.
+   * Quantized to 2dp (dx/dy) and 1dp (mag) to avoid float drift.
    *
    * @private
    */
   _inputsEqual(a, b) {
     if (!a || !b) return a === b;
-    return (a.left === b.left &&
-            a.right === b.right &&
-            a.up === b.up &&
-            a.down === b.down &&
-            a.shoot === b.shoot);
+    const aq = this._quantizeJoy(a.joy), bq = this._quantizeJoy(b.joy);
+    if (aq.active !== bq.active) return false;
+    if (!aq.active) return true; // both inactive — direction doesn't matter
+    return aq.dx === bq.dx && aq.dy === bq.dy && aq.mag === bq.mag;
   }
 
   /**
-   * Create a neutral input (no movement, no shoot).
+   * Create a neutral input (no movement).
    *
    * @private
    */
   _neutralInput() {
-    return { left: false, right: false, up: false, down: false, shoot: false };
+    return { joy: { dx: 0, dy: 0, active: false, mag: 0 } };
+  }
+
+  /**
+   * Quantize a raw joy value to stable, comparable scalars.
+   * dx/dy rounded to 2dp; mag rounded to 1dp.
+   * Returns a neutral record if joy is missing or inactive.
+   *
+   * @private
+   */
+  _quantizeJoy(joy) {
+    if (!joy || !joy.active) return { active: false, dx: 0, dy: 0, mag: 0 };
+    return {
+      active: true,
+      dx:  Math.round((joy.dx  || 0) * 100) / 100,
+      dy:  Math.round((joy.dy  || 0) * 100) / 100,
+      mag: Math.round((joy.mag || 0) * 10)  / 10,
+    };
   }
 
   /**

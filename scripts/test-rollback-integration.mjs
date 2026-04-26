@@ -42,7 +42,7 @@ test('Setup and teardown coordinator', () => {
   const sendFn = async () => {};
   const registerFn = (cb) => {};
 
-  const coor = setupRollback(state, 0, sendFn, registerFn, null, false);
+  const coor = setupRollback(state, 0, sendFn, registerFn);
   assert.ok(coor, 'coordinator should exist');
 
   teardownRollback();
@@ -63,10 +63,10 @@ test('Coordinator collects local input', () => {
   let remoteInputCallback = null;
   const registerFn = (cb) => { remoteInputCallback = cb; };
 
-  setupRollback(state, 0, sendFn, registerFn, null, false);
+  setupRollback(state, 0, sendFn, registerFn);
 
-  // Step with local input
-  coordinatorStep({ left: true, right: false, up: false, down: false, shoot: false }, 1/60);
+  // Step with local input (joy format)
+  coordinatorStep({ joy: { dx: -1, dy: 0, active: true, mag: 60 } }, 1/60);
   
   // Coordinator should have queued the input for sending
   // (actual send happens async, but we can check it was collected)
@@ -102,7 +102,7 @@ test('Two coordinators exchange inputs', () => {
   const registerFnForPeer1 = (cb) => { peer1RemoteInputCb = cb; };
 
   // Setup both coordinators
-  setupRollback(state0, 0, sendFnForPeer0, registerFnForPeer0, null, false);
+  setupRollback(state0, 0, sendFnForPeer0, registerFnForPeer0);
 
   // Can't have two active at once with global state; test ends here for now
   // This will be more thoroughly tested in test-rollback-two-peer-harness.mjs
@@ -119,7 +119,7 @@ test('setSimStep updates coordinator function', () => {
     mockSimStepCalled = true;
   };
 
-  setupRollback(state, 0, async () => {}, (cb) => {}, null, false);
+  setupRollback(state, 0, async () => {}, (cb) => {});
   setSimStep(mockSimStep);
   
   // After R0.4, simStep would be called; for now it's just stored
@@ -133,7 +133,7 @@ test('coordinatorStep no-op when coordinator is null', () => {
   teardownRollback(); // Ensure no active coordinator
   
   // This should not throw
-  coordinatorStep({ left: true }, 1/60);
+  coordinatorStep({ joy: { dx: -1, dy: 0, active: true, mag: 60 } }, 1/60);
   
   assert.ok(true, 'no-op succeeded');
 });
