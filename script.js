@@ -1982,6 +1982,20 @@ function onLocalBoonPickedOnline(slotId, boon) {
       showCoopGuestWaitOverlay('WAITING FOR HOST…');
       return true;
     }
+    if (isHost) {
+      // Host picked a dynamic/local-only boon (e.g. Recover heal). The boon
+      // is applied locally by showUpgrades' onSelect before this is called;
+      // nothing needs to be mirrored to the guest. Send the -1 sentinel so the
+      // guest's handleCoopBoonPickIncoming marks hostDone and updates its wait
+      // state, then wait for guestDone before advancing.
+      pendingCoopBoonPicks.hostDone = true;
+      sendCoopBoonPick(0, -1);
+      if (!pendingCoopBoonPicks.guestDone) {
+        try { showCoopGuestWaitOverlay('WAITING FOR PARTNER…'); } catch (_) {}
+      }
+      tryResumeCoopBoonPhase();
+      return true;
+    }
     return false;
   }
   if (isHost) {

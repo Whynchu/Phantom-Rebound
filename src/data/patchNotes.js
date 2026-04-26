@@ -2,6 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.120',
+      label: 'D20.4 HOST RECOVER HANDSHAKE FIX',
+      summary: ['Fixed a bug where picking the Recover (heal) boon as the HOST caused both players to be pushed into the next round without the guest getting to pick their boon. Root cause: the Recover boon is created dynamically and has no BOONS array entry, so boonIdFromBoon returns -1. The host path in onLocalBoonPickedOnline did not handle id<0, falling through to resumePlayAfterBoons() directly — bypassing the two-peer handshake. The fix: when id<0 and the caller is the host, the function now sets hostDone, sends the standard boonId=-1 no-mirror sentinel to the guest, and calls tryResumeCoopBoonPhase() (which waits for guestDone before advancing), returning true so resumePlayAfterBoons is never called directly.'],
+      highlights: [
+        'D20.4: host picking Recover (heal) boon no longer bypasses the coop boon handshake.',
+        'D20.4: onLocalBoonPickedOnline id<0 host path now sets hostDone, sends -1 sentinel, and waits for guest.',
+        'Both players correctly get to pick their boon before the round advances.',
+      ]
+    },
+  {
       version: '1.20.119',
       label: 'D20.3 RECOVER HEAL SYNC',
       summary: ['Fixed Recover (heal) boon not applying HP when guest was dead at end of last round. Root cause: the heal boon is created dynamically and is not in the BOONS array, so the -1 sentinel sent to the host carried no HP information. The host\'s slot1.metrics.hp stayed at 0, so revivePartialHpSpectators only gave the 25% revive floor, and the next snapshot then wrote that floor value onto the guest\'s screen. The boon-pick payload now carries resultHp when boonId=-1 is sent; the host syncs slot1.metrics.hp before reviving so the heal value stacks on top of (or exceeds) the 25% floor as intended.'],
