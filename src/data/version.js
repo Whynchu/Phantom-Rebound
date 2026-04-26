@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.132', label: 'R4.2 STALL INDICATOR + BUFFER TUNING' };
+const VERSION = { num: '1.20.133', label: 'R3.3-SAFE: ROLLBACK ALWAYS-ON + RECONCILER RETIRED' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

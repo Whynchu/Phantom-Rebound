@@ -1,24 +1,20 @@
 /**
  * R3 Rollback Integration Layer
- * 
+ *
  * Manages RollbackCoordinator instances for coop sessions.
  * Bridges between the game loop (script.js) and the rollback netcode.
- * 
- * Design:
- * - One coordinator per coop session (once per host+guest pair)
- * - Lazy initialization: created when coopSession starts
- * - Parallel to D-series: both paths can run until R3.3 cleanup
- * - Guards: only active in coop runs with rollback explicitly enabled
- * 
- * CURRENT PHASE (R3.1):
- * - Input path wired: coordinator.step() called from game loop
- * - Remote input received and buffered
- * - Rollback logic: placeholder until R0.4 carves simStep out of script.js
- * 
- * NEXT PHASE (after R0.4):
- * - Plug in real simStep(state, s0input, s1input, dt)
- * - Rollback+resim becomes live
- * - Full byte-identical determinism on both peers
+ *
+ * Status (R4.2):
+ * - ROLLBACK_ENABLED is always-on; guestPredictionReconciler retired.
+ * - coordinator.step() called every sim tick for input exchange + resim.
+ * - stall flag wired to UI indicator; telemetry via window.__rbdiag().
+ * - D-series snapshot modules (snapshotBroadcaster, snapshotApplier,
+ *   bulletLocalAdvance, greyLagComp) still provide world-state sync until
+ *   R0.4 carves deterministic simStep out of script.js.
+ *
+ * Next milestones:
+ * - R0.4: carve real simStep → rollback handles full state, retire snapshots
+ * - R5:   two-peer stress test + production ship
  */
 
 import { RollbackCoordinator } from './rollbackCoordinator.js';

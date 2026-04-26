@@ -2,7 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
-      version: '1.20.132',
+      version: '1.20.133',
+      label: 'R3.3-SAFE: ROLLBACK ALWAYS-ON + RECONCILER RETIRED',
+      summary: ['Rollback netcode is now the permanent default — no ?rollback=1 flag needed. guestPredictionReconciler fully retired (~90 lines removed). Snapshot world-sync still active until R0.4.'],
+      highlights: [
+        'ROLLBACK_ENABLED = true always; URL flag removed.',
+        'guestPredictionReconciler, RECONCILE_* constants, lastGuestPredictionWedged, and wedge-tracking movement code all removed.',
+        'rollbackIntegration.js + rollbackCoordinator.js doc headers updated to reflect current hybrid architecture.',
+      ]
+    },
+  {
       label: 'R4.2 STALL INDICATOR + BUFFER TUNING',
       summary: ['Rollback coordinator now shows a small "⟳ SYNC…" badge when remote input age exceeds the rollback window, and hides it when sync resumes.'],
       highlights: [

@@ -1,6 +1,6 @@
 /**
  * R3 Rollback Netcode Coordinator
- * 
+ *
  * Integrates RollbackBuffer into the coop gameplay loop.
  * Responsibilities:
  * - Maintain rollback buffer (last 16 states)
@@ -9,12 +9,13 @@
  * - Predict remote input (repeat-last or neutral)
  * - On late-arrival input: detect divergence, rewind, resim, apply
  * - Expose a `step()` API that game loop calls each tick
- * 
+ *
  * Design philosophy:
  * - Stateless in-place rollback: restoreState never replaces objects
  * - RNG state rolls back with simState (seeded RNG determinism)
  * - Bridges in script.js work transparently across rollback
- * - No snapshots transmitted: only lightweight input frames
+ * - No rollback state transmitted: only lightweight input frames
+ *   (separate snapshot channel still provides world-sync until R0.4)
  */
 
 import { RollbackBuffer } from '../sim/rollbackBuffer.js';

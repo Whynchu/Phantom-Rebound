@@ -148,7 +148,6 @@ import {
   decodeSnapshot,
 } from './src/net/coopSnapshot.js';
 import { createSnapshotApplier } from './src/net/snapshotApplier.js';
-import { createPredictionReconciler } from './src/net/predictionReconciler.js';
 import { createBulletLocalAdvance, PREDICTABLE_STATES as BULLET_PREDICTABLE_STATES } from './src/net/bulletLocalAdvance.js';
 import { createGreyLagComp } from './src/net/greyLagComp.js';
 import { createBulletSpawnDetector } from './src/net/bulletSpawnDetector.js';
@@ -1171,38 +1170,8 @@ let hostGreyLagComp = null;
 // teleport into existence at their ~70 ms snapshot-delayed position with no
 // spawn cue, looking like they came out of thin air. Null on solo and host.
 let guestBulletSpawnDetector = null;
-// Phase D5e — guest-side prediction reconciler. Records local input frames
-// per tick and replays them from authoritative state to compute drift
-// corrections. Null outside online guest runs. Plus a tracker for the
-// last snapshot seq we already reconciled against (don't double-correct
-// the same snapshot at 60 Hz against a 10 Hz feed).
-let guestPredictionReconciler = null;
+// Phase D5e — reconciler seq tracker: don't double-correct same snapshot.
 let lastReconciledSnapshotSeq = null;
-// Phase D5e — correction thresholds. HARD_SNAP: error magnitude (px) above
-// which we instantly teleport the predicted body to the corrected position
-// (massive desync, prediction is unrecoverable). SOFT_DEAD_ZONE: errors
-// below this are ignored (small numerical noise). SOFT_FACTOR: fraction of
-// error closed per snapshot inside the soft band (10 Hz cadence → ~3-5
-// snapshots to fully converge on a typical drift).
-//
-// D18.16 — widened the dead-zone substantially. The reconciler's replay
-// is collision-free Euler (no obstacle resolves), but the predicted body
-// IS resolved against obstacles every tick. When the player walks into a
-// wall, replay says "you should be 30 px past the wall" while the body
-// is clamped at the wall edge — a tight 1.5 px dead-zone made the soft
-// pull jam the body into the wall every snapshot, producing visible
-// vibration / "sloppy" feel. 10 px dead-zone is invisible to players,
-// kills wall-wedge tug-of-war, and still corrects real drift inside ~5
-// snapshots. Soft factor reduced from 0.35 to 0.18 so the pull is half
-// as aggressive — the body slides smoothly to truth instead of snapping.
-const RECONCILE_HARD_SNAP_PX = 96;
-const RECONCILE_SOFT_DEAD_ZONE_PX = 10;
-const RECONCILE_SOFT_FACTOR = 0.18;
-// D18.16 — track whether the last prediction tick was collision-clamped.
-// updateOnlineGuestPrediction sets this when actual travel < 60% of
-// expected; the reconciler skips the soft pull while true so we don't
-// yank the body into the obstacle the host's replay didn't see.
-let lastGuestPredictionWedged = false;
 // Fixed-step accumulator (Phase C1b). Sim runs at a deterministic
 // 60 Hz cadence regardless of display refresh rate. On fast displays
 // we may run 0-1 sim steps per rAF; on slow displays we catch up by
@@ -1398,12 +1367,13 @@ const COOP_DEBUG = (typeof window !== 'undefined' && window.location)
 const COOP_DIAG = (typeof window !== 'undefined' && window.location)
   ? new URLSearchParams(window.location.search).get('coopdiag') === '1'
   : false;
-// R3 — `?rollback=1` enables rollback netcode coordinator (experimental).
-// Currently runs in parallel with D-series snapshot path.
-// Once R0.4 (simStep carving) is complete, this will be the primary path.
-const ROLLBACK_ENABLED = (typeof window !== 'undefined' && window.location)
-  ? new URLSearchParams(window.location.search).get('rollback') === '1'
-  : false;
+// R3 — Rollback netcode coordinator: always-on for coop sessions.
+// D-series snapshot modules (snapshotBroadcaster, snapshotApplier, etc.)
+// are still required for world-state sync (HP, room phase, score, bullet
+// smoothing) until R0.4 carves those out of the main loop. The only fully-
+// retired D-series component is guestPredictionReconciler, replaced by
+// rollback resim for guest position correction.
+const ROLLBACK_ENABLED = true;
 let coopDiagInterval = null;
 const guestKeyState = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 let _guestKeysBound = false;
@@ -1511,8 +1481,6 @@ function teardownCoopInputUplink() {
     try { hostGreyLagComp.clear(); } catch (_) {}
   }
   hostGreyLagComp = null;
-  // Phase D5e: tear down reconciler + correction tracker.
-  guestPredictionReconciler = null;
   lastReconciledSnapshotSeq = null;
   if (onlineGuestSlot1Installed) {
     try { delete playerSlots[1]; } catch (_) {}
@@ -2815,12 +2783,7 @@ function installCoopInputUplink(armedCoop) {
     // or replay drifts by construction. World bounds default to current
     // WORLD_W/WORLD_H; updated whenever the room/world resizes via the
     // existing world-space recomputation path.
-    guestPredictionReconciler = ROLLBACK_ENABLED ? null : createPredictionReconciler({
-      speedPerSecond: 165 * GLOBAL_SPEED_LIFT,
-      worldBounds: { left: M, right: WORLD_W - M, top: M, bottom: WORLD_H - M },
-    });
     lastReconciledSnapshotSeq = null;
-    try { if (!ROLLBACK_ENABLED) console.info('[coop] guest prediction reconciler armed'); } catch (_) {}
     // D19.1 — bullet local-advance pool, guest only. Wall margin & world
     // bounds match host's bullet bounce constants exactly so reconcile
     // thresholds reflect real divergence rather than constant offset.
@@ -3393,41 +3356,12 @@ function updateOnlineGuestPrediction(dt) {
   }
   if (!slot.input || typeof slot.input.moveVector !== 'function') return;
   const { dx, dy, t, active } = slot.input.moveVector();
-  // Phase D5e — record the input frame BEFORE applying movement so the
-  // reconciler's stored frame matches what this tick simulated. Replay
-  // can then reproduce this exact step from authoritative state.
-  if (guestPredictionReconciler) {
-    try {
-      guestPredictionReconciler.record({
-        tick: simTick | 0,
-        dx, dy, t, active,
-      });
-    } catch (_) {}
-  }
   const SPD = 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (slot.upg?.speedMult || 1));
   if (active) { body.vx = dx * SPD * t; body.vy = dy * SPD * t; }
   else { body.vx = 0; body.vy = 0; }
-  // D18.16 — measure expected vs actual travel to detect obstacle wedge.
-  // The reconciler's replay is collision-free, so when we're pinned
-  // against a wall the auth-replay position diverges by tens of pixels
-  // and the soft-correction would jam us into the wall every snapshot.
-  // We compare actual position delta after clamping + collision resolve
-  // to the unclamped step; if the body actually moved less than 60% of
-  // what input demanded, we mark wedged and the reconciler short-circuits.
-  const beforeX = body.x;
-  const beforeY = body.y;
-  const expectDx = body.vx * dt;
-  const expectDy = body.vy * dt;
-  body.x = Math.max(M + body.r, Math.min(WORLD_W - M - body.r, body.x + expectDx));
-  body.y = Math.max(M + body.r, Math.min(WORLD_H - M - body.r, body.y + expectDy));
+  body.x = Math.max(M + body.r, Math.min(WORLD_W - M - body.r, body.x + body.vx * dt));
+  body.y = Math.max(M + body.r, Math.min(WORLD_H - M - body.r, body.y + body.vy * dt));
   resolveEntityObstacleCollisions(body);
-  const expectMag = Math.hypot(expectDx, expectDy);
-  if (expectMag > 0.5) {
-    const actualMag = Math.hypot(body.x - beforeX, body.y - beforeY);
-    lastGuestPredictionWedged = actualMag < expectMag * 0.6;
-  } else {
-    lastGuestPredictionWedged = false;
-  }
 }
 
 
@@ -5475,85 +5409,9 @@ function loop(ts){
             }
           }
           if (Number.isFinite(result.score)) score = result.score;
-          // Phase D5e — reconciliation. Once per fresh snapshot, compare our
-          // predicted slot 1 body against an authoritative replay from the
-          // host's state-at-snapshot, replaying our locally-buffered inputs
-          // forward to current simTick. The applier left body x/y untouched
-          // (predictedSlotId=1 → skipBody) so we can correct it directly.
+          // Phase D5e reconciler retired (rollback resim handles guest position correction).
           const snap = latestRemoteSnapshot;
           const snapSeq = snap && snap.snapshotSeq;
-          if (
-            !ROLLBACK_ENABLED &&
-            guestPredictionReconciler &&
-            snap &&
-            Number.isFinite(snapSeq) &&
-            snapSeq !== lastReconciledSnapshotSeq
-          ) {
-            try {
-              const slot1 = playerSlots[1];
-              const body = slot1 && slot1.body;
-              const authSlot = snap.slots && snap.slots.find(s => s && s.id === 1);
-              const fromTick = snap.lastProcessedInputSeq && snap.lastProcessedInputSeq[1];
-              // Skip if guest body absent, slot 1 not yet known to host, or
-              // host hasn't ack'd any of our input ticks yet — nothing to
-              // anchor the replay on. The next snapshot may carry it.
-              if (
-                body &&
-                authSlot &&
-                authSlot.alive &&
-                (body.deadAt | 0) === 0 &&
-                Number.isFinite(fromTick) &&
-                fromTick !== null
-              ) {
-                const toTick = simTick | 0;
-                if (toTick >= fromTick) {
-                  // D19.6b — pass current slot speedMult-derived speed so
-                  // a guest with Ghost Velocity replays at the right speed.
-                  const slotUpg = slot1 && slot1.upg;
-                  const replaySpeed = 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (slotUpg?.speedMult || 1));
-                  // D19.6c — collision-aware replay: each replayed tick
-                  // resolves against current room obstacles so corrected
-                  // targets respect walls/corners. resolveEntityObstacleCollisions
-                  // mutates the entity in-place (matches reconciler API).
-                  const corrected = guestPredictionReconciler.replay(
-                    { x: authSlot.x, y: authSlot.y, vx: authSlot.vx, vy: authSlot.vy },
-                    fromTick | 0,
-                    toTick,
-                    SIM_STEP_SEC,
-                    body.r || 0,
-                    replaySpeed,
-                    resolveEntityObstacleCollisions,
-                  );
-                  if (corrected) {
-                    const ex = corrected.x - body.x;
-                    const ey = corrected.y - body.y;
-                    const errMag = Math.hypot(ex, ey);
-                    if (errMag >= RECONCILE_HARD_SNAP_PX) {
-                      // Hard snap always fires — large drift means
-                      // prediction is genuinely unrecoverable (input
-                      // dropped, host re-anchored, etc.) and a wedge
-                      // can't account for >96 px error.
-                      body.x = corrected.x;
-                      body.y = corrected.y;
-                    } else if (errMag > RECONCILE_SOFT_DEAD_ZONE_PX && !lastGuestPredictionWedged) {
-                      // D18.16 — skip soft pull when the predicted body
-                      // is clamped against an obstacle. Replay has no
-                      // collisions so the auth target sits inside/past
-                      // the wall; pulling toward it would re-jam every
-                      // snapshot. Next tick where input clears the wall
-                      // contact, drift converges normally.
-                      body.x += ex * RECONCILE_SOFT_FACTOR;
-                      body.y += ey * RECONCILE_SOFT_FACTOR;
-                    }
-                  }
-                }
-              }
-              lastReconciledSnapshotSeq = snapSeq;
-            } catch (recErr) {
-              try { console.warn('[coop] reconcile error', recErr); } catch (_) {}
-              lastReconciledSnapshotSeq = snapSeq;
-            }
-          }
           // D19.1 — bullet local-advance reconcile. Once per fresh snapshot,
           // age each authoritative predictable bullet ('output'/'danger')
           // forward by (simTick - snapshotSimTick) ticks of linear+bounce
