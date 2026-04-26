@@ -1,6 +1,15 @@
-import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
+// Older notes archived in patchNotesArchive.js. Only the 50 most recent entries are loaded in-client.
 
 const PATCH_NOTES_RECENT = [
+  {
+      version: '1.20.112',
+      label: 'PATCH NOTES FIX',
+      summary: ['Fixed a JS syntax error in patch notes (unescaped quote in a string literal) that caused the panel to show "Failed to load". Also limited in-client notes to the 50 most recent updates to keep the panel fast.'],
+      highlights: [
+        'Fixed: unescaped single quote in a highlights string was silently breaking the patch notes module parse.',
+        'Patch notes panel now loads the 50 most recent entries only; older notes archived in patchNotesArchive.js.',
+      ]
+    },
   {
       version: '1.20.111',
       label: 'R3.4 RUSHER CONTACT RESIM',
@@ -403,7 +412,7 @@ const PATCH_NOTES_RECENT = [
       summary: ['Seventh and eighth R0.4 micro-migrations shipped together (both trivial one-liner bridges). UPG (the per-slot upgrade/boon state object) is now bridged to simState.slots[0].upg; world.obstacles (the per-room collision boundary list) is bridged to simState.world.obstacles. Both use the same getter/setter pattern established in chunks 3–6. UPG is reassigned once at resetUpgrades() (line 530) and world.obstacles is reassigned once per room transition (line 3722), otherwise mutated in place — so the setter propagation on rollback is the critical piece. Determinism canary 11/11 byte-identical; 29-suite test sweep green.'],
       highlights: [
         'UPG bridge: Object.defineProperty(simState.slots[0], \'upg\', { get() { return UPG; }, set(v) { UPG = v; }, enumerable: true, configurable: true }). Getter reads the legacy let; setter propagates rollback restores. UPG object itself is mutated in place (boon tier increases, cooldown decrements), so the shared-reference model would have worked just fine — but a reassigning at resetUpgrades() means a full-migration would require touching every call site. The bridge is cleaner.',
-        'world.obstacles bridge: Object.defineProperty(simState.world, \'obstacles\', { get() { return roomObstacles; }, set(v) { roomObstacles = v; }, enumerable: true, configurable: true }). Semantically identical — legacy let reassigned on room load, otherwise mutated. Rollback must rewind the list to its pre-transition state; the setter does that. simState.world now has w, h, and obstacles all mapped to their legacy counterparts or shared-ref'd.',
+        'world.obstacles bridge: Object.defineProperty(simState.world, \'obstacles\', { get() { return roomObstacles; }, set(v) { roomObstacles = v; }, enumerable: true, configurable: true }). Semantically identical — legacy let reassigned on room load, otherwise mutated. Rollback must rewind the list to its pre-transition state; the setter does that. simState.world now has w, h, and obstacles all mapped to their legacy counterparts or shared-ref\'d.',
         'Migration map now complete for core gameplay state: nextEnemyId ✓, nextBulletId ✓, score/kills/scoreBreakdown ✓, roomIndex/roomPhase/roomTimer ✓, bullets[] ✓, enemies[] ✓, slot 0 body+metrics ✓, UPG ✓, world.obstacles ✓. What remains is rngState integration (deferred decision on simRng threading), R0.5 Map/Set iteration audit, and R0.6 long-canary CI gate.',
         'rngState is the last major holdout: it lives in simRng\'s internal mulberry32 state today. To roll back correctly, rngState must advance in lockstep with simState (so every deterministic operation gets the same RNG sequence). Decision point: thread state through simRng.getState() / simRng.setState(state) (similar to bulletIds.js singleton-ref pattern), or full migration of the PRNG module. Deferred to next session pending playtest feedback or when R1 serialize/deserialize lands.',
         'Performance: UPG bridge is accessed once per boon apply + once per upgrade increment — negligible. world.obstacles bridge is queried every collision check (per frame, hundreds of calls). Getter indirection cost is sub-microsecond. No measurable impact.',
@@ -1654,8 +1663,8 @@ const PATCH_NOTES_RECENT = [
     },
 ];
 
-const PATCH_NOTES = [...PATCH_NOTES_RECENT, ...PATCH_NOTES_ARCHIVE];
+const PATCH_NOTES = PATCH_NOTES_RECENT.slice(0, 50);
 
-const PATCH_NOTES_ARCHIVE_MESSAGE = 'In-client notes currently begin at v1.16.1. Older builds were not archived in this panel.';
+const PATCH_NOTES_ARCHIVE_MESSAGE = 'In-client notes show the 50 most recent updates. Older builds were not archived in this panel.';
 
 export { PATCH_NOTES, PATCH_NOTES_ARCHIVE_MESSAGE };
