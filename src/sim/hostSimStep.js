@@ -38,6 +38,7 @@ import { resolveOutputHits } from './outputHitDispatch.js';
 import { tickEnemyCombat } from './enemyCombatStep.js';
 import { resolveShieldCollisions } from './shieldCollisionStep.js';
 import { resolveVolatileOrbHits } from './volatileOrbStep.js';
+import { resolveOrbitSphereContactHits } from './orbitSphereContactStep.js';
 
 const NOOP = () => {};
 const FALSE_FN = () => false;
@@ -133,6 +134,8 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   resolveShieldCollisions(state, opts);
   // R3.1 — combat resim: danger projectiles can damage player slots.
   resolveDangerHits(state, opts);
+  // R3 parity — orbit spheres damage/kill enemies before output bullets.
+  resolveOrbitSphereContactHits(state, opts);
   // R3.2 — combat resim: output projectiles can damage/kill enemies.
   resolveOutputHits(state, opts);
 

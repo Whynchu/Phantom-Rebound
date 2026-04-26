@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.127',
+      label: 'R3 ORBIT CONTACT PARITY',
+      summary: ['Rollback resim now applies orbit-sphere enemy contact damage and kills.'],
+      highlights: [
+        'Added focused coverage for orbit hits, kills, cooldown gates, damage scaling, and Final Form charge.',
+      ]
+    },
+  {
       version: '1.20.126',
       label: 'R3 VOLATILE ORB PARITY',
       summary: ['Rollback resim now handles Volatile Orbs removing danger bullets and starting per-orb/shared cooldowns during replay.'],
