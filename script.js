@@ -5123,27 +5123,39 @@ function loop(ts){
       // for remote-input divergence (triggering hostSimStep-based resim if needed).
       // Gated by ROLLBACK_ENABLED so there is zero cost in solo / D-series runs.
       if (ROLLBACK_ENABLED) {
-        // R4: drain effectQueue before coordinator snapshots state, so the snapshot
-        // has an empty queue. Any effects here came from async rollback corrections
-        // (the _onRemoteInputArrived callback fires between rAF frames, not inside
-        // this accumulator loop — JS is single-threaded so this is safe).
+        // R4 pause/intro safety: only snapshot/resim during active combat phases.
+        // During intro, both peers are in the same deterministic pre-combat state,
+        // but intro-phase snapshots can cause cross-boundary resims where the gate
+        // property (which reads current roomPhase) disagrees with the snapshotted
+        // phase, producing movement that never happened live. gstate !== 'playing'
+        // already short-circuits the RAF loop during boon-select and pause;
+        // this gate handles the in-room intro window.
+        const _rollbackActive = roomPhase === 'spawning' || roomPhase === 'fighting';
+        // Drain effectQueue regardless of phase so async rollback corrections from
+        // the previous frame never accumulate into the next snapshot. Only dispatch
+        // visual effects when we're in a phase that makes them meaningful.
         try {
           const _fx = drainSimEffectQueue(simState);
-          if (_fx.length > 0) dispatchSimEffects(_fx);
+          if (_fx.length > 0 && _rollbackActive) dispatchSimEffects(_fx);
         } catch (err) {
           try { console.warn('[rollback] effect drain error', err); } catch (_) {}
         }
-        try {
-          coordinatorStep({
-            joy: {
-              dx:     joy.dx     || 0,
-              dy:     joy.dy     || 0,
-              active: !!joy.active,
-              mag:    joy.mag    || 0,
-            },
-          }, SIM_STEP_SEC);
-        } catch (err) {
-          try { console.warn('[rollback] coordinatorStep error', err); } catch (_) {}
+        if (_rollbackActive) {
+          try {
+            const _stepResult = coordinatorStep({
+              joy: {
+                dx:     joy.dx     || 0,
+                dy:     joy.dy     || 0,
+                active: !!joy.active,
+                mag:    joy.mag    || 0,
+              },
+            }, SIM_STEP_SEC);
+            if (_stepResult && _stepResult.stalled) {
+              try { console.warn('[rollback] coordinator stalled — remote input age exceeds maxRollbackTicks'); } catch (_) {}
+            }
+          } catch (err) {
+            try { console.warn('[rollback] coordinatorStep error', err); } catch (_) {}
+          }
         }
       }
       // Phase D4: host emits a snapshot every ticksPerSnapshot sim ticks.

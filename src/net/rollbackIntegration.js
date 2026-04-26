@@ -116,18 +116,21 @@ export function teardownRollback() {
  * Call coordinator.step() from the game loop.
  * During R3.1, this is the input-ingestion path.
  * During R3.2+, this also triggers rollback+resim on divergence.
- * 
- * @param {object} localInput - Local player input: { left, right, up, down, shoot, aimX, aimY }
+ *
+ * @param {object} localInput - Local player input: { joy: { dx, dy, active, mag } }
  * @param {number} dt - Timestep in seconds
- * 
- * Returns nothing (state is mutated in-place by coordinator).
+ *
+ * @returns {{ stalled: boolean } | undefined} Stall status from the coordinator,
+ *   or undefined if no coordinator is active. stalled=true means remote input age
+ *   exceeds maxRollbackTicks — the prediction window is overstretched.
  */
 export function coordinatorStep(localInput, dt) {
-  if (!rollbackCoordinator) return; // No-op if not in rollback mode
+  if (!rollbackCoordinator) return undefined;
   try {
-    rollbackCoordinator.step(localInput, dt);
+    return rollbackCoordinator.step(localInput, dt);
   } catch (err) {
     console.error('[rollback] coordinator.step failed:', err);
+    return undefined;
   }
 }
 

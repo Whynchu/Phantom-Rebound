@@ -2,6 +2,17 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.115',
+      label: 'R4 PAUSE-INTRO SAFETY',
+      summary: ['Rollback coordinator now only runs during active combat phases (spawning/fighting). Coordinator is skipped during room intro transitions, preventing intro-phase snapshots from polluting the rollback buffer with pre-combat state. coordinatorStep() now returns the stall status from the coordinator so callers can detect when the remote input age exceeds the max rollback window.'],
+      highlights: [
+        'R4: coordinatorStep() gated on roomPhase === "spawning" || "fighting" — no snapshots during intro phase.',
+        'Effect drain runs every tick (keeps queue clean) but only dispatches visuals during combat phases.',
+        'coordinatorStep() now returns { stalled } from rollbackCoordinator.step() — game loop logs a warning when stalled.',
+        'boon-select / pause safety already handled: gstate !== "playing" short-circuits RAF loop before coordinator can step.',
+      ]
+    },
+  {
       version: '1.20.114',
       label: 'R4 EFFECTQUEUE DRAIN',
       summary: ['Rollback corrective effects (damage numbers, sparks) now fire correctly after a resim. Effect descriptors queued by hostSimStep during rollback are drained and dispatched to visual/audio handlers each tick before the coordinator snapshots state.'],
