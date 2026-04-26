@@ -214,6 +214,35 @@ test('danger bullet has danger=true', () => {
   assertEq(b.state, 'danger');
 });
 
+test('danger bullet render flags survive reconcile and getBullets', () => {
+  const pool = newPool();
+  pool.reconcile([{
+    id: 1,
+    state: 'danger',
+    x: 100,
+    y: 100,
+    vx: 0,
+    vy: 0,
+    r: 6,
+    ownerSlot: 9,
+    doubleBounce: true,
+    bounceCount: 0,
+    dangerBounceBudget: 1,
+    eliteStage: 1,
+    eliteColor: '#123456',
+    eliteCore: '#abcdef',
+    isTriangle: true,
+  }], 0);
+  const b = pool.getBullets()[0];
+  assertEq(b.doubleBounce, true);
+  assertEq(b.bounceCount, 0);
+  assertEq(b.dangerBounceBudget, 1);
+  assertEq(b.eliteStage, 1);
+  assertEq(b.eliteColor, '#123456');
+  assertEq(b.eliteCore, '#abcdef');
+  assertEq(b.isTriangle, true);
+});
+
 test('throws without getWorldSize', () => {
   let threw = false;
   try { createBulletLocalAdvance({ wallMargin: 18 }); } catch (_) { threw = true; }

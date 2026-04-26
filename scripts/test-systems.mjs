@@ -91,6 +91,7 @@ import {
   fireEnemyBurst,
   applyOrbitSphereContact,
 } from '../src/entities/enemyRuntime.js';
+import { createEnemy } from '../src/entities/enemyTypes.js';
 import {
   createLaneOffsets,
   buildPlayerShotPlan,
@@ -2178,6 +2179,27 @@ test('enemy runtime helpers keep movement and fire cadence deterministic', () =>
   assert.equal(cooldownApplied, true);
   assert.equal(ranged.disruptorBulletCount, 0);
   assert.equal(ranged.disruptorCooldown, 800);
+});
+
+test('createEnemy applies optional hpMultiplier to hp and maxHp only', () => {
+  const baseArgs = {
+    width: 800,
+    height: 600,
+    margin: 24,
+    roomIndex: 10,
+    nextEnemyId: 1,
+  };
+  simRng.reseed(1234);
+  const solo = createEnemy('chaser', baseArgs);
+  simRng.reseed(1234);
+  const coop = createEnemy('chaser', { ...baseArgs, hpMultiplier: 2 });
+
+  assert.equal(coop.hp, solo.hp * 2);
+  assert.equal(coop.maxHp, solo.maxHp * 2);
+  assert.equal(coop.x, solo.x);
+  assert.equal(coop.y, solo.y);
+  assert.equal(coop.spd, solo.spd);
+  assert.equal(coop.fRate, solo.fRate);
 });
 
 test('enemy fire helper routes burst patterns by enemy type deterministically', () => {

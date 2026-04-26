@@ -111,6 +111,13 @@ function hydrateBullet(snapBullet, lerpedX, lerpedY, lerpedVx, lerpedVy) {
     ownerId: snapBullet.ownerSlot | 0,
     bounces: snapBullet.bounces | 0,
     spawnTick: snapBullet.spawnTick | 0,
+    doubleBounce: !!snapBullet.doubleBounce,
+    bounceCount: snapBullet.bounceCount | 0,
+    dangerBounceBudget: snapBullet.dangerBounceBudget | 0,
+    eliteStage: snapBullet.eliteStage === null || snapBullet.eliteStage === undefined ? undefined : (snapBullet.eliteStage | 0),
+    eliteColor: snapBullet.eliteColor || undefined,
+    eliteCore: snapBullet.eliteCore || undefined,
+    isTriangle: !!snapBullet.isTriangle,
     danger: snapBullet.state === 'danger',
     __remote: true,
   };

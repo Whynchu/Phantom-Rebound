@@ -71,7 +71,7 @@ function getEnemyDefinition(type) {
   };
 }
 
-function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBoss = false, bossScale = 1 }) {
+function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBoss = false, bossScale = 1, hpMultiplier = 1 }) {
   const def = getEnemyDefinition(type);
   const palette = getThreatPalette();
   const effectiveR = isBoss ? def.r * 3 : def.r;
@@ -131,9 +131,11 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
     1;
   const effectiveFireRate = def.fRate >= 9000 ? def.fRate : Math.max(480, def.fRate * fireRateMult * (isElite ? 0.92 : 1) / (isBoss ? bossScale : 1));
 
-  const hpVal = isBoss
+  const safeHpMultiplier = Number.isFinite(hpMultiplier) && hpMultiplier > 0 ? hpMultiplier : 1;
+  const baseHpVal = isBoss
     ? Math.max(1, Math.round(def.hp * hpMult * 5 * bossScale * 10)) // 10x HP scale
     : Math.max(1, Math.round(def.hp * hpMult * getLateThreatHpMultiplier(type, roomIndex) * (isElite ? 1.3 : 1) * 10)); // 10x HP scale
+  const hpVal = Math.max(1, Math.round(baseHpVal * safeHpMultiplier));
 
   return {
     ...def,

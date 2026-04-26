@@ -2,6 +2,15 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.124',
+      label: 'COOP ENEMY HP',
+      summary: ['Online coop enemy spawns now use exactly 2x the solo HP and max HP values so two-player runs keep their intended combat durability.'],
+      highlights: [
+        'The multiplier is applied at host spawn time only, preserving solo and local coop-debug behavior while snapshots carry the scaled HP to guests.',
+        'Coop snapshots now preserve special danger-bullet render flags (double-bounce rings, bounce budgets, elite stages/colors, triangle shape) so guest hardware renders bouncing enemy shots correctly.',
+      ]
+    },
+  {
       version: '1.20.123',
       label: 'COOP FEEDBACK EVENTS',
       summary: ['Guest clients now receive host-authored pickup and enemy-hit feedback events so grey pickups play their spark feedback locally.'],

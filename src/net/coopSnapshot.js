@@ -157,6 +157,7 @@ function encodeSlot(src, idx) {
 
 function encodeBullet(src, idx) {
   if (!src || typeof src !== 'object') throw new Error('snapshot: bullets[' + idx + '] missing');
+  const eliteStage = src.eliteStage == null ? null : u32(src.eliteStage, 'bullets[' + idx + '].eliteStage');
   return {
     id: u32(src.id, 'bullets[' + idx + '].id'),
     x: num(src.x, 'bullets[' + idx + '].x'),
@@ -172,6 +173,13 @@ function encodeBullet(src, idx) {
     ownerSlot: u32(src.ownerSlot ?? src.ownerId ?? 0, 'bullets[' + idx + '].ownerSlot'),
     bounces: u32(src.bounces ?? 0, 'bullets[' + idx + '].bounces'),
     spawnTick: u32(src.spawnTick ?? 0, 'bullets[' + idx + '].spawnTick'),
+    doubleBounce: !!src.doubleBounce,
+    bounceCount: u32(src.bounceCount ?? 0, 'bullets[' + idx + '].bounceCount'),
+    dangerBounceBudget: u32(src.dangerBounceBudget ?? 0, 'bullets[' + idx + '].dangerBounceBudget'),
+    eliteStage,
+    eliteColor: src.eliteColor == null ? null : String(src.eliteColor),
+    eliteCore: src.eliteCore == null ? null : String(src.eliteCore),
+    isTriangle: !!src.isTriangle,
   };
 }
 

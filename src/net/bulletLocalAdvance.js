@@ -70,6 +70,16 @@ function stepBullet(b, dt, W, H, M) {
   for (let s = 0; s < subSteps; s++) stepBulletOnce(b, sd, W, H, M);
 }
 
+function copyRenderFlags(target, source) {
+  target.doubleBounce = !!source.doubleBounce;
+  target.bounceCount = source.bounceCount | 0;
+  target.dangerBounceBudget = source.dangerBounceBudget | 0;
+  target.eliteStage = source.eliteStage === null || source.eliteStage === undefined ? undefined : (source.eliteStage | 0);
+  target.eliteColor = source.eliteColor || undefined;
+  target.eliteCore = source.eliteCore || undefined;
+  target.isTriangle = !!source.isTriangle;
+}
+
 // Construct a guest-side bullet local-advance pool. `getWorldSize` returns
 // `{ w, h }`; `wallMargin` is the arena bounce inset (host const M=18).
 function createBulletLocalAdvance({ wallMargin, getWorldSize } = {}) {
@@ -136,7 +146,7 @@ function createBulletLocalAdvance({ wallMargin, getWorldSize } = {}) {
       const aged = ageAuthForward(ab, ticksElapsed, W, H);
       const existing = local.get(id);
       if (!existing) {
-        local.set(id, {
+        const nextBullet = {
           id,
           x: aged.x, y: aged.y,
           vx: aged.vx, vy: aged.vy,
@@ -149,7 +159,9 @@ function createBulletLocalAdvance({ wallMargin, getWorldSize } = {}) {
           danger: ab.state === 'danger',
           __remote: true,
           __predicted: true,
-        });
+        };
+        copyRenderFlags(nextBullet, ab);
+        local.set(id, nextBullet);
         continue;
       }
       const dx = aged.x - existing.x;
@@ -174,6 +186,7 @@ function createBulletLocalAdvance({ wallMargin, getWorldSize } = {}) {
       existing.bounces = ab.bounces | 0;
       existing.state = ab.state;
       existing.danger = ab.state === 'danger';
+      copyRenderFlags(existing, ab);
     }
     // immediate despawn of ids missing from this snapshot
     for (const id of [...local.keys()]) {
@@ -187,7 +200,7 @@ function createBulletLocalAdvance({ wallMargin, getWorldSize } = {}) {
   function getBullets() {
     const out = [];
     for (const b of local.values()) {
-      out.push({
+      const nextBullet = {
         id: b.id,
         x: b.x, y: b.y, vx: b.vx, vy: b.vy,
         r: b.r, type: b.type, state: b.state,
@@ -197,7 +210,9 @@ function createBulletLocalAdvance({ wallMargin, getWorldSize } = {}) {
         danger: b.danger,
         __remote: true,
         __predicted: true,
-      });
+      };
+      copyRenderFlags(nextBullet, b);
+      out.push(nextBullet);
     }
     return out;
   }

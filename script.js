@@ -1092,6 +1092,7 @@ let coopHiddenAtMs = 0;
 const COOP_SOFT_DISCONNECT_MS = 7000;
 const COOP_HARD_DISCONNECT_MS = 30000;
 const COOP_HEARTBEAT_INTERVAL_MS = 2500;
+const ONLINE_COOP_ENEMY_HP_MULT = 2;
 
 // D18.7 — partner color sync. Each peer broadcasts its chosen color key
 // once on coop run start (and again on local color change) via a
@@ -3143,6 +3144,13 @@ function collectHostSnapshotState() {
       ownerSlot: (typeof owner === 'number' && owner >= 0) ? (owner | 0) : 0,
       bounces: b.bounces ?? 0,
       spawnTick: b.spawnTick ?? 0,
+      doubleBounce: !!b.doubleBounce,
+      bounceCount: b.bounceCount ?? 0,
+      dangerBounceBudget: b.dangerBounceBudget ?? 0,
+      eliteStage: b.eliteStage,
+      eliteColor: b.eliteColor,
+      eliteCore: b.eliteCore,
+      isTriangle: !!b.isTriangle,
     });
   }
   const enemiesOut = [];
@@ -4172,6 +4180,7 @@ function spawnEnemy(type, isBoss = false, bossScale = 1) {
     nextEnemyId: simState.nextEnemyId++,
     isBoss,
     bossScale,
+    hpMultiplier: isOnlineCoopRun() ? ONLINE_COOP_ENEMY_HP_MULT : 1,
   });
   if(enemy.forcePurpleShots) roomPurpleShooterAssigned = true;
   resolveEntityObstacleCollisions(enemy);

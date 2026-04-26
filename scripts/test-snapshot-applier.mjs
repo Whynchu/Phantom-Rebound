@@ -274,7 +274,7 @@ function snap(overrides = {}) {
     snapshotSeq: 1,
     bullets: [
       { id: 1, x: 0, y: 0, vx: 0, vy: 0, r: 5, type: 'p', state: 'output', ownerSlot: 0, bounces: 0, spawnTick: 1 },
-      { id: 2, x: 0, y: 0, vx: 0, vy: 0, r: 7, type: 'e', state: 'danger', ownerSlot: 99, bounces: 1, spawnTick: 2 },
+      { id: 2, x: 0, y: 0, vx: 0, vy: 0, r: 7, type: 'e', state: 'danger', ownerSlot: 99, bounces: 1, spawnTick: 2, doubleBounce: true, bounceCount: 0, dangerBounceBudget: 1, eliteStage: 1, eliteColor: '#123456', eliteCore: '#abcdef', isTriangle: true },
     ],
   }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
   ok('bullet: r preserved', t.bullets[0].r === 5 && t.bullets[1].r === 7);
@@ -282,6 +282,11 @@ function snap(overrides = {}) {
   ok('bullet: danger fallback flag', t.bullets[1].danger === true && t.bullets[0].danger === false);
   ok('bullet: ownerId from ownerSlot', t.bullets[0].ownerId === 0 && t.bullets[1].ownerId === 99);
   ok('bullet: bounces preserved', t.bullets[1].bounces === 1);
+  ok('bullet: doubleBounce preserved', t.bullets[1].doubleBounce === true);
+  ok('bullet: dangerBounceBudget preserved', t.bullets[1].dangerBounceBudget === 1);
+  ok('bullet: eliteStage preserved', t.bullets[1].eliteStage === 1);
+  ok('bullet: elite colors preserved', t.bullets[1].eliteColor === '#123456' && t.bullets[1].eliteCore === '#abcdef');
+  ok('bullet: triangle flag preserved', t.bullets[1].isTriangle === true);
 }
 
 // 15. Bullet position lerp.
