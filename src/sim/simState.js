@@ -143,6 +143,19 @@ export function createSimState({
       // legendaryRoomsSinceReject: dict { boonId: roomIndex } when that legendary was last rejected.
       legendaryRejectedIds: [],
       legendaryRoomsSinceReject: {},
+      // R0.4 step 9 — GAP 3: run-scope counters moved to state.run.
+      // These were closure-level vars in script.js (script.js:1176-1244).
+      // They live here (not per-slot) because they belong to the whole run,
+      // not to a single player; and they must snapshot/restore with sim so
+      // rollback resim through room transitions, stall spawns, and boss clears
+      // produces the exact same sequence of events.
+      runElapsedMs: 0,       // ms since run start; accumulates every tick
+      gameOverShown: false,  // whether the game-over screen has been shown
+      boonRerolls: 1,        // rerolls remaining for this run (default 1)
+      damagelessRooms: 0,    // count of rooms completed without taking damage
+      tookDamageThisRoom: false, // resets to false at room start
+      lastStallSpawnAt: -99999,  // roomTimer value when last stall-spawn fired
+      bossClears: 0,         // count of boss rooms cleared
     },
 
     // ── Sequence counters ────────────────────────────────────────
@@ -292,6 +305,12 @@ export function createSlot(index, baseHp = DEFAULT_BASE_PLAYER_HP) {
  *           state.tick/state.timeMs), NOT per-slot. enemyIdSeq is the
  *           critical one — bullet/enemy carve-outs need a deterministic
  *           id source; today script.js bumps a closure variable.
+ *           [CLOSED 2026-04-26 v1.20.102 — R0.4 step 9.] runElapsedMs,
+ *           gameOverShown, boonRerolls, damagelessRooms, tookDamageThisRoom,
+ *           lastStallSpawnAt, bossClears added to state.run. Restored in
+ *           restoreState, cleared in resetSimState. nextEnemyId was already
+ *           at state-level since R0.3 (state.nextEnemyId) — no change needed
+ *           for that part.
  *
  *   GAP 4 — out-of-sim ring buffers. Region C (grey absorb) reads
  *           hostGreyLagComp (src/net/greyLagComp.js) which is a host-only
@@ -435,6 +454,14 @@ export function resetSimState(state, { seed = 1, baseHp = DEFAULT_BASE_PLAYER_HP
   state.run.boonHistory.length = 0;
   state.run.legendaryRejectedIds.length = 0;
   state.run.legendaryRoomsSinceReject = {};
+  // R0.4 step 9 — GAP 3 fields reset at run start.
+  state.run.runElapsedMs = 0;
+  state.run.gameOverShown = false;
+  state.run.boonRerolls = 1;
+  state.run.damagelessRooms = 0;
+  state.run.tookDamageThisRoom = false;
+  state.run.lastStallSpawnAt = -99999;
+  state.run.bossClears = 0;
   state.nextEnemyId = 1;
   state.nextBulletId = 1;
   state.effectQueue.length = 0;

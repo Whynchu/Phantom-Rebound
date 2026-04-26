@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.102',
+      label: 'R0.4 STEP 9 — GAP 3 CLOSED (RUN-SCOPE COUNTERS ON state.run)',
+      summary: ['Closes the third parity gap from the R0.4 step-5 audit: seven run-scoped counters that lived as closure variables in script.js are now canonical fields on state.run. This unblocks any future carve-out that reads these values during simStep (stall spawn timer, damageless room streak, boss clear count, etc.). Canary baselines re-pinned because serialized state now contains 7 additional fields in state.run — sim math UNCHANGED. Parallel run-A == run-B continues to pass.'],
+      highlights: [
+        'state.run gains 7 new fields: runElapsedMs:0, gameOverShown:false, boonRerolls:1, damagelessRooms:0, tookDamageThisRoom:false, lastStallSpawnAt:-99999, bossClears:0. Defaults match legacy script.js closure variable initialization.',
+        'resetSimState() updated to zero/reset all 7 fields to their defaults, so between-run reset mirrors the legacy createInitialPlayerState path.',
+        'restoreState() in simStateSerialize.js gains 7 explicit copy lines in the run.* block, using the same "if defined" guard pattern as all other run fields — rollback ring-buffer restores will round-trip these counters correctly.',
+        'src/sim/simState.js audit comment updated: GAP 3 marked [CLOSED 2026-04-26 v1.20.102 — R0.4 step 9]. Remaining open: GAP 4 (hostGreyLagComp out-of-sim, gates Region C grey absorb).',
+        'scripts/test-sim-state-serialize.mjs — 3 new tests: "createSimState populates run-scope counters with defaults (R0.4 GAP 3)", "restoreState round-trips run-scope counters (R0.4 GAP 3)", "resetSimState clears run-scope counters to defaults (R0.4 GAP 3)". Suite: 20/20.',
+        'scripts/test-determinism-canary-10k.mjs — three SHA-256 baselines re-pinned. Before: tick100=640835a4…, tick5000=621ba92c…, tick10000=f0b7c83f…. After: tick100=e0d34ae4…, tick5000=7e9051a6…, tick10000=6be36f76…. Parallel run-A == run-B test still passes.',
+        'Full 47-suite sweep green.',
+      ]
+    },
+  {
       version: '1.20.101',
       label: 'R0.4 STEP 8 — SLOT-0 PARITY GAPS 1 + 2 CLOSED (DEATH VISUALS ON BODY, getSlotShields ADAPTER)',
       summary: ['Closes the first two of four parity gaps documented in src/sim/simState.js bottom comment block during R0.4 step 5. These gaps blocked the remaining bullet region carve-outs (Region E shield collision in particular) because legacy player and sim slot shapes diverged in ways that would silently desync on rollback resim. Step 8 is pure schema additions + a small adapter helper — sim math UNCHANGED. Canary baselines re-pinned because serialized state now contains 4 additional zero-valued fields per slot (default initialization). Parallel run-A == run-B continues to pass: refactor is observably equivalent.'],

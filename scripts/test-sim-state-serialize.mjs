@@ -316,6 +316,67 @@ test('resetSimState clears slot.timers and body transients', () => {
   assert.equal(state.slots[0].body.deadPulse, 0);
 });
 
+test('createSimState populates run-scope counters with defaults (R0.4 GAP 3)', () => {
+  const state = createSimState({ seed: 1, slotCount: 1 });
+  assert.equal(state.run.runElapsedMs, 0);
+  assert.equal(state.run.gameOverShown, false);
+  assert.equal(state.run.boonRerolls, 1);
+  assert.equal(state.run.damagelessRooms, 0);
+  assert.equal(state.run.tookDamageThisRoom, false);
+  assert.equal(state.run.lastStallSpawnAt, -99999);
+  assert.equal(state.run.bossClears, 0);
+});
+
+test('restoreState round-trips run-scope counters (R0.4 GAP 3)', () => {
+  const state = createSimState({ seed: 1, slotCount: 1 });
+  state.run.runElapsedMs = 123456;
+  state.run.gameOverShown = true;
+  state.run.boonRerolls = 0;
+  state.run.damagelessRooms = 3;
+  state.run.tookDamageThisRoom = true;
+  state.run.lastStallSpawnAt = 7.5;
+  state.run.bossClears = 2;
+  const runIdentity = state.run;
+
+  const snap = snapshotState(state);
+  state.run.runElapsedMs = 0;
+  state.run.gameOverShown = false;
+  state.run.boonRerolls = 1;
+  state.run.damagelessRooms = 0;
+  state.run.tookDamageThisRoom = false;
+  state.run.lastStallSpawnAt = -99999;
+  state.run.bossClears = 0;
+
+  restoreState(state, snap);
+  assert.equal(state.run, runIdentity, 'run object identity preserved');
+  assert.equal(state.run.runElapsedMs, 123456);
+  assert.equal(state.run.gameOverShown, true);
+  assert.equal(state.run.boonRerolls, 0);
+  assert.equal(state.run.damagelessRooms, 3);
+  assert.equal(state.run.tookDamageThisRoom, true);
+  assert.equal(state.run.lastStallSpawnAt, 7.5);
+  assert.equal(state.run.bossClears, 2);
+});
+
+test('resetSimState clears run-scope counters to defaults (R0.4 GAP 3)', () => {
+  const state = createSimState({ seed: 1, slotCount: 1 });
+  state.run.runElapsedMs = 50000;
+  state.run.gameOverShown = true;
+  state.run.boonRerolls = 0;
+  state.run.damagelessRooms = 5;
+  state.run.tookDamageThisRoom = true;
+  state.run.lastStallSpawnAt = 12.0;
+  state.run.bossClears = 4;
+  resetSimState(state, { seed: 9 });
+  assert.equal(state.run.runElapsedMs, 0);
+  assert.equal(state.run.gameOverShown, false);
+  assert.equal(state.run.boonRerolls, 1);
+  assert.equal(state.run.damagelessRooms, 0);
+  assert.equal(state.run.tookDamageThisRoom, false);
+  assert.equal(state.run.lastStallSpawnAt, -99999);
+  assert.equal(state.run.bossClears, 0);
+});
+
 // R1 round-trip parity: serialize a state, deserialize a fresh copy via
 // snapshotState+restoreState, simulate one hostSimStep tick from each,
 // and assert the resulting serialized states are byte-identical. This is

@@ -98,15 +98,16 @@ function runCanary(ticks) {
 // run this test, copy the printed values, and update these constants in the
 // SAME commit. Any unexpected drift will fail the test.
 const EXPECTED = {
-  // Re-pinned in v1.20.101 when slot.body gained 4 death/pop visual fields
-  // (deadAt, popAt, deadPop, deadPulse) for R0.4 step 8 GAP 1 closure.
+  // Re-pinned in v1.20.102 when state.run gained 7 run-scope counter fields
+  // (runElapsedMs, gameOverShown, boonRerolls, damagelessRooms, tookDamageThisRoom,
+  // lastStallSpawnAt, bossClears) for R0.4 step 9 GAP 3 closure.
   // Sim math UNCHANGED; the hash shifts because serialized state now contains
-  // 4 additional zero-valued fields per slot (default initialization).
+  // 7 additional fields in state.run (default initialization).
   // Parallel run-A == run-B continues to pass — refactor is observably equivalent.
-  // Prior re-pin v1.20.98 (R0.4 step 5 — clock seam).
-  tick100:   '640835a4a2059fafa1bbdc402281e0c1b629587ca43da3488dd25644553756b6',
-  tick5000:  '621ba92c8c4389c369e7807e9167c6b2fcd4b6120e13ca452e4e56fa45b203bc',
-  tick10000: 'f0b7c83f06a596ceb6e6587f27f033f75f0c29674267f579c3bd9a0b3797b9e5',
+  // Prior re-pin v1.20.101 (R0.4 step 8 — GAP 1 death/pop fields).
+  tick100:   'e0d34ae4fb511187c4f6610b19e7f06621a65484bbb7e18f510ecfe02596b9c5',
+  tick5000:  '7e9051a628b97631a6798191677717937e3cbf45ee942ee31d8943171dde6f23',
+  tick10000: '6be36f7617d0d61fedc2600627cf859b6df439226c78f1c631b27d301b4e3ccb',
 };
 
 test('R0.6: 10000-tick canary state hash matches baseline', () => {

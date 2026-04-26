@@ -248,6 +248,14 @@ export function restoreState(liveState, snapshot) {
     if (snapshot.run.legendaryRoomsSinceReject) {
       liveState.run.legendaryRoomsSinceReject = { ...snapshot.run.legendaryRoomsSinceReject };
     }
+    // R0.4 step 9 — GAP 3: run-scope counters (were closure vars in script.js).
+    if (snapshot.run.runElapsedMs !== undefined) liveState.run.runElapsedMs = snapshot.run.runElapsedMs;
+    if (snapshot.run.gameOverShown !== undefined) liveState.run.gameOverShown = snapshot.run.gameOverShown;
+    if (snapshot.run.boonRerolls !== undefined) liveState.run.boonRerolls = snapshot.run.boonRerolls;
+    if (snapshot.run.damagelessRooms !== undefined) liveState.run.damagelessRooms = snapshot.run.damagelessRooms;
+    if (snapshot.run.tookDamageThisRoom !== undefined) liveState.run.tookDamageThisRoom = snapshot.run.tookDamageThisRoom;
+    if (snapshot.run.lastStallSpawnAt !== undefined) liveState.run.lastStallSpawnAt = snapshot.run.lastStallSpawnAt;
+    if (snapshot.run.bossClears !== undefined) liveState.run.bossClears = snapshot.run.bossClears;
   }
 
   // ID counters.
