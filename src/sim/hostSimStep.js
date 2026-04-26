@@ -31,6 +31,8 @@
  */
 import { applyJoystickVelocity, tickBodyPosition } from './playerMovement.js';
 import { tickPostMovementTimers } from './postMovementTick.js';
+import { tickBulletsKinematic } from './bulletKinematic.js';
+import { tickEnemiesKinematic } from './enemyKinematic.js';
 
 const NOOP = () => {};
 const FALSE_FN = () => false;
@@ -111,6 +113,11 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
       }
     );
   }
+
+  // R2 — kinematic resim: advance bullet positions + wall bounce + expiry
+  tickBulletsKinematic(state, dt);
+  // R2 — kinematic resim: advance enemy positions toward nearest player
+  tickEnemiesKinematic(state, dt);
 
   // R0.4 step 5: advance the deterministic sim clock LAST, after all per-tick
   // logic above has read the pre-tick values. Bullet/enemy carve-outs landing

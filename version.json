@@ -1,1 +1,1 @@
-{ "version": "1.20.105", "label": "R1 — coordinatorStep wired into game loop (skipSimStepOnForward)" }
+{ "version": "1.20.106", "label": "R2 — bullet + enemy kinematic resim in hostSimStep" }

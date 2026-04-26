@@ -2,6 +2,18 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+    version: '1.20.106',
+    label: 'R2 — BULLET + ENEMY KINEMATIC RESIM IN HOSTSIMSTEP',
+    summary: ['R2 milestone: after a rollback+resim, bullets and enemies are now at their correct predicted positions. tickBulletsKinematic(state, dt) advances bullet positions via advanceBulletWithSubsteps (wall bounce + substeps) and removes expired bullets silently — no hit detection, no audio, no sparks. tickEnemiesKinematic(state, dt) moves each live enemy toward the nearest slot body by e.spd*dt — no firing, no contact damage, no AI state transitions. Both functions are called from hostSimStep after player movement, before the clock advance. The solo game path is unaffected — these functions only run during rollback resim. All 9+8 new test cases green; canary UNCHANGED.'],
+    highlights: [
+      'src/sim/bulletKinematic.js (new): tickBulletsKinematic(state, dt) — iterates state.bullets in reverse, splices null/expired entries, advances position via advanceBulletWithSubsteps. Pure: no side effects, no spawning, no hit detection.',
+      'src/sim/enemyKinematic.js (new): tickEnemiesKinematic(state, dt) — skips dead enemies, finds nearest slot body, moves enemy toward it by e.spd*dt, clamps to world bounds. Pure: no firing, no damage.',
+      'hostSimStep.js: imports and calls tickBulletsKinematic + tickEnemiesKinematic after slot movement blocks, before clock advance. Closes R2 gap: resim ticks now correctly advance bullet and enemy positions.',
+      'scripts/test-bullet-kinematic.mjs (new): 9 test cases covering advance, wall bounce X/Y, expiry, non-expiry, null cleanup, no-side-effects, multiple bullets, empty array.',
+      'scripts/test-enemy-kinematic.mjs (new): 8 test cases covering basic movement, diagonal, on-target no-NaN, dead skip, no-slots no-crash, nearest-slot selection, world clamp, speed-zero.',
+    ],
+  },
+  {
       version: '1.20.105',
       label: 'R1 — COORDINATORSTEP WIRED INTO GAME LOOP (SKIPSIMSTEPONFORWARD)',
       summary: ['R1 milestone: the RollbackCoordinator is now called every sim tick from the game loop via coordinatorStep(). The skipSimStepOnForward=true option ensures hostSimStep is NOT called on the forward path (game loop already ran update()), preventing double-advance of live position. On remote-input divergence the coordinator still calls hostSimStep during _rollbackAndResim() to correctly replay movement. Input format migrated from digital {left,right,up,down,shoot} to analog joy format {joy:{dx,dy,active,mag}} with 2dp/1dp quantization to prevent float-drift rollbacks. All 3 test files updated; 11+9+5 tests green; 10k canary UNCHANGED.'],
