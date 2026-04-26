@@ -27,11 +27,13 @@
  *
  *   - R3.3: enemy combat state (movement archetypes, fire timers, projectile
  *     spawn, siphon charge drain) during rollback resim.
+ *   - R3.4: rusher contact damage during rollback resim (resolveRusherContactHits,
+ *     called before tickBulletsKinematic so contact invuln gates same-tick bullet hits).
  */
 import { applyJoystickVelocity, tickBodyPosition } from './playerMovement.js';
 import { tickPostMovementTimers } from './postMovementTick.js';
 import { tickBulletsKinematic } from './bulletKinematic.js';
-import { resolveDangerHits } from './dangerHitDispatch.js';
+import { resolveDangerHits, resolveRusherContactHits } from './dangerHitDispatch.js';
 import { resolveOutputHits } from './outputHitDispatch.js';
 import { tickEnemyCombat } from './enemyCombatStep.js';
 
@@ -117,6 +119,9 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
 
   // R3.3 — enemy combat resim: movement archetypes + fire cadence/projectiles.
   tickEnemyCombat(state, dt, opts);
+  // R3.4 — rusher contact damage: must run BEFORE bullet kinematics so the
+  // contact invuln set here gates same-tick projectile hits in resolveDangerHits.
+  resolveRusherContactHits(state, opts);
   // R2 — kinematic resim: advance bullet positions + wall bounce + expiry.
   // Enemy bullets spawned above move during the same tick, matching script.js.
   tickBulletsKinematic(state, dt);

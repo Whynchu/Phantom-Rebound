@@ -2,6 +2,16 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.111',
+      label: 'R3.4 RUSHER CONTACT RESIM',
+      summary: ['Rusher contact damage is now fully deterministic during rollback resim. Contact invuln is applied before bullet kinematics each tick so a rusher hit blocks same-tick projectile hits, exactly matching the live loop.'],
+      highlights: [
+        'resolveRusherContactHits added to dangerHitDispatch — targets only the nearest alive slot per rusher, matching live-loop semantics.',
+        'hostSimStep now runs rusher contact BEFORE tickBulletsKinematic so contact invuln gates danger-bullet hits correctly.',
+        '6 new tests covering overlap, invincible-skip, non-rusher skip, game-over, nearest-slot selection, and the order/integration invariant.',
+      ]
+    },
+  {
       version: '1.20.110',
       label: 'COOP GUEST POSITION PRIORITY',
       summary: ['Guest input frames now include the guest\'s locally displayed body position, and the host prioritizes that fresh position for slot-1 movement so pickups match what the guest sees.'],

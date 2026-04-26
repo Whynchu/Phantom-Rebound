@@ -12,6 +12,7 @@ import { computeProjectileHitDamage } from '../systems/damage.js';
 import {
   resolveDangerPlayerHit,
   resolveSlipstreamNearMiss,
+  resolveRusherContactHit,
   resolvePostHitAftermath,
   convertNearbyDangerBulletsToGrey,
 } from '../systems/dangerHit.js';
@@ -25,7 +26,10 @@ const PHASE_DASH_DAMAGE_MULT = 0.25;
 const GLOBAL_SPEED_LIFT = 1.55;
 const BASE_PROJECTILE_INVULN_S = 1.2;
 const MIN_PROJECTILE_INVULN_S = 0.6;
+const BASE_CONTACT_INVULN_S = 1.0;
+const MIN_CONTACT_INVULN_S = 0.45;
 const BOSS_CLEAR_INVULN_REDUCTION_S = 0.08;
+const RUSHER_CONTACT_DAMAGE = 18;
 const GAME_OVER_ANIM_MS = 850;
 const BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET = 1;
 const BLOOD_PACT_BLOOD_MOON_BONUS_CAP = 1;
@@ -157,6 +161,94 @@ function getProjectileInvulnSeconds(state, opts) {
   const min = opts.minProjectileInvulnSeconds ?? MIN_PROJECTILE_INVULN_S;
   const reduction = (state.run?.bossClears || 0) * (opts.bossClearInvulnReductionSeconds ?? BOSS_CLEAR_INVULN_REDUCTION_S);
   return Math.max(min, base - reduction);
+}
+
+function getContactInvulnSeconds(state, opts) {
+  const base = opts.baseContactInvulnSeconds ?? BASE_CONTACT_INVULN_S;
+  const min = opts.minContactInvulnSeconds ?? MIN_CONTACT_INVULN_S;
+  const reduction = (state.run?.bossClears || 0) * (opts.bossClearInvulnReductionSeconds ?? BOSS_CLEAR_INVULN_REDUCTION_S);
+  return Math.max(min, base - reduction);
+}
+
+/**
+ * R3.4 — Rusher contact damage during rollback resim.
+ *
+ * For each live rusher enemy, find the nearest alive non-invincible slot,
+ * check circle overlap, and apply contact damage + aftermath (matching the
+ * live loop in script.js ~line 5846). Only the nearest slot is hit per
+ * rusher per tick, matching live semantics.
+ *
+ * Must be called AFTER tickEnemyCombat (so enemy positions are updated) and
+ * BEFORE tickBulletsKinematic (so contact invuln gates same-tick bullet hits).
+ *
+ * @param {object} state - SimState (mutated in-place)
+ * @param {object} [opts] - sim config (bossClearInvulnReductionSeconds, queueEffects, etc.)
+ * @returns {number} number of contact hits applied
+ */
+function resolveRusherContactHits(state, opts = {}) {
+  const enemies = state?.enemies;
+  const slots = state?.slots;
+  if (!Array.isArray(enemies) || !Array.isArray(slots) || enemies.length === 0) return 0;
+
+  let hits = 0;
+
+  for (let i = 0; i < enemies.length; i++) {
+    const enemy = enemies[i];
+    if (!enemy || !enemy.isRusher || enemy.dead || enemy.alive === false) continue;
+
+    // Match live-loop target selection: nearest alive non-invincible slot only.
+    // (live code only hits the chosen target slot, not all overlapping slots)
+    let targetSlot = null;
+    let bestDist = Infinity;
+    for (let s = 0; s < slots.length; s++) {
+      const slot = slots[s];
+      if (!canSlotBeHit(slot)) continue;
+      if ((slot.body.invincible || 0) > 0) continue;
+      const d = Math.hypot(slot.body.x - enemy.x, slot.body.y - enemy.y);
+      if (d < bestDist) {
+        bestDist = d;
+        targetSlot = slot;
+      }
+    }
+
+    if (!targetSlot) continue;
+
+    const body = targetSlot.body;
+    if (bestDist >= body.r + enemy.r + 2) continue;
+
+    const upg = targetSlot.upg || {};
+    const metrics = targetSlot.metrics || {};
+    const ts = Number.isFinite(state.timeMs) ? state.timeMs : 0;
+
+    const contactInvulnSeconds = getContactInvulnSeconds(state, opts);
+    const hit = resolveRusherContactHit({
+      hp: metrics.hp || 0,
+      upgrades: upg,
+      contactDamage: opts.rusherContactDamage ?? RUSHER_CONTACT_DAMAGE,
+      contactInvulnSeconds,
+    });
+
+    metrics.hp = hit.nextHp;
+    body.invincible = hit.invincibleSeconds;
+    body.distort = hit.distortSeconds;
+    if (state.run) state.run.tookDamageThisRoom = true;
+
+    applyAftermath(state, targetSlot, hit, { enableShockwave: true, shouldTriggerLastStand: Boolean(upg.lastStand && hit.lifelineTriggered), opts });
+
+    emitEffect(state, opts, 'contact.rusherHit', {
+      slotIndex: targetSlot.index || 0,
+      enemyId: enemy.eid ?? enemy.id,
+      damage: hit.damage,
+      hp: metrics.hp,
+      x: body.x,
+      y: body.y,
+      ts,
+    });
+
+    hits++;
+  }
+
+  return hits;
 }
 
 function applyPhaseDashHit(state, slot, hit, bullet, opts) {
@@ -351,6 +443,7 @@ function emitEffect(state, opts, kind, payload) {
 
 export {
   resolveDangerHits,
+  resolveRusherContactHits,
   getProjectileDamageForSlot,
   getLateBloomDamageTakenMultiplier,
 };
