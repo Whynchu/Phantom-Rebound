@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.92',
+      label: 'R0.4 STEP 4D — BULLET NEAR-MISS TELEMETRY DETECTION EXTRACTED',
+      summary: ['Fourth slice of R0.4 step 4. The 8-line block in script.js update() that detected near-misses (danger bullet passes inside a 2.75x player-radius ring without colliding) is now detectBulletNearMiss on src/systems/bulletRuntime.js. Pure helper: caller resolves the current room and player invincibility, helper writes bullet.nearMissed and increments room.nearMisses. No globals, no allocations beyond a single Math.hypot. Returns true when a new near-miss was registered. 20 unit tests cover null-safety, state filtering, invincibility skip, in-band detection, both boundary cases, double-count prevention, custom outerScale, diagonal distance, and determinism. All sim/rollback suites green.'],
+      highlights: [
+        'src/systems/bulletRuntime.js — detectBulletNearMiss(bullet, player, room, opts). Returns boolean. opts: { playerInvincible: number=0, outerScale: number=2.75 }. Skips on non-danger state, already-flagged bullet, or invincible player. Boundary check uses strict comparators (> inner && < outer) matching the original.',
+        'script.js update() — 8-line near-miss block replaced by single helper call passing telemetryController.getCurrentRoom() and player.invincible through opts. Behavior is byte-equivalent: same outer/inner ring math, same flag semantics, same room counter increment.',
+        'scripts/test-bullet-near-miss.mjs — 20 tests. Null-safety, state-skip (non-danger), already-flagged skip, invincible-player skip, in-band detection registers + flags + increments, inside collision range no-register, outside outer ring no-register, both boundaries strict (no register), room counter preserved when present, missing nearMisses initialized to 1, second call no double-count, custom outerScale, determinism across calls, diagonal-distance handling.',
+        'Test pass: determinism canary, sim-state, sim-state-serialize, sim-replay, player movement, post-movement-tick, bullet-homing, bullet-gravity-well, bullet-substeps, bullet-near-miss (new), rollback buffer/coordinator/integration, systems, bullet-ids/local-advance/spawn-detector, snapshot shield/orb sync — all green.',
+        'Slicing strategy continues: each clean inner block of the bullet loop becomes a single-responsibility helper with unit-test coverage. Cumulative R0.4 progress: ~58 lines of script.js update() bullet/post-movement code now live in deterministic, unit-tested pure helpers across post-movement-tick, homing, gravity-well, substep integration, and near-miss detection.',
+        'Production unchanged: helper preserves the original side-effect contract exactly (mutates bullet.nearMissed, increments room.nearMisses or initializes from undefined). Rollback resim path still dormant in production (?rollback=1 flag).',
+      ]
+    },
+  {
       version: '1.20.91',
       label: 'R0.4 STEP 4C — BULLET SUBSTEP INTEGRATION + WALL BOUNCE EXTRACTED',
       summary: ['Third slice of R0.4 step 4. The 13-line block in script.js update() that ran sub-stepped bullet integration (anti-tunneling) plus axis-aligned wall reflection plus per-substep obstacle collision is now advanceBulletWithSubsteps on src/systems/bulletRuntime.js. Pure deterministic geometry: substep count = clamp(ceil(maxFrameTravel/10), 1, 6); per-substep position update; wall reflection with clamp on overlap; obstacle callback dispatched per substep. No RNG, no audio, no allocations. 22 unit tests cover null-safety, every wall axis, corner bounce, callback wiring, substep count math, and 30-tick determinism. All sim/rollback suites green.'],

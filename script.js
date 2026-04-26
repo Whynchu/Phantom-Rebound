@@ -220,6 +220,7 @@ import {
   applyBulletHoming,
   applyDangerGravityWell,
   advanceBulletWithSubsteps,
+  detectBulletNearMiss,
 } from './src/systems/bulletRuntime.js';
 import {
   resolveOutputEnemyHit,
@@ -5960,14 +5961,10 @@ function update(dt,ts){
       resolveObstacleCollision: resolveBulletObstacleCollision,
     });
 
-    const nmRoom = telemetryController.getCurrentRoom();
-    if(b.state==='danger' && !b.nearMissed && nmRoom && player.invincible <= 0){
-      const nmDist = Math.hypot(b.x - player.x, b.y - player.y);
-      if(nmDist < player.r * 2.75 + b.r && nmDist > player.r + b.r){
-        b.nearMissed = true;
-        nmRoom.nearMisses = (nmRoom.nearMisses || 0) + 1;
-      }
-    }
+    // R0.4 step 4d: near-miss telemetry detection extracted to bulletRuntime.detectBulletNearMiss
+    detectBulletNearMiss(b, player, telemetryController.getCurrentRoom(), {
+      playerInvincible: player.invincible,
+    });
 
     if(bounced){
       if(b.state==='danger'){

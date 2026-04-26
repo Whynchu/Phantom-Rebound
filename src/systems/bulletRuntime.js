@@ -199,6 +199,29 @@ function advanceBulletWithSubsteps(bullet, dt, opts) {
   return bounced;
 }
 
+// R0.4 step 4d: near-miss telemetry detection.
+// Detects when a danger bullet passes close to the player without colliding,
+// and increments the room's nearMisses counter. Pure helper: caller resolves
+// the current room and player invincibility state. Returns true if a new
+// near-miss was registered this call (false otherwise).
+function detectBulletNearMiss(bullet, player, room, opts) {
+  if (!bullet || !player || !room) return false;
+  if (bullet.state !== 'danger') return false;
+  if (bullet.nearMissed) return false;
+  const playerInvincible = opts?.playerInvincible ?? 0;
+  if (playerInvincible > 0) return false;
+  const outerScale = opts?.outerScale ?? 2.75;
+  const dist = Math.hypot(bullet.x - player.x, bullet.y - player.y);
+  const outer = player.r * outerScale + bullet.r;
+  const inner = player.r + bullet.r;
+  if (dist < outer && dist > inner) {
+    bullet.nearMissed = true;
+    room.nearMisses = (room.nearMisses || 0) + 1;
+    return true;
+  }
+  return false;
+}
+
 export {
   shouldExpireOutputBullet,
   shouldRemoveBulletOutOfBounds,
@@ -207,4 +230,5 @@ export {
   applyBulletHoming,
   applyDangerGravityWell,
   advanceBulletWithSubsteps,
+  detectBulletNearMiss,
 };
