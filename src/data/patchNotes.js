@@ -2,6 +2,17 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.118',
+      label: 'D20.2 GUEST FEEL + BOON FIX',
+      summary: ['Three guest coop bugs fixed. (1) Joystick feel mismatch: the drift-anchor correction (tickJoystick) was only called in the host path; guests felt slightly looser when making wide sweeping movements. Guest path now calls tickJoystick at the same phase gates. (2) READY/GO and intro lockout: guests saw "READY?" but never "GO!" before the round started, and could move freely during the intro countdown. Guest now shows "GO!" briefly on the intro→spawning transition (matching host timing), and guest local prediction is gated to zero velocity during intro phase. (3) Recover boon crash: selecting the Recover (heal) card as guest sent no completion signal to the host, leaving the boon phase permanently open. The heal boon is not in the BOONS array so boonIdFromBoon returned -1; the phase-complete path was silently abandoned. Guest now sends a -1 sentinel (same as host legendary reject) so the host marks guest-done and the run advances.'],
+      highlights: [
+        'D20.2: tickJoystick (drift anchor) now called for guest at fighting/spawning phases — joystick feel matches host.',
+        'D20.2: guest shows "GO!" banner on intro→spawning transition before hiding overlay (600 ms, matching host).',
+        'D20.2: guest local prediction zeroes velocity during intro phase — guest can no longer move before GO!.',
+        'D20.2: Recover (heal) boon pick as guest now sends boonId=-1 to host so phase advances cleanly; crash + disconnect fixed.',
+      ]
+    },
+  {
       version: '1.20.117',
       label: 'D20 GUEST POS SMOOTH',
       summary: ['Fixed guest position appearing choppy/jerky on the host device. Root cause: the remote input adapter was re-snapping the guest body to the same old position every tick (freeze), then jumping when a new batch of frames arrived (jump). Fix: a lastSnapTick tracker now ensures each incoming frame triggers a position snap exactly once; subsequent ticks with the same best-available frame fall through to velocity integration (dead reckoning) instead of re-snapping. Also fixed guest body blinking to old position at room start: the ring buffer is now cleared on room transitions so stale cross-room position stamps cannot contaminate the new room.'],

@@ -1968,7 +1968,20 @@ function onLocalBoonPickedOnline(slotId, boon) {
   if (!isHost && !isGuest) return false;
   if (currentBoonPhaseId == null) return false;
   const id = boonIdFromBoon(boon);
-  if (id < 0) return false;
+  if (id < 0) {
+    // Local-only picks (e.g. the heal/Recover boon, which is created
+    // dynamically and not in the BOONS array). Guest still needs to signal
+    // done to the host so the phase can advance — send boonId=-1 sentinel
+    // (host marks guestDone without applying any boon, since guest already
+    // applied it locally). Host's own legendary-reject path also uses -1.
+    if (isGuest) {
+      pendingCoopBoonPicks.guestDone = true;
+      sendCoopBoonPick(1, -1);
+      showCoopGuestWaitOverlay('WAITING FOR HOST…');
+      return true;
+    }
+    return false;
+  }
   if (isHost) {
     pendingCoopBoonPicks.hostDone = true;
     sendCoopBoonPick(0, id);
@@ -3218,6 +3231,12 @@ function updateOnlineGuestPrediction(dt) {
   // the renderer doesn't show post-mortem drift; the applier re-anchors
   // on respawn (dead→alive edge) before prediction resumes.
   if ((body.deadAt | 0) !== 0) {
+    body.vx = 0;
+    body.vy = 0;
+    return;
+  }
+  // D20.2 — mirror host's movement gate: no movement allowed during intro.
+  if (roomPhase === 'intro') {
     body.vx = 0;
     body.vy = 0;
     return;
@@ -5249,7 +5268,9 @@ function loop(ts){
             if (roomPhase === 'intro' && (prevRoomPhase !== 'intro' || roomIndex !== prevRoomIndex)) {
               try { showRoomIntro('READY?', false); } catch (_) {}
             } else if (prevRoomPhase === 'intro' && roomPhase !== 'intro') {
-              try { hideRoomIntro(); } catch (_) {}
+              // D20.2 — show GO! briefly before hiding, matching host's intro state machine.
+              try { showRoomIntro('GO!', true); } catch (_) {}
+              try { setTimeout(() => { try { hideRoomIntro(); } catch (_) {} }, 600); } catch (_) {}
             }
             // D18.13 — sync the ROOM CLEAR flash overlay on guest. Host
             // calls finalizeRoomClearState → showRoomClear() inside its
@@ -5549,6 +5570,12 @@ function update(dt,ts){
     runElapsedMs += dt * 1000;
     simNowMs += dt * 1000;
     prevStill = true;
+    // D20.2 — joystick drift anchor runs for guest too. Without this,
+    // sweeping touches cause the virtual thumb to walk away from its anchor
+    // point over time, making the guest feel sluggish compared to host.
+    if (roomPhase === 'fighting' || roomPhase === 'spawning') {
+      try { tickJoystick(joy, dt); } catch (_) {}
+    }
     // Phase D3: guest samples local input once per sim tick and batches
     // quantized frames to the host. sampleFrame auto-flushes when the
     // batch hits size 4 (~15 msg/s at 60 Hz, well under Supabase's
