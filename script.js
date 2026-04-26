@@ -150,9 +150,9 @@ import {
 import { createSnapshotApplier } from './src/net/snapshotApplier.js';
 import { createBulletLocalAdvance, PREDICTABLE_STATES as BULLET_PREDICTABLE_STATES } from './src/net/bulletLocalAdvance.js';
 import { createGreyLagComp } from './src/net/greyLagComp.js';
-import { createBulletSpawnDetector } from './src/net/bulletSpawnDetector.js';
+
 import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
-import { createHostRemoteInputProcessor } from './src/net/hostRemoteInputProcessor.js';
+
 import { setupRollback, teardownRollback, coordinatorStep, getRollbackStats, isRollbackStalled } from './src/net/rollbackIntegration.js';
 import { hostSimStep } from './src/sim/hostSimStep.js';
 import { drain as drainSimEffectQueue } from './src/sim/effectQueue.js';
@@ -1107,11 +1107,9 @@ let coopLocalColorAnnounced = false;
 // to render the partner with their cosmetic. Reset by teardownCoopRunFully.
 let coopPartnerHatKey = null;
 let coopLocalHatAnnounced = false;
-// Phase D4.5: host-side processor that tracks the highest sim-tick for
-// which the host has actually consumed a remote-input frame (for slot 1).
-// `null` outside online host runs. Powers `lastProcessedInputSeq[1]` on
-// snapshots and trims the remote-input ring buffer to bound memory.
-let hostRemoteInputProcessor = null;
+// Phase D4.5: host-side remote-input processor retired (DR-0a) — rollback
+// coordinator now owns input delivery. lastProcessedInputSeq[1] acks to null
+// (D6 reconciliation retired along with guestPredictionReconciler).
 let onlineHostSlot1Installed = false;
 // Phase D5b — guest-side snapshot applier + slot 1 install.
 let guestSnapshotApplier = null;
@@ -1165,11 +1163,8 @@ function getCoopPlayerColorForSlot(slotId) {
 // "touched." Null on solo and on guest devices.
 let hostGreyLagComp = null;
 // D19.4 — guest-side bullet spawn detector. Tracks every bullet id observed
-// in a snapshot so we can pop a small muzzle flash the first time a given
-// id appears (host shots, enemy shots, charge orbs). Without this, bullets
-// teleport into existence at their ~70 ms snapshot-delayed position with no
-// spawn cue, looking like they came out of thin air. Null on solo and host.
-let guestBulletSpawnDetector = null;
+// D19.4: bullet spawn detector retired (DR-0b) — muzzle flashes for remote
+// bullets will be provided by the effectQueue once R0.4 is complete.
 // Phase D5e — reconciler seq tracker: don't double-correct same snapshot.
 let lastReconciledSnapshotSeq = null;
 // Fixed-step accumulator (Phase C1b). Sim runs at a deterministic
@@ -1454,8 +1449,7 @@ function teardownCoopInputUplink() {
   latestRemoteSnapshotRecvAtMs = 0;
   coopEnemyDamageEvents.length = 0;
   coopPickupEvents.length = 0;
-  // Phase D4.5: tear down host-side slot 1 + processor.
-  hostRemoteInputProcessor = null;
+  // Phase D4.5: host-side slot 1 teardown.
   if (onlineHostSlot1Installed) {
     // Slot 1 was installed by us (online host). Remove it. Slot 0 is left
     // intact — installPlayerSlot0 owns its lifecycle. We just delete the
@@ -1471,11 +1465,7 @@ function teardownCoopInputUplink() {
   }
   guestBulletLocalAdvance = null;
   lastBulletReconciledSnapshotSeq = null;
-  // D19.4: tear down guest spawn detector.
-  if (guestBulletSpawnDetector) {
-    try { guestBulletSpawnDetector.clear(); } catch (_) {}
-  }
-  guestBulletSpawnDetector = null;
+  // D19.4: spawn detector retired (DR-0b).
   // D19.3: tear down host grey lag-comp tracker.
   if (hostGreyLagComp) {
     try { hostGreyLagComp.clear(); } catch (_) {}
@@ -2793,9 +2783,8 @@ function installCoopInputUplink(armedCoop) {
     });
     lastBulletReconciledSnapshotSeq = null;
     try { console.info('[coop] guest bullet local-advance armed'); } catch (_) {}
-    // D19.4 — bullet spawn detector for any-owner muzzle flashes.
-    guestBulletSpawnDetector = createBulletSpawnDetector({});
-    try { console.info('[coop] guest bullet spawn detector armed'); } catch (_) {}
+    // D19.4 — bullet spawn detector retired (DR-0b).
+    try { console.info('[coop] guest bullet spawn detector retired (DR-0b)'); } catch (_) {}
   }
   ensureRollbackSlot1Bridge();
   // R3 — rollback coordinator (experimental). Slot 1 must be installed before
@@ -3017,8 +3006,7 @@ function startCoopDiagnostics(role) {
   coopDiagInterval = setInterval(() => {
     try {
       const stats = coopInputSync ? coopInputSync.getStats() : null;
-      const rp = (typeof hostRemoteInputProcessor !== 'undefined' && hostRemoteInputProcessor)
-        ? hostRemoteInputProcessor.getStats() : null;
+      const rp = null; // DR-0a: hostRemoteInputProcessor retired
       const slot1 = playerSlots[1] || null;
       const body = slot1 && slot1.body;
       const mv = (slot1 && slot1.input && typeof slot1.input.moveVector === 'function')
@@ -3211,13 +3199,9 @@ function collectHostSnapshotState() {
     elapsedMs: runElapsedMs | 0,
     enemyDamageEvents: coopEnemyDamageEvents.splice(0, coopEnemyDamageEvents.length),
     pickupEvents: coopPickupEvents.splice(0, coopPickupEvents.length),
-    // Slot 0 is host-owned; we've consumed all our own input up to simTick.
-    // Slot 1 ack comes from hostRemoteInputProcessor — null until we've
-    // actually consumed a remote-input frame (D4.5). Per rubber-duck #3
-    // this MUST be a consumed tick, not "newest received".
     lastProcessedInputSeq: {
       0: simTick | 0,
-      1: hostRemoteInputProcessor ? hostRemoteInputProcessor.getLastProcessedTick() : null,
+      1: null, // DR-0a: hostRemoteInputProcessor retired; D6 reconciliation dead
     },
   };
 }
@@ -3256,11 +3240,7 @@ function installOnlineCoopHostSlot1(remoteRing) {
     metrics, timers, aim,
     input: createRemoteInputAdapter(remoteRing, { getCurrentTick: () => simTick }),
   }));
-  hostRemoteInputProcessor = createHostRemoteInputProcessor({
-    remoteRing,
-    retainTicks: 60, // ~1s of replay history for D6 reconciliation
-    logger: (msg, err) => { try { console.warn('[coop] ' + msg, err || ''); } catch (_) {} },
-  });
+  // DR-0a: hostRemoteInputProcessor retired; rollback coordinator owns input delivery.
   onlineHostSlot1Installed = true;
   // D19.3 — arm host-side grey lag-comp when slot 1 (the guest) is on-line.
   // Solo + host-without-guest never instantiate this; no determinism risk.
@@ -5267,15 +5247,6 @@ function loop(ts){
       simNowMs += SIM_STEP_MS;
       simTick++;
       update(SIM_STEP_SEC, simNowMs);
-      // Phase D4.5: after update() finishes, ack the remote input frame
-      // for this sim tick (if any). MUST come before broadcaster.tick so
-      // the snapshot's lastProcessedInputSeq[1] reflects the just-consumed
-      // tick rather than lagging by one cadence period.
-      if (hostRemoteInputProcessor) {
-        try { hostRemoteInputProcessor.tick(simTick); } catch (err) {
-          try { console.warn('[coop] remote input processor error', err); } catch (_) {}
-        }
-      }
       // R1 — rollback coordinator input capture + snapshot (after update()).
       // skipSimStepOnForward=true means the coordinator does NOT re-run movement
       // here; it only records inputs, buffers a post-update snapshot, and checks
@@ -5492,55 +5463,8 @@ function loop(ts){
         } catch (decayErr) {
           try { console.warn('[coop] grey-decay stamp error', decayErr); } catch (_) {}
         }
-        // D19.4 — any-owner bullet spawn muzzle. Detect bullet ids that
-        // weren't in any prior snapshot we processed and emit a small
-        // spark burst at their position so they don't materialize from
-        // thin air. Dispatcher routes color by ownerSlot/state:
-        //   • state==='danger' (enemy shot) → C.red
-        //   • ownerSlot===0 (host's player shot, partner on guest screen)
-        //     → coopPartnerColorKey hex if known, else C.green fallback
-        //   • ownerSlot===1 (guest's own shot) → C.green, but skipped if
-        //     D19.2's local fireT-wrap already fired the muzzle this
-        //     fire-cycle. Conservative dedup: skip slot==1 entirely;
-        //     D19.2 owns that slot. Drift between charge clocks is rare
-        //     and the missed muzzle is the lesser evil vs double-flash.
-        //   • Charge orbs (state==='grey' from a player) → light ghost
-        //     spark so harvested orbs visually emerge from the kill.
-        try {
-          if (guestBulletSpawnDetector) {
-            const fresh = guestBulletSpawnDetector.detectNewSpawns(bullets, simTick);
-            for (let fi = 0; fi < fresh.length; fi++) {
-              const b = fresh[fi];
-              if (!b || typeof b !== 'object') continue;
-              let col = null;
-              let count = 4;
-              const owner = b.ownerSlot | 0;
-              if (b.state === 'danger') {
-                col = C.red;
-                count = 5;
-              } else if (b.state === 'grey') {
-                // Greys don't really "spawn" — they're harvested from
-                // killed enemies. A subtle ghost spark on first sight
-                // gives the orb visual continuity instead of popping in.
-                col = C.ghost || C.grey;
-                count = 3;
-              } else if (owner === 1) {
-                // D19.2 owns the local guest's muzzle. Skip to avoid
-                // double-flash; markSeen so eviction still ages out.
-                continue;
-              } else if (owner === 0) {
-                const partnerHex = coopPartnerColorKey ? (getColorSchemeForKey(coopPartnerColorKey)?.hex || null) : null;
-                col = partnerHex || C.green;
-                count = 4;
-              } else {
-                col = C.green;
-              }
-              try { spawnSparks(b.x, b.y, col, count, 50); } catch (_) {}
-            }
-          }
-        } catch (spawnErr) {
-          try { console.warn('[coop] spawn-muzzle dispatch error', spawnErr); } catch (_) {}
-        }
+        // DR-0b: bulletSpawnDetector retired; muzzle flashes for remote bullets
+        // will be provided by effectQueue once R0.4 is complete.
       } catch (err) {
         try { console.warn('[coop] snapshot apply error', err); } catch (_) {}
       }

@@ -2,6 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.134',
+      label: 'DR-0: REMOTE INPUT PROCESSOR + SPAWN DETECTOR RETIRED',
+      summary: ['Two more D-series modules removed: hostRemoteInputProcessor (input ack ring buffer) and bulletSpawnDetector (remote muzzle flashes). Rollback coordinator owns input delivery. Muzzle flashes for remote bullets will return via effectQueue in R0.4.'],
+      highlights: [
+        'hostRemoteInputProcessor removed — lastProcessedInputSeq[1] now always null (D6 reconciliation dead).',
+        'bulletSpawnDetector removed — ~50 lines of remote muzzle-flash dispatch deleted.',
+        'All 74 tests green.',
+      ]
+    },
+  {
       version: '1.20.133',
       label: 'R3.3-SAFE: ROLLBACK ALWAYS-ON + RECONCILER RETIRED',
       summary: ['Rollback netcode is now the permanent default — no ?rollback=1 flag needed. guestPredictionReconciler fully retired (~90 lines removed). Snapshot world-sync still active until R0.4.'],
