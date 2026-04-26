@@ -2,7 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
-      version: '1.20.103',
+      version: '1.20.104',
+      label: 'R0.4 STEP 11 — REGION E (SHIELD COLLISION) CARVED INTO PURE MODULE',
+      summary: ['Carves Region E (danger-bullet vs player-shield collision) out of the script.js bullet loop into a new pure module src/sim/shieldHitDispatch.js. The dispatcher handles all shield boon interactions: Mirror Shield reflection, Tempered Shield two-stage absorption, Shield Burst radial output, Barrier Pulse charge grant, and Aegis Titan cross-shield cooldown sharing. Critical ordering detail preserved: mirror fires before tempered check so a hardened tempered shield can also emit a reflection on its first hit. Telemetry (shieldBlocks++) returned as a data signal so the dispatcher stays pure — caller only applies it on the live commit tick, not during rollback resim. Canary hash UNCHANGED — refactor is observably equivalent.'],
+      highlights: [
+        'src/sim/shieldHitDispatch.js (new) — exports detectShieldHit(bullet, ctx). Pure: returns null on miss; discriminated union {kind:\'temperedAbsorb\'|\'pop\', effects, hitShieldIdx, shieldBlockOccurred, mirrorCooldown?, mirrorReflectionSpec?, shieldBurstSpec?, barrierPulseGain?, shieldCooldown?, aegisTitanCdShare?} on hit.',
+        'getShieldCooldown() and getAegisBatteryDamageMult() close over UPG globals — pre-computed as shieldCooldown and aegisBatteryDamageMult scalars in ctx per dispatcher pattern established at Region C.',
+        'circleIntersectsShieldPlate() logic inlined into _circleIntersectsShieldPlate() inside the dispatcher using SHIELD_HALF_W/SHIELD_HALF_H imported from constants.js. Avoids any circular dependency.',
+        'script.js: 83-line inline Region E block replaced with dispatcher call + translator (~40 lines). Telemetry shieldBlocks++ lives only in translator (commit-phase guard).',
+        'scripts/test-shield-hit-dispatch.mjs (new) — 28 assertions covering: miss (far/cooldown/geometry), pop path (basic, mirror, mirror+tempered ordering, mirror cooldown, burst, burst+aegis, barrier pulse, aegis titan), temperedAbsorb (hardened/unhardened, no-cooldown fields), multi-shield priority, purity (bullet/shield/player not mutated), telemetry-as-data, geometry edge cases, shieldCooldown passthrough, mirror damage factor, aegis titan damage doubling.',
+        'Full 50-suite sweep green. Canary hash UNCHANGED — sim math identical.',
+      ]
+    },
+  {
       label: 'R0.4 STEP 10 — GAP 4 CLOSED, REGION C (GREY ABSORB) CARVED INTO PURE MODULE',
       summary: ['Closes the final parity gap from the R0.4 step-5 audit (GAP 4 — hostGreyLagComp out-of-sim) and carves Region C (grey bullet absorption) out of the script.js bullet loop into a new pure module src/sim/greyAbsorbDispatch.js. Resolution strategy: hostGreyLagComp injected as ctx.lagComp (null in solo/resim). During rollback resim the caller passes lagComp:null so all historic-overlap checks return false (conservative). Acceptable for Phantom Rebound\'s snapshot-reconciliation model. All 4 parity gaps from the R0.4 audit are now closed. Canary hash UNCHANGED — refactor is observably equivalent.'],
       highlights: [

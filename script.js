@@ -226,6 +226,7 @@ import {
 import { dispatchBulletBounce } from './src/sim/bulletBounceDispatch.js';
 import { detectVolatileOrbHit } from './src/sim/volatileOrbDispatch.js';
 import { detectGreyAbsorb } from './src/sim/greyAbsorbDispatch.js';
+import { detectShieldHit } from './src/sim/shieldHitDispatch.js';
 import {
   resolveOutputEnemyHit,
 } from './src/systems/outputHit.js';
@@ -6123,87 +6124,46 @@ function update(dt,ts){
       }
     }
 
+    // Region E — shield collision (R0.4 step 11; pure dispatcher in src/sim/shieldHitDispatch.js)
     if(b.state==='danger' && player.shields.length>0){
-      const total=player.shields.length;
-      // Quick proximity guard: bullet must be near the orbital ring
-      if(Math.hypot(b.x-player.x,b.y-player.y)<SHIELD_ORBIT_R+8+b.r){
-        let shieldHit=false;
-        for(let si=0;si<total;si++){
-          const s=player.shields[si];
-          if(s.cooldown>0) continue;
-          const shieldSlot = getShieldSlotPosition({
-            index: si,
-            shieldCount: total,
-            ts,
-            rotationSpeed: SHIELD_ROTATION_SPD,
-            radius: SHIELD_ORBIT_R,
-            originX: player.x,
-            originY: player.y,
-          });
-          const sx=shieldSlot.x;
-          const sy=shieldSlot.y;
-          const shieldFacing = shieldSlot.facing;
-          if(circleIntersectsShieldPlate(b.x, b.y, b.r, sx, sy, shieldFacing)){
-            const shieldRoom = telemetryController.getCurrentRoom();
-            if (shieldRoom) shieldRoom.safety.shieldBlocks += 1;
-            // Mirror Shield: reflect bullet back as output
-            if(UPG.shieldMirror && (ts - (s.mirrorCooldown||0)) > 300){
-              s.mirrorCooldown = ts;
-              const reflectionSpec = buildMirrorShieldReflectionSpec({
-                x: sx,
-                y: sy,
-                vx: b.vx,
-                vy: b.vy,
-                shotSize: UPG.shotSize,
-                playerDamageMult: UPG.playerDamageMult || 1,
-                denseDamageMult: UPG.denseDamageMult || 1,
-                aegisTitan: UPG.aegisTitan,
-                mirrorShieldDamageFactor: MIRROR_SHIELD_DAMAGE_FACTOR,
-                aegisBatteryDamageMult: getAegisBatteryDamageMult(),
-                now: simNowMs,
-                playerShotLifeMs: PLAYER_SHOT_LIFE_MS,
-                shotLifeMult: UPG.shotLifeMult || 1,
-              });
-              pushOutputBullet({ bullets, ...reflectionSpec });
-            }
-            // Tempered Shield: two-stage (purple -> blue -> pop)
-            if(UPG.shieldTempered && s.hardened){
-              s.hardened=false;
-              sparks(sx,sy,C.shieldEnhanced,8,60);
-              bullets.splice(i,1); shieldHit=true; break;
-            }
-            // Shield pops — Shield Burst fires 4/8-way output
-            if(UPG.shieldBurst){
-              const shieldBurstSpec = buildShieldBurstSpec({
-                x: player.x,
-                y: player.y,
-                aegisTitan: UPG.aegisTitan,
-                globalSpeedLift: GLOBAL_SPEED_LIFT,
-                shotSize: UPG.shotSize,
-                playerDamageMult: UPG.playerDamageMult || 1,
-                denseDamageMult: UPG.denseDamageMult || 1,
-                aegisNovaDamageFactor: AEGIS_NOVA_DAMAGE_FACTOR,
-                aegisBatteryDamageMult: getAegisBatteryDamageMult(),
-                now: simNowMs,
-                playerShotLifeMs: PLAYER_SHOT_LIFE_MS,
-                shotLifeMult: UPG.shotLifeMult || 1,
-              });
-              spawnRadialOutputBurst({ bullets, ...shieldBurstSpec });
-            }
-            // Barrier Pulse: +2 charge + magnet pulse
-            if(UPG.barrierPulse){
-              gainCharge(2, 'barrierPulse');
-              slot0Timers.barrierPulseTimer=800;
-            }
-            const cd = getShieldCooldown();
-            s.cooldown = cd; s.maxCooldown = cd;
-            // AEGIS TITAN: all shields share one cooldown
-            if(UPG.aegisTitan){ for(const os of player.shields){ if(os!==s && os.cooldown<=0){ os.cooldown=cd; os.maxCooldown=cd; os.hardened=false; } } }
-            sparks(sx,sy,C.shieldActive,8,60);
-            bullets.splice(i,1); shieldHit=true; break;
-          }
+      const shieldResult = detectShieldHit(b, {
+        player,
+        ts,
+        UPG,
+        simNowMs,
+        shieldOrbitR: SHIELD_ORBIT_R,
+        shieldRotationSpd: SHIELD_ROTATION_SPD,
+        shieldCooldown: getShieldCooldown(),
+        aegisBatteryDamageMult: getAegisBatteryDamageMult(),
+        playerShotLifeMs: PLAYER_SHOT_LIFE_MS,
+        mirrorShieldDamageFactor: MIRROR_SHIELD_DAMAGE_FACTOR,
+        aegisNovaDamageFactor: AEGIS_NOVA_DAMAGE_FACTOR,
+        globalSpeedLift: GLOBAL_SPEED_LIFT,
+        shieldActiveColor: C.shieldActive,
+        shieldEnhancedColor: C.shieldEnhanced,
+      });
+      if(shieldResult){
+        // Telemetry — commit-phase only (never in rollback resim)
+        const shieldRoom = telemetryController.getCurrentRoom();
+        if(shieldRoom) shieldRoom.safety.shieldBlocks += 1;
+        // Apply cosmetic effects
+        for(const fx of shieldResult.effects){
+          if(fx.kind==='sparks') sparks(fx.x, fx.y, fx.color, fx.count, fx.size);
         }
-        if(shieldHit) continue;
+        const s = player.shields[shieldResult.hitShieldIdx];
+        // Mirror reflection output bullet
+        if(shieldResult.mirrorCooldown !== null) s.mirrorCooldown = shieldResult.mirrorCooldown;
+        if(shieldResult.mirrorReflectionSpec) pushOutputBullet({ bullets, ...shieldResult.mirrorReflectionSpec });
+        if(shieldResult.kind === 'temperedAbsorb'){
+          s.hardened = false;
+        } else {
+          // pop path
+          if(shieldResult.shieldBurstSpec) spawnRadialOutputBurst({ bullets, ...shieldResult.shieldBurstSpec });
+          if(shieldResult.barrierPulseGain > 0){ gainCharge(shieldResult.barrierPulseGain, 'barrierPulse'); slot0Timers.barrierPulseTimer=800; }
+          s.cooldown = shieldResult.shieldCooldown; s.maxCooldown = shieldResult.shieldCooldown;
+          if(shieldResult.aegisTitanCdShare){ for(const os of player.shields){ if(os!==s && os.cooldown<=0){ os.cooldown=shieldResult.shieldCooldown; os.maxCooldown=shieldResult.shieldCooldown; os.hardened=false; } } }
+        }
+        bullets.splice(i,1); continue;
       }
     }
 

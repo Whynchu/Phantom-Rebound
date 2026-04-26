@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.103', label: 'R0.4 step 10 — GAP 4 closed, Region C (grey absorb) carved into pure module' };
+const VERSION = { num: '1.20.104', label: 'R0.4 step 11 — Region E (shield collision) carved into pure module' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;
