@@ -2,7 +2,7 @@
 
 const PATCH_NOTES_RECENT = [
   {
-      version: '1.20.111',
+      version: '1.20.122',
       label: 'DAMAGE VARIANCE FEEDBACK',
       summary: ['Player shots now roll deterministic RPG-style damage variance per bullet instead of showing strictly static/incremental values.'],
       highlights: [
