@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.128',
+      label: 'R3 GREY ABSORB PARITY',
+      summary: ['Rollback resim now handles grey decay and slot/orb pickup charge deterministically.'],
+      highlights: [
+        'Added focused coverage for host pickup, guest pickup, resonant absorb, refraction, absorb-orbs, and grey expiry.',
+      ]
+    },
+  {
       version: '1.20.127',
       label: 'R3 ORBIT CONTACT PARITY',
       summary: ['Rollback resim now applies orbit-sphere enemy contact damage and kills.'],

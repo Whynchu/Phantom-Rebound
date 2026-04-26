@@ -39,6 +39,7 @@ import { tickEnemyCombat } from './enemyCombatStep.js';
 import { resolveShieldCollisions } from './shieldCollisionStep.js';
 import { resolveVolatileOrbHits } from './volatileOrbStep.js';
 import { resolveOrbitSphereContactHits } from './orbitSphereContactStep.js';
+import { resolveGreyAbsorbs } from './greyAbsorbStep.js';
 
 const NOOP = () => {};
 const FALSE_FN = () => false;
@@ -128,6 +129,8 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   // R2 — kinematic resim: advance bullet positions + wall bounce + expiry.
   // Enemy bullets spawned above move during the same tick, matching script.js.
   tickBulletsKinematic(state, dt);
+  // R3 parity — grey bullets decay and can be absorbed by player slots/orbs.
+  resolveGreyAbsorbs(state, dt, opts);
   // R3 parity — volatile orbit spheres remove danger bullets before shields/player hits.
   resolveVolatileOrbHits(state, opts);
   // R3 parity — shields block/reflect danger bullets before player damage.
