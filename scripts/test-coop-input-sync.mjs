@@ -466,6 +466,67 @@ test('remote adapter: D12.3 guest-ahead works even with very large gap', () => {
   assert.equal(v.active, true);
 });
 
+// D20.1 — position-snap smoothing tests
+test('remote adapter: D20.1 position snap fires once per new frame, not every tick', () => {
+  const rb = createRemoteInputBuffer();
+  rb.push({ tick: 50, dx: 64, dy: 0, t: 200, still: 0, x: 100, y: 200 });
+  let currentTick = 55; // host simTick ahead of frame tick (normal network case)
+  const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => currentTick });
+  // First call: new frame (tick 50 > lastSnapTick -1) → position included
+  const v1 = adapter.moveVector();
+  assert.equal(v1.x, 100, 'first call: x provided');
+  assert.equal(v1.y, 200, 'first call: y provided');
+  // Second call same tick: frame 50 already snapped → no position (dead reckon)
+  const v2 = adapter.moveVector();
+  assert.equal(v2.x, null, 'repeat call same frame: x must be null (dead reckon)');
+  assert.equal(v2.y, null, 'repeat call same frame: y must be null (dead reckon)');
+});
+
+test('remote adapter: D20.1 new batch triggers re-snap, old batch dead-reckons', () => {
+  const rb = createRemoteInputBuffer();
+  rb.push({ tick: 50, dx: 64, dy: 0, t: 200, still: 0, x: 100, y: 200 });
+  let currentTick = 55;
+  const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => currentTick });
+  adapter.moveVector(); // snap to frame 50
+  adapter.moveVector(); // dead reckon (no snap)
+  // New batch arrives with a higher-tick frame
+  rb.push({ tick: 54, dx: 80, dy: 0, t: 210, still: 0, x: 120, y: 210 });
+  // peekLatestUpTo(55) now returns frame 54 (newer than 50)
+  const v = adapter.moveVector();
+  assert.equal(v.x, 120, 'new frame triggers re-snap');
+  assert.equal(v.y, 210, 'new frame triggers re-snap');
+  // Next call: frame 54 already snapped
+  const v2 = adapter.moveVector();
+  assert.equal(v2.x, null, 'after snap: dead reckon');
+});
+
+test('remote adapter: D20.1 resetSnapHistory re-enables position snap', () => {
+  const rb = createRemoteInputBuffer();
+  rb.push({ tick: 50, dx: 64, dy: 0, t: 200, still: 0, x: 100, y: 200 });
+  let currentTick = 55;
+  const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => currentTick });
+  adapter.moveVector(); // snap (lastSnapTick = 50)
+  adapter.moveVector(); // dead reckon
+  adapter.resetSnapHistory(); // reset (lastSnapTick = -1)
+  const v = adapter.moveVector(); // frame 50 > -1 → re-snap
+  assert.equal(v.x, 100, 'after resetSnapHistory: position snap re-enabled');
+});
+
+test('remote adapter: D20.1 frames without position never set lastSnapTick', () => {
+  const rb = createRemoteInputBuffer();
+  rb.push({ tick: 50, dx: 64, dy: 0, t: 200, still: 0 }); // no x/y
+  let currentTick = 50;
+  const adapter = createRemoteInputAdapter(rb, { getCurrentTick: () => currentTick });
+  const v1 = adapter.moveVector();
+  assert.equal(v1.x, null, 'no x/y on frame → null');
+  assert.equal(v1.y, null);
+  // Now push a frame with position at a higher tick
+  rb.push({ tick: 51, dx: 80, dy: 0, t: 210, still: 0, x: 150, y: 250 });
+  currentTick = 51;
+  const v2 = adapter.moveVector();
+  assert.equal(v2.x, 150, 'frame with position at tick 51 snaps correctly');
+});
+
 // ---------------------------------------------------------------------------
 
 await Promise.all(pendingAsync);

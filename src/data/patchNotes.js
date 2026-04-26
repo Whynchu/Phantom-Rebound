@@ -2,6 +2,17 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.117',
+      label: 'D20 GUEST POS SMOOTH',
+      summary: ['Fixed guest position appearing choppy/jerky on the host device. Root cause: the remote input adapter was re-snapping the guest body to the same old position every tick (freeze), then jumping when a new batch of frames arrived (jump). Fix: a lastSnapTick tracker now ensures each incoming frame triggers a position snap exactly once; subsequent ticks with the same best-available frame fall through to velocity integration (dead reckoning) instead of re-snapping. Also fixed guest body blinking to old position at room start: the ring buffer is now cleared on room transitions so stale cross-room position stamps cannot contaminate the new room.'],
+      highlights: [
+        'D20.1: remote input adapter tracks lastSnapTick — position snap fires once per new frame arrival, not every tick.',
+        'D20.1: between batch arrivals, guest body uses velocity dead-reckoning instead of freezing at last known position.',
+        'D20.1: remoteInputBuffer gains clear() method called on room start to flush cross-room position contamination.',
+        'D20.1: resetSnapHistory() resets lastSnapTick on room transition (pairs with ring-buffer clear).',
+      ]
+    },
+  {
       version: '1.20.116',
       label: 'R4 HOST NO-ROLLBACK FIX',
       summary: ['Fixed guest position being choppy on the host device. The host rollback coordinator was triggering resim corrections for slot 1 (guest), but hostSimStep is a partial simulation that does not include the D-series remoteX/Y position snap that drives slot 1 in the live forward path. These corrections systematically diverged from the actual position, causing visible snapping on every direction change. The host coordinator now acts as a snapshot/input-sender only — it never triggers rollback corrections for slot 1. Slot 1 position on the host remains exclusively driven by D-series (ring buffer + remoteX/Y snap), which is smooth.'],

@@ -3968,6 +3968,18 @@ function startRoom(idx) {
     s.body.spawnY = sy;
     s.body.invincible = Math.max(s.body.invincible || 0, 1.0);
     s.body.distort = 0;
+    // D20.1 — reset position-snap history so the first frame from the new
+    // room triggers a fresh snap (not treated as "already snapped").
+    if (s.input && typeof s.input.resetSnapHistory === 'function') {
+      try { s.input.resetSnapHistory(); } catch (_) {}
+    }
+  }
+  // D20.1 — flush the remote ring buffer on room start so position stamps
+  // from the previous room (which can still be inside the buffer and
+  // within the stale-tick threshold) don't snap the guest body to the
+  // wrong position, causing the visible "blink" at round start.
+  if (coopInputSync) {
+    try { coopInputSync.getRemoteRingBuffer().clear?.(); } catch (_) {}
   }
   // D18.15 — coop spectator-on-death: revive any slot that died last
   // room at 25% maxHp (or current hp, whichever is higher so HP boons

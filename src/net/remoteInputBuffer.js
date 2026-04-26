@@ -118,7 +118,13 @@ function createRemoteInputBuffer({ capacity = 120, logger = null } = {}) {
     };
   }
 
-  return { push, peekAt, peekLatestUpTo, peekOldest, peekNewest, consumeUpTo, hasFrameFor, size, oldestTick, newestTick, stats };
+  // D20.1 — flush all buffered frames (e.g. on room transition) so stale
+  // cross-room position stamps don't contaminate the new room's movement.
+  function clear() {
+    buf.length = 0;
+  }
+
+  return { push, peekAt, peekLatestUpTo, peekOldest, peekNewest, consumeUpTo, hasFrameFor, size, oldestTick, newestTick, stats, clear };
 }
 
 export { createRemoteInputBuffer };

@@ -117,21 +117,39 @@ function createRemoteInputAdapter(ringBuffer, { getCurrentTick, staleTickThresho
     }
     return { frame: null, stale: true };
   }
+
+  // D20.1 — position smoothing. Track the highest frame tick we've already
+  // used for a position snap. When the best-available frame changes (new
+  // frame arrived), snap once; for subsequent ticks with the same "best"
+  // frame, omit x/y so updateGuestSlotMovement falls through to velocity
+  // integration (dead reckoning). This eliminates the "freeze then jump"
+  // artifact caused by re-snapping to the same stale position every tick.
+  let lastSnapTick = -1;
+
   return {
     kind: 'remote',
+    // Call on room/run transitions so cross-room position stamps can't
+    // contaminate the new room (works in tandem with remoteRing.clear()).
+    resetSnapHistory() { lastSnapTick = -1; },
     moveVector() {
       const { frame, stale } = selectFrame();
       if (!frame || stale) {
         return { dx: 0, dy: 0, t: 0, active: false, stale: true };
       }
+      // Provide position correction only the first time this frame becomes
+      // the "best" frame. Once snapped, dead-reckon via velocity until a
+      // newer frame arrives and frame.tick advances past lastSnapTick.
+      const isNewFrame = frame.tick > lastSnapTick;
+      const hasPos = isNewFrame && Number.isFinite(frame.x) && Number.isFinite(frame.y);
+      if (hasPos) lastSnapTick = frame.tick;
       return {
         dx: frame.dx / 127,
         dy: frame.dy / 127,
         t: frame.t / 255,
         active: frame.still === 0,
         stale: false,
-        x: Number.isFinite(frame.x) ? frame.x : null,
-        y: Number.isFinite(frame.y) ? frame.y : null,
+        x: hasPos ? frame.x : null,
+        y: hasPos ? frame.y : null,
       };
     },
     isStill() {
