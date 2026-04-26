@@ -219,6 +219,7 @@ import {
   resolveOutputBounceState,
   applyBulletHoming,
   applyDangerGravityWell,
+  advanceBulletWithSubsteps,
 } from './src/systems/bulletRuntime.js';
 import {
   resolveOutputEnemyHit,
@@ -5953,19 +5954,11 @@ function update(dt,ts){
     }
 
     let bounced=false;
-    // Sub-stepped bullet movement prevents tunneling through wall cubes on long frames.
-    const maxFrameTravel = Math.max(Math.abs(b.vx), Math.abs(b.vy)) * dt;
-    const subSteps = Math.min(6, Math.max(1, Math.ceil(maxFrameTravel / 10)));
-    const stepDt = dt / subSteps;
-    for(let step = 0; step < subSteps; step++){
-      b.x += b.vx * stepDt;
-      b.y += b.vy * stepDt;
-      if(b.x-b.r<M){b.x=M+b.r;b.vx=Math.abs(b.vx);bounced=true;}
-      if(b.x+b.r>W-M){b.x=W-M-b.r;b.vx=-Math.abs(b.vx);bounced=true;}
-      if(b.y-b.r<M){b.y=M+b.r;b.vy=Math.abs(b.vy);bounced=true;}
-      if(b.y+b.r>H-M){b.y=H-M-b.r;b.vy=-Math.abs(b.vy);bounced=true;}
-      if(resolveBulletObstacleCollision(b)) bounced = true;
-    }
+    // R0.4 step 4c: sub-stepped integration + wall bounce extracted to bulletRuntime.advanceBulletWithSubsteps
+    bounced = advanceBulletWithSubsteps(b, dt, {
+      W, H, M,
+      resolveObstacleCollision: resolveBulletObstacleCollision,
+    });
 
     const nmRoom = telemetryController.getCurrentRoom();
     if(b.state==='danger' && !b.nearMissed && nmRoom && player.invincible <= 0){

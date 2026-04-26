@@ -2,6 +2,19 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.91',
+      label: 'R0.4 STEP 4C — BULLET SUBSTEP INTEGRATION + WALL BOUNCE EXTRACTED',
+      summary: ['Third slice of R0.4 step 4. The 13-line block in script.js update() that ran sub-stepped bullet integration (anti-tunneling) plus axis-aligned wall reflection plus per-substep obstacle collision is now advanceBulletWithSubsteps on src/systems/bulletRuntime.js. Pure deterministic geometry: substep count = clamp(ceil(maxFrameTravel/10), 1, 6); per-substep position update; wall reflection with clamp on overlap; obstacle callback dispatched per substep. No RNG, no audio, no allocations. 22 unit tests cover null-safety, every wall axis, corner bounce, callback wiring, substep count math, and 30-tick determinism. All sim/rollback suites green.'],
+      highlights: [
+        'src/systems/bulletRuntime.js — advanceBulletWithSubsteps(bullet, dt, opts). Returns true if bounced. opts: { W, H, M, resolveObstacleCollision }. Mutates bullet.x/y/vx/vy in place. Null-safe on missing bullet, missing opts, or missing W/H/M. Tolerates missing resolveObstacleCollision callback.',
+        'script.js update() — 13-line substep loop replaced by single helper call passing W, H, M and the existing resolveBulletObstacleCollision closure as a callback. Behavior is byte-equivalent: same substep count formula, same reflection math, same per-substep callback ordering.',
+        'scripts/test-bullet-substeps.mjs — 22 tests. Null-safety, simple translation, all four wall reflections (left/right/top/bottom), corner bounce (both axes flip), obstacle callback invocation count, obstacle-returns-true bounced-result, substep count = 1 for low velocity, capped at 6 for high velocity, exact formula check (vx=300, dt=0.1 → 3 substeps), missing-callback tolerance, 30-tick determinism, zero-velocity no-op.',
+        'Test pass: determinism canary, sim-state, sim-state-serialize, sim-replay, player movement, post-movement-tick, bullet-homing, bullet-gravity-well, bullet-substeps (new), rollback buffer/coordinator/integration, systems, bullet-ids/local-advance/spawn-detector, snapshot shield/orb sync — all green.',
+        'Slicing strategy: each clean inner block of the bullet loop becomes a single-responsibility helper with unit-test coverage. Next candidates: near-miss telemetry detection (lines ~5970-5977, coupled to telemetryController side effect), then bounce-state effect dispatch (already partially extracted), then per-bullet collision sweep against enemies and slot bridges.',
+        'Production unchanged: helper preserves the original integer-bouncing semantics exactly (post-bounce bullet continues moving in the next substep, so end-of-frame x can be inside the play area, not pinned to M+r). Rollback resim path still dormant in production (?rollback=1 flag). Cumulative R0.4 progress: ~50 lines of script.js update() bullet/post-movement code now live in deterministic, unit-tested pure helpers.',
+      ]
+    },
+  {
       version: '1.20.90',
       label: 'R0.4 STEP 4B — DANGER BULLET GRAVITY-WELL STEERING EXTRACTED',
       summary: ['Second slice of R0.4 step 4. The 22-line block in script.js update() that handled gravityWell deceleration/recovery for danger bullets is now applyDangerGravityWell on src/systems/bulletRuntime.js. Pure deterministic math: enter-field captures baseSpeed, in-field exponential pull toward 55% of baseSpeed (floor 40), out-of-field recovery toward baseSpeed (floor 40), baseSpeed cleared once recovery is within 2 units of target. No RNG, no audio, no allocations. 15 unit tests cover entry/exit, floor clamping, asymptotic behavior, direction preservation, multiple in/out cycles, stationary bullet (no NaN), null-safety, custom range. All sim/rollback suites green.'],

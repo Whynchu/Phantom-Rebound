@@ -174,6 +174,31 @@ function applyDangerGravityWell(bullet, target, dt, opts = {}) {
   return true;
 }
 
+// R0.4 step 4c: sub-stepped bullet integration + wall bounce.
+// Pure helper extracted from script.js update() bullet loop.
+// Advances bullet position via sub-steps to prevent tunneling on long frames,
+// reflects velocity off world walls, and invokes resolveObstacleCollision per substep.
+// Returns true if the bullet bounced off any wall or obstacle this frame.
+function advanceBulletWithSubsteps(bullet, dt, opts) {
+  if (!bullet || !opts) return false;
+  const { W, H, M, resolveObstacleCollision } = opts;
+  if (typeof W !== 'number' || typeof H !== 'number' || typeof M !== 'number') return false;
+  let bounced = false;
+  const maxFrameTravel = Math.max(Math.abs(bullet.vx), Math.abs(bullet.vy)) * dt;
+  const subSteps = Math.min(6, Math.max(1, Math.ceil(maxFrameTravel / 10)));
+  const stepDt = dt / subSteps;
+  for (let step = 0; step < subSteps; step++) {
+    bullet.x += bullet.vx * stepDt;
+    bullet.y += bullet.vy * stepDt;
+    if (bullet.x - bullet.r < M) { bullet.x = M + bullet.r; bullet.vx = Math.abs(bullet.vx); bounced = true; }
+    if (bullet.x + bullet.r > W - M) { bullet.x = W - M - bullet.r; bullet.vx = -Math.abs(bullet.vx); bounced = true; }
+    if (bullet.y - bullet.r < M) { bullet.y = M + bullet.r; bullet.vy = Math.abs(bullet.vy); bounced = true; }
+    if (bullet.y + bullet.r > H - M) { bullet.y = H - M - bullet.r; bullet.vy = -Math.abs(bullet.vy); bounced = true; }
+    if (typeof resolveObstacleCollision === 'function' && resolveObstacleCollision(bullet)) bounced = true;
+  }
+  return bounced;
+}
+
 export {
   shouldExpireOutputBullet,
   shouldRemoveBulletOutOfBounds,
@@ -181,4 +206,5 @@ export {
   resolveOutputBounceState,
   applyBulletHoming,
   applyDangerGravityWell,
+  advanceBulletWithSubsteps,
 };
