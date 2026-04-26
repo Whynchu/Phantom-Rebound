@@ -1,51 +1,76 @@
 /**
  * R3 Host Sim Step
- * 
- * A deterministic sim step function for rollback-based coop.
- * Encapsulates the core host simulation logic that can be replayed
- * identically on both peers for rollback validation.
- * 
- * Signature: hostSimStep(state, slot0Input, slot1Input, dt)
- * 
- * This is a bridge to script.js's existing update() logic.
- * Once R0.4 carves simStep out of update(), this becomes the
- * canonical deterministic sim.
+ *
+ * Deterministic sim step for rollback-based coop. Mutates simState in place.
+ *
+ * Signature: hostSimStep(state, slot0Input, slot1Input, dt, opts?)
+ *
+ * Population strategy: this function is built up chunk by chunk during R0.4.
+ * Each chunk (player movement → timers/shields/orbs → bullets → enemies →
+ * collisions) is added here AND extracted out of script.js's update() in the
+ * same commit, so the two paths stay equivalent. The black-box replay test
+ * (scripts/test-sim-replay.mjs) drives hostSimStep through N ticks with a
+ * deterministic input stream and asserts byte-identity across runs — this
+ * is the gate that catches non-determinism the moment a chunk lands.
+ *
+ * Currently wired:
+ *   - R0.4 chunks 1+2: player movement (joystick → velocity, position
+ *     integration with substeps + phase-walk obstacle handling).
+ *
+ * Pending:
+ *   - R0.4 step 3: timer/shield/orb tick block.
+ *   - R0.4 step 4: bullets / enemies / collisions.
  */
+import { applyJoystickVelocity, tickBodyPosition } from './playerMovement.js';
+
+const NOOP = () => {};
+const FALSE_FN = () => false;
 
 /**
- * Host simulation step. Called by RollbackCoordinator or directly by game loop.
- * 
- * @param {SimState} state - The live simulation state (mutated in-place)
- * @param {object} slot0Input - { left, right, up, down, shoot, ... } for slot 0 (world/host)
- * @param {object} slot1Input - { left, right, up, down, shoot, ... } for slot 1 (remote/guest)
- * @param {number} dt - Timestep in seconds
- * 
- * Mutates state in-place:
- * - state.slots[0/1].body.x/y/vx/vy (position/velocity)
- * - state.slots[0/1].metrics.hp/charge/fireT (game metrics)
- * - state.bullets array (projectiles)
- * - state.enemies array (enemies)
- * - state.run.{roomIndex, score, kills} (progression/scoring)
- * - Queues effects to state.effectQueue for later consumption by render
+ * @param {object} state - SimState (mutated in-place)
+ * @param {object|null} slot0Input - { joy: {dx,dy,active,max?}, ... } or null
+ * @param {object|null} slot1Input - same shape, for coop slot
+ * @param {number} dt - timestep in seconds
+ * @param {object} [opts] - sim config + obstacle helpers (see below)
+ *
+ * opts fields (with defaults):
+ *   baseSpeed=200, deadzone=0.15, joyMax=60, gate=true,
+ *   worldW=state.worldW||800, worldH=state.worldH||600, margin=16,
+ *   phaseWalk=false, phaseWalkMaxOverlapMs=500, phaseWalkIdleEjectMs=250,
+ *   resolveCollisions=noop, isOverlapping=()=>false, eject=noop.
  */
-export function hostSimStep(state, slot0Input, slot1Input, dt) {
-  // Placeholder: This function will be populated during R0.4 refactor
-  // when simStep is carved out of update().
-  //
-  // For now, this is a no-op. The actual host sim runs inline in
-  // script.js's update() function.
-  //
-  // During R3.1 integration, we'll:
-  // 1. Extract the host's update() logic into this function
-  // 2. Wire it through RollbackCoordinator
-  // 3. Validate determinism with existing canary tests
-  //
-  // The wrapped version will:
-  // - Take input objects (left/right/up/down/shoot/aimX/aimY/etc)
-  // - Call simRng.next() for deterministic randomness
-  // - Mutate state in-place (no snapshots, no copies)
-  // - Queue effects to state.effectQueue
-  // - Return nothing (void)
+export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
+  const baseSpeed = opts.baseSpeed != null ? opts.baseSpeed : 200;
+  const deadzone = opts.deadzone != null ? opts.deadzone : 0.15;
+  const joyMax = opts.joyMax != null ? opts.joyMax : 60;
+  const gate = opts.gate !== false;
+  const worldW = opts.worldW != null ? opts.worldW : (state.worldW || 800);
+  const worldH = opts.worldH != null ? opts.worldH : (state.worldH || 600);
+  const margin = opts.margin != null ? opts.margin : 16;
+  const phaseOpts = {
+    phaseWalk: !!opts.phaseWalk,
+    phaseWalkMaxOverlapMs: opts.phaseWalkMaxOverlapMs != null ? opts.phaseWalkMaxOverlapMs : 500,
+    phaseWalkIdleEjectMs: opts.phaseWalkIdleEjectMs != null ? opts.phaseWalkIdleEjectMs : 250,
+    resolveCollisions: opts.resolveCollisions || NOOP,
+    isOverlapping: opts.isOverlapping || FALSE_FN,
+    eject: opts.eject || NOOP,
+  };
+  const world = { W: worldW, H: worldH, M: margin };
+
+  const slot0 = state.slots && state.slots[0];
+  if (slot0 && slot0.body) {
+    const joy0 = slot0Input && slot0Input.joy;
+    applyJoystickVelocity(slot0.body, joy0, baseSpeed, deadzone, joyMax, gate);
+    tickBodyPosition(slot0.body, dt, world, phaseOpts);
+  }
+
+  const slot1 = state.slots && state.slots[1];
+  if (slot1 && slot1.body) {
+    const joy1 = slot1Input && slot1Input.joy;
+    applyJoystickVelocity(slot1.body, joy1, baseSpeed, deadzone, joyMax, gate);
+    tickBodyPosition(slot1.body, dt, world, phaseOpts);
+  }
 }
 
 export default hostSimStep;
+
