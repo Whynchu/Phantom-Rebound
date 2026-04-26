@@ -225,6 +225,7 @@ import {
 } from './src/systems/bulletRuntime.js';
 import { dispatchBulletBounce } from './src/sim/bulletBounceDispatch.js';
 import { detectVolatileOrbHit } from './src/sim/volatileOrbDispatch.js';
+import { detectGreyAbsorb } from './src/sim/greyAbsorbDispatch.js';
 import {
   resolveOutputEnemyHit,
 } from './src/systems/outputHit.js';
@@ -6027,118 +6028,67 @@ function update(dt,ts){
       // R0.4 step 4e: decay + expiry extracted to bulletRuntime.tickGreyBulletDecay
       const greyTick = tickGreyBulletDecay(b, ts, dt, { decayMS });
       if(greyTick.expired){ bullets.splice(i,1); continue; }
-      if(Math.hypot(b.x-player.x,b.y-player.y)<absorbR+b.r){
-        let absorbGain = UPG.absorbValue;
-        if(UPG.ghostFlow){
-          const spd = Math.hypot(player.vx, player.vy);
-          const titanSlow = UPG.colossus ? 1 - (1 - (UPG.titanSlowMult || 1)) * 0.5 : (UPG.titanSlowMult || 1);
-          const maxSpd = 165 * Math.min(2.5, (UPG.speedMult || 1) * titanSlow);
-          const frac = Math.min(1, spd / Math.max(1, maxSpd));
-          absorbGain *= 0.5 + frac * 1.1;
-        }
-        gainCharge(absorbGain, 'greyAbsorb');
-        // Resonant Absorb
-        if(UPG.resonantAbsorb){
-          slot0Timers.absorbComboTimer=1500;
-          slot0Timers.absorbComboCount++;
-          if(slot0Timers.absorbComboCount>=3){
-            gainCharge(UPG.absorbValue * (UPG.surgeHarvest ? 1.0 : 0.5), 'resonantAbsorb');
-            slot0Timers.absorbComboCount=0;
-          }
-        }
-        // Refraction: fire weak homing shot from absorbed grey bullet
-        if(UPG.refraction && UPG.refractionCooldown <= 0){
-          UPG.refractionCount = (UPG.refractionCount || 0) + 1;
-          if(UPG.refractionCount <= 4){
-            const angle = Math.atan2(player.y - b.y, player.x - b.x);
-            const rNow = simNowMs;
-            pushOutputBullet({
-              bullets,
-              x: b.x,
-              y: b.y,
-              vx: Math.cos(angle) * 140 * GLOBAL_SPEED_LIFT,
-              vy: Math.sin(angle) * 140 * GLOBAL_SPEED_LIFT,
-              radius: 3.2,
-              bounceLeft: 0,
-              pierceLeft: 0,
-              homing: true,
-              crit: false,
-              dmg: 0.75,
-              expireAt: rNow + 1600,
-            });
-            if(UPG.refractionCount >= 4){
-              UPG.refractionCooldown = 900;
-              UPG.refractionCount = 0;
-            }
-          }
-        }
-        // Chain Magnet
-        if(UPG.chainMagnetTier>0){
-          slot0Timers.chainMagnetTimer=700+(UPG.chainMagnetTier-1)*350;
-        }
-        sparks(b.x,b.y,C.ghost,5,45);
-        bullets.splice(i,1);continue;
-      }
-      // D13.2 — slot-1+ grey absorb (coop guest pickup). Slot 0 owns the
-      // host-side absorb path above (with all its boon hooks). Extra slots
-      // get a simple absorb: per-slot maxCharge clamp, per-slot absorbRange,
-      // no host-only timer state (no _barrierPulse / _chainMagnet bonuses).
-      // Iterates ascending slot id so the order is deterministic.
-      if(playerSlots.length > 1){
-        let absorbedSlot = false;
-        for(let si=1; si<playerSlots.length; si++){
-          const gs = playerSlots[si];
-          const gb = gs && gs.body;
-          if(!gb || ((gs.metrics && gs.metrics.hp) || 0) <= 0) continue;
-          if((gb.deadAt || 0) > 0) continue;
-          const gAbsR = (gb.r || 14) + 5 + ((gs.upg && gs.upg.absorbRange) || 0);
-          // D19.3 — accept a hit if the body overlaps the grey at its
-          // current position OR at its position ~6 ticks ago (≈100 ms).
-          // Guests render greys at host-now-renderDelayMs, so when their
-          // body visually touches the orb on screen, the grey has since
-          // drifted forward on the host. The historic check forgives that
-          // drift. Solo unaffected (hostGreyLagComp is null).
-          const overlapNow = Math.hypot(b.x - gb.x, b.y - gb.y) < gAbsR + b.r;
-          const overlapHistoric = !overlapNow && hostGreyLagComp
-            ? hostGreyLagComp.wasNearHistoric(b.id, simTick, gb.x, gb.y, gAbsR)
-            : false;
-          if(overlapNow || overlapHistoric){
-            const cap = (gs.upg && gs.upg.maxCharge) || 1;
-            const gain = (gs.upg && gs.upg.absorbValue) || 1;
-            gs.metrics.charge = Math.min(cap, (gs.metrics.charge || 0) + gain);
-            sparks(b.x, b.y, C.ghost, 5, 45);
-            bullets.splice(i, 1);
-            absorbedSlot = true;
-            break;
-          }
-        }
-        if(absorbedSlot) continue;
-      }
-      // Absorb Orbs: grey bullets near any alive orbit sphere are absorbed
+
+      // R0.4 step 10 — Region C carved into greyAbsorbDispatch.js.
+      // Pre-compute orbit scalars outside the pure dispatcher so it doesn't
+      // close over UPG globals (per rubber-duck critique).
       if(UPG.absorbOrbs && UPG.orbitSphereTier>0){
         syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
-        let absorbed=false;
-        for(let si=0;si<UPG.orbitSphereTier;si++){
-          if(_orbCooldown[si]>0) continue;
-          const orbitSlot = getOrbitSlotPosition({
-            index: si,
-            orbitSphereTier: UPG.orbitSphereTier,
-            ts,
-            rotationSpeed: ORBIT_ROTATION_SPD,
-            radius: getOrbitRadius(),
-            originX: player.x,
-            originY: player.y,
-          });
-          const sx=orbitSlot.x;
-          const sy=orbitSlot.y;
-          const orbAbsorbR = getOrbVisualRadius() + 7;
-          if(Math.hypot(b.x-sx,b.y-sy)<b.r+orbAbsorbR){
-            gainCharge(UPG.absorbValue, 'orbAbsorb');
-            sparks(sx,sy,C.ghost,4,40);
-            bullets.splice(i,1); absorbed=true; break;
-          }
+      }
+      const greyResult = detectGreyAbsorb(b, {
+        player,
+        absorbR,
+        slot0Timers,
+        UPG,
+        simNowMs,
+        playerSlots,
+        simTick,
+        lagComp: hostGreyLagComp,  // null in solo/resim — see greyAbsorbDispatch.js
+        ts,
+        ORBIT_ROTATION_SPD,
+        getOrbitSlotPosition,
+        orbitRadius: getOrbitRadius(),
+        orbVisualRadius: getOrbVisualRadius(),
+        orbCooldowns: _orbCooldown,
+        GLOBAL_SPEED_LIFT,
+        ghostColor: C.ghost,
+      });
+      if(greyResult){
+        // Apply cosmetic effects (sparks)
+        for(const fx of greyResult.effects){
+          if(fx.kind==='sparks') sparks(fx.x,fx.y,fx.color,fx.count,fx.size);
         }
-        if(absorbed) continue;
+        if(greyResult.kind==='slot0'){
+          const s0 = greyResult.slot0;
+          gainCharge(s0.absorbGain, 'greyAbsorb');
+          if(s0.resonantIncrement){
+            slot0Timers.absorbComboTimer=1500;
+            slot0Timers.absorbComboCount++;
+            if(s0.resonantBonusGain>0){
+              gainCharge(s0.resonantBonusGain, 'resonantAbsorb');
+              slot0Timers.absorbComboCount=0;
+            }
+          }
+          if(s0.refractionSpec){
+            pushOutputBullet({ bullets, ...s0.refractionSpec });
+          }
+          if(s0.refractionCooldownReset){
+            UPG.refractionCooldown=900;
+            UPG.refractionCount=0;
+          } else if(s0.newRefractionCount!==undefined){
+            UPG.refractionCount=s0.newRefractionCount;
+          }
+          if(s0.chainMagnetDuration>0){
+            slot0Timers.chainMagnetTimer=s0.chainMagnetDuration;
+          }
+        } else if(greyResult.kind==='guest'){
+          const g = greyResult.guest;
+          playerSlots[g.slotIdx].metrics.charge=g.newCharge;
+        } else if(greyResult.kind==='orb'){
+          const o = greyResult.orb;
+          gainCharge(o.absorbGain, 'orbAbsorb');
+        }
+        bullets.splice(i,1); continue;
       }
     }
 

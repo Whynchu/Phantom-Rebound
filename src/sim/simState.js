@@ -314,11 +314,15 @@ export function createSlot(index, baseHp = DEFAULT_BASE_PLAYER_HP) {
  *
  *   GAP 4 — out-of-sim ring buffers. Region C (grey absorb) reads
  *           hostGreyLagComp (src/net/greyLagComp.js) which is a host-only
- *           ring buffer NOT part of simState. That region cannot be
- *           carved until the lag-comp data is either (a) moved into sim
- *           (rollback-safe but wider blast radius), or (b) the lag-comp
- *           lookup is moved to a post-sim resolution pass and the sim
- *           emits an "absorb candidate" event.
+ *           ring buffer NOT part of simState. [CLOSED 2026-04-26 v1.20.103
+ *           — R0.4 step 10.] Resolution: inject as ctx.lagComp (null in
+ *           solo/resim). The dispatcher is "pure given ctx" — same inputs
+ *           → same outputs. During rollback resim the caller passes
+ *           lagComp:null so all historic-overlap checks return false
+ *           (conservative). Acceptable for Phantom Rebound's snapshot-
+ *           reconciliation model: host sends authoritative state to guests
+ *           after reconciliation so minor divergence in guest charge
+ *           pickups during resim does not cause persistent desync.
  *
  * EFFECT-QUEUE CONTRACT — the four deferred regions need these events on
  * state.effectQueue (drained on commit by the renderer; suppressed during

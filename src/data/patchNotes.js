@@ -2,6 +2,20 @@ import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.103',
+      label: 'R0.4 STEP 10 — GAP 4 CLOSED, REGION C (GREY ABSORB) CARVED INTO PURE MODULE',
+      summary: ['Closes the final parity gap from the R0.4 step-5 audit (GAP 4 — hostGreyLagComp out-of-sim) and carves Region C (grey bullet absorption) out of the script.js bullet loop into a new pure module src/sim/greyAbsorbDispatch.js. Resolution strategy: hostGreyLagComp injected as ctx.lagComp (null in solo/resim). During rollback resim the caller passes lagComp:null so all historic-overlap checks return false (conservative). Acceptable for Phantom Rebound\'s snapshot-reconciliation model. All 4 parity gaps from the R0.4 audit are now closed. Canary hash UNCHANGED — refactor is observably equivalent.'],
+      highlights: [
+        'src/sim/greyAbsorbDispatch.js (new) — exports detectGreyAbsorb(bullet, ctx). Pure module: handles all three grey absorption sub-paths: slot-0 (with GhostFlow speed-scaling, ResonantAbsorb combo streak, Refraction homing shot, ChainMagnet duration), slot-1+ coop guest absorb (overlapNow || overlapHistoric via lagComp oracle), and AbsorbOrbs (grey near alive orbit sphere). Returns null on miss; discriminated union {kind,effects,slot0?/guest?/orb?} on hit.',
+        'GAP 4 resolution: hostGreyLagComp injected as ctx.lagComp rather than being called directly in sim. Dispatcher is pure given ctx — no module-level globals. Per rubber-duck critique, getOrbitRadius()/getOrbVisualRadius() pre-computed as scalar ctx fields (orbitRadius/orbVisualRadius) so the dispatcher does not close over UPG globals.',
+        'Refraction edge case hardened: refractionCount clamped to [0,3] at entry in dispatcher so bad persisted state cannot deadlock the refraction boon.',
+        'script.js: 100-line inline grey block replaced with dispatcher call + 30-line translator. hostGreyLagComp.record() remains before the bullet loop (pre-sim snapshot, unchanged). orbitRadius/orbVisualRadius pre-computed scalars passed into ctx. lagComp: hostGreyLagComp (null in solo).',
+        'src/sim/simState.js audit comment: GAP 4 marked [CLOSED 2026-04-26 v1.20.103 — R0.4 step 10] with rationale. All 4 parity gaps are now closed.',
+        'scripts/test-grey-absorb-dispatch.mjs (new) — 28 assertions covering: miss, slot0 basic, GhostFlow (full/zero speed), ResonantAbsorb (no-bonus/bonus/surgeHarvest), Refraction (fire/reset/suppressed/bad-count-clamp), ChainMagnet (tier 1/3), guest (overlapNow/charge-cap/dead-skip/lagComp-historic/lagComp-null), orb (absorb/cooldown-skip), priority order (slot0>guest>orb), spark positions, determinism, purity (bullet/slot0Timers/UPG not mutated).',
+        'Full 47-suite sweep green (now 48 suites). Canary unchanged — sim math is identical, only code structure changed.',
+      ]
+    },
+  {
       version: '1.20.102',
       label: 'R0.4 STEP 9 — GAP 3 CLOSED (RUN-SCOPE COUNTERS ON state.run)',
       summary: ['Closes the third parity gap from the R0.4 step-5 audit: seven run-scoped counters that lived as closure variables in script.js are now canonical fields on state.run. This unblocks any future carve-out that reads these values during simStep (stall spawn timer, damageless room streak, boss clear count, etc.). Canary baselines re-pinned because serialized state now contains 7 additional fields in state.run — sim math UNCHANGED. Parallel run-A == run-B continues to pass.'],
