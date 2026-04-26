@@ -98,14 +98,15 @@ function runCanary(ticks) {
 // run this test, copy the printed values, and update these constants in the
 // SAME commit. Any unexpected drift will fail the test.
 const EXPECTED = {
-  // Re-pinned in v1.20.98 when hostSimStep started advancing state.tick and
-  // state.timeMs (R0.4 step 5 — clock seam). Prior baselines (v1.20.94) were
-  // computed when the sim clock was frozen at 0; bumping the seam shifts the
-  // hashes by exactly the per-tick clock advancement (sim math itself is
-  // unchanged). Parallel run-A == run-B continues to pass.
-  tick100:   'b07f81ecf28309e260d104f94334e2387831a3b055d290e6be9073d4dc0fbad4',
-  tick5000:  'a4fe5a1d3c94f1a5d2a5026b2b4877336ee05e7e80fd3b127541057e96235fbc',
-  tick10000: 'ba27cc13e13fbe96eb1c4527f2fc31ba9e3c8ba1182ac018dc8254eaaeb49f4f',
+  // Re-pinned in v1.20.101 when slot.body gained 4 death/pop visual fields
+  // (deadAt, popAt, deadPop, deadPulse) for R0.4 step 8 GAP 1 closure.
+  // Sim math UNCHANGED; the hash shifts because serialized state now contains
+  // 4 additional zero-valued fields per slot (default initialization).
+  // Parallel run-A == run-B continues to pass — refactor is observably equivalent.
+  // Prior re-pin v1.20.98 (R0.4 step 5 — clock seam).
+  tick100:   '640835a4a2059fafa1bbdc402281e0c1b629587ca43da3488dd25644553756b6',
+  tick5000:  '621ba92c8c4389c369e7807e9167c6b2fcd4b6120e13ca452e4e56fa45b203bc',
+  tick10000: 'f0b7c83f06a596ceb6e6587f27f033f75f0c29674267f579c3bd9a0b3797b9e5',
 };
 
 test('R0.6: 10000-tick canary state hash matches baseline', () => {

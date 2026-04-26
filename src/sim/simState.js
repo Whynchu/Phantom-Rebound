@@ -193,6 +193,20 @@ export function createSlot(index, baseHp = DEFAULT_BASE_PLAYER_HP) {
       phaseWalkOverlapMs: 0,
       phaseWalkIdleMs: 0,
       coopSpectating: false,
+      // Death/pop visual state (R0.4 step 8 — GAP 1 closed). Legacy
+      // runState.player carries these on the player body and the renderer
+      // reads them to drive the death "pop" animation + post-death pulse.
+      // Carving Region E (shield collision) or any future hit-resolution
+      // region into sim will set these on hit; if they don't snapshot/restore
+      // with the body, resim will desync the death visual. Init values match
+      // legacy createInitialPlayerState defaults (deadAt=0, popAt=0,
+      // deadPop=false, deadPulse=0). Snapshotted automatically via the
+      // structuredClone path; restoreState explicitly copies them so the
+      // in-place field-by-field restore covers them too.
+      deadAt: 0,
+      popAt: 0,
+      deadPop: false,
+      deadPulse: 0,
     },
     metrics: {
       hp: baseHp,
@@ -249,21 +263,23 @@ export function createSlot(index, baseHp = DEFAULT_BASE_PLAYER_HP) {
  *
  *   GAP 1 — death/pop visuals on body. runState.player carries:
  *           deadAt, popAt, deadPop (bool), deadPulse.
- *           simState.createSlot().body has none of these. They feed the
- *           hit-stop + death "pop" animation drained by the renderer; if
- *           we carve hits into sim before adding them, the death visual
- *           will silently desync on resim. Fix: add the four fields to
- *           body, init to 0/false, snapshot/restore by virtue of the
- *           existing body deep-clone path (no other change needed).
+ *           [CLOSED 2026-04-26 v1.20.101 — R0.4 step 8.] simState
+ *           slot.body now carries the same four fields, init to
+ *           0/0/false/0, snapshotted via the structuredClone path,
+ *           restored explicitly in restoreState. Future hit-resolution
+ *           carve-outs that set deadAt/popAt/deadPop/deadPulse on the
+ *           body will now round-trip through rollback resim.
  *
  *   GAP 2 — shields location. runState.player.shields is on the body in
  *           legacy code (player.shields). simState keeps shields one
  *           level up (slot.shields) outside slot.body. Region E (shield
  *           collision) iterates `player.shields` — a generic carve-out
  *           that iterates state.slots[i].body.shields would miss them.
- *           Fix: introduce a small adaptor (`getSlotShields(slot)`) that
- *           always reads slot.shields, keep the legacy body.shields write
- *           in sync until the legacy player object is retired.
+ *           [CLOSED 2026-04-26 v1.20.101 — R0.4 step 8.] Adapter
+ *           getSlotShields(slotOrPlayer) added; reads slot.shields
+ *           direct, falls back to .body.shields, defensive on junk
+ *           inputs. Region E carve-out can be written against ONE
+ *           shape via this helper.
  *
  *   GAP 3 — runtime stat fields not on slot. runState.player owns
  *           score/kills/charge/fireT/stillTimer/prevStill/hp/maxHp/
@@ -316,6 +332,35 @@ export function createSlot(index, baseHp = DEFAULT_BASE_PLAYER_HP) {
 
 
 /**
+ * Slot-shape adapter (R0.4 step 8 — GAP 2 closed).
+ *
+ * Returns the shields array for a slot-or-legacy-player object. Both
+ * shapes store shields as a direct array property (`shields`); the
+ * legacy `player` object from runState.js is itself the body, while
+ * the sim slot is `state.slots[i]` with shields one level up from
+ * `slot.body`. This helper exists so a future Region E (shield
+ * collision) carve-out can be written against ONE shape — pass either
+ * `legacyPlayer` OR `state.slots[i]` and get the right array back.
+ *
+ * Defensive: returns an empty array if neither shape applies, so a
+ * caller iterating the result never NPEs on a half-initialized object.
+ *
+ * @param {object} slotOrPlayer - sim slot OR legacy player
+ * @returns {Array} shields array (live reference, not a copy)
+ */
+export function getSlotShields(slotOrPlayer) {
+  if (!slotOrPlayer || typeof slotOrPlayer !== 'object') return [];
+  if (Array.isArray(slotOrPlayer.shields)) return slotOrPlayer.shields;
+  // Legacy fallback: shields nested under .body (no current callers, but
+  // future schema migrations may temporarily live here).
+  if (slotOrPlayer.body && Array.isArray(slotOrPlayer.body.shields)) {
+    return slotOrPlayer.body.shields;
+  }
+  return [];
+}
+
+
+/**
  * Reset a sim state in place to a fresh-run starting position WITHOUT
  * reallocating it. Used between runs to avoid garbage. Preserves the
  * world dimensions and slot count from the existing state.
@@ -339,6 +384,10 @@ export function resetSimState(state, { seed = 1, baseHp = DEFAULT_BASE_PLAYER_HP
     slot.body.phaseWalkOverlapMs = 0;
     slot.body.phaseWalkIdleMs = 0;
     slot.body.coopSpectating = false;
+    slot.body.deadAt = 0;
+    slot.body.popAt = 0;
+    slot.body.deadPop = false;
+    slot.body.deadPulse = 0;
     slot.metrics.hp = baseHp;
     slot.metrics.maxHp = baseHp;
     slot.metrics.charge = 0;

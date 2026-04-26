@@ -188,6 +188,11 @@ test('createSimState populates body transient combat fields', () => {
   assert.equal(b.phaseWalkOverlapMs, 0);
   assert.equal(b.phaseWalkIdleMs, 0);
   assert.equal(b.coopSpectating, false);
+  // R0.4 step 8 — death/pop visuals (GAP 1).
+  assert.equal(b.deadAt, 0);
+  assert.equal(b.popAt, 0);
+  assert.equal(b.deadPop, false);
+  assert.equal(b.deadPulse, 0);
 });
 
 test('restoreState round-trips slot.timers fields', () => {
@@ -251,6 +256,33 @@ test('restoreState round-trips body transient combat fields', () => {
   assert.equal(b.coopSpectating, true);
 });
 
+test('restoreState round-trips body death/pop visual fields (R0.4 GAP 1)', () => {
+  const state = createSimState({ seed: 1, slotCount: 1 });
+  const b = state.slots[0].body;
+  // Mid-death visual state: deadAt timestamp set, pop animation triggered,
+  // pulse decaying. A rollback while this is mid-flight must restore all
+  // four fields or the death animation will desync on resim.
+  b.deadAt = 12_345;
+  b.popAt = 12_400;
+  b.deadPop = true;
+  b.deadPulse = 0.62;
+  const bodyIdentity = state.slots[0].body;
+
+  const snap = snapshotState(state);
+  // Mutate live state to look "post-death-anim" — different from snapshot.
+  b.deadAt = 99_999;
+  b.popAt = 0;
+  b.deadPop = false;
+  b.deadPulse = 0;
+
+  restoreState(state, snap);
+  assert.equal(state.slots[0].body, bodyIdentity, 'body object identity preserved');
+  assert.equal(b.deadAt, 12_345);
+  assert.equal(b.popAt, 12_400);
+  assert.equal(b.deadPop, true);
+  assert.equal(b.deadPulse, 0.62);
+});
+
 test('restoreState handles legacy slot without timers field', () => {
   // Simulate a stale liveState (e.g., from before schema bump). Resim
   // should still adopt the snapshot timers without throwing.
@@ -269,11 +301,19 @@ test('resetSimState clears slot.timers and body transients', () => {
   state.slots[0].timers.volatileOrbGlobalCooldown = 0.5;
   state.slots[0].body.invincible = 2;
   state.slots[0].body.coopSpectating = true;
+  state.slots[0].body.deadAt = 1000;
+  state.slots[0].body.popAt = 1100;
+  state.slots[0].body.deadPop = true;
+  state.slots[0].body.deadPulse = 0.5;
   resetSimState(state, { seed: 7 });
   assert.equal(state.slots[0].timers.barrierPulseTimer, 0);
   assert.equal(state.slots[0].timers.volatileOrbGlobalCooldown, 0);
   assert.equal(state.slots[0].body.invincible, 0);
   assert.equal(state.slots[0].body.coopSpectating, false);
+  assert.equal(state.slots[0].body.deadAt, 0);
+  assert.equal(state.slots[0].body.popAt, 0);
+  assert.equal(state.slots[0].body.deadPop, false);
+  assert.equal(state.slots[0].body.deadPulse, 0);
 });
 
 // R1 round-trip parity: serialize a state, deserialize a fresh copy via

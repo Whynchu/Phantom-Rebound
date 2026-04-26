@@ -186,5 +186,25 @@ console.log('R0 — sim/effectQueue');
   ok('initEffectQueue: re-initializes queue', size(s) === 0);
 }
 
+// R0.4 step 8 — getSlotShields adapter (GAP 2)
+{
+  const { getSlotShields } = await import('../src/sim/simState.js');
+  const s = createSimState({ seed: 1, slotCount: 1 });
+  s.slots[0].shields.push({ hardened: false, cooldown: 0 });
+  ok('getSlotShields: reads slot.shields directly', getSlotShields(s.slots[0]).length === 1);
+  ok('getSlotShields: returns LIVE reference (mutation visible)',
+    (() => { const arr = getSlotShields(s.slots[0]); arr.push({ hardened: true, cooldown: 1 }); return s.slots[0].shields.length === 2; })());
+  // Legacy player shape — shields directly on object
+  const legacy = { x: 0, y: 0, r: 14, shields: [{ hardened: false, cooldown: 0 }, { hardened: true, cooldown: 2 }] };
+  ok('getSlotShields: works on legacy player shape', getSlotShields(legacy).length === 2);
+  // Defensive: nested under .body fallback
+  const nested = { body: { shields: [{ hardened: false, cooldown: 0 }] } };
+  ok('getSlotShields: falls back to .body.shields when top-level missing', getSlotShields(nested).length === 1);
+  // Defensive: junk input
+  ok('getSlotShields: null returns empty array', Array.isArray(getSlotShields(null)) && getSlotShields(null).length === 0);
+  ok('getSlotShields: undefined returns empty array', getSlotShields(undefined).length === 0);
+  ok('getSlotShields: object without shields returns empty array', getSlotShields({}).length === 0);
+}
+
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail === 0 ? 0 : 1);

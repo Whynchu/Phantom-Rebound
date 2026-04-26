@@ -145,6 +145,11 @@ export function restoreState(liveState, snapshot) {
         if (snapshotSlot.body.phaseWalkOverlapMs !== undefined) liveSlot.body.phaseWalkOverlapMs = snapshotSlot.body.phaseWalkOverlapMs;
         if (snapshotSlot.body.phaseWalkIdleMs !== undefined) liveSlot.body.phaseWalkIdleMs = snapshotSlot.body.phaseWalkIdleMs;
         if (snapshotSlot.body.coopSpectating !== undefined) liveSlot.body.coopSpectating = snapshotSlot.body.coopSpectating;
+        // Death/pop visuals (R0.4 step 8 — GAP 1).
+        if (snapshotSlot.body.deadAt !== undefined) liveSlot.body.deadAt = snapshotSlot.body.deadAt;
+        if (snapshotSlot.body.popAt !== undefined) liveSlot.body.popAt = snapshotSlot.body.popAt;
+        if (snapshotSlot.body.deadPop !== undefined) liveSlot.body.deadPop = snapshotSlot.body.deadPop;
+        if (snapshotSlot.body.deadPulse !== undefined) liveSlot.body.deadPulse = snapshotSlot.body.deadPulse;
       }
 
       // Metrics fields.
