@@ -108,7 +108,13 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   const slot1 = state.slots && state.slots[1];
   if (slot1 && slot1.body) {
     const joy1 = slot1Input && slot1Input.joy;
-    applyJoystickVelocity(slot1.body, joy1, baseSpeed, deadzone, joyMax, gate);
+    // P4: slot1 uses its own speedMult — matches updateGuestSlotMovement() in script.js.
+    // opts.baseSpeedRaw is the pre-upg base speed (165 * GLOBAL_SPEED_LIFT); when provided
+    // we apply slot1's own speedMult so each slot moves at its correct rate during resim.
+    const slot1Speed = opts.baseSpeedRaw != null
+      ? opts.baseSpeedRaw * Math.min(2.5, (slot1.upg && slot1.upg.speedMult) || 1)
+      : baseSpeed;
+    applyJoystickVelocity(slot1.body, joy1, slot1Speed, deadzone, joyMax, gate);
     tickBodyPosition(slot1.body, dt, world, phaseOpts);
     tickPostMovementTimers(
       slot1.body,

@@ -42,6 +42,9 @@ export function tickRoomState(state, dt, opts = {}) {
     ? opts.getReinforcementIntervalMs
     : () => 6000;
 
+  // Track phase before any mutations so we can detect fight→clear transition.
+  const phaseBefore = run.roomPhase;
+
   // Advance the room-level ms timer (shared across all phases).
   run.roomTimer = (run.roomTimer || 0) + dtMs;
 
@@ -172,5 +175,13 @@ export function tickRoomState(state, dt, opts = {}) {
   run.roomClearTimer = clearStep.roomClearTimer;
   if (clearStep.shouldShowUpgrades) {
     emit(state, 'showUpgrades', {});
+  }
+
+  // P5: emit roomClear when phase first transitions to 'clear' this tick.
+  // dispatchSimEffects handles this on the guest to fire bullet-clear, boon
+  // hooks, progression, and UI — the host's update() path (finalizeRoomClearState)
+  // handles the same on the host, guarded by isCoopGuest() in the dispatcher.
+  if (run.roomPhase === 'clear' && phaseBefore !== 'clear') {
+    emit(state, 'roomClear', { roomIndex: run.roomIndex || 0 });
   }
 }

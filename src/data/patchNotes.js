@@ -2,6 +2,25 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.138',
+      label: 'DR-2: RETIRE COOPSNAPSHOTBROADCASTER + SNAPSHOTAPPLIER',
+      summary: ['DR-2: Retired the D-series snapshot broadcaster (host) and snapshot applier (guest). The rollback coordinator now drives hostSimStep every forward tick on guest (skipSimStepOnForward:false), giving both peers a deterministic shared simulation without snapshot jitter.'],
+      highlights: [
+        'script.js: coopSnapshotBroadcaster, guestSnapshotApplier, latestRemoteSnapshot/Seq/RecvAtMs, collectHostSnapshotState(), and updateOnlineGuestPrediction() all removed.',
+        'setupRollback: skipSimStepOnForward:role==="host" — guest forward ticks now call hostSimStep via coordinator.',
+        'simStepOpts: baseSpeedRaw getter added (165 * GLOBAL_SPEED_LIFT) for per-slot speed in hostSimStep slot-1 movement.',
+        '_rollbackActive gate extended to include roomPhase==="intro" for guest so rollback starts immediately on room entry.',
+        'P3: removed legacy guest fireT ticking block — hostSimStep/tickPlayerFire now advances fireT on every forward tick.',
+        'P5: roomClear effectQueue handler dispatches bullets.length=0 + boon hooks + applyRoomClearProgression() + showRoomClear() on guest.',
+        'P6: handleCoopRoomAdvanceGuest syncs roomIndex from payload and calls startRoom()+ensureRollbackSlot1Bridge().',
+        'DR-2 Step 12: standalone grey-decay loop retained — stamps decayStart on grey bullets each frame on guest.',
+        'DR-2 Step 13: coordinator-based disconnect watchdog replaces latestRemoteSnapshotRecvAtMs watchdog. Uses getCoordinatorRemoteAgeTicks() + hasReceivedRemoteInput() from rollbackIntegration.js.',
+        'DR-2 Step 14: _guestPrevRoomPhase tracks phase for intro→spawning/GO! overlay and clear overlay transitions on guest.',
+        'src/net/rollbackIntegration.js: nopSimStep removed (fallback is inline no-op); hasReceivedRemoteInput() and getCoordinatorRemoteAgeTicks() exported; module-level comment updated to DR-2 status.',
+        'All 74 tests green.',
+      ]
+    },
+  {
       version: '1.20.137',
       label: 'HOTFIX: REMOVE DUPLICATE HIDECOOPGUESTWAITOVERLAY DECLARATION',
       summary: ['Removed accidental duplicate function declaration of hideCoopGuestWaitOverlay introduced in v1.20.136 that caused a SyntaxError on load.'],

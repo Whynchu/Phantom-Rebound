@@ -142,16 +142,12 @@ import {
 } from './src/net/coopRunConfig.js';
 import { getLocalSlot, getLocalSlotIndex } from './src/net/onlineSlotRuntime.js';
 import { createCoopInputSync } from './src/net/coopInputSync.js';
-import {
-  createSnapshotSequencer,
-  isNewerSnapshot,
-  decodeSnapshot,
-} from './src/net/coopSnapshot.js';
-import { createSnapshotApplier } from './src/net/snapshotApplier.js';
+// DR-2: coopSnapshot / snapshotApplier / coopSnapshotBroadcaster imports
+// retired — rollback coordinator replaces the D-series snapshot stack.
 
-import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
+// DR-2: coopSnapshotBroadcaster retired.
 
-import { setupRollback, teardownRollback, coordinatorStep, getRollbackStats, isRollbackStalled } from './src/net/rollbackIntegration.js';
+import { setupRollback, teardownRollback, coordinatorStep, getRollbackStats, isRollbackStalled, hasReceivedRemoteInput, getCoordinatorRemoteAgeTicks } from './src/net/rollbackIntegration.js';
 import { hostSimStep } from './src/sim/hostSimStep.js';
 import { drain as drainSimEffectQueue } from './src/sim/effectQueue.js';
 import { applyJoystickVelocity, tickBodyPosition } from './src/sim/playerMovement.js';
@@ -351,6 +347,11 @@ let WORLD_H = 0;
 // scale via getRenderScale. Cleared on coop teardown so solo runs go back to
 // canvas-driven world sizing.
 let coopWorldPinned = false;
+// DR-2 (Step 14): tracks roomPhase on the previous coordinatorStep tick so we
+// can detect intro→spawning and any→clear transitions for guest UI overlays
+// (the old applier block did this from snapshot room.phase; now coordinator
+// drives roomPhase via getter/setter bridge).
+let _guestPrevRoomPhase = null;
 function syncWorldFromCanvas() {
   if (coopWorldPinned) return; // Coop guest: world is host-authoritative.
   if (cv.width > 0 && cv.height > 0) {
@@ -1032,44 +1033,24 @@ let simTick = 0;
 // gameover / new run.
 let coopInputSync = null;
 let coopInputUnsubscribe = null;
-// Phase D4: host-side snapshot broadcaster + runId/epoch tracking. The host
-// generates a fresh runId at init()/restoreRun() (after resetBulletIds) and
-// includes it in every emitted snapshot. Guests track the latest snapshot
-// they've received per runId; when runId changes the guest resets its
-// sequence-number tracker so post-dispose stale packets from a prior run
-// can't contaminate the new one. `null` outside online coop runs.
-let coopSnapshotBroadcaster = null;
-let coopSnapshotSequencer = null;
+// DR-2: coopSnapshotBroadcaster and snapshotApplier retired.
+// Rollback coordinator (skipSimStepOnForward:false on guest) now drives
+// deterministic forward simulation on both peers, replacing the D-series
+// snapshot + prediction stack.
+let coopSnapshotSequencer = null; // retained for hostSimTick reference
 let currentRunId = null;
 const coopEnemyDamageEvents = [];
 const coopPickupEvents = [];
-// Phase D4: guest stores newest received snapshot but does NOT yet render
-// from it (D5 wires interpolation/prediction). Reset on runId change.
-let latestRemoteSnapshot = null;
-let latestRemoteSnapshotSeq = null;
-// Phase D5c — wall-clock receive time of the latest snapshot. Used by the
-// applier's interpolation buffer as the curr-snapshot timestamp on shift.
-let latestRemoteSnapshotRecvAtMs = 0;
-// D18.3 — disconnect watchdog. Guest only. If we've received at least one
-// snapshot but then go silent for COOP_WATCHDOG_TIMEOUT_MS, the transport is
-// dead; trip once, toast, and run unified teardown so the run doesn't sit
-// frozen and leak listeners into the menu.
-// D18.6 — bumped to 30s. The user only ever wants a "true" disconnect (lost
-// internet for 30s+ or app closed) to bail. The watchdog is also gated off
-// during boon-phase / upgrade gstate, where the host intentionally cancels
-// its RAF loop and stops emitting snapshots until both peers pick.
+// DR-2: latestRemoteSnapshot/Seq/RecvAtMs retired with snapshotApplier.
+// Watchdog now uses rollback coordinator's getRemoteAgeTicks().
 const COOP_WATCHDOG_TIMEOUT_MS = 30000;
 let coopWatchdogTripped = false;
-// D18.6 — guest-only local map: per-bullet decayStart (in simNowMs frame)
-// for grey-state pickups. The wire format omits decayStart, so without
-// stamping it locally the bullet renderer's age math collapses to NaN and
-// orbs sit at full alpha forever instead of fading out the way they do on
-// host. Pruned per snapshot apply to bound memory.
+// DR-2 (Step 12): grey-decay Map retained — standalone loop below applier
+// removal stamps decayStart for grey bullets each frame.
 const guestGreyDecayStartByBulletId = new Map();
-// D18.6 — guest-only local fireT for animating each slot's fire-ready ring
-// when fully charged. The wire format omits fireT to save bandwidth, so
-// without ticking locally the ring stays empty on the guest screen even
-// when its slot is fully charged. Reset to 0 when charge drops < 1.
+// D18.6 — guest-only local fireT for animating each slot's fire-ready ring.
+// P3: no longer ticked by local block (DR-2 hostSimStep drives fireT);
+// kept for declaration completeness only.
 const guestLocalFireTBySlotId = new Map();
 // D18.11 — Coop disconnect resilience.
 // Wall-clock of the most recent inbound gameplay packet (any kind:
@@ -1109,8 +1090,7 @@ let coopLocalHatAnnounced = false;
 // coordinator now owns input delivery. lastProcessedInputSeq[1] acks to null
 // (D6 reconciliation retired along with guestPredictionReconciler).
 let onlineHostSlot1Installed = false;
-// Phase D5b — guest-side snapshot applier + slot 1 install.
-let guestSnapshotApplier = null;
+// DR-2: guestSnapshotApplier retired — rollback coordinator drives forward sim.
 let onlineGuestSlot1Installed = false;
 // D19.1 — guest-side bullet local-advance pool. Maintains a separate pool
 
@@ -1290,6 +1270,74 @@ Object.defineProperty(simState.run, 'bossClears', {
   configurable: true,
 });
 
+// P2 — bridge the remaining room-state-machine fields that tickRoomState reads/writes
+// during rollback resim. Without these, hostSimStep corrections update simState.run but
+// the legacy `let` bindings stay stale, causing divergence between resim and live state.
+Object.defineProperty(simState.run, 'activeWaveIndex', {
+  get() { return activeWaveIndex; },
+  set(v) { activeWaveIndex = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'roomClearTimer', {
+  get() { return roomClearTimer; },
+  set(v) { roomClearTimer = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'roomIntroTimer', {
+  get() { return roomIntroTimer; },
+  set(v) { roomIntroTimer = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'currentRoomIsBoss', {
+  get() { return currentRoomIsBoss; },
+  set(v) { currentRoomIsBoss = !!v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'bossAlive', {
+  get() { return bossAlive; },
+  set(v) { bossAlive = !!v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'escortType', {
+  get() { return escortType; },
+  set(v) { escortType = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'escortMaxCount', {
+  get() { return escortMaxCount; },
+  set(v) { escortMaxCount = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'escortRespawnTimer', {
+  get() { return escortRespawnTimer; },
+  set(v) { escortRespawnTimer = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'reinforceTimer', {
+  get() { return reinforceTimer; },
+  set(v) { reinforceTimer = v; },
+  enumerable: true,
+  configurable: true,
+});
+Object.defineProperty(simState.run, 'currentRoomMaxOnScreen', {
+  get() { return currentRoomMaxOnScreen; },
+  set(v) { currentRoomMaxOnScreen = v; },
+  enumerable: true,
+  configurable: true,
+});
+// spawnQueue is imported as a const array ref from gameState.js and mutated in-place.
+// Point simState.run.spawnQueue at the same array so tickRoomState mutations are visible
+// to both the resim path and the live update() path. (array identity is preserved; no setter needed)
+simState.run.spawnQueue = spawnQueue;
+
 // ── PLAYER SLOT 0 BRIDGE (Phase C2a) ─────────────────────────────────────────
 // Slot 0 = host. For solo play and pre-C2b callsites, everything still reads
 // the legacy singletons (`player`, `UPG`, `score`, `slot0Timers.slipCooldown`, ...). The
@@ -1427,16 +1475,11 @@ function teardownCoopInputUplink() {
   // R3 — tear down rollback coordinator + R4.2 dismiss stall indicator
   try { teardownRollback(); } catch (_) {}
   try { hideRollbackStallIndicator(); } catch (_) {}
-  if (coopSnapshotBroadcaster) {
-    try { coopSnapshotBroadcaster.dispose(); } catch (_) {}
-    coopSnapshotBroadcaster = null;
-  }
+  // DR-2: coopSnapshotBroadcaster retired — no dispose needed.
   coopSnapshotSequencer = null;
-  latestRemoteSnapshot = null;
-  latestRemoteSnapshotSeq = null;
-  latestRemoteSnapshotRecvAtMs = 0;
   coopEnemyDamageEvents.length = 0;
   coopPickupEvents.length = 0;
+  guestGreyDecayStartByBulletId.clear();
   // Phase D4.5: host-side slot 1 teardown.
   if (onlineHostSlot1Installed) {
     // Slot 1 was installed by us (online host). Remove it. Slot 0 is left
@@ -1445,8 +1488,7 @@ function teardownCoopInputUplink() {
     try { delete playerSlots[1]; } catch (_) {}
     onlineHostSlot1Installed = false;
   }
-  // Phase D5b: tear down guest-side slot 1 + applier.
-  guestSnapshotApplier = null;
+  // DR-2: guestSnapshotApplier retired.
   // D19.4: spawn detector retired (DR-0b).
   lastReconciledSnapshotSeq = null;
   if (onlineGuestSlot1Installed) {
@@ -1502,7 +1544,8 @@ function teardownCoopRunFully(reason) {
   try { clearCoopRun(); } catch (_) {}
   // Reset watchdog so a future run starts clean.
   coopWatchdogTripped = false;
-  latestRemoteSnapshotRecvAtMs = 0;
+  // DR-2: latestRemoteSnapshotRecvAtMs retired; watchdog now uses coordinator.
+  _guestPrevRoomPhase = null;
   // D18.6 — clear guest-only render-side maps so a future run starts fresh.
   try { guestGreyDecayStartByBulletId.clear(); } catch (_) {}
   try { guestLocalFireTBySlotId.clear(); } catch (_) {}
@@ -2283,6 +2326,18 @@ function handleCoopRoomAdvanceGuest(payload) {
   if (payload && payload.hostSimTick != null) {
     simTick = payload.hostSimTick | 0;
   }
+  // P6: advance guest to the new room. The host includes the target roomIndex
+  // in the coop-room-advance payload so the guest doesn't need to wait for a
+  // snapshot to learn it. startRoom() initialises obstacles, spawnQueue, boss
+  // flags, and teleport positions; without it the first room tick sees stale
+  // state from the previous room. ensureRollbackSlot1Bridge() re-attaches
+  // rollback's slot-1 body/upg accessors after startRoom may have re-created
+  // slot objects.
+  if (payload && Number.isFinite(payload.roomIndex)) {
+    roomIndex = payload.roomIndex | 0;
+  }
+  try { startRoom(roomIndex); } catch (_) {}
+  try { ensureRollbackSlot1Bridge(); } catch (_) {}
   // If the picker was still open (e.g. AFK timeout fired on host), close
   // it. Then unfreeze guest sim if we paused for the picker.
   try { document.getElementById('s-up').classList.add('off'); } catch (_) {}
@@ -2653,100 +2708,20 @@ function installCoopInputUplink(armedCoop) {
     batchSize: 4,
   });
 
-  // Phase D4: host-only snapshot broadcaster. Emits a full state snapshot
-  // every 4 sim ticks (60 Hz / 4 = 15 Hz, D12 — was 6/10 Hz). Combined with
-  // guest's 4-frame input batch (~15 msg/s) each peer stays within the
-  // Supabase 20 msg/s budget with headroom for handshakes and retries.
+  // DR-2: broadcaster retired. Host still installs slot 1 (needed for rollback
+  // to have a real body target), but no longer creates a snapshot sequencer or
+  // broadcaster. Guest installs its own slot 1 too.
   if (role === 'host') {
-    // Phase D4.5: spin up slot 1 driven by the remote-input ring buffer +
-    // a processor that tracks consumed ticks. Must come BEFORE the broadcaster
-    // is built so the snapshot's lastProcessedInputSeq[1] reads from a real
-    // processor on the very first emit.
     installOnlineCoopHostSlot1(coopInputSync.getRemoteRingBuffer());
-    coopSnapshotSequencer = createSnapshotSequencer();
-    coopSnapshotBroadcaster = createSnapshotBroadcaster({
-      sendGameplay: (msg) => session.sendGameplay(msg),
-      sequencer: coopSnapshotSequencer,
-      runId: currentRunId,
-      // D19.6a — bump 4 → 3 (15 Hz → 20 Hz). Earlier claims of "20 Hz"
-      // in code comments and patch notes were incorrect; verified
-      // ticksPerSnapshot was still 4 at v1.20.70. The +33% send rate
-      // is acceptable per the 2026-04-25 user decision ("shoot for 3
-      // immediately"). renderDelayMs stays at 70 ms — that's now ~1.4×
-      // the 50 ms snapshot interval, still buffering >1 full interval
-      // for smooth interpolation but ~17 ms more current.
-      ticksPerSnapshot: 3,
-      getState: collectHostSnapshotState,
-      logger: (msg, err) => { try { console.warn('[coop] ' + msg, err || ''); } catch (_) {} },
-    });
-    try { console.info('[coop] snapshot broadcaster armed runId=' + currentRunId); } catch (_) {}
+    try { console.info('[coop] host slot-1 installed (DR-2: no broadcaster)'); } catch (_) {}
   }
   if (role === 'guest') {
-    // Phase D5b: guest installs its OWN slot 1 (placeholder body) so D5a's
-    // local-render-slot retargeting has a real target, and so the snapshot
-    // applier has somewhere to land the host's view of slot 1's position.
+    // DR-2: guest installs its own slot 1 (placeholder body) for rollback to
+    // snapshot/restore. No snapshot applier — coordinator drives hostSimStep.
     installOnlineCoopGuestSlot1();
-    // Build a snapshot applier with a palette-aware color resolver. Each
-    // applier instance keeps its own seq/runId memory so duplicate snapshots
-    // don't thrash the entity arrays at 60 Hz against a 10 Hz feed.
-    guestSnapshotApplier = createSnapshotApplier({
-      enemyTypeDefs: ENEMY_TYPES,
-      // D12 — render delay buffers snapshot interpolation. With D19.6a
-      // bumping snapshot rate to 20 Hz (50 ms interval), 70 ms still
-      // buffers >1 full interval (~1.4×), preserving smooth lerp while
-      // making the guest's view of the host ~17 ms more current than
-      // the prior 15 Hz feed.
-      renderDelayMs: 70,
-      // Phase D5d — guest's own slot 1 is locally predicted. The applier
-      // skips continuous body x/y/vx/vy writes for slot id 1 so the
-      // prediction step (updateOnlineGuestPrediction) owns movement;
-      // applier still re-anchors on first snapshot, death, respawn, and
-      // runId reset, and still applies aim/hp/charge/invulnT every frame.
-      predictedSlotId: 1,
-      // D13.3 — host already drew the dmg# + sparks locally on its own
-      // screen when it applied the damage; this fires the same effects on
-      // the guest's screen when the snapshot's hp delta is observed. Gated
-      // inside the applier on snapshot SHIFT so it fires once per fresh
-      // snapshot, not every render frame.
-      onSlotDamage: ({ slotId, damage, x, y }) => {
-        try {
-          const dmg = Math.max(1, Math.round(damage));
-          spawnDmgNumber(x, y - 18, dmg, '#ff6b9b');
-          sparks(x, y, '#ff6b9b', 8, 70);
-        } catch (_) {}
-      },
-      onEnemyDamage: ({ damage, x, y, ownerSlot }) => {
-        try {
-          const dmg = Math.max(1, Math.round(damage));
-          const col = getCoopPlayerColorForSlot(ownerSlot);
-          spawnDmgNumber(x, y, dmg, col);
-          sparks(x, y, col, 4, 50);
-        } catch (_) {}
-      },
-      onPickupEvent: ({ slotId, x, y, kind }) => {
-        try {
-          if ((slotId | 0) !== (getLocalSlotIndex() | 0)) return;
-          if (kind !== 'grey') return;
-          sparks(x, y, C.ghost, 5, 45);
-        } catch (_) {}
-      },
-      resolveColors: (type) => {
-        try {
-          const def = getEnemyDefinition(type);
-          return { col: def && def.col, glowCol: def && def.glowCol };
-        } catch (_) { return null; }
-      },
-    });
-    try { console.info('[coop] guest snapshot applier armed'); } catch (_) {}
-    // Phase D5e — Build the prediction reconciler. Records local input
-    // frames per sim tick and provides replay for drift correction.
-    // SPD must match updateOnlineGuestPrediction's (165 * GLOBAL_SPEED_LIFT)
-    // or replay drifts by construction. World bounds default to current
-    // WORLD_W/WORLD_H; updated whenever the room/world resizes via the
-    // existing world-space recomputation path.
     lastReconciledSnapshotSeq = null;
     // D19.4 — bullet spawn detector retired (DR-0b).
-    try { console.info('[coop] guest bullet spawn detector retired (DR-0b)'); } catch (_) {}
+    try { console.info('[coop] guest slot-1 installed (DR-2: no applier)'); } catch (_) {}
   }
   ensureRollbackSlot1Bridge();
   // R3 — rollback coordinator (experimental). Slot 1 must be installed before
@@ -2769,10 +2744,17 @@ function installCoopInputUplink(armedCoop) {
         }),
         {
           simStep: hostSimStep,
+          // Step 8: skipSimStepOnForward:false on guest — coordinator drives hostSimStep
+          // every forward tick (DR-2). Host keeps true: update() is the authoritative
+          // forward path, resim-only for host corrections.
+          skipSimStepOnForward: role === 'host',
           simStepOpts: {
             get worldW() { return simState.world && simState.world.w ? simState.world.w : (W || 800); },
             get worldH() { return simState.world && simState.world.h ? simState.world.h : (H || 600); },
-            baseSpeed: BASE_SPD,
+            // P4: provide base speed as a getter so it stays current with GLOBAL_SPEED_LIFT.
+            // baseSpeedRaw = pre-upg speed; hostSimStep applies per-slot speedMult for slot1.
+            get baseSpeed() { return 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (UPG.speedMult || 1)); },
+            get baseSpeedRaw() { return 165 * GLOBAL_SPEED_LIFT; },
             deadzone: JOY_DEADZONE,
             joyMax,
             get gate() { return roomPhase !== 'intro'; },
@@ -2805,7 +2787,7 @@ function installCoopInputUplink(armedCoop) {
           logging: true,
         }
       );
-      console.info('[coop] rollback coordinator armed (R1: hostSimStep for resim)');
+      console.info(`[coop] rollback coordinator armed (DR-2: skipForward=${role === 'host'})`);
     } catch (err) {
       try { console.warn('[coop] rollback setup failed:', err); } catch (_) {}
     }
@@ -2926,37 +2908,7 @@ function installCoopInputUplink(armedCoop) {
       }
       return;
     }
-    if (payload.kind === 'snapshot' && role === 'guest') {
-      // Phase D5b: validate via decodeSnapshot before storing. Malformed
-      // packets are dropped (decoder throws on bad scalars) so they can't
-      // wedge the applier mid-frame. Decode is idempotent / pure.
-      let decoded;
-      try {
-        decoded = decodeSnapshot(payload);
-      } catch (err) {
-        try { console.warn('[coop] dropped malformed snapshot', err && err.message); } catch (_) {}
-        return;
-      }
-      // Epoch gate: if the packet is from a different run (e.g. host
-      // restarted, late arrival from a disposed broadcaster), drop our
-      // tracker so we don't compare seqs across runs.
-      if (latestRemoteSnapshot && latestRemoteSnapshot.runId !== decoded.runId) {
-        latestRemoteSnapshot = null;
-        latestRemoteSnapshotSeq = null;
-        latestRemoteSnapshotRecvAtMs = 0;
-      }
-      // Newest-wins on snapshotSeq. isNewerSnapshot handles the wrap edge case.
-      if (latestRemoteSnapshotSeq != null && !isNewerSnapshot(decoded.snapshotSeq, latestRemoteSnapshotSeq)) {
-        return;
-      }
-      latestRemoteSnapshot = decoded;
-      latestRemoteSnapshotSeq = decoded.snapshotSeq;
-      // D5c: stamp the wall-clock arrival time. The applier uses this as
-      // the curr-snapshot timestamp; rAF's `ts` is the same clock domain.
-      try { latestRemoteSnapshotRecvAtMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
-      catch (_) { latestRemoteSnapshotRecvAtMs = Date.now(); }
-      return;
-    }
+    // DR-2: 'snapshot' payload handler retired — broadcaster removed.
   });
   try { console.info('[coop] input uplink installed role=' + role + ' slot=' + localSlotIndex); } catch (_) {}
   // D18.11 — reset disconnect state and arm liveness/heartbeat/visibility.
@@ -3011,172 +2963,7 @@ function stopCoopDiagnostics() {
   }
 }
 
-// Phase D4: builds the loose state object passed into encodeSnapshot.
-// Called by the broadcaster every ticksPerSnapshot. Defensive defaults on
-// every field — encodeSnapshot is strict and any throw is caught and
-// counted as a failed send by the broadcaster.
-// Phase D4 — host snapshot collection. Phase D4.6 — fixed:
-//   - enemy id was `e.id ?? i` (always falls through to array index because
-//     runtime uses `eid`); now reads `e.eid`. Stable IDs are required for
-//     guest-side upsert in D5.
-//   - enemy fire fields were `fireT`/`windup`; runtime has `fT`/`fRate` and
-//     no `windup`. Renamed to match runtime so guests see live fire-tells.
-//   - bullets need `r` and `state` to render correctly via bulletRenderer,
-//     which dispatches on `b.state`.
-//   - slot output now writes the full schema (charge/aim/invulnT/etc.); the
-//     fields were declared in encodeSlot but never populated, so guests
-//     would have decoded zeros.
-function collectHostSnapshotState() {
-  const slotsOut = [];
-  for (let i = 0; i < playerSlots.length; i++) {
-    const s = playerSlots[i];
-    if (!s) continue;
-    const body = (typeof s.getBody === 'function') ? s.getBody() : null;
-    const bodyOrSlot = body || (s.body ?? null);
-    if (!bodyOrSlot) continue;
-    const m = s.metrics || {};
-    const upg = (typeof s.getUpg === 'function') ? s.getUpg() : (s.upg || {});
-    const aim = s.aim || {};
-    // body.shields is an array of active shield records; first entry's
-    // remaining time is the canonical "shield timer" for the renderer.
-    const shieldT = (Array.isArray(bodyOrSlot.shields) && bodyOrSlot.shields.length > 0)
-      ? Number(bodyOrSlot.shields[0].t || bodyOrSlot.shields[0].timer || 0)
-      : 0;
-    // D19.5 — pack shield count + per-shield hardened/cooldown bitmasks so
-    // the partner's screen can render the orbiting shields. body.shields
-    // entries have shape { cooldown, hardened, mirrorCooldown }. Mask
-    // capped at 8 bits → up to 8 shields visible on partner; legendary
-    // tiers max out at ~5 so this is plenty. Slot 1 host-side typically
-    // has no shields array (boon mechanics live on slot 0 in v1) → both
-    // counts default to 0 cleanly.
-    let shieldCount = 0;
-    let shieldHardenedMask = 0;
-    let shieldCooldownMask = 0;
-    if (Array.isArray(bodyOrSlot.shields) && bodyOrSlot.shields.length > 0) {
-      const sh = bodyOrSlot.shields;
-      shieldCount = Math.min(8, sh.length);
-      for (let si = 0; si < shieldCount; si++) {
-        if (sh[si] && sh[si].hardened) shieldHardenedMask |= (1 << si);
-        if (sh[si] && (sh[si].cooldown | 0) > 0) shieldCooldownMask |= (1 << si);
-      }
-    }
-    // D19.5 — pack orbit-sphere count from the slot's own UPG. Per-orb
-    // cooldown isn't synced (host module-level _orbCooldown is slot-0 only;
-    // partner doesn't fire orbs anyway in v1). Render uses full opacity.
-    const orbCount = Math.min(8, (upg.orbitSphereTier | 0) || 0);
-    slotsOut.push({
-      id: s.id ?? i,
-      x: bodyOrSlot.x ?? 0,
-      y: bodyOrSlot.y ?? 0,
-      vx: bodyOrSlot.vx ?? 0,
-      vy: bodyOrSlot.vy ?? 0,
-      hp: m.hp ?? 0,
-      maxHp: m.maxHp ?? 0,
-      charge: m.charge ?? 0,
-      maxCharge: upg.maxCharge ?? 1,
-      aimAngle: aim.angle ?? 0,
-      invulnT: bodyOrSlot.invincible ?? 0,
-      shieldT,
-      stillTimer: m.stillTimer ?? 0,
-      // body.deadAt > 0 marks a dead player; createInitialPlayerState
-      // initializes deadAt:0. m.hp > 0 is a defensive secondary check.
-      // D18.15a — spectators are wire-alive so the guest predictor doesn't
-      // halt at body.deadAt; the `spectating` flag below carries the dead
-      // pose to the partner's render.
-      alive: !((bodyOrSlot.deadAt ?? 0) > 0) && (((m.hp ?? 0) > 0) || !!bodyOrSlot.coopSpectating || (m.maxHp ?? 0) === 0),
-      // D13.1 / D13.3 / D13.4 — propagate respawn counter, hurt-wobble
-      // timer, and aim-target flag so guest renders match host.
-      respawnSeq: (bodyOrSlot.respawnSeq | 0),
-      distort: bodyOrSlot.distort ?? 0,
-      hasTarget: !!aim.hasTarget,
-      // D18.15a — coop spectator-on-death. Carried over the wire so the
-      // partner renders the dead player translucent + frowning while they
-      // walk around. hp=0 on the wire so enemy targeting still skips them.
-      spectating: !!bodyOrSlot.coopSpectating,
-      // D19.5 — partner cosmetic sync (shields + orbs).
-      shieldCount,
-      shieldHardenedMask,
-      shieldCooldownMask,
-      orbCount,
-    });
-  }
-  const bulletsOut = [];
-  for (let i = 0; i < bullets.length; i++) {
-    const b = bullets[i];
-    if (!b) continue;
-    const owner = b.ownerId;
-    bulletsOut.push({
-      id: (b.id != null && b.id >= 0) ? (b.id | 0) : i,
-      x: b.x ?? 0,
-      y: b.y ?? 0,
-      vx: b.vx ?? 0,
-      vy: b.vy ?? 0,
-      r: b.r ?? 6,
-      type: b.kind || (b.danger ? 'd' : 'p'),
-      // D4.6: bulletRenderer reads `b.state` directly. Pass through the
-      // runtime field; default 'output' keeps any oddly-shaped bullets
-      // rendering as player shots rather than crashing the renderer.
-      state: b.state || (b.danger ? 'danger' : 'output'),
-      // Schema requires u32 ≥ 0. Danger bullets carry no slot owner: clamp
-      // to 0 — the `type`/`state` fields carry the player/danger discriminator.
-      ownerSlot: (typeof owner === 'number' && owner >= 0) ? (owner | 0) : 0,
-      bounces: b.bounces ?? 0,
-      spawnTick: b.spawnTick ?? 0,
-      doubleBounce: !!b.doubleBounce,
-      bounceCount: b.bounceCount ?? 0,
-      dangerBounceBudget: b.dangerBounceBudget ?? 0,
-      eliteStage: b.eliteStage,
-      eliteColor: b.eliteColor,
-      eliteCore: b.eliteCore,
-      isTriangle: !!b.isTriangle,
-    });
-  }
-  const enemiesOut = [];
-  for (let i = 0; i < enemies.length; i++) {
-    const e = enemies[i];
-    if (!e) continue;
-    // D4.6: runtime enemies use `eid` (set by createEnemy). Falling back to
-    // array index would make IDs non-stable across snapshots, breaking
-    // upsert in the D5 applier.
-    const stableId = (e.eid != null && e.eid >= 0) ? (e.eid | 0)
-      : (e.id != null && e.id >= 0) ? (e.id | 0)
-      : i;
-    enemiesOut.push({
-      id: stableId,
-      x: e.x ?? 0,
-      y: e.y ?? 0,
-      vx: e.vx ?? 0,
-      vy: e.vy ?? 0,
-      hp: e.hp ?? 0,
-      maxHp: e.maxHp ?? e.hp ?? 0,
-      r: e.r ?? 12,
-      type: e.type || 'e',
-      // D4.6: runtime field names (fT cooldown counter ms, fRate period ms).
-      fT: e.fT ?? 0,
-      fRate: e.fRate ?? 0,
-    });
-  }
-  return {
-    // runId/snapshotSeq/snapshotSimTick are stamped by the broadcaster.
-    slots: slotsOut,
-    bullets: bulletsOut,
-    enemies: enemiesOut,
-    room: {
-      index: roomIndex | 0,
-      phase: roomPhase || 'intro',
-      clearTimer: 0,
-      spawnQueueLen: spawnQueue.length | 0,
-    },
-    score: score | 0,
-    elapsedMs: runElapsedMs | 0,
-    enemyDamageEvents: coopEnemyDamageEvents.splice(0, coopEnemyDamageEvents.length),
-    pickupEvents: coopPickupEvents.splice(0, coopPickupEvents.length),
-    lastProcessedInputSeq: {
-      0: simTick | 0,
-      1: null, // DR-0a: hostRemoteInputProcessor retired; D6 reconciliation dead
-    },
-  };
-}
+// DR-2: collectHostSnapshotState() retired with snapshotBroadcaster.
 
 // Phase D4.5: install online host slot 1 — its body, metrics, timers, aim,
 // and a remote-input adapter that reads from the coop input ring buffer.
@@ -4599,6 +4386,24 @@ function dispatchSimEffects(effects) {
         break;
       case 'slot.chargeGain':
         break;
+      case 'roomClear':
+        // P5: room-clear side effects for guest — fired via effectQueue so the guest
+        // path mirrors finalizeRoomClearState() on the host. tickRoomState already set
+        // roomPhase='clear' + roomClearTimer=0 via the getter/setter bridge, so we only
+        // need the downstream effects. Guard on isCoopGuest() so host doesn't double-fire
+        // (host already ran finalizeRoomClearState() in update()).
+        if (isCoopGuest()) {
+          try {
+            bullets.length = 0;
+            clearParticles();
+            runBoonHook('onRoomClear', { UPG, healPlayer, slot: playerSlots[0] || null });
+            applyRoomClearProgression();
+            const _isBossRoom = !!(BOSS_ROOMS && BOSS_ROOMS[roomIndex]);
+            if (_isBossRoom) showBossDefeated();
+            else showRoomClear();
+          } catch (_) {}
+        }
+        break;
       default:
         break;
     }
@@ -5226,7 +5031,9 @@ function loop(ts){
         // phase, producing movement that never happened live. gstate !== 'playing'
         // already short-circuits the RAF loop during boon-select and pause;
         // this gate handles the in-room intro window.
-        const _rollbackActive = roomPhase === 'spawning' || roomPhase === 'fighting';
+        const _rollbackActive = isCoopGuest()
+          ? (roomPhase === 'intro' || roomPhase === 'spawning' || roomPhase === 'fighting')
+          : (roomPhase === 'spawning' || roomPhase === 'fighting');
         // Drain effectQueue regardless of phase so async rollback corrections from
         // the previous frame never accumulate into the next snapshot. Only dispatch
         // visual effects when we're in a phase that makes them meaningful.
@@ -5255,16 +5062,34 @@ function loop(ts){
           } catch (err) {
             try { console.warn('[rollback] coordinatorStep error', err); } catch (_) {}
           }
+          // DR-2 (Step 14): room-phase transition UI for guest. The coordinator
+          // drives roomPhase via the getter/setter bridge; we detect edges here
+          // instead of in the old applier block. _guestPrevRoomPhase is set
+          // at the START of the tick so we see the phase BEFORE this step.
+          if (isCoopGuest()) {
+            try {
+              const _nowPhase = roomPhase;
+              if (_guestPrevRoomPhase !== _nowPhase) {
+                if (_nowPhase === 'intro') {
+                  // New room: show READY? overlay.
+                  try { showRoomIntro('READY?', false); } catch (_) {}
+                } else if (_guestPrevRoomPhase === 'intro' && _nowPhase !== 'intro') {
+                  // intro → spawning/fighting: GO! flash then hide.
+                  try { showRoomIntro('GO!', true); } catch (_) {}
+                  try { setTimeout(() => { try { hideRoomIntro(); } catch (_) {} }, 600); } catch (_) {}
+                }
+              }
+              _guestPrevRoomPhase = _nowPhase;
+            } catch (_) {}
+          }
+        }
+        // Capture phase before the step so transitions from last tick are visible
+        // in next iteration's UI check.
+        if (isCoopGuest() && _guestPrevRoomPhase === null) {
+          _guestPrevRoomPhase = roomPhase;
         }
       }
-      // Phase D4: host emits a snapshot every ticksPerSnapshot sim ticks.
-      // No-op on guest/solo. Tick-cadence (not ms) so behavior is
-      // deterministic and resilient to rAF jitter / tab unfreeze bursts.
-      if (coopSnapshotBroadcaster) {
-        try { coopSnapshotBroadcaster.tick(simTick); } catch (err) {
-          try { console.warn('[coop] snapshot tick error', err); } catch (_) {}
-        }
-      }
+      // DR-2: coopSnapshotBroadcaster.tick() retired.
       simAccumulatorMs -= SIM_STEP_MS;
       steps++;
     }
@@ -5275,123 +5100,56 @@ function loop(ts){
       // keep the loop responsive.
       simAccumulatorMs = 0;
     }
-    // Phase D5c: guest applies the latest remote snapshot once per frame
-    // with interpolation. The applier holds a 2-snapshot buffer and renders
-    // entities at `renderTimeMs - renderDelayMs`, lerping between prev and
-    // curr by id. Solo / host: applier is null, hook skipped.
-    // Order: AFTER sim ticks (host's update path is a no-op on guest), and
-    // BEFORE draw, so this frame's render reflects the interpolated state.
-    if (guestSnapshotApplier && latestRemoteSnapshot) {
-      // D18.3 — disconnect watchdog. If we've received at least one snapshot
-      // (recvAtMs > 0) but it's older than the timeout, the host's transport
-      // is dead. Trip once, run unified teardown. Skipped while no snapshots
-      // have arrived yet (initial connection) so a slow handshake doesn't
-      // bounce us back to the menu prematurely.
-      // D18.6 — also skipped while we're in the boon-phase / upgrade gstate
-      // because the host intentionally cancels its RAF + stops emitting
-      // snapshots until both peers pick. A 30s timeout is plenty long for a
-      // real network drop, but unconditional ticking here would still trip
-      // on a fast boon picker if either peer takes >30s.
-      const inBoonOrUpgrade = (currentBoonPhaseId !== null) || (gstate === 'upgrade');
-      if (
-        !coopWatchdogTripped &&
-        !inBoonOrUpgrade &&
-        latestRemoteSnapshotRecvAtMs > 0 &&
-        (frameStartTs - latestRemoteSnapshotRecvAtMs) > COOP_WATCHDOG_TIMEOUT_MS
-      ) {
-        tripCoopDisconnectWatchdog();
-      }
+    // DR-2 (Step 13): coordinator-based disconnect watchdog. Replaces the
+    // old latestRemoteSnapshotRecvAtMs watchdog. Fires once if we have ever
+    // received remote input but then go silent for COOP_WATCHDOG_TIMEOUT_MS.
+    // Skipped while boon-select / upgrade are active (host RAF is paused).
+    if (isCoopGuest() && !coopWatchdogTripped) {
       try {
-        const result = guestSnapshotApplier.apply(latestRemoteSnapshot, {
-          enemies,
-          bullets,
-          slotsById: { 0: playerSlots[0] || null, 1: playerSlots[1] || null },
-        }, {
-          renderTimeMs: frameStartTs,
-          snapshotRecvAtMs: latestRemoteSnapshotRecvAtMs,
-        });
-        if (result && result.applied) {
-          // Mirror room phase + score from authoritative state. Intentionally
-          // NOT runElapsedMs (advanced locally on guest in update()'s
-          // isCoopGuest branch — overwriting at ~10 Hz would jitter the HUD).
-          if (result.room) {
-            const prevRoomIndex = roomIndex;
-            const prevRoomPhase = roomPhase;
-            roomIndex = result.room.index;
-            roomPhase = result.room.phase;
-            // D12.2 — sync the room intro overlay on guest. Host runs the
-            // advanceRoomIntroPhase state machine in update() (skipped on
-            // guest), so without this the "READY?" panel would stick on
-            // screen for the whole run. Show on entering 'intro' (new room),
-            // hide on leaving it.
-            if (roomPhase === 'intro' && (prevRoomPhase !== 'intro' || roomIndex !== prevRoomIndex)) {
-              try { showRoomIntro('READY?', false); } catch (_) {}
-            } else if (prevRoomPhase === 'intro' && roomPhase !== 'intro') {
-              // D20.2 — show GO! briefly before hiding, matching host's intro state machine.
-              try { showRoomIntro('GO!', true); } catch (_) {}
-              try { setTimeout(() => { try { hideRoomIntro(); } catch (_) {} }, 600); } catch (_) {}
-            }
-            // D18.13 — sync the ROOM CLEAR flash overlay on guest. Host
-            // calls finalizeRoomClearState → showRoomClear() inside its
-            // update path (skipped on guest), so without this the guest
-            // never sees the "ROOM CLEAR" message between rooms. Trigger
-            // once on the prevRoomPhase!=='clear' → 'clear' edge. Use the
-            // boss overlay for boss-room indices (9, 19, 29, 39+).
-            if (roomPhase === 'clear' && prevRoomPhase !== 'clear') {
-              try {
-                const isBossRoom = !!(BOSS_ROOMS && BOSS_ROOMS[roomIndex]);
-                if (isBossRoom) showBossDefeated();
-                else showRoomClear();
-              } catch (_) {}
-            }
+        const inBoonOrUpgrade = (currentBoonPhaseId !== null) || (gstate === 'upgrade');
+        if (!inBoonOrUpgrade && hasReceivedRemoteInput()) {
+          const remoteAgeTicks = getCoordinatorRemoteAgeTicks();
+          const remoteAgeMs = remoteAgeTicks * SIM_STEP_MS;
+          if (remoteAgeMs > COOP_WATCHDOG_TIMEOUT_MS) {
+            tripCoopDisconnectWatchdog();
           }
-          if (Number.isFinite(result.score)) score = result.score;
-          // Phase D5e reconciler retired (rollback resim handles guest position correction).
-          const snap = latestRemoteSnapshot;
-          const snapSeq = snap && snap.snapshotSeq;
         }
-        // D18.6 — stamp decayStart on grey bullets locally. The wire format
-        // does NOT carry decayStart (it's a render-only value on host); the
-        // bullet renderer's age math collapses to NaN without it and orbs
-        // never fade out on guest. We track when each grey bullet id was
-        // first seen and write it back so the renderer can compute alpha
-        // identically to host. Also GC entries whose bullet ids are no
-        // longer present so the map can't grow unbounded across rooms.
-        try {
-          const liveIds = new Set();
-          for (let bi = 0; bi < bullets.length; bi++) {
-            const b = bullets[bi];
-            if (!b) continue;
-            const id = b.id;
-            if (id == null) continue;
-            liveIds.add(id);
-            if (b.state === 'grey') {
-              let stamp = guestGreyDecayStartByBulletId.get(id);
-              if (stamp == null) {
-                stamp = simNowMs;
-                guestGreyDecayStartByBulletId.set(id, stamp);
-              }
-              b.decayStart = stamp;
-            } else {
-              // Re-arm: a bullet that exits grey should re-stamp on next
-              // grey transition. Drop any prior stamp.
-              if (guestGreyDecayStartByBulletId.has(id)) {
-                guestGreyDecayStartByBulletId.delete(id);
-              }
+      } catch (_) {}
+    }
+    // DR-2 (Step 11): guestSnapshotApplier retired. Coordinator drives forward
+    // sim on guest (skipSimStepOnForward:false). Removed the watchdog-guarded
+    // applier block that was here; watchdog replaced in Step 13.
+    // DR-2 (Step 12): standalone grey-decay loop — stamps decayStart on grey
+    // bullets so the renderer's age math doesn't collapse to NaN on guest.
+    if (isCoopGuest()) {
+      try {
+        const liveIds = new Set();
+        for (let bi = 0; bi < bullets.length; bi++) {
+          const b = bullets[bi];
+          if (!b) continue;
+          const id = b.id;
+          if (id == null) continue;
+          liveIds.add(id);
+          if (b.state === 'grey') {
+            let stamp = guestGreyDecayStartByBulletId.get(id);
+            if (stamp == null) {
+              stamp = simNowMs;
+              guestGreyDecayStartByBulletId.set(id, stamp);
+            }
+            b.decayStart = stamp;
+          } else {
+            if (guestGreyDecayStartByBulletId.has(id)) {
+              guestGreyDecayStartByBulletId.delete(id);
             }
           }
-          if (guestGreyDecayStartByBulletId.size > 0) {
-            for (const id of guestGreyDecayStartByBulletId.keys()) {
-              if (!liveIds.has(id)) guestGreyDecayStartByBulletId.delete(id);
-            }
-          }
-        } catch (decayErr) {
-          try { console.warn('[coop] grey-decay stamp error', decayErr); } catch (_) {}
         }
-        // DR-0b: bulletSpawnDetector retired; muzzle flashes for remote bullets
-        // will be provided by effectQueue once R0.4 is complete.
-      } catch (err) {
-        try { console.warn('[coop] snapshot apply error', err); } catch (_) {}
+        if (guestGreyDecayStartByBulletId.size > 0) {
+          for (const id of guestGreyDecayStartByBulletId.keys()) {
+            if (!liveIds.has(id)) guestGreyDecayStartByBulletId.delete(id);
+          }
+        }
+      } catch (decayErr) {
+        try { console.warn('[coop] grey-decay stamp error', decayErr); } catch (_) {}
       }
     }
     draw(simNowMs); hudUpdate();
@@ -5479,21 +5237,9 @@ function update(dt,ts){
     try { coopInputSync && coopInputSync.sampleFrame(simTick); } catch (err) {
       try { console.warn('[coop] sampleFrame error', err); } catch (_) {}
     }
-    // Phase D5d — predict slot 1 movement locally for instant input
-    // response. Applier (predictedSlotId:1) won't clobber body x/y/vx/vy
-    // continuously, but will still re-anchor on death/respawn/runId reset.
-    // Aim, hp, charge, invulnT continue to come from snapshot.
-    if (onlineGuestSlot1Installed) {
-      try { updateOnlineGuestPrediction(dt); } catch (err) {
-        try { console.warn('[coop] guest prediction error', err); } catch (_) {}
-      }
-    }
-    // D18.6 — tick guest-local cosmetics. Without this, particles +
-    // dmgNumbers + shockwaves + payloadCooldownMs are spawned (via the
-    // applier's onSlotDamage callback at hit time) but never decay/fade,
-    // freezing the bullet+number at the hit location forever. This block
-    // mirrors the host's tick block at ~5350 below; identical math so guest
-    // and host see the same visual lifetimes.
+    // DR-2 (Step 11): updateOnlineGuestPrediction retired — hostSimStep drives
+    // slot 1 movement every forward tick via skipSimStepOnForward:false.
+    // D18.6 — tick guest-local cosmetics.
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
       p.x += p.vx * dt; p.y += p.vy * dt;
@@ -5514,74 +5260,9 @@ function update(dt,ts){
       if (s.life <= 0 || s.r >= s.maxR - 0.5) shockwaves.splice(i, 1);
     }
     if (payloadCooldownMs > 0) payloadCooldownMs = Math.max(0, payloadCooldownMs - dt * 1000);
-    // D18.6 — animate per-slot fire-ready ring locally on guest. Snapshots
-    // omit fireT (intentional, cosmetic-only on host), so without ticking
-    // here the charge ring sits empty even when the slot is fully charged.
-    // Reset to 0 on charge<1 so the ring starts from the top of the cycle
-    // each time the slot crests full charge.
-    try {
-      for (let si = 0; si < playerSlots.length; si++) {
-        const sl = playerSlots[si];
-        if (!sl) continue;
-        const m = sl.metrics;
-        if (!m) continue;
-        const maxC = m.maxCharge || 1;
-        const chargeFrac = (m.charge || 0) / maxC;
-        if (chargeFrac < 1) {
-          m.fireT = 0;
-          guestLocalFireTBySlotId.set(sl.id, 0);
-        } else {
-          // D18.12 — match solo player's fireT logic (script.js:4933-4947):
-          //   const mobileChargeMult = isStill ? 1.0 : (UPG.mobileChargeRate || 0.10);
-          //   fireT += dt * mobileChargeMult;
-          //   if (!isStill) fireT = min(fireT, interval);  // cap while moving
-          //   if (fireT >= interval && isStill && hasTarget) fireT %= interval;
-          // While moving, the ring still ADVANCES (just at ~10% rate) up to
-          // the interval cap, matching the solo "ring slowly fills while
-          // running" feel. While still + has-target, it wraps and the host
-          // would actually be firing. isStill from snapshot velocity;
-          // hasTarget from snapshot aim.hasTarget.
-          const sps = (sl.upg && sl.upg.sps) || 0.8;
-          const interval = 1 / Math.max(0.001, sps * 2);
-          const body = sl.body || {};
-          const speed2 = (body.vx || 0) * (body.vx || 0) + (body.vy || 0) * (body.vy || 0);
-          const isStill = speed2 < 1; // ~1 px/s threshold
-          const hasTarget = !!(sl.aim && sl.aim.hasTarget);
-          const mobileChargeMult = isStill ? 1.0 : ((sl.upg && sl.upg.mobileChargeRate) || 0.10);
-          const prev = guestLocalFireTBySlotId.get(sl.id) || 0;
-          let next = prev + dt * mobileChargeMult;
-          if (!isStill) {
-            if (next > interval) next = interval;
-          } else if (hasTarget && next >= interval) {
-            next = next % interval;
-            // D19.2 — guest muzzle prediction. The wrap edge above is
-            // exactly when host's updateGuestFire would call firePlayer
-            // for this slot. Emit cosmetic muzzle VFX (sparks + a short
-            // directional streak in the aim direction) so pressing fire
-            // feels instant on guest. The actual bullet still arrives
-            // ~RTT later via snapshot+local-advance — no predicted bullet
-            // is spawned here, so there's no rollback risk and no chance
-            // of a phantom bullet that never matches an auth shot.
-            // Gated to slot 1 (the guest's own player); slot 0 is the
-            // host's body — predicting their muzzle would risk drift
-            // between guest's mirrored-charge clock and host's real one.
-            if (sl.id === 1 && body && sl.aim) {
-              try {
-                spawnSparks(body.x, body.y, C.green, 4, 55);
-                spawnMuzzleStreak(body.x, body.y, sl.aim.angle || 0, C.green);
-              } catch (_) {}
-            }
-          } else if (!hasTarget && next > interval) {
-            // still + no target: cap (host wouldn't fire either)
-            next = interval;
-          }
-          guestLocalFireTBySlotId.set(sl.id, next);
-          m.fireT = next;
-        }
-      }
-    } catch (fireErr) {
-      try { console.warn('[coop] guest fireT tick error', fireErr); } catch (_) {}
-    }
+    // P3 — fireT is now advanced by hostSimStep → tickPlayerFire() on every forward tick
+    // when skipSimStepOnForward:false (DR-2 guest). Removed the local-only fireT ticking
+    // block that was here to avoid double-advancing fireT and drifting charge state.
     return;
   }
 

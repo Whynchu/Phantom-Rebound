@@ -4,17 +4,15 @@
  * Manages RollbackCoordinator instances for coop sessions.
  * Bridges between the game loop (script.js) and the rollback netcode.
  *
- * Status (R4.2):
+ * Status (DR-2):
  * - ROLLBACK_ENABLED is always-on; guestPredictionReconciler retired.
  * - coordinator.step() called every sim tick for input exchange + resim.
+ * - skipSimStepOnForward:false on guest — coordinator drives hostSimStep
+ *   every forward tick, retiring the D-series snapshotApplier + broadcaster.
  * - stall flag wired to UI indicator; telemetry via window.__rbdiag().
- * - D-series snapshot modules (snapshotBroadcaster, snapshotApplier,
- *   bulletLocalAdvance, greyLagComp) still provide world-state sync until
- *   R0.4 carves deterministic simStep out of script.js.
  *
  * Next milestones:
- * - R0.4: carve real simStep → rollback handles full state, retire snapshots
- * - R5:   two-peer stress test + production ship
+ * - R5: two-peer stress test + production ship
  */
 
 import { RollbackCoordinator } from './rollbackCoordinator.js';
@@ -39,6 +37,9 @@ export let rollbackCoordinator = null;
  *   game loop's update() as the authoritative forward path — no double-advance).
  * @param {object}   [options.simStepOpts] - opts passed as 5th arg to simStep (worldW/H,
  *   baseSpeed, obstacle callbacks, etc.)
+ * @param {boolean}  [options.skipSimStepOnForward=true] - When false (DR-2 guest mode),
+ *   coordinator calls hostSimStep every forward tick so guest physics are driven by the
+ *   same deterministic path as the host, retiring the snapshotApplier as the sync source.
  * @param {boolean}  [options.logging] - Log rollback events for debugging
  *
  * @returns {RollbackCoordinator} The new coordinator
@@ -55,14 +56,21 @@ export function setupRollback(
     return rollbackCoordinator;
   }
 
-  const { simStep: realSimStepFn = null, simStepOpts = {}, logging = false } = options;
+  const {
+    simStep: realSimStepFn = null,
+    simStepOpts = {},
+    logging = false,
+    skipSimStepOnForward = true,
+  } = options;
 
   // Wrap realSimStepFn with opts so coordinator.step() only needs (state,s0,s1,dt).
   // skipSimStepOnForward=true: simStep is used for resim only, not the forward step —
   // because update() already advanced state each tick and we must not double-advance.
+  // skipSimStepOnForward=false (DR-2 guest): coordinator calls hostSimStep every forward
+  // tick so the guest's physics are driven deterministically by the same sim path as host.
   const simStepFn = realSimStepFn
     ? (state, s0, s1, dt) => realSimStepFn(state, s0, s1, dt, simStepOpts)
-    : nopSimStep;
+    : () => {}; // no-op fallback when no simStep provided
 
   rollbackCoordinator = new RollbackCoordinator({
     simState,
@@ -83,13 +91,13 @@ export function setupRollback(
     //     ticks.  Lower values risk getAtTick() misses on deeper rollbacks.
     maxRollbackTicks: 8,
     bufferCapacity: 16,
-    skipSimStepOnForward: true,   // update() already advances state — no double-advance
+    skipSimStepOnForward,
     logger: logging ? (msg) => console.log('[rollback]', msg) : null,
   });
 
   console.log(
     `[rollback] Coordinator initialized: slot ${localSlotIndex}, ` +
-    `simStep=${realSimStepFn ? 'real' : 'placeholder'}, maxRollback=8 ticks, skipForward=true`
+    `simStep=${realSimStepFn ? 'real' : 'placeholder'}, maxRollback=8 ticks, skipForward=${skipSimStepOnForward}`
   );
   return rollbackCoordinator;
 }
@@ -162,16 +170,23 @@ export function isRollbackStalled() {
 }
 
 /**
- * Placeholder simStep until R0.4 carves out the real one.
- * Currently a no-op; game loop still uses inline update() logic.
- * 
- * Once R0.4 is complete, this will be replaced with the actual
- * deterministic sim function: (state, slot0Input, slot1Input, dt) => void
+ * DR-2 (Step 13): Whether at least one remote input has been received since
+ * coordinator init. Returns false when no coordinator is active.
  */
-function nopSimStep(state, slot0Input, slot1Input, dt) {
-  // Placeholder: no-op
-  // Game loop still runs inline update() logic in script.js
-  // TODO (R0.4): extract real simStep from script.js update() function
+export function hasReceivedRemoteInput() {
+  if (!rollbackCoordinator) return false;
+  try { return rollbackCoordinator.getRemoteAgeTicks() !== Infinity; }
+  catch (_) { return false; }
+}
+
+/**
+ * DR-2 (Step 13): Ticks since the freshest received remote input.
+ * Returns Infinity when no remote input ever received or no coordinator.
+ */
+export function getCoordinatorRemoteAgeTicks() {
+  if (!rollbackCoordinator) return Infinity;
+  try { return rollbackCoordinator.getRemoteAgeTicks(); }
+  catch (_) { return Infinity; }
 }
 
 export default {
@@ -181,5 +196,7 @@ export default {
   coordinatorStep,
   getRollbackStats,
   isRollbackStalled,
+  hasReceivedRemoteInput,
+  getCoordinatorRemoteAgeTicks,
   get rollbackCoordinator() { return rollbackCoordinator; },
 };
