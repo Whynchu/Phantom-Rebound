@@ -251,8 +251,12 @@ export function createSnapshotApplier({
   onSlotDamage = null,
   // Same visual-only callback for enemy HP drops. Guests do not run the
   // host's bullet collision path, so this reconstructs damage numbers from
-  // authoritative snapshot HP deltas.
+  // authoritative snapshot HP deltas unless host-authored hit events exist.
   onEnemyDamage = null,
+  // Host-authored pickup visual events. Used for grey pickups on a predicted
+  // guest slot where charge changes arrive via snapshot but sparks would
+  // otherwise be missing on the guest device.
+  onPickupEvent = null,
 } = {}) {
   // Buffer: prev/curr each hold { snapshot, recvAtMs }. Newest applied
   // snapshot is `curr`; the one just before it is `prev`. Older snapshots
@@ -345,7 +349,35 @@ export function createSnapshotApplier({
               }
             }
           }
-          if (typeof onEnemyDamage === 'function' && curr && curr.snapshot && Array.isArray(curr.snapshot.enemies) && Array.isArray(snapshot.enemies)) {
+          if (typeof onPickupEvent === 'function' && Array.isArray(snapshot.pickupEvents)) {
+            for (let i = 0; i < snapshot.pickupEvents.length; i++) {
+              const ev = snapshot.pickupEvents[i];
+              if (!ev) continue;
+              try {
+                onPickupEvent({
+                  slotId: ev.slotId | 0,
+                  x: ev.x,
+                  y: ev.y,
+                  kind: ev.kind || 'grey',
+                });
+              } catch (_) {}
+            }
+          }
+          if (typeof onEnemyDamage === 'function' && Array.isArray(snapshot.enemyDamageEvents) && snapshot.enemyDamageEvents.length > 0) {
+            for (let i = 0; i < snapshot.enemyDamageEvents.length; i++) {
+              const ev = snapshot.enemyDamageEvents[i];
+              if (!ev) continue;
+              try {
+                onEnemyDamage({
+                  enemyId: ev.enemyId | 0,
+                  damage: ev.damage,
+                  x: ev.x,
+                  y: ev.y,
+                  ownerSlot: ev.ownerSlot | 0,
+                });
+              } catch (_) {}
+            }
+          } else if (typeof onEnemyDamage === 'function' && curr && curr.snapshot && Array.isArray(curr.snapshot.enemies) && Array.isArray(snapshot.enemies)) {
             const prevEnemiesById = new Map();
             for (let i = 0; i < curr.snapshot.enemies.length; i++) {
               const pe = curr.snapshot.enemies[i];

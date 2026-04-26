@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.123',
+      label: 'COOP FEEDBACK EVENTS',
+      summary: ['Guest clients now receive host-authored pickup and enemy-hit feedback events so grey pickups play their spark feedback locally.'],
+      highlights: [
+        'Coop enemy damage numbers now preserve the firing slot and use the correct local or partner player color on guest screens.',
+      ]
+    },
+  {
       version: '1.20.122',
       label: 'DAMAGE VARIANCE FEEDBACK',
       summary: ['Player shots now roll deterministic RPG-style damage variance per bullet instead of showing strictly static/incremental values.'],

@@ -169,9 +169,30 @@ function encodeBullet(src, idx) {
     // The legacy `type` field carried this discriminator, but the renderer
     // checks `state` directly, so guests need it on the wire.
     state: String(src.state ?? 'output'),
-    ownerSlot: u32(src.ownerSlot ?? 0, 'bullets[' + idx + '].ownerSlot'),
+    ownerSlot: u32(src.ownerSlot ?? src.ownerId ?? 0, 'bullets[' + idx + '].ownerSlot'),
     bounces: u32(src.bounces ?? 0, 'bullets[' + idx + '].bounces'),
     spawnTick: u32(src.spawnTick ?? 0, 'bullets[' + idx + '].spawnTick'),
+  };
+}
+
+function encodeEnemyDamageEvent(src, idx) {
+  if (!src || typeof src !== 'object') throw new Error('snapshot: enemyDamageEvents[' + idx + '] missing');
+  return {
+    enemyId: u32(src.enemyId ?? src.id ?? 0, 'enemyDamageEvents[' + idx + '].enemyId'),
+    damage: num(src.damage ?? 0, 'enemyDamageEvents[' + idx + '].damage'),
+    x: num(src.x ?? 0, 'enemyDamageEvents[' + idx + '].x'),
+    y: num(src.y ?? 0, 'enemyDamageEvents[' + idx + '].y'),
+    ownerSlot: u32(src.ownerSlot ?? src.ownerId ?? 0, 'enemyDamageEvents[' + idx + '].ownerSlot'),
+  };
+}
+
+function encodePickupEvent(src, idx) {
+  if (!src || typeof src !== 'object') throw new Error('snapshot: pickupEvents[' + idx + '] missing');
+  return {
+    slotId: u32(src.slotId ?? src.slotIdx ?? 0, 'pickupEvents[' + idx + '].slotId'),
+    x: num(src.x ?? 0, 'pickupEvents[' + idx + '].x'),
+    y: num(src.y ?? 0, 'pickupEvents[' + idx + '].y'),
+    kind: String(src.kind ?? 'grey'),
   };
 }
 
@@ -232,6 +253,8 @@ function encodeSnapshot(state) {
   const slots = (state.slots || []).map(encodeSlot);
   const bullets = (state.bullets || []).map(encodeBullet);
   const enemies = (state.enemies || []).map(encodeEnemy);
+  const enemyDamageEvents = (state.enemyDamageEvents || []).map(encodeEnemyDamageEvent);
+  const pickupEvents = (state.pickupEvents || []).map(encodePickupEvent);
   const room = encodeRoom(state.room);
   const score = num(state.score ?? 0, 'score');
   const elapsedMs = num(state.elapsedMs ?? 0, 'elapsedMs');
@@ -244,6 +267,8 @@ function encodeSnapshot(state) {
     slots,
     bullets,
     enemies,
+    enemyDamageEvents,
+    pickupEvents,
     room,
     score,
     elapsedMs,

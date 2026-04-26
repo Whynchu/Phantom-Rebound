@@ -105,6 +105,8 @@ test('encode: full state round-trips via JSON', () => {
     room: { index: 2, phase: 'fighting', clearTimer: 0, spawnQueueLen: 3 },
     score: 1234,
     elapsedMs: 42000,
+    enemyDamageEvents: [{ enemyId: 10, damage: 7, x: 250, y: 87, ownerSlot: 1 }],
+    pickupEvents: [{ slotId: 1, x: 120, y: 130, kind: 'grey' }],
   };
   const snap = encodeSnapshot(src);
   const roundTrip = decodeSnapshot(JSON.parse(JSON.stringify(snap)));
@@ -123,6 +125,10 @@ test('encode: full state round-trips via JSON', () => {
   assertEq(roundTrip.enemies[0].r, 13);
   assertEq(roundTrip.enemies[0].fT, 0.2);
   assertEq(roundTrip.enemies[0].fRate, 1800);
+  assertEq(roundTrip.enemyDamageEvents.length, 1);
+  assertEq(roundTrip.enemyDamageEvents[0].ownerSlot, 1);
+  assertEq(roundTrip.pickupEvents.length, 1);
+  assertEq(roundTrip.pickupEvents[0].kind, 'grey');
   assertEq(roundTrip.room.phase, 'fighting');
   assertEq(roundTrip.score, 1234);
   assertEq(roundTrip.lastProcessedInputSeq[0], 100);
@@ -178,6 +184,31 @@ test('encode: D4.6 bullet/enemy preserve runtime field names', () => {
   assertEq(snap.enemies[0].windup, undefined);
   assertEq(snap.bullets[0].r, 7.5);
   assertEq(snap.bullets[0].state, 'grey');
+});
+
+test('encode: bullet ownerSlot falls back to runtime ownerId', () => {
+  const snap = encodeSnapshot({
+    runId: RID, snapshotSeq: 1, snapshotSimTick: 1,
+    bullets: [{ id: 1, x: 0, y: 0, ownerId: 1 }],
+  });
+  assertEq(snap.bullets[0].ownerSlot, 1);
+});
+
+test('encode: visual event arrays default empty and round-trip', () => {
+  const snap = encodeSnapshot({
+    runId: RID,
+    snapshotSeq: 1,
+    snapshotSimTick: 1,
+    enemyDamageEvents: [{ enemyId: 7, damage: 2.5, x: 10, y: 20, ownerId: 1 }],
+    pickupEvents: [{ slotIdx: 1, x: 30, y: 40 }],
+  });
+  assertEq(snap.enemyDamageEvents[0].ownerSlot, 1);
+  assertEq(snap.enemyDamageEvents[0].damage, 2.5);
+  assertEq(snap.pickupEvents[0].slotId, 1);
+  assertEq(snap.pickupEvents[0].kind, 'grey');
+  const minimal = encodeSnapshot({ runId: RID, snapshotSeq: 2, snapshotSimTick: 2 });
+  assertEq(minimal.enemyDamageEvents.length, 0);
+  assertEq(minimal.pickupEvents.length, 0);
 });
 
 test('encode: coerces fractional u32 fields via floor', () => {

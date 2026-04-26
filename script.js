@@ -1044,6 +1044,8 @@ let coopInputUnsubscribe = null;
 let coopSnapshotBroadcaster = null;
 let coopSnapshotSequencer = null;
 let currentRunId = null;
+const coopEnemyDamageEvents = [];
+const coopPickupEvents = [];
 // Phase D4: guest stores newest received snapshot but does NOT yet render
 // from it (D5 wires interpolation/prediction). Reset on runId change.
 let latestRemoteSnapshot = null;
@@ -1121,6 +1123,40 @@ let onlineGuestSlot1Installed = false;
 // applier's snapshot-lerp path. Null outside online guest runs.
 let guestBulletLocalAdvance = null;
 let lastBulletReconciledSnapshotSeq = null;
+
+function queueCoopEnemyDamageEvent(ev) {
+  if (!activeCoopSession || !isCoopHost()) return;
+  if (!ev || !Number.isFinite(ev.damage) || ev.damage <= 0) return;
+  coopEnemyDamageEvents.push({
+    enemyId: (ev.enemyId ?? 0) | 0,
+    damage: ev.damage,
+    x: ev.x ?? 0,
+    y: ev.y ?? 0,
+    ownerSlot: (ev.ownerSlot ?? 0) | 0,
+  });
+}
+
+function queueCoopPickupEvent(ev) {
+  if (!activeCoopSession || !isCoopHost()) return;
+  if (!ev || !Number.isFinite(ev.x) || !Number.isFinite(ev.y)) return;
+  coopPickupEvents.push({
+    slotId: (ev.slotId ?? ev.slotIdx ?? 0) | 0,
+    x: ev.x,
+    y: ev.y,
+    kind: ev.kind || 'grey',
+  });
+}
+
+function getCoopPlayerColorForSlot(slotId) {
+  const localSlot = getLocalSlotIndex();
+  if (Number.isFinite(slotId) && ((slotId | 0) === (localSlot | 0))) {
+    return getPlayerColorScheme().hex;
+  }
+  if (coopPartnerColorKey) {
+    return getColorSchemeForKey(coopPartnerColorKey)?.hex || getPlayerColorScheme().hex;
+  }
+  return getPlayerColorScheme().hex;
+}
 // D19.3 — host-side grey-pickup lag compensation. Records each grey bullet's
 // recent positions per sim tick on the host. When a non-host slot's pickup
 // check runs, the host augments the current-position overlap test with a
@@ -1444,6 +1480,8 @@ function teardownCoopInputUplink() {
   latestRemoteSnapshot = null;
   latestRemoteSnapshotSeq = null;
   latestRemoteSnapshotRecvAtMs = 0;
+  coopEnemyDamageEvents.length = 0;
+  coopPickupEvents.length = 0;
   // Phase D4.5: tear down host-side slot 1 + processor.
   hostRemoteInputProcessor = null;
   if (onlineHostSlot1Installed) {
@@ -2692,14 +2730,19 @@ function installCoopInputUplink(armedCoop) {
           sparks(x, y, '#ff6b9b', 8, 70);
         } catch (_) {}
       },
-      onEnemyDamage: ({ damage, x, y }) => {
+      onEnemyDamage: ({ damage, x, y, ownerSlot }) => {
         try {
           const dmg = Math.max(1, Math.round(damage));
-          const col = coopPartnerColorKey
-            ? (getColorSchemeForKey(coopPartnerColorKey)?.hex || getPlayerColorScheme().hex)
-            : getPlayerColorScheme().hex;
+          const col = getCoopPlayerColorForSlot(ownerSlot);
           spawnDmgNumber(x, y, dmg, col);
           sparks(x, y, col, 4, 50);
+        } catch (_) {}
+      },
+      onPickupEvent: ({ slotId, x, y, kind }) => {
+        try {
+          if ((slotId | 0) !== (getLocalSlotIndex() | 0)) return;
+          if (kind !== 'grey') return;
+          sparks(x, y, C.ghost, 5, 45);
         } catch (_) {}
       },
       resolveColors: (type) => {
@@ -3140,6 +3183,8 @@ function collectHostSnapshotState() {
     },
     score: score | 0,
     elapsedMs: runElapsedMs | 0,
+    enemyDamageEvents: coopEnemyDamageEvents.splice(0, coopEnemyDamageEvents.length),
+    pickupEvents: coopPickupEvents.splice(0, coopPickupEvents.length),
     // Slot 0 is host-owned; we've consumed all our own input up to simTick.
     // Slot 1 ack comes from hostRemoteInputProcessor — null until we've
     // actually consumed a remote-input frame (D4.5). Per rubber-duck #3
@@ -6391,6 +6436,7 @@ function update(dt,ts){
         } else if(greyResult.kind==='guest'){
           const g = greyResult.guest;
           playerSlots[g.slotIdx].metrics.charge=g.newCharge;
+          queueCoopPickupEvent({ slotId: g.slotIdx, x: b.x, y: b.y, kind: 'grey' });
         } else if(greyResult.kind==='orb'){
           const o = greyResult.orb;
           gainCharge(o.absorbGain, 'orbAbsorb');
@@ -6639,8 +6685,17 @@ function update(dt,ts){
             bloodPactBaseHealCap: BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET,
           });
           e.hp = hitResolution.enemyHpAfterHit;
+          const hitOwnerSlot = b.ownerId ?? b.ownerSlot ?? 0;
+          const hitColor = b.crit ? C.ghost : getCoopPlayerColorForSlot(hitOwnerSlot);
           sparks(b.x,b.y,b.crit?C.ghost:C.green,b.crit?8:5,b.crit?70:55);
-          spawnDmgNumber(e.x, e.y - e.r, hitResolution.damage, b.crit ? C.ghost : getPlayerColorScheme().hex);
+          spawnDmgNumber(e.x, e.y - e.r, hitResolution.damage, hitColor);
+          queueCoopEnemyDamageEvent({
+            enemyId: e.eid,
+            damage: hitResolution.damage,
+            x: e.x,
+            y: e.y - e.r,
+            ownerSlot: hitOwnerSlot,
+          });
           // Blood Pact: piercing shots restore 1 HP per enemy hit
           if(hitResolution.shouldBloodPactHeal){
             applyKillSustainHeal(1, 'bloodPact');

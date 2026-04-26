@@ -520,5 +520,34 @@ function snap(overrides = {}) {
   ok('enemy-damage: reports drop amount', events[0] && events[0].damage === 3);
 }
 
+// 26. Host-authored visual events fire once per fresh snapshot and carry owner slot.
+{
+  const enemyEvents = [];
+  const pickupEvents = [];
+  const ap = createSnapshotApplier({
+    enemyTypeDefs: ENEMY_DEFS,
+    resolveColors: colorResolver,
+    renderDelayMs: 100,
+    onEnemyDamage: (ev) => enemyEvents.push(ev),
+    onPickupEvent: (ev) => pickupEvents.push(ev),
+  });
+  const t = freshTarget();
+  ap.apply(snap({ snapshotSeq: 1 }), t, { snapshotRecvAtMs: 0, renderTimeMs: 0 });
+  ap.apply(snap({
+    snapshotSeq: 2,
+    enemyDamageEvents: [{ enemyId: 9, damage: 4, x: 50, y: 60, ownerSlot: 1 }],
+    pickupEvents: [{ slotId: 1, x: 70, y: 80, kind: 'grey' }],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 200 });
+  ap.apply(snap({
+    snapshotSeq: 2,
+    enemyDamageEvents: [{ enemyId: 9, damage: 4, x: 50, y: 60, ownerSlot: 1 }],
+    pickupEvents: [{ slotId: 1, x: 70, y: 80, kind: 'grey' }],
+  }), t, { snapshotRecvAtMs: 100, renderTimeMs: 250 });
+  ok('visual-events: enemy event fired once', enemyEvents.length === 1);
+  ok('visual-events: enemy ownerSlot preserved', enemyEvents[0] && enemyEvents[0].ownerSlot === 1);
+  ok('visual-events: pickup event fired once', pickupEvents.length === 1);
+  ok('visual-events: pickup slot preserved', pickupEvents[0] && pickupEvents[0].slotId === 1);
+}
+
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail === 0 ? 0 : 1);
