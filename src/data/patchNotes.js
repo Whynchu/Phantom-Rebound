@@ -2,6 +2,18 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.145',
+      label: 'DR-2: FIX BULLET BOUNCE DISPATCH IN KINEMATIC RESIM',
+      summary: ['Fixed the core Phantom Rebound mechanic in coop: tickBulletsKinematic (used during rollback resim) was advancing bullet positions but never calling dispatchBulletBounce. Without the dispatch, bounceLeft never decremented, output bullets never converted to grey charge pickups, and triangle bursts never fired. The fix adds full bounce dispatch to the kinematic step with owner-upg lookup for phantomRebound/split flags and correct triangle burst speed scaling from roomIndex.'],
+      highlights: [
+        'src/sim/bulletKinematic.js: now imports and calls dispatchBulletBounce after each bounce.',
+        'Handles all bounce outcomes: grey conversion (phantomRebound), split shot siblings, triangle burst spawning.',
+        'Triangle burst speed correctly computed from state.run.roomIndex (matches enemyCombatStep formula).',
+        'payload-blast intentionally skipped in kinematic (requires live enemy HP; handled by update() path).',
+        'All 74 tests green.',
+      ]
+    },
+  {
       version: '1.20.144',
       label: 'DR-2: FIX HOST ROLLBACK GATE — INCLUDE INTRO PHASE',
       summary: ['Fixed permanent guest stall: the host\'s _rollbackActive gate excluded \'intro\' phase, so the host never called coordinatorStep during the ~1600ms room intro. The guest ran ~97 ticks before any host input arrived, creating a permanent stall that lasted the entire session. Fix: unified gate — both host and guest now include \'intro\', keeping both coordinators in sync from tick 0.'],

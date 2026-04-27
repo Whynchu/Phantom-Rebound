@@ -1,1 +1,1 @@
-{ "version": "1.20.144", "label": "DR-2: fix host _rollbackActive gate — include intro so both peers sync from tick 0" }
+{ "version": "1.20.145", "label": "DR-2: fix bullet bounce dispatch in kinematic resim — grey conversion, split, triangle burst" }
