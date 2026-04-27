@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.145', label: 'DR-2: fix bullet bounce dispatch in kinematic resim — grey conversion, split, triangle burst' };
+const VERSION = { num: '1.20.146', label: 'DR-2: rollback partial resync + 20-tick window (was 8) — prevents permanent guest divergence' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

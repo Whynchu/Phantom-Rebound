@@ -2,6 +2,17 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.146',
+      label: 'DR-2: ROLLBACK PARTIAL RESYNC + WIDER WINDOW',
+      summary: ['Fixed permanent guest divergence caused by network latency spikes. The rollback window was only 8 ticks (133ms); real sessions showed 44-tick (730ms) input gaps that exceeded the window, causing the coordinator to silently give up and leaving guest state permanently wrong. Fix 1: partial resync — when divergence exceeds the max, correct the last maxRollbackTicks using real inputs instead of giving up. Fix 2: window widened from 8 to 20 ticks (333ms) to handle normal mobile latency.'],
+      highlights: [
+        'rollbackCoordinator.js: partial resync when rollbackDepth > maxRollbackTicks — finds oldest buffer snapshot and resims forward.',
+        'rollbackIntegration.js: maxRollbackTicks 8→20, bufferCapacity 16→42.',
+        'New test 12: verifies partial resync calls simStep ≥ maxRollbackTicks frames on deep divergence.',
+        '75 tests green.',
+      ]
+    },
+  {
       version: '1.20.145',
       label: 'DR-2: FIX BULLET BOUNCE DISPATCH IN KINEMATIC RESIM',
       summary: ['Fixed the core Phantom Rebound mechanic in coop: tickBulletsKinematic (used during rollback resim) was advancing bullet positions but never calling dispatchBulletBounce. Without the dispatch, bounceLeft never decremented, output bullets never converted to grey charge pickups, and triangle bursts never fired. The fix adds full bounce dispatch to the kinematic step with owner-upg lookup for phantomRebound/split flags and correct triangle burst speed scaling from roomIndex.'],

@@ -245,10 +245,38 @@ export class RollbackCoordinator {
     // Safety check: don't rollback too far
     const rollbackDepth = this.currentTick - divergenceTick;
     if (rollbackDepth > this.maxRollbackTicks) {
+      // Divergence is deeper than the rollback window (e.g., a network stall
+      // caused a burst of late inputs). Instead of silently giving up and
+      // letting the state stay permanently wrong, perform a "partial resync":
+      // find the oldest snapshot still in the buffer and correct the last
+      // maxRollbackTicks ticks using the best-available real inputs. Ticks
+      // before the window remain uncorrected — this is best-effort, but it
+      // prevents the session from diverging permanently (e.g., preventing
+      // room-clear from ever registering on the guest).
+      const partialStart = this.currentTick - this.maxRollbackTicks;
+      const partialRewindTick = partialStart - 1;
+      const partialSnap = this.buffer.getAtTick(partialRewindTick);
+      if (!partialSnap) {
+        this.logger?.(
+          `RollbackCoordinator: divergence at tick ${divergenceTick} exceeds max rollback (${rollbackDepth} > ${this.maxRollbackTicks}); partial resync also failed — no snapshot at tick ${partialRewindTick}`
+        );
+        return;
+      }
+      restoreState(this.simState, partialSnap.state);
+      for (let tick = partialStart; tick < this.currentTick; tick++) {
+        const localInput = this.localInputHistory[tick] ?? {};
+        const remoteInput = this.remoteInputHistory[tick] ?? this._neutralInput();
+        const slot0Input = this.localSlotIndex === 0 ? localInput : remoteInput;
+        const slot1Input = this.localSlotIndex === 1 ? localInput : remoteInput;
+        this.simStep(this.simState, slot0Input, slot1Input, 1 / 60);
+        this.buffer.replaceAtTick(tick, this.simState, slot0Input, slot1Input);
+        this.remotePredictions[tick] = null;
+      }
       this.logger?.(
-        `RollbackCoordinator: divergence at tick ${divergenceTick} exceeds max rollback (${rollbackDepth} > ${this.maxRollbackTicks})`
+        `RollbackCoordinator: partial resync from tick ${partialStart} (divergence at ${divergenceTick} depth=${rollbackDepth} > max=${this.maxRollbackTicks})`
       );
-      return; // Give up; state is too old
+      this._stats.rollbacksPerformed++;
+      return;
     }
 
     // Find the snapshot just before divergenceTick

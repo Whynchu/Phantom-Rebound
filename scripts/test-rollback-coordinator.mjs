@@ -309,4 +309,44 @@ console.log('\n=== RollbackCoordinator Tests ===\n');
   console.log('✓ PASS');
 }
 
+// Test 12: Partial resync fires when divergence exceeds maxRollbackTicks
+{
+  console.log('Test 12: Partial resync on deep divergence (depth > maxRollbackTicks)');
+  const state = createSimState();
+  let remoteInputCallback = null;
+  let simStepCalls = 0;
+  const maxRollback = 4;
+
+  const coordinator = new RollbackCoordinator({
+    simState: state,
+    simStep: (s, s0, s1, dt) => {
+      counterSimStep(s, s0, s1, dt);
+      simStepCalls++;
+    },
+    localSlotIndex: 1,
+    sendInput: async () => {},
+    onRemoteInput: (cb) => { remoteInputCallback = cb; },
+    maxRollbackTicks: maxRollback,
+    bufferCapacity: maxRollback * 2 + 2,
+  });
+
+  const neutral = { joy: { dx: 0, dy: 0, active: false, mag: 0 } };
+
+  // Advance 10 ticks (well beyond maxRollbackTicks)
+  for (let i = 0; i < 10; i++) {
+    coordinator.step(neutral, 1 / 60);
+  }
+  assert.strictEqual(coordinator.currentTick, 10);
+
+  // Deliver a remote input for tick 0 — divergence depth = 10 > maxRollback (4)
+  // This should trigger partial resync, not a silent give-up
+  const stepsBefore = simStepCalls;
+  remoteInputCallback({ tick: 0, slot: 0, dx: 1, dy: 0, active: true, mag: 60 });
+
+  // Partial resync must have called simStep for maxRollbackTicks frames
+  assert.ok(simStepCalls >= stepsBefore + maxRollback,
+    `Partial resync should call simStep >= ${maxRollback} times, got ${simStepCalls - stepsBefore}`);
+  console.log('✓ PASS');
+}
+
 console.log('\n=== All RollbackCoordinator Tests Passed ===\n');

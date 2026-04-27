@@ -79,25 +79,26 @@ export function setupRollback(
     sendInput: sendInputFn,
     onRemoteInput: registerRemoteInputFn,
     // R4.2 — Buffer tuning rationale:
-    //   maxRollbackTicks = 8:  At 60 Hz, 8 ticks ≈ 133 ms.  This comfortably
-    //     covers a 100 ms round-trip on a typical consumer connection (50 ms
-    //     one-way) plus ~30 ms of processing/batching headroom.  Going higher
-    //     increases resim cost per divergence; going lower risks missing late
-    //     frames on a congested link, forcing full state desync.
-    //   bufferCapacity = 16:  Must be > maxRollbackTicks (enforced in
-    //     RollbackCoordinator constructor).  16 = 2× the rollback window,
+    //   maxRollbackTicks = 20:  At 60 Hz, 20 ticks ≈ 333 ms.  This covers
+    //     the typical mobile round-trip (100–200 ms) plus headroom for brief
+    //     network stalls.  The previous 8-tick window caused permanent guest
+    //     divergence after any >133 ms latency spike (observed 44-tick / 730 ms
+    //     gaps on real devices).  Partial-resync fallback in _rollbackAndResim
+    //     handles bursts beyond this window.
+    //   bufferCapacity = 42:  Must be > maxRollbackTicks (enforced in
+    //     RollbackCoordinator constructor).  42 = 2× the rollback window + 2,
     //     giving the ring buffer enough slack to store the rewind target (tick
-    //     divergenceTick - 1) even when the resim replays all 8 subsequent
+    //     divergenceTick - 1) even when the resim replays all 20 subsequent
     //     ticks.  Lower values risk getAtTick() misses on deeper rollbacks.
-    maxRollbackTicks: 8,
-    bufferCapacity: 16,
+    maxRollbackTicks: 20,
+    bufferCapacity: 42,
     skipSimStepOnForward,
     logger: logging ? (msg) => console.log('[rollback]', msg) : null,
   });
 
   console.log(
     `[rollback] Coordinator initialized: slot ${localSlotIndex}, ` +
-    `simStep=${realSimStepFn ? 'real' : 'placeholder'}, maxRollback=8 ticks, skipForward=${skipSimStepOnForward}`
+    `simStep=${realSimStepFn ? 'real' : 'placeholder'}, maxRollback=20 ticks, skipForward=${skipSimStepOnForward}`
   );
   return rollbackCoordinator;
 }
