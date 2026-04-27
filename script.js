@@ -143,10 +143,9 @@ import {
 } from './src/net/coopRunConfig.js';
 import { getLocalSlot, getLocalSlotIndex } from './src/net/onlineSlotRuntime.js';
 import { createCoopInputSync } from './src/net/coopInputSync.js';
-// DR-2: coopSnapshot / snapshotApplier / coopSnapshotBroadcaster imports
-// retired — rollback coordinator replaces the D-series snapshot stack.
-
-// DR-2: coopSnapshotBroadcaster retired.
+import { encodeSnapshot, decodeSnapshot, createSnapshotSequencer } from './src/net/coopSnapshot.js';
+import { createSnapshotBroadcaster } from './src/net/coopSnapshotBroadcaster.js';
+import { createSnapshotApplier } from './src/net/snapshotApplier.js';
 
 import { rollbackCoordinator, setupRollback, teardownRollback, coordinatorStep, getRollbackStats, isRollbackStalled, hasReceivedRemoteInput, getCoordinatorRemoteAgeTicks } from './src/net/rollbackIntegration.js';
 import { hostSimStep } from './src/sim/hostSimStep.js';
@@ -1034,11 +1033,9 @@ let simTick = 0;
 // gameover / new run.
 let coopInputSync = null;
 let coopInputUnsubscribe = null;
-// DR-2: coopSnapshotBroadcaster and snapshotApplier retired.
-// Rollback coordinator (skipSimStepOnForward:false on guest) now drives
-// deterministic forward simulation on both peers, replacing the D-series
-// snapshot + prediction stack.
-let coopSnapshotSequencer = null; // retained for hostSimTick reference
+let coopSnapshotBroadcaster = null;
+let coopSnapshotApplier = null;
+let lastSnapshotRecvAtMs = 0;
 let currentRunId = null;
 const coopEnemyDamageEvents = [];
 const coopPickupEvents = [];
@@ -1476,8 +1473,13 @@ function teardownCoopInputUplink() {
   // R3 — tear down rollback coordinator + R4.2 dismiss stall indicator
   try { teardownRollback(); } catch (_) {}
   try { hideRollbackStallIndicator(); } catch (_) {}
-  // DR-2: coopSnapshotBroadcaster retired — no dispose needed.
-  coopSnapshotSequencer = null;
+  // H2: dispose snapshot broadcaster (host) and applier (guest).
+  if (coopSnapshotBroadcaster) {
+    try { coopSnapshotBroadcaster.dispose(); } catch (_) {}
+    coopSnapshotBroadcaster = null;
+  }
+  coopSnapshotApplier = null;
+  lastSnapshotRecvAtMs = 0;
   coopEnemyDamageEvents.length = 0;
   coopPickupEvents.length = 0;
   guestGreyDecayStartByBulletId.clear();
@@ -1489,7 +1491,7 @@ function teardownCoopInputUplink() {
     try { delete playerSlots[1]; } catch (_) {}
     onlineHostSlot1Installed = false;
   }
-  // DR-2: guestSnapshotApplier retired.
+  // H2: snapshot applier — instantiated in installCoopInputUplink for guest.
   // D19.4: spawn detector retired (DR-0b).
   lastReconciledSnapshotSeq = null;
   if (onlineGuestSlot1Installed) {
@@ -2340,7 +2342,7 @@ function handleCoopRoomAdvanceGuest(payload) {
     roomIndex = payload.roomIndex | 0;
   }
   try { startRoom(roomIndex); } catch (_) {}
-  try { ensureRollbackSlot1Bridge(); } catch (_) {}
+  // H1: ensureRollbackSlot1Bridge() removed for guest — no coordinator on guest.
   // If the picker was still open (e.g. AFK timeout fired on host), close
   // it. Then unfreeze guest sim if we paused for the picker.
   try { document.getElementById('s-up').classList.add('off'); } catch (_) {}
@@ -2711,115 +2713,146 @@ function installCoopInputUplink(armedCoop) {
     batchSize: 4,
   });
 
-  // DR-2: broadcaster retired. Host still installs slot 1 (needed for rollback
-  // to have a real body target), but no longer creates a snapshot sequencer or
-  // broadcaster. Guest installs its own slot 1 too.
   if (role === 'host') {
     installOnlineCoopHostSlot1(coopInputSync.getRemoteRingBuffer());
-    try { console.info('[coop] host slot-1 installed (DR-2: no broadcaster)'); } catch (_) {}
+    try { console.info('[coop] host slot-1 installed'); } catch (_) {}
   }
   if (role === 'guest') {
-    // DR-2: guest installs its own slot 1 (placeholder body) for rollback to
-    // snapshot/restore. No snapshot applier — coordinator drives hostSimStep.
     installOnlineCoopGuestSlot1();
     lastReconciledSnapshotSeq = null;
-    // D19.4 — bullet spawn detector retired (DR-0b).
-    try { console.info('[coop] guest slot-1 installed (DR-2: no applier)'); } catch (_) {}
+    lastSnapshotRecvAtMs = 0;
+    // H2: create snapshot applier. predictedSlotId:1 skips body position writes
+    // for guest's own slot so local prediction drives movement; applier only
+    // updates HP, charge, distort, invuln, aim, etc.
+    coopSnapshotApplier = createSnapshotApplier({
+      predictedSlotId: 1,
+      onSlotDamage: ({ slotId, damage, x, y }) => {
+        try {
+          const col = getCoopPlayerColorForSlot(slotId);
+          spawnDmgNumber(x, y, damage | 0, col);
+        } catch (_) {}
+      },
+      onPickupEvent: ({ x, y }) => {
+        try { sparks(x, y, '#ccc', 5, 40); } catch (_) {}
+      },
+      onEnemyDamage: ({ damage, x, y, ownerSlot }) => {
+        try {
+          const col = getCoopPlayerColorForSlot(ownerSlot);
+          spawnDmgNumber(x, y, damage | 0, col);
+        } catch (_) {}
+      },
+    });
+    try { console.info('[coop] guest slot-1 installed (H2: snapshot applier active)'); } catch (_) {}
   }
-  ensureRollbackSlot1Bridge();
-  // R3 — rollback coordinator (experimental). Slot 1 must be installed before
-  // setup so the coordinator snapshots/restores the same live body rendered by
-  // the D-series coop path.
-  if (ROLLBACK_ENABLED) {
-    try {
-      const rollbackInputBatch = [];
-      const flushRollbackInputBatch = async () => {
-        if (rollbackInputBatch.length === 0) return;
-        const frames = rollbackInputBatch.splice(0, rollbackInputBatch.length);
-        try { await session.sendGameplay({ kind: 'rollback-input-batch', frames }); } catch (_) {}
-      };
-      const deliverRollbackInputFrame = (frame, callback) => {
-        if (!frame) return;
-        ingestRollbackFrameForLegacySlot(frame);
-        callback(frame);
-      };
-      setupRollback(
-        simState,
-        localSlotIndex,
-        async (frame) => {
-          const positionedFrame = attachRollbackFramePosition(frame, localSlotIndex);
-          rollbackInputBatch.push(positionedFrame);
-          if (rollbackInputBatch.length >= ROLLBACK_INPUT_BATCH_SIZE) {
-            await flushRollbackInputBatch();
-          }
-        },
-        // R0.4-H: hostSimStep now covers room state + player fire — complete enough
-        // for host coordinator to apply rollback corrections on slot 1 position.
-        (callback) => session.onGameplay((ev) => {
-          const payload = ev && ev.payload;
-          if (!payload) return;
-          if (payload.kind === 'rollback-input' && payload.frame) {
-            deliverRollbackInputFrame(payload.frame, callback);
-            return;
-          }
-          if (payload.kind === 'rollback-input-batch' && Array.isArray(payload.frames)) {
-            for (const frame of payload.frames) deliverRollbackInputFrame(frame, callback);
-          }
-        }),
-        {
-          simStep: hostSimStep,
-          // Step 8: skipSimStepOnForward:false on guest — coordinator drives hostSimStep
-          // every forward tick (DR-2). Host keeps true: update() is the authoritative
-          // forward path, resim-only for host corrections.
-          skipSimStepOnForward: role === 'host',
-          simStepOpts: {
-            get worldW() { return simState.world && simState.world.w ? simState.world.w : (WORLD_W || 800); },
-            get worldH() { return simState.world && simState.world.h ? simState.world.h : (WORLD_H || 600); },
-            // P4: provide base speed as a getter so it stays current with GLOBAL_SPEED_LIFT.
-            // baseSpeedRaw = pre-upg speed; hostSimStep applies per-slot speedMult for slot1.
-            get baseSpeed() { return 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (UPG.speedMult || 1)); },
-            get baseSpeedRaw() { return 165 * GLOBAL_SPEED_LIFT; },
-            deadzone: JOY_DEADZONE,
-            joyMax: JOY_MAX,
-            get gate() { return simState.run.roomPhase !== 'intro'; },
-            get phaseWalk() { return !!UPG.phaseWalk; },
-            get bossDamageMultiplier() { return currentBossDamageMultiplier || 1; },
-            resolveCollisions: resolveEntityObstacleCollisions,
-            isOverlapping: isEntityOverlappingObstacle,
-            eject: ejectEntityFromObstacles,
-            // R0.4-H: enable effectQueue so resim ticks can push visual/audio
-            // descriptors; drained in the game loop before coordinatorStep snapshots.
-            queueEffects: true,
-            spawnEnemy: (type, isBoss, bossScale) => {
-              const enemy = createEnemy(type, {
-                width: simState.world && simState.world.w ? simState.world.w : (WORLD_W || 800),
-                height: simState.world && simState.world.h ? simState.world.h : (WORLD_H || 600),
-                margin: M,
-                roomIndex: simState.run ? simState.run.roomIndex : 0,
-                nextEnemyId: simState.nextEnemyId++,
-                isBoss: !!isBoss,
-                bossScale: bossScale || 1,
-                hpMultiplier: isOnlineCoopRun() ? ONLINE_COOP_ENEMY_HP_MULT : 1,
-              });
-              if (enemy.forcePurpleShots && simState.run) simState.run.roomPurpleShooterAssigned = true;
-              resolveEntityObstacleCollisions(enemy);
-              simState.enemies.push(enemy);
-            },
-            get getBossEscortRespawnMs() { return getBossEscortRespawnMs; },
-            get getReinforcementIntervalMs() { return getReinforcementIntervalMs; },
+
+  // H1: Coordinator and slot-1 bridge are host-only. Guest drives slot 1
+  // locally (updateOnlineGuestPrediction) + corrects via snapshots.
+  if (role === 'host') {
+    ensureRollbackSlot1Bridge();
+    // R3 — rollback coordinator (experimental). Slot 1 must be installed before
+    // setup so the coordinator snapshots/restores the same live body rendered by
+    // the D-series coop path.
+    if (ROLLBACK_ENABLED) {
+      try {
+        const rollbackInputBatch = [];
+        const flushRollbackInputBatch = async () => {
+          if (rollbackInputBatch.length === 0) return;
+          const frames = rollbackInputBatch.splice(0, rollbackInputBatch.length);
+          try { await session.sendGameplay({ kind: 'rollback-input-batch', frames }); } catch (_) {}
+        };
+        const deliverRollbackInputFrame = (frame, callback) => {
+          if (!frame) return;
+          ingestRollbackFrameForLegacySlot(frame);
+          callback(frame);
+        };
+        setupRollback(
+          simState,
+          localSlotIndex,
+          async (frame) => {
+            const positionedFrame = attachRollbackFramePosition(frame, localSlotIndex);
+            rollbackInputBatch.push(positionedFrame);
+            if (rollbackInputBatch.length >= ROLLBACK_INPUT_BATCH_SIZE) {
+              await flushRollbackInputBatch();
+            }
           },
-          inputDeadzoneMag: JOY_DEADZONE,
-          inputJoyMax: () => joy.max || JOY_MAX,
-          canonicalJoyMax: JOY_MAX,
-          logging: COOP_DIAG,
-        }
-      );
-      console.info(`[coop] rollback coordinator armed (DR-2: skipForward=${role === 'host'})`);
-    } catch (err) {
-      try { console.warn('[coop] rollback setup failed:', err); } catch (_) {}
+          // R0.4-H: hostSimStep now covers room state + player fire — complete enough
+          // for host coordinator to apply rollback corrections on slot 1 position.
+          (callback) => session.onGameplay((ev) => {
+            const payload = ev && ev.payload;
+            if (!payload) return;
+            if (payload.kind === 'rollback-input' && payload.frame) {
+              deliverRollbackInputFrame(payload.frame, callback);
+              return;
+            }
+            if (payload.kind === 'rollback-input-batch' && Array.isArray(payload.frames)) {
+              for (const frame of payload.frames) deliverRollbackInputFrame(frame, callback);
+            }
+          }),
+          {
+            simStep: hostSimStep,
+            // H1: host keeps skipSimStepOnForward:true — update() is the authoritative
+            // forward path, resim-only for host corrections.
+            skipSimStepOnForward: true,
+            simStepOpts: {
+              get worldW() { return simState.world && simState.world.w ? simState.world.w : (WORLD_W || 800); },
+              get worldH() { return simState.world && simState.world.h ? simState.world.h : (WORLD_H || 600); },
+              // P4: provide base speed as a getter so it stays current with GLOBAL_SPEED_LIFT.
+              // baseSpeedRaw = pre-upg speed; hostSimStep applies per-slot speedMult for slot1.
+              get baseSpeed() { return 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (UPG.speedMult || 1)); },
+              get baseSpeedRaw() { return 165 * GLOBAL_SPEED_LIFT; },
+              deadzone: JOY_DEADZONE,
+              joyMax: JOY_MAX,
+              get gate() { return simState.run.roomPhase !== 'intro'; },
+              get phaseWalk() { return !!UPG.phaseWalk; },
+              get bossDamageMultiplier() { return currentBossDamageMultiplier || 1; },
+              resolveCollisions: resolveEntityObstacleCollisions,
+              isOverlapping: isEntityOverlappingObstacle,
+              eject: ejectEntityFromObstacles,
+              // R0.4-H: enable effectQueue so resim ticks can push visual/audio
+              // descriptors; drained in the game loop before coordinatorStep snapshots.
+              queueEffects: true,
+              spawnEnemy: (type, isBoss, bossScale) => {
+                const enemy = createEnemy(type, {
+                  width: simState.world && simState.world.w ? simState.world.w : (WORLD_W || 800),
+                  height: simState.world && simState.world.h ? simState.world.h : (WORLD_H || 600),
+                  margin: M,
+                  roomIndex: simState.run ? simState.run.roomIndex : 0,
+                  nextEnemyId: simState.nextEnemyId++,
+                  isBoss: !!isBoss,
+                  bossScale: bossScale || 1,
+                  hpMultiplier: isOnlineCoopRun() ? ONLINE_COOP_ENEMY_HP_MULT : 1,
+                });
+                if (enemy.forcePurpleShots && simState.run) simState.run.roomPurpleShooterAssigned = true;
+                resolveEntityObstacleCollisions(enemy);
+                simState.enemies.push(enemy);
+              },
+              get getBossEscortRespawnMs() { return getBossEscortRespawnMs; },
+              get getReinforcementIntervalMs() { return getReinforcementIntervalMs; },
+            },
+            inputDeadzoneMag: JOY_DEADZONE,
+            inputJoyMax: () => joy.max || JOY_MAX,
+            canonicalJoyMax: JOY_MAX,
+            logging: COOP_DIAG,
+          }
+        );
+        console.info('[coop] rollback coordinator armed (H1: host-only, skipForward=true)');
+      } catch (err) {
+        try { console.warn('[coop] rollback setup failed:', err); } catch (_) {}
+      }
     }
-    if (!rollbackCoordinator) {
-      console.error('[coop] CRITICAL: rollbackCoordinator is null after setup — guest will be stuck at READY?');
+    // H2: snapshot broadcaster at 10 Hz (every 6 ticks at 60 Hz sim).
+    try {
+      const seq = createSnapshotSequencer();
+      coopSnapshotBroadcaster = createSnapshotBroadcaster({
+        sendGameplay: (msg) => session.sendGameplay(msg),
+        sequencer: seq,
+        runId: currentRunId || ('run-' + Date.now()),
+        ticksPerSnapshot: 6,
+        getState: () => collectHostSnapshotState(),
+      });
+      console.info('[coop] snapshot broadcaster armed (H2, 10 Hz)');
+    } catch (err) {
+      try { console.warn('[coop] snapshot broadcaster setup failed:', err); } catch (_) {}
     }
   }
   // Ingest any gameplay payload that is an input frame from the peer.
@@ -2939,6 +2972,56 @@ function installCoopInputUplink(armedCoop) {
       return;
     }
     // DR-2: 'snapshot' payload handler retired — broadcaster removed.
+    if (payload.kind === 'snapshot') {
+      if (role === 'guest' && coopSnapshotApplier) {
+        try {
+          lastSnapshotRecvAtMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+          const snapshot = decodeSnapshot(payload);
+          const slotsById = {};
+          if (playerSlots[0]) slotsById[0] = playerSlots[0];
+          if (playerSlots[1]) slotsById[1] = playerSlots[1];
+          const recvMs = lastSnapshotRecvAtMs;
+          coopSnapshotApplier.apply(snapshot, { enemies, bullets, slotsById }, {
+            snapshotRecvAtMs: recvMs,
+            renderTimeMs: recvMs,
+          });
+          // Apply score + elapsedMs directly.
+          if (Number.isFinite(snapshot.score)) score = snapshot.score;
+          if (Number.isFinite(snapshot.elapsedMs) && snapshot.elapsedMs > 0) runElapsedMs = snapshot.elapsedMs;
+          // Apply room phase changes. Room index changes come via coop-room-advance.
+          // Only update roomPhase within the current room; do not call startRoom here.
+          if (snapshot.room && typeof snapshot.room.phase === 'string') {
+            const newPhase = snapshot.room.phase;
+            if (newPhase !== roomPhase) {
+              const prevPhase = roomPhase;
+              roomPhase = newPhase;
+              // Edge: non-clear → clear. Fire room-clear effects once.
+              if (prevPhase !== 'clear' && newPhase === 'clear') {
+                try {
+                  bullets.length = 0;
+                  clearParticles();
+                  runBoonHook('onRoomClear', { UPG, healPlayer, slot: playerSlots[1] || playerSlots[0] || null });
+                  applyRoomClearProgression();
+                  const _isBossRoom = !!(BOSS_ROOMS && BOSS_ROOMS[roomIndex]);
+                  if (_isBossRoom) showBossDefeated();
+                  else showRoomClear();
+                } catch (_) {}
+              }
+              // Edge: intro → spawning/fighting: GO! flash
+              if (prevPhase === 'intro' && (newPhase === 'spawning' || newPhase === 'fighting')) {
+                try {
+                  showRoomIntro('GO!', true);
+                  setTimeout(() => { try { hideRoomIntro(); } catch (_) {} }, 600);
+                } catch (_) {}
+              }
+            }
+          }
+        } catch (err) {
+          try { console.warn('[coop] snapshot apply error:', err); } catch (_) {}
+        }
+      }
+      return;
+    }
   });
   try { console.info('[coop] input uplink installed role=' + role + ' slot=' + localSlotIndex); } catch (_) {}
   // D18.11 — reset disconnect state and arm liveness/heartbeat/visibility.
@@ -2995,7 +3078,104 @@ function stopCoopDiagnostics() {
 
 // DR-2: collectHostSnapshotState() retired with snapshotBroadcaster.
 
-// Phase D4.5: install online host slot 1 — its body, metrics, timers, aim,
+// H2: collect authoritative game state for snapshot broadcast.
+function collectHostSnapshotState() {
+  const slotsData = [];
+  for (let i = 0; i < playerSlots.length; i++) {
+    const sl = playerSlots[i];
+    if (!sl) continue;
+    const b = sl.body;
+    if (!b) continue;
+    const m = sl.metrics || {};
+    const aim = sl.aim || {};
+    const shields = b.shields || [];
+    let shieldCount = 0, shieldHardenedMask = 0, shieldCooldownMask = 0;
+    for (let si = 0; si < shields.length && si < 8; si++) {
+      const s = shields[si];
+      if (!s) continue;
+      shieldCount++;
+      if (s.hardened) shieldHardenedMask |= (1 << si);
+      if ((s.cooldown || 0) > 0) shieldCooldownMask |= (1 << si);
+    }
+    const upg = sl.upg || {};
+    slotsData.push({
+      id: sl.id,
+      x: b.x, y: b.y,
+      vx: b.vx || 0, vy: b.vy || 0,
+      hp: m.hp != null ? m.hp : (b.hp || 0),
+      maxHp: m.maxHp || BASE_PLAYER_HP,
+      charge: m.charge || 0,
+      maxCharge: upg.maxCharge || maxCharge || 100,
+      aimAngle: aim.angle != null ? aim.angle : -Math.PI * 0.5,
+      invulnT: b.invincible || 0,
+      shieldT: 0,
+      stillTimer: m.stillTimer || 0,
+      alive: !b.deadAt,
+      respawnSeq: b.respawnSeq || 0,
+      distort: b.distort || 0,
+      hasTarget: !!(aim.hasTarget),
+      spectating: !!b.coopSpectating,
+      shieldCount,
+      shieldHardenedMask,
+      shieldCooldownMask,
+      orbCount: (b.coopOrbCount | 0) || 0,
+    });
+  }
+
+  const bulletsData = bullets.map(b => ({
+    id: b.id,
+    x: b.x, y: b.y,
+    vx: b.vx || 0, vy: b.vy || 0,
+    r: b.r || 6,
+    type: b.type || 'p',
+    state: b.state || 'output',
+    ownerSlot: b.ownerSlot != null ? b.ownerSlot : (b.ownerId != null ? b.ownerId : 0),
+    bounces: b.bounces || 0,
+    spawnTick: b.spawnTick || 0,
+    doubleBounce: !!b.doubleBounce,
+    bounceCount: b.bounceCount || 0,
+    dangerBounceBudget: b.dangerBounceBudget || 0,
+    eliteStage: b.eliteStage != null ? b.eliteStage : null,
+    eliteColor: b.eliteColor || null,
+    eliteCore: b.eliteCore || null,
+    isTriangle: !!b.isTriangle,
+  }));
+
+  const enemiesData = enemies.map(e => ({
+    id: e.id,
+    x: e.x, y: e.y,
+    vx: e.vx || 0, vy: e.vy || 0,
+    hp: e.hp,
+    maxHp: e.maxHp || e.hp,
+    r: e.r || 12,
+    type: e.type,
+    fT: e.fT || 0,
+    fRate: e.fRate || 0,
+  }));
+
+  // Consume events (single-threaded, no race)
+  const pickupEvs = coopPickupEvents.splice(0);
+  const enemyDmgEvs = coopEnemyDamageEvents.splice(0);
+
+  return {
+    slots: slotsData,
+    bullets: bulletsData,
+    enemies: enemiesData,
+    room: {
+      index: roomIndex,
+      phase: roomPhase,
+      clearTimer: roomClearTimer || 0,
+      spawnQueueLen: spawnQueue ? spawnQueue.length : 0,
+    },
+    score,
+    elapsedMs: runElapsedMs,
+    pickupEvents: pickupEvs,
+    enemyDamageEvents: enemyDmgEvs,
+    lastProcessedInputSeq: { 0: null, 1: null },
+  };
+}
+
+
 // and a remote-input adapter that reads from the coop input ring buffer.
 // Mirrors the COOP_DEBUG installGuestDebugSlot setup (so it benefits from
 // the existing slot-1 movement / contact-damage / respawn paths) but
@@ -5185,7 +5365,10 @@ function loop(ts){
           _guestPrevRoomPhase = roomPhase;
         }
       }
-      // DR-2: coopSnapshotBroadcaster.tick() retired.
+      // H2: snapshot broadcaster — host sends state at 10 Hz to guest.
+      if (isCoopHost && isCoopHost() && coopSnapshotBroadcaster) {
+        try { coopSnapshotBroadcaster.tick(simTick); } catch (_) {}
+      }
       simAccumulatorMs -= SIM_STEP_MS;
       steps++;
     }
@@ -5196,26 +5379,20 @@ function loop(ts){
       // keep the loop responsive.
       simAccumulatorMs = 0;
     }
-    // DR-2 (Step 13): coordinator-based disconnect watchdog. Replaces the
-    // old latestRemoteSnapshotRecvAtMs watchdog. Fires once if we have ever
-    // received remote input but then go silent for COOP_WATCHDOG_TIMEOUT_MS.
-    // Skipped while boon-select / upgrade are active (host RAF is paused).
+    // H1+H2: snapshot-based disconnect watchdog for guest.
+    // Uses lastSnapshotRecvAtMs instead of coordinator remote-age ticks.
     if (isCoopGuest() && !coopWatchdogTripped) {
       try {
         const inBoonOrUpgrade = (currentBoonPhaseId !== null) || (gstate === 'upgrade');
-        if (!inBoonOrUpgrade && hasReceivedRemoteInput()) {
-          const remoteAgeTicks = getCoordinatorRemoteAgeTicks();
-          const remoteAgeMs = remoteAgeTicks * SIM_STEP_MS;
-          if (remoteAgeMs > COOP_WATCHDOG_TIMEOUT_MS) {
+        if (!inBoonOrUpgrade && lastSnapshotRecvAtMs > 0) {
+          const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          if (now - lastSnapshotRecvAtMs > COOP_WATCHDOG_TIMEOUT_MS) {
             tripCoopDisconnectWatchdog();
           }
         }
       } catch (_) {}
     }
-    // DR-2 (Step 11): guestSnapshotApplier retired. Coordinator drives forward
-    // sim on guest (skipSimStepOnForward:false). Removed the watchdog-guarded
-    // applier block that was here; watchdog replaced in Step 13.
-    // DR-2 (Step 12): standalone grey-decay loop — stamps decayStart on grey
+    // H2: standalone grey-decay loop — stamps decayStart on grey
     // bullets so the renderer's age math doesn't collapse to NaN on guest.
     if (isCoopGuest()) {
       try {
@@ -5326,19 +5503,16 @@ function update(dt,ts){
     if (roomPhase === 'fighting' || roomPhase === 'spawning') {
       try { tickJoystick(joy, dt); } catch (_) {}
     }
-    // Phase D3: guest samples local input once per sim tick and batches
-    // quantized frames to the host. sampleFrame auto-flushes when the
-    // batch hits size 4 (~15 msg/s at 60 Hz, well under Supabase's
-    // 20 msg/s cap). Errors inside sendGameplay are logged and do not
-    // interrupt the guest's render loop.
-    if (!ROLLBACK_ENABLED) {
-      try { coopInputSync && coopInputSync.sampleFrame(simTick); } catch (err) {
-        try { console.warn('[coop] sampleFrame error', err); } catch (_) {}
-      }
+    // H1: always sample input (no longer gated on !ROLLBACK_ENABLED)
+    try { coopInputSync && coopInputSync.sampleFrame(simTick); } catch (err) {
+      try { console.warn('[coop] sampleFrame error', err); } catch (_) {}
     }
-    // DR-2 (Step 11): updateOnlineGuestPrediction retired — hostSimStep drives
-    // slot 1 movement every forward tick via skipSimStepOnForward:false.
-    // D18.6 — tick guest-local cosmetics.
+    // H1: guest drives slot 1 locally (prediction); snapshot applier corrects
+    // HP/charge/aim/invuln but leaves body position to local prediction.
+    if (onlineGuestSlot1Installed) {
+      try { updateOnlineGuestPrediction(dt); } catch (_) {}
+    }
+    // Tick cosmetics (particles, damage numbers, shockwaves)
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
       p.x += p.vx * dt; p.y += p.vy * dt;
@@ -5359,9 +5533,6 @@ function update(dt,ts){
       if (s.life <= 0 || s.r >= s.maxR - 0.5) shockwaves.splice(i, 1);
     }
     if (payloadCooldownMs > 0) payloadCooldownMs = Math.max(0, payloadCooldownMs - dt * 1000);
-    // P3 — fireT is now advanced by hostSimStep → tickPlayerFire() on every forward tick
-    // when skipSimStepOnForward:false (DR-2 guest). Removed the local-only fireT ticking
-    // block that was here to avoid double-advancing fireT and drifting charge state.
     return;
   }
 

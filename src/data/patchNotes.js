@@ -2,6 +2,15 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.152',
+      label: 'H1+H2 COOP SNAPSHOT',
+      summary: ['[COOP] H1+H2: Guest no longer runs independent combat simulation. Host snapshots now drive guest game state (enemies, bullets, room, score) at 10 Hz. Guest player movement is locally predicted and corrected by host. Fundamental fix for coop divergence.'],
+      highlights: [
+        'H1: Guest no longer installs rollback coordinator or runs hostSimStep. Guest drives slot 1 body locally via updateOnlineGuestPrediction().',
+        'H2: Host sends snapshots at 10 Hz via coopSnapshotBroadcaster. Guest applies via snapshotApplier with predictedSlotId:1.',
+      ]
+    },
+  {
       version: '1.20.151',
       label: 'HYBRID COOP PLAN',
       summary: ['Added the hybrid coop authority plan documenting host-authoritative combat with guest-local prediction.'],

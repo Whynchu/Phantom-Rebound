@@ -1,0 +1,1330 @@
+[coop] phase → connecting
+coopLobby.js:149 [coop] phase → joining
+coopLobby.js:149 [coop] phase → ready
+script.js?v=1.20.147:7035 [coop] lobby ready {seed: 3926890872, role: 'guest', code: 'X7MANV', partner: 'RUNNER'}
+script.js?v=1.20.147:374 [coop] world pinned to host: 372x662
+script.js?v=1.20.147:4940 [seed] coop run seed 3926890872 role guest
+script.js?v=1.20.147:3057 [coop] online guest slot 1 installed (placeholder body)
+script.js?v=1.20.147:2725 [coop] guest slot-1 installed (DR-2: no applier)
+rollbackIntegration.js:105 [rollback] Coordinator initialized: slot 1, simStep=real, maxRollback=20 ticks, skipForward=false
+script.js?v=1.20.147:2794 [coop] rollback coordinator armed (DR-2: skipForward=false)
+script.js?v=1.20.147:2920 [coop] input uplink installed role=guest slot=1
+script.js?v=1.20.147:5049 [diag-guest] tick 1 phase intro introTimer 0 rollbackActive true role guest coordinator true coordTick 0 gstate playing
+script.js?v=1.20.147:5049 [diag-guest] tick 30 phase intro introTimer 483 rollbackActive true role guest coordinator true coordTick 29 gstate playing
+script.js?v=1.20.147:5049 [diag-guest] tick 60 phase intro introTimer 983 rollbackActive true role guest coordinator true coordTick 59 gstate playing
+script.js?v=1.20.147:5049 [diag-guest] tick 90 phase intro introTimer 1483 rollbackActive true role guest coordinator true coordTick 89 gstate playing
+script.js?v=1.20.147:5049 [diag-guest] tick 120 phase fighting introTimer 1600 rollbackActive true role guest coordinator true coordTick 119 gstate playing
+script.js?v=1.20.147:5049 [diag-guest] tick 150 phase fighting introTimer 1600 rollbackActive true role guest coordinator true coordTick 149 gstate playing
+script.js?v=1.20.147:5049 [diag-guest] tick 180 phase fighting introTimer 1600 rollbackActive true role guest coordinator true coordTick 179 gstate playing
+script.js?v=1.20.147:5081 [rollback] coordinator stalled — remote input age exceeds maxRollbackTicks
+loop @ script.js?v=1.20.147:5081
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+launchCoopRun @ script.js?v=1.20.147:7062
+(anonymous) @ script.js?v=1.20.147:7086
+handleMessage @ coopSession.js:189
+(anonymous) @ coopTransportSupabase.js:60
+(anonymous) @ RealtimeChannel.ts:668
+_trigger @ RealtimeChannel.ts:649
+(anonymous) @ RealtimeClient.ts:445
+(anonymous) @ RealtimeClient.ts:444
+decode @ serializer.ts:13
+_onConnMessage @ RealtimeClient.ts:425
+(anonymous) @ RealtimeClient.ts:406
+
+9script.js?v=1.20.147:5081 [rollback] coordinator stalled — remote input age exceeds maxRollbackTicks
+loop @ script.js?v=1.20.147:5081
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+loop @ script.js?v=1.20.147:5180
+requestAnimationFrame
+launchCoopRun @ script.js?v=1.20.147:7062
+(anonymous) @ script.js?v=1.20.147:7086
+handleMessage @ coopSession.js:189
+(anonymous) @ coopTransportSupabase.js:60
+(anonymous) @ RealtimeChannel.ts:668
+_trigger @ RealtimeChannel.ts:649
+(anonymous) @ RealtimeClient.ts:445
+(anonymous) @ RealtimeClient.ts:444
+decode @ serializer.ts:13
+_onConnMessage @ RealtimeClient.ts:425
+(anonymous) @ RealtimeClient.ts:406
+rollbackIntegration.js:133 [rollback] Coordinator torn down
