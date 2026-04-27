@@ -147,7 +147,7 @@ import { createCoopInputSync } from './src/net/coopInputSync.js';
 
 // DR-2: coopSnapshotBroadcaster retired.
 
-import { setupRollback, teardownRollback, coordinatorStep, getRollbackStats, isRollbackStalled, hasReceivedRemoteInput, getCoordinatorRemoteAgeTicks } from './src/net/rollbackIntegration.js';
+import { rollbackCoordinator, setupRollback, teardownRollback, coordinatorStep, getRollbackStats, isRollbackStalled, hasReceivedRemoteInput, getCoordinatorRemoteAgeTicks } from './src/net/rollbackIntegration.js';
 import { hostSimStep } from './src/sim/hostSimStep.js';
 import { drain as drainSimEffectQueue } from './src/sim/effectQueue.js';
 import { applyJoystickVelocity, tickBodyPosition } from './src/sim/playerMovement.js';
@@ -2757,7 +2757,7 @@ function installCoopInputUplink(armedCoop) {
             get baseSpeedRaw() { return 165 * GLOBAL_SPEED_LIFT; },
             deadzone: JOY_DEADZONE,
             joyMax,
-            get gate() { return roomPhase !== 'intro'; },
+            get gate() { return simState.run.roomPhase !== 'intro'; },
             get phaseWalk() { return !!UPG.phaseWalk; },
             get bossDamageMultiplier() { return currentBossDamageMultiplier || 1; },
             resolveCollisions: resolveEntityObstacleCollisions,
@@ -2790,6 +2790,9 @@ function installCoopInputUplink(armedCoop) {
       console.info(`[coop] rollback coordinator armed (DR-2: skipForward=${role === 'host'})`);
     } catch (err) {
       try { console.warn('[coop] rollback setup failed:', err); } catch (_) {}
+    }
+    if (!rollbackCoordinator) {
+      console.error('[coop] CRITICAL: rollbackCoordinator is null after setup — guest will be stuck at READY?');
     }
   }
   // Ingest any gameplay payload that is an input frame from the peer.
@@ -5221,7 +5224,8 @@ function update(dt,ts){
   // (role:'local') keep the full sim — never negate; always check === 'guest'.
   if (isCoopGuest()) {
     runElapsedMs += dt * 1000;
-    simNowMs += dt * 1000;
+    // simNowMs is already advanced by SIM_STEP_MS in the game loop before update() is
+    // called — do NOT advance it again here or the sim clock runs at 2× speed on guest.
     prevStill = true;
     // D20.2 — joystick drift anchor runs for guest too. Without this,
     // sweeping touches cause the virtual thumb to walk away from its anchor

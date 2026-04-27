@@ -256,6 +256,24 @@ export function restoreState(liveState, snapshot) {
     if (snapshot.run.tookDamageThisRoom !== undefined) liveState.run.tookDamageThisRoom = snapshot.run.tookDamageThisRoom;
     if (snapshot.run.lastStallSpawnAt !== undefined) liveState.run.lastStallSpawnAt = snapshot.run.lastStallSpawnAt;
     if (snapshot.run.bossClears !== undefined) liveState.run.bossClears = snapshot.run.bossClears;
+    // R0.4-A / P2 bridge fields — added in DR-2. Must be restored so rollback resim
+    // doesn't run with stale room-machine state (intro timer, boss flags, spawn queue).
+    if (snapshot.run.roomIntroTimer !== undefined) liveState.run.roomIntroTimer = snapshot.run.roomIntroTimer;
+    if (snapshot.run.roomClearTimer !== undefined) liveState.run.roomClearTimer = snapshot.run.roomClearTimer;
+    if (snapshot.run.activeWaveIndex !== undefined) liveState.run.activeWaveIndex = snapshot.run.activeWaveIndex;
+    if (snapshot.run.currentRoomIsBoss !== undefined) liveState.run.currentRoomIsBoss = snapshot.run.currentRoomIsBoss;
+    if (snapshot.run.bossAlive !== undefined) liveState.run.bossAlive = snapshot.run.bossAlive;
+    if (snapshot.run.escortType !== undefined) liveState.run.escortType = snapshot.run.escortType;
+    if (snapshot.run.escortMaxCount !== undefined) liveState.run.escortMaxCount = snapshot.run.escortMaxCount;
+    if (snapshot.run.escortRespawnTimer !== undefined) liveState.run.escortRespawnTimer = snapshot.run.escortRespawnTimer;
+    if (snapshot.run.reinforceTimer !== undefined) liveState.run.reinforceTimer = snapshot.run.reinforceTimer;
+    if (snapshot.run.currentRoomMaxOnScreen !== undefined) liveState.run.currentRoomMaxOnScreen = snapshot.run.currentRoomMaxOnScreen;
+    if (snapshot.run.roomPurpleShooterAssigned !== undefined) liveState.run.roomPurpleShooterAssigned = snapshot.run.roomPurpleShooterAssigned;
+    // spawnQueue: restore in-place to preserve array identity (many callsites hold a reference).
+    if (Array.isArray(liveState.run.spawnQueue) && Array.isArray(snapshot.run.spawnQueue)) {
+      liveState.run.spawnQueue.length = 0;
+      liveState.run.spawnQueue.push(...snapshot.run.spawnQueue);
+    }
   }
 
   // ID counters.
