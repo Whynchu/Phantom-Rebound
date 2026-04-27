@@ -1507,6 +1507,7 @@ function teardownCoopInputUplink() {
   // since they self-gate on `activeCoopSession` being non-null.
   try { stopCoopHeartbeat(); } catch (_) {}
   coopLastInboundAtMs = 0;
+  _guestPrevRoomPhase = null; // Reset so run 2+ doesn't start with stale intro state.
   coopSoftDisconnectActive = false;
   coopSoftDisconnectShownAtMs = 0;
   coopHardDisconnectTripped = false;
@@ -2849,6 +2850,7 @@ function installCoopInputUplink(armedCoop) {
         runId: currentRunId || ('run-' + Date.now()),
         ticksPerSnapshot: 6,
         getState: () => collectHostSnapshotState(),
+        logger: (msg, err) => { try { console.warn('[coop-broadcaster]', msg, err || ''); } catch (_) {} },
       });
       console.info('[coop] snapshot broadcaster armed (H2, 10 Hz)');
     } catch (err) {
@@ -2971,12 +2973,24 @@ function installCoopInputUplink(armedCoop) {
       }
       return;
     }
-    // DR-2: 'snapshot' payload handler retired — broadcaster removed.
+    // H2: 'snapshot' payload handler — host broadcasts at 10 Hz, guest applies.
     if (payload.kind === 'snapshot') {
       if (role === 'guest' && coopSnapshotApplier) {
+        lastSnapshotRecvAtMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        // Decode first; bail on malformed payload before touching any state.
+        let snapshot;
         try {
-          lastSnapshotRecvAtMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-          const snapshot = decodeSnapshot(payload);
+          snapshot = decodeSnapshot(payload);
+        } catch (err) {
+          try { console.warn('[coop] snapshot decode error:', err); } catch (_) {}
+          return;
+        }
+        try { console.log('[coop] snapshot recv phase=', snapshot.room && snapshot.room.phase, 'seq=', snapshot.snapshotSeq); } catch (_) {}
+        // Apply entity state (enemies/bullets/slots). Wrapped in its own try so a
+        // failure here does NOT prevent the room-phase update below — the phase
+        // transition (intro→spawning) is what ends the READY? overlay, and it must
+        // always run regardless of whether the applier can mutate entity arrays.
+        try {
           const slotsById = {};
           if (playerSlots[0]) slotsById[0] = playerSlots[0];
           if (playerSlots[1]) slotsById[1] = playerSlots[1];
@@ -2985,39 +2999,41 @@ function installCoopInputUplink(armedCoop) {
             snapshotRecvAtMs: recvMs,
             renderTimeMs: recvMs,
           });
-          // Apply score + elapsedMs directly.
-          if (Number.isFinite(snapshot.score)) score = snapshot.score;
-          if (Number.isFinite(snapshot.elapsedMs) && snapshot.elapsedMs > 0) runElapsedMs = snapshot.elapsedMs;
-          // Apply room phase changes. Room index changes come via coop-room-advance.
-          // Only update roomPhase within the current room; do not call startRoom here.
-          if (snapshot.room && typeof snapshot.room.phase === 'string') {
-            const newPhase = snapshot.room.phase;
-            if (newPhase !== roomPhase) {
-              const prevPhase = roomPhase;
-              roomPhase = newPhase;
-              // Edge: non-clear → clear. Fire room-clear effects once.
-              if (prevPhase !== 'clear' && newPhase === 'clear') {
-                try {
-                  bullets.length = 0;
-                  clearParticles();
-                  runBoonHook('onRoomClear', { UPG, healPlayer, slot: playerSlots[1] || playerSlots[0] || null });
-                  applyRoomClearProgression();
-                  const _isBossRoom = !!(BOSS_ROOMS && BOSS_ROOMS[roomIndex]);
-                  if (_isBossRoom) showBossDefeated();
-                  else showRoomClear();
-                } catch (_) {}
-              }
-              // Edge: intro → spawning/fighting: GO! flash
-              if (prevPhase === 'intro' && (newPhase === 'spawning' || newPhase === 'fighting')) {
-                try {
-                  showRoomIntro('GO!', true);
-                  setTimeout(() => { try { hideRoomIntro(); } catch (_) {} }, 600);
-                } catch (_) {}
-              }
-            }
-          }
         } catch (err) {
           try { console.warn('[coop] snapshot apply error:', err); } catch (_) {}
+        }
+        // Apply score + elapsedMs directly.
+        if (Number.isFinite(snapshot.score)) score = snapshot.score;
+        if (Number.isFinite(snapshot.elapsedMs) && snapshot.elapsedMs > 0) runElapsedMs = snapshot.elapsedMs;
+        // Apply room phase changes. Room index changes come via coop-room-advance.
+        // Only update roomPhase within the current room; do not call startRoom here.
+        // CRITICAL: this block runs even if apply() above threw, so the guest never
+        // gets permanently stuck at READY? due to an entity-level encode/apply error.
+        if (snapshot.room && typeof snapshot.room.phase === 'string') {
+          const newPhase = snapshot.room.phase;
+          if (newPhase !== roomPhase) {
+            const prevPhase = roomPhase;
+            roomPhase = newPhase;
+            // Edge: non-clear → clear. Fire room-clear effects once.
+            if (prevPhase !== 'clear' && newPhase === 'clear') {
+              try {
+                bullets.length = 0;
+                clearParticles();
+                runBoonHook('onRoomClear', { UPG, healPlayer, slot: playerSlots[1] || playerSlots[0] || null });
+                applyRoomClearProgression();
+                const _isBossRoom = !!(BOSS_ROOMS && BOSS_ROOMS[roomIndex]);
+                if (_isBossRoom) showBossDefeated();
+                else showRoomClear();
+              } catch (_) {}
+            }
+            // Edge: intro → spawning/fighting: GO! flash
+            if (prevPhase === 'intro' && (newPhase === 'spawning' || newPhase === 'fighting')) {
+              try {
+                showRoomIntro('GO!', true);
+                setTimeout(() => { try { hideRoomIntro(); } catch (_) {} }, 600);
+              } catch (_) {}
+            }
+          }
         }
       }
       return;

@@ -2,6 +2,17 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.153',
+      label: 'COOP SNAPSHOT PHASE FIX',
+      summary: ['[COOP] Critical fix: guest no longer gets permanently stuck at READY? when a snapshot entity-apply error occurs. Room phase transitions now happen in a separate resilient block.'],
+      highlights: [
+        'Snapshot handler restructured: decodeSnapshot and apply() each get their own try/catch; room phase update always runs even if apply() throws.',
+        'Broadcaster errors (encode failures) now logged with console.warn so they are visible in devtools.',
+        'Console diagnostic: snapshot receipt now logs phase and seq number.',
+        '_guestPrevRoomPhase reset on teardown so run 2+ cannot start with stale intro state.',
+      ]
+    },
+  {
       version: '1.20.152',
       label: 'H1+H2 COOP SNAPSHOT',
       summary: ['[COOP] H1+H2: Guest no longer runs independent combat simulation. Host snapshots now drive guest game state (enemies, bullets, room, score) at 10 Hz. Guest player movement is locally predicted and corrected by host. Fundamental fix for coop divergence.'],
