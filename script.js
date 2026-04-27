@@ -1002,8 +1002,8 @@ Object.defineProperty(simState.run, 'legendaryRejectedIds', {
   configurable: true,
 });
 Object.defineProperty(simState.run, 'legendaryRoomsSinceReject', {
-  get() { return legendaryRoomsSinceReject; },
-  set(v) { legendaryRoomsSinceReject = v; },
+  get() { return legendaryRoomsSinceRejection; },
+  set(v) { legendaryRoomsSinceRejection = v; },
   enumerable: true,
   configurable: true,
 });
