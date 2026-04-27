@@ -3137,6 +3137,7 @@ function collectHostSnapshotState() {
       invulnT: b.invincible || 0,
       shieldT: 0,
       stillTimer: m.stillTimer || 0,
+      fireT: m.fireT || 0,
       alive: !b.deadAt,
       respawnSeq: b.respawnSeq || 0,
       distort: b.distort || 0,

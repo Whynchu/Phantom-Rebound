@@ -2,6 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.157',
+      label: 'COOP CHARGE RING FIX',
+      summary: ['[COOP] The charge-shot ring around the guest player now animates correctly. fireT was missing from the snapshot wire format, so the ring always read 0 on the guest device.'],
+      highlights: [
+        'Added fireT to encodeSlot (coopSnapshot.js), collectHostSnapshotState (script.js), and applySlot (snapshotApplier.js).',
+        'Snapshots backward on post-shot wrap (fireT reset) to avoid ring appearing to reverse-fill.',
+        'Per-frame interpolation sweeps fireT smoothly between snapshots at 60fps.',
+      ]
+    },
+  {
       version: '1.20.156',
       label: 'COOP SMOOTH INTERP + ENEMY COLORS',
       summary: ['[COOP] Enemies and bullets now move smoothly on the guest device (60fps interpolation instead of 10Hz freeze). Enemy types now display with correct colors and properties (rusher, siphon, triangle etc.).'],

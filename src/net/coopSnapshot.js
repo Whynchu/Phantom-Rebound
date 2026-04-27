@@ -121,6 +121,7 @@ function encodeSlot(src, idx) {
     invulnT: num(src.invulnT ?? 0, 'slots[' + idx + '].invulnT'),
     shieldT: num(src.shieldT ?? 0, 'slots[' + idx + '].shieldT'),
     stillTimer: num(src.stillTimer ?? 0, 'slots[' + idx + '].stillTimer'),
+    fireT: num(src.fireT ?? 0, 'slots[' + idx + '].fireT'),
     alive: !!src.alive,
     // D13.1 — incremented by host on respawn so the applier can force-anchor
     // a predicted body even when death+respawn happen in a single host tick

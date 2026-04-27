@@ -225,6 +225,15 @@ function applySlot(snapSlot, prevSnapSlot, slot, alpha, opts) {
       slot.metrics.charge = snapSlot.charge || 0;
     }
     slot.metrics.stillTimer = snapSlot.stillTimer || 0;
+    // fireT drives the shot-readiness ring fill. Snap backward (post-shot wrap)
+    // instead of lerping to avoid the ring appearing to refill in reverse.
+    if (prevSnapSlot && Number.isFinite(prevSnapSlot.fireT)) {
+      const pf = prevSnapSlot.fireT || 0;
+      const cf = snapSlot.fireT || 0;
+      slot.metrics.fireT = cf < pf ? cf : pf + (cf - pf) * alpha;
+    } else {
+      slot.metrics.fireT = snapSlot.fireT || 0;
+    }
   }
   if (slot.upg && Number.isFinite(snapSlot.maxCharge) && snapSlot.maxCharge > 0) {
     slot.upg.maxCharge = snapSlot.maxCharge;
