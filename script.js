@@ -2757,7 +2757,7 @@ function installCoopInputUplink(armedCoop) {
             get baseSpeed() { return 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (UPG.speedMult || 1)); },
             get baseSpeedRaw() { return 165 * GLOBAL_SPEED_LIFT; },
             deadzone: JOY_DEADZONE,
-            joyMax,
+            get joyMax() { return joy.max || JOY_MAX; },
             get gate() { return simState.run.roomPhase !== 'intro'; },
             get phaseWalk() { return !!UPG.phaseWalk; },
             get bossDamageMultiplier() { return currentBossDamageMultiplier || 1; },

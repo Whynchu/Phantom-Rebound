@@ -2,7 +2,15 @@
 
 const PATCH_NOTES_RECENT = [
   {
-      version: '1.20.140',
+      version: '1.20.141',
+      label: 'DR-2: FIX JOYMAXREFERENCEERROR IN INSTALLCOOPINPUTUPLINK',
+      summary: ['Fixed ReferenceError: joyMax is not defined that caused rollback coordinator setup to fail silently on guest, leaving rollbackCoordinator null and the guest permanently stuck at READY?.'],
+      highlights: [
+        'script.js: replaced bare `joyMax` shorthand (which referenced a local variable in update() not in scope) with `get joyMax() { return joy.max || JOY_MAX; }` getter on simStepOpts.',
+        'Root cause: installCoopInputUplink is called at init-time, outside update(), so the local const joyMax from update() was not in scope.',
+        'All 74 tests green.',
+      ]
+    },
       label: 'DR-2: DIAGNOSTIC LOGGING FOR GUEST READY STALL',
       summary: ['Added [diag-guest] runtime diagnostic logging to identify why the guest gets stuck at READY? and never transitions to GO!. Logs phase, introTimer, rollbackActive, role, coordinator presence, coordTick, and gstate every 30 sim ticks for the first 180 ticks.'],
       highlights: [
