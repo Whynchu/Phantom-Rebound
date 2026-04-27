@@ -2,6 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.156',
+      label: 'COOP SMOOTH INTERP + ENEMY COLORS',
+      summary: ['[COOP] Enemies and bullets now move smoothly on the guest device (60fps interpolation instead of 10Hz freeze). Enemy types now display with correct colors and properties (rusher, siphon, triangle etc.).'],
+      highlights: [
+        'Per-frame interpolation: apply() called every render tick with advancing renderTimeMs — alpha sweeps 0→1 between snapshots, eliminating jitter.',
+        'Enemy type definitions (ENEMY_TYPES + resolveColors) now passed to the snapshot applier — correct colors, isRusher/isSiphon flags, and fRate for windup ring.',
+        'latestCoopSnapshot cached on receipt; cleared on teardown.',
+      ]
+    },
+  {
       version: '1.20.155',
       label: 'ENEMY ID FIX SNAPSHOT BROADCAST',
       summary: ['[COOP] Critical fix: enemies now appear and move on the guest screen. Host snapshot broadcasts were silently failing because enemies use the field name eid (not id) — the encoder threw on every enemy, causing zero snapshots to reach the guest.'],

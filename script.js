@@ -1036,6 +1036,7 @@ let coopInputUnsubscribe = null;
 let coopSnapshotBroadcaster = null;
 let coopSnapshotApplier = null;
 let lastSnapshotRecvAtMs = 0;
+let latestCoopSnapshot = null;
 let currentRunId = null;
 const coopEnemyDamageEvents = [];
 const coopPickupEvents = [];
@@ -1479,6 +1480,7 @@ function teardownCoopInputUplink() {
     coopSnapshotBroadcaster = null;
   }
   coopSnapshotApplier = null;
+  latestCoopSnapshot = null;
   lastSnapshotRecvAtMs = 0;
   coopEnemyDamageEvents.length = 0;
   coopPickupEvents.length = 0;
@@ -2726,6 +2728,13 @@ function installCoopInputUplink(armedCoop) {
     // for guest's own slot so local prediction drives movement; applier only
     // updates HP, charge, distort, invuln, aim, etc.
     coopSnapshotApplier = createSnapshotApplier({
+      enemyTypeDefs: ENEMY_TYPES,
+      resolveColors: (type) => {
+        try {
+          const d = getEnemyDefinition(type);
+          return d ? { col: d.col, glowCol: d.glowCol } : null;
+        } catch (_) { return null; }
+      },
       predictedSlotId: 1,
       onSlotDamage: ({ slotId, damage, x, y }) => {
         try {
@@ -2986,6 +2995,8 @@ function installCoopInputUplink(armedCoop) {
           return;
         }
         try { console.log('[coop] snapshot recv phase=', snapshot.room && snapshot.room.phase, 'seq=', snapshot.snapshotSeq); } catch (_) {}
+        // Cache for per-frame interpolation in update() guest path.
+        latestCoopSnapshot = snapshot;
         // Apply entity state (enemies/bullets/slots). Wrapped in its own try so a
         // failure here does NOT prevent the room-phase update below — the phase
         // transition (intro→spawning) is what ends the READY? overlay, and it must
@@ -5563,6 +5574,19 @@ function update(dt,ts){
       roomIntroTimer = introStep.roomIntroTimer;
       if (introStep.shouldShowGo) showRoomIntro('GO!', true);
       if (introStep.shouldHideIntro) hideRoomIntro();
+    }
+    // H2: per-frame interpolation — call apply() every frame with advancing
+    // renderTimeMs so enemies/bullets smoothly interpolate between snapshots
+    // instead of freezing at the 10Hz snapshot rate.
+    if (coopSnapshotApplier && latestCoopSnapshot) {
+      try {
+        const slotsById = {};
+        if (playerSlots[0]) slotsById[0] = playerSlots[0];
+        if (playerSlots[1]) slotsById[1] = playerSlots[1];
+        coopSnapshotApplier.apply(latestCoopSnapshot, { enemies, bullets, slotsById }, {
+          renderTimeMs: performance.now(),
+        });
+      } catch (_) {}
     }
     return;
   }

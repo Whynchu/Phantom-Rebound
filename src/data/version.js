@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.155', label: 'ENEMY ID FIX SNAPSHOT BROADCAST' };
+const VERSION = { num: '1.20.156', label: 'COOP SMOOTH INTERP + ENEMY COLORS' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;
