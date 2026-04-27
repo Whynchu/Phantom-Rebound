@@ -66,6 +66,8 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   const deadzone = opts.deadzone != null ? opts.deadzone : 0.15;
   const joyMax = opts.joyMax != null ? opts.joyMax : 60;
   const gate = opts.gate !== false;
+  const phaseAtStart = state.run?.roomPhase || 'intro';
+  const movementGate = gate && phaseAtStart !== 'intro';
   // R0.4 step 5: prefer state.world.{w,h} (the canonical sim shape); fall
   // back to legacy state.worldW/H so older callers don't regress.
   const stateWorld = state.world || {};
@@ -89,7 +91,7 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   const slot0 = state.slots && state.slots[0];
   if (slot0 && slot0.body) {
     const joy0 = slot0Input && slot0Input.joy;
-    applyJoystickVelocity(slot0.body, joy0, baseSpeed, deadzone, joyMax, gate);
+    applyJoystickVelocity(slot0.body, joy0, baseSpeed, deadzone, joyMax, movementGate);
     tickBodyPosition(slot0.body, dt, world, phaseOpts);
     tickPostMovementTimers(
       slot0.body,
@@ -114,7 +116,7 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
     const slot1Speed = opts.baseSpeedRaw != null
       ? opts.baseSpeedRaw * Math.min(2.5, (slot1.upg && slot1.upg.speedMult) || 1)
       : baseSpeed;
-    applyJoystickVelocity(slot1.body, joy1, slot1Speed, deadzone, joyMax, gate);
+    applyJoystickVelocity(slot1.body, joy1, slot1Speed, deadzone, joyMax, movementGate);
     tickBodyPosition(slot1.body, dt, world, phaseOpts);
     tickPostMovementTimers(
       slot1.body,
@@ -134,6 +136,16 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   // R0.4-A: Room state machine — advances phase, spawns enemies.
   if (opts.spawnEnemy && state.run) {
     tickRoomState(state, dt, opts);
+  }
+
+  // The legacy host update() returns immediately after the READY/GO intro
+  // state machine. Guest forward rollback must mirror that barrier exactly:
+  // pre-spawned enemies render during READY, but no player movement, enemy AI,
+  // bullets, combat, or auto-fire may advance until the next post-intro tick.
+  if (phaseAtStart === 'intro') {
+    if (typeof state.tick === 'number') state.tick = (state.tick | 0) + 1;
+    if (typeof state.timeMs === 'number') state.timeMs += dt * 1000;
+    return;
   }
 
   tickEnemyCombat(state, dt, opts);

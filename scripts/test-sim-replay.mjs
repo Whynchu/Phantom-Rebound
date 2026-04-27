@@ -65,6 +65,7 @@ function makeFreshState(opts = {}) {
   state.slots[1].body.x = 600;
   state.slots[1].body.y = 300;
   state.slots[1].body.r = 14;
+  state.run.roomPhase = 'spawning';
   if (opts.exerciseTimers) {
     // Pre-load each slot with non-zero timer values + UPG flags so the
     // R0.4 step 3 helper (tickPostMovementTimers) actually exercises every

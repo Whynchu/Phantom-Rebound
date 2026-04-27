@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.149',
+      label: 'ROLLBACK INTRO BARRIER',
+      summary: ['Rollback hostSimStep now treats READY/GO intro as a hard simulation barrier so guests cannot move, fire, or advance enemy combat before GO.'],
+      highlights: [
+        'Updated rollback determinism tests and canary coverage for the new intro gate.',
+      ]
+    },
+  {
       version: '1.20.148',
       label: 'ROLLBACK INPUT BATCHING',
       summary: ['Rollback input frames are now batched to stay under realtime message-rate limits instead of sending one gameplay packet every sim tick.'],

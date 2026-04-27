@@ -81,13 +81,41 @@ console.log('\n=== enemyCombatStep tests ===\n');
 
 {
   const state = makeState();
+  state.run.roomPhase = 'spawning';
   state.enemies.push(makeRangedEnemy({ x: 260, y: 300, fT: 100 }));
-  hostSimStep(state, null, null, 1 / 60, { bulletSpeedScale: 1 });
+  hostSimStep(state, null, null, 1 / 60, { bulletSpeedScale: 1, spawnEnemy: () => {} });
   assert.equal(state.bullets.length, 1);
   assert.equal(state.bullets[0].state, 'danger');
   assert.equal(state.tick, 1);
   console.log('PASS hostSimStep includes enemy combat projectile spawn');
 }
 
-console.log('\nAll enemyCombatStep tests passed.\n');
+{
+  const state = makeState();
+  state.run.roomPhase = 'intro';
+  state.run.roomIntroTimer = 0;
+  state.enemies.push(makeRangedEnemy({ x: 260, y: 300, fT: 100 }));
+  const input = { joy: { dx: 1, dy: 0, mag: 60, active: true } };
+  const slot0X = state.slots[0].body.x;
+  const enemyX = state.enemies[0].x;
+  hostSimStep(state, input, input, 1 / 60, { bulletSpeedScale: 1, spawnEnemy: () => {} });
+  assert.equal(state.slots[0].body.x, slot0X, 'slot0 must not move during intro');
+  assert.equal(state.enemies[0].x, enemyX, 'enemy must not advance during intro');
+  assert.equal(state.bullets.length, 0, 'enemy must not fire during intro');
+  assert.equal(state.tick, 1);
+  console.log('PASS hostSimStep freezes movement/combat during intro');
+}
 
+{
+  const state = makeState();
+  state.run.roomPhase = 'intro';
+  state.run.roomIntroTimer = 1599;
+  state.enemies.push(makeRangedEnemy({ x: 260, y: 300, fT: 100 }));
+  hostSimStep(state, null, null, 1 / 60, { bulletSpeedScale: 1, spawnEnemy: () => {} });
+  assert.notEqual(state.run.roomPhase, 'intro', 'intro should transition out of READY/GO phase');
+  assert.equal(state.bullets.length, 0, 'transition tick must not also run combat');
+  assert.equal(state.tick, 1);
+  console.log('PASS hostSimStep transition tick does not run combat before GO');
+}
+
+console.log('\nAll enemyCombatStep tests passed.\n');

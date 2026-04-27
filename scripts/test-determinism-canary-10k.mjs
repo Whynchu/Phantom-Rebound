@@ -61,6 +61,7 @@ function makeFreshCanaryState() {
   const s = createSimState({ seed: 0xC0FFEE, worldW: 800, worldH: 600, slotCount: 2 });
   s.slots[0].body.x = 200; s.slots[0].body.y = 300; s.slots[0].body.r = 14;
   s.slots[1].body.x = 600; s.slots[1].body.y = 300; s.slots[1].body.r = 14;
+  s.run.roomPhase = 'spawning';
   // Pre-load a few timer + UPG fields so the post-movement helper exercises real branches.
   for (const slot of s.slots) {
     slot.body.invincible = 0.5;
@@ -98,6 +99,9 @@ function runCanary(ticks) {
 // run this test, copy the printed values, and update these constants in the
 // SAME commit. Any unexpected drift will fail the test.
 const EXPECTED = {
+  // Re-pinned in v1.20.149 after intro became a hard hostSimStep barrier.
+  // The canary now starts in spawning so it continues to exercise movement
+  // and timer math instead of intentionally freezing behind the READY gate.
   // Re-pinned in v1.20.147 after the DR-2 rollback branch had advanced the
   // deterministic hostSimStep surface through room/combat parity. Parallel
   // run-A == run-B still passes; this restores the baseline guard for the
@@ -109,9 +113,9 @@ const EXPECTED = {
   // 7 additional fields in state.run (default initialization).
   // Parallel run-A == run-B continues to pass — refactor is observably equivalent.
   // Prior re-pin v1.20.101 (R0.4 step 8 — GAP 1 death/pop fields).
-  tick100:   '9d40c31177915eaaf14d313986d7c32f1656a961b77862e5c93cc9088f1f07fd',
-  tick5000:  '10bb11ab456a15d52a0f0d10ef92157f29d8b00b3128f04ce91599d52f7bc051',
-  tick10000: '43d5c20d37b0d03d3d1fc7611e6ef410d6ac8bc97d08218bf5c97fa3953f0f18',
+  tick100:   'f00b5b88d30e42d1970a35d8356855881ca22b588ec57f6a048be23a7091a64e',
+  tick5000:  'be09a0eb892b82f7c18fb4e57ab49c39dfc5a3c5d4d0d68839e64e98dd8b9d16',
+  tick10000: '6478d3b8f13eaa7f10f68242257321b7b13f3e3ac315b77d2aa59afdf23d8105',
 };
 
 test('R0.6: 10000-tick canary state hash matches baseline', () => {
