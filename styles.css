@@ -345,7 +345,8 @@ body.compact-viewport #wrap {
   width: 100%;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   touch-action: pan-y;
   padding-right: 2px;
 }
