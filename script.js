@@ -5034,10 +5034,12 @@ function loop(ts){
         // property (which reads current roomPhase) disagrees with the snapshotted
         // phase, producing movement that never happened live. gstate !== 'playing'
         // already short-circuits the RAF loop during boon-select and pause;
-        // this gate handles the in-room intro window.
-        const _rollbackActive = isCoopGuest()
-          ? (roomPhase === 'intro' || roomPhase === 'spawning' || roomPhase === 'fighting')
-          : (roomPhase === 'spawning' || roomPhase === 'fighting');
+        // Both peers (host and guest) must call coordinatorStep during 'intro' so
+        // both send input from tick 0. If the host skips intro (old behaviour), the
+        // guest runs ~97 ticks ahead before host input arrives, creating a permanent
+        // stall. DR-2 fix: 'intro' included for host too.
+        const _rollbackActive =
+          roomPhase === 'intro' || roomPhase === 'spawning' || roomPhase === 'fighting';
         // DR-2 diagnostic: log guest state periodically for READY? stall diagnosis.
         if (isCoopGuest() && simTick <= 180 && (simTick === 1 || simTick % 30 === 0)) {
           try {

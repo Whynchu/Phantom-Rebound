@@ -2,6 +2,15 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.144',
+      label: 'DR-2: FIX HOST ROLLBACK GATE — INCLUDE INTRO PHASE',
+      summary: ['Fixed permanent guest stall: the host\'s _rollbackActive gate excluded \'intro\' phase, so the host never called coordinatorStep during the ~1600ms room intro. The guest ran ~97 ticks before any host input arrived, creating a permanent stall that lasted the entire session. Fix: unified gate — both host and guest now include \'intro\', keeping both coordinators in sync from tick 0.'],
+      highlights: [
+        'script.js lines 5037-5040: _rollbackActive now includes \'intro\' for both peers (was host-only exclusion).',
+        'All 74 tests green.',
+      ]
+    },
+  {
       version: '1.20.143',
       label: 'DR-2: FIX W/H SCOPE ERRORS IN SIMSTEPOPTS',
       summary: ['Fixed ReferenceError: W is not defined — simStepOpts worldW/worldH getters and spawnEnemy callback used the local W/H aliases from update() which are not in scope inside installCoopInputUplink. Replaced with module-level WORLD_W/WORLD_H.'],
