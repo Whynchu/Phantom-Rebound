@@ -2,6 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.140',
+      label: 'DR-2: DIAGNOSTIC LOGGING FOR GUEST READY STALL',
+      summary: ['Added [diag-guest] runtime diagnostic logging to identify why the guest gets stuck at READY? and never transitions to GO!. Logs phase, introTimer, rollbackActive, role, coordinator presence, coordTick, and gstate every 30 sim ticks for the first 180 ticks.'],
+      highlights: [
+        'script.js: [diag-guest] log block fires at tick 1, 30, 60 ... 180 on guest; logs phase/introTimer/rollbackActive/role/coordinator/coordTick/gstate.',
+        'script.js: imported getActiveCoopRun from coopRunConfig.js for role verification in diagnostic.',
+        'All 74 tests green.',
+      ]
+    },
+  {
       version: '1.20.138',
       label: 'DR-2: RETIRE COOPSNAPSHOTBROADCASTER + SNAPSHOTAPPLIER',
       summary: ['DR-2: Retired the D-series snapshot broadcaster (host) and snapshot applier (guest). The rollback coordinator now drives hostSimStep every forward tick on guest (skipSimStepOnForward:false), giving both peers a deterministic shared simulation without snapshot jitter.'],

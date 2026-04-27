@@ -136,6 +136,7 @@ import {
   consumePendingCoopRun,
   clearCoopRun,
   isCoopRun,
+  getActiveCoopRun,
   isOnlineCoopRun,
   isCoopHost,
   isCoopGuest,
@@ -5037,6 +5038,21 @@ function loop(ts){
         const _rollbackActive = isCoopGuest()
           ? (roomPhase === 'intro' || roomPhase === 'spawning' || roomPhase === 'fighting')
           : (roomPhase === 'spawning' || roomPhase === 'fighting');
+        // DR-2 diagnostic: log guest state periodically for READY? stall diagnosis.
+        if (isCoopGuest() && simTick <= 180 && (simTick === 1 || simTick % 30 === 0)) {
+          try {
+            console.log('[diag-guest]',
+              'tick', simTick,
+              'phase', roomPhase,
+              'introTimer', roomIntroTimer | 0,
+              'rollbackActive', _rollbackActive,
+              'role', getActiveCoopRun()?.role,
+              'coordinator', !!rollbackCoordinator,
+              'coordTick', rollbackCoordinator?.currentTick,
+              'gstate', gstate,
+            );
+          } catch (_) {}
+        }
         // Drain effectQueue regardless of phase so async rollback corrections from
         // the previous frame never accumulate into the next snapshot. Only dispatch
         // visual effects when we're in a phase that makes them meaningful.
