@@ -5549,6 +5549,21 @@ function update(dt,ts){
       if (s.life <= 0 || s.r >= s.maxR - 0.5) shockwaves.splice(i, 1);
     }
     if (payloadCooldownMs > 0) payloadCooldownMs = Math.max(0, payloadCooldownMs - dt * 1000);
+    // H1: guest advances its own intro timer locally so the READY?→GO!
+    // overlay transitions even if snapshots are delayed or missing.
+    // Snapshots still update roomPhase when they arrive; if they already
+    // advanced it to 'spawning', this block is a no-op.
+    if (roomPhase === 'intro') {
+      const introStep = advanceRoomIntroPhase({
+        roomPhase,
+        roomIntroTimer,
+        dtMs: dt * 1000,
+      });
+      roomPhase = introStep.roomPhase;
+      roomIntroTimer = introStep.roomIntroTimer;
+      if (introStep.shouldShowGo) showRoomIntro('GO!', true);
+      if (introStep.shouldHideIntro) hideRoomIntro();
+    }
     return;
   }
 

@@ -2,7 +2,15 @@
 
 const PATCH_NOTES_RECENT = [
   {
-      version: '1.20.153',
+      version: '1.20.154',
+      label: 'GUEST INTRO LOCAL ADVANCE',
+      summary: ['[COOP] Critical fix: guest now advances its own READY?→GO! intro timer locally instead of waiting for snapshots. Eliminates the "stuck at READY?" hang regardless of snapshot delivery timing.'],
+      highlights: [
+        'Guest runs advanceRoomIntroPhase() in its own update path — same logic as host, but without affecting combat sim.',
+        'Snapshots still sync room phase when they arrive; local advancement is a safe fallback that makes them non-critical for the overlay.',
+      ]
+    },
+  {
       label: 'COOP SNAPSHOT PHASE FIX',
       summary: ['[COOP] Critical fix: guest no longer gets permanently stuck at READY? when a snapshot entity-apply error occurs. Room phase transitions now happen in a separate resilient block.'],
       highlights: [
