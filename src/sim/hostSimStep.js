@@ -47,6 +47,14 @@ import { tickRoomState } from './roomStateStep.js';
 const NOOP = () => {};
 const FALSE_FN = () => false;
 
+function applyAuthoritativeInputPosition(body, input, world, phaseOpts) {
+  if (!body || !input) return;
+  if (!Number.isFinite(input.x) || !Number.isFinite(input.y)) return;
+  body.x = Math.max(world.M + body.r, Math.min(world.W - world.M - body.r, input.x));
+  body.y = Math.max(world.M + body.r, Math.min(world.H - world.M - body.r, input.y));
+  try { phaseOpts.resolveCollisions(body); } catch (_) {}
+}
+
 /**
  * @param {object} state - SimState (mutated in-place)
  * @param {object|null} slot0Input - { joy: {dx,dy,active,max?}, ... } or null
@@ -93,6 +101,7 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
     const joy0 = slot0Input && slot0Input.joy;
     applyJoystickVelocity(slot0.body, joy0, baseSpeed, deadzone, joyMax, movementGate);
     tickBodyPosition(slot0.body, dt, world, phaseOpts);
+    applyAuthoritativeInputPosition(slot0.body, slot0Input, world, phaseOpts);
     tickPostMovementTimers(
       slot0.body,
       slot0.shields,
@@ -118,6 +127,7 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
       : baseSpeed;
     applyJoystickVelocity(slot1.body, joy1, slot1Speed, deadzone, joyMax, movementGate);
     tickBodyPosition(slot1.body, dt, world, phaseOpts);
+    applyAuthoritativeInputPosition(slot1.body, slot1Input, world, phaseOpts);
     tickPostMovementTimers(
       slot1.body,
       slot1.shields,

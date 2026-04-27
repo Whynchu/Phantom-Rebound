@@ -429,4 +429,26 @@ console.log('\n=== RollbackCoordinator Tests ===\n');
   console.log('✓ PASS');
 }
 
+// Test 16: Remote authoritative positions survive input buffering
+{
+  console.log('Test 16: Remote x/y position fields are preserved for simStep');
+  const state = createSimState({ slotCount: 2 });
+  let remoteInputCallback = null;
+  let captured = null;
+  const coordinator = new RollbackCoordinator({
+    simState: state,
+    simStep: (st, s0, s1) => { captured = s1; },
+    localSlotIndex: 0,
+    sendInput: async () => {},
+    onRemoteInput: (cb) => { remoteInputCallback = cb; },
+  });
+
+  remoteInputCallback({ tick: 0, slot: 1, dx: 0.5, dy: 0, active: true, mag: 40, x: 321.4, y: 222.2 });
+  coordinator.step({ joy: { dx: 0, dy: 0, active: false, mag: 0 } }, 1 / 60);
+
+  assert.strictEqual(captured.x, 321.4);
+  assert.strictEqual(captured.y, 222.2);
+  console.log('✓ PASS');
+}
+
 console.log('\n=== All RollbackCoordinator Tests Passed ===\n');

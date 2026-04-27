@@ -167,14 +167,19 @@ export class RollbackCoordinator {
     const wireJoy = canonicalLocalInput?.joy
       ? { ...canonicalLocalInput.joy }
       : this._neutralInput().joy;
-    this.sendInput({
+    const outgoing = {
       tick: this.currentTick,
       slot: this.localSlotIndex,
       dx: wireJoy.dx,
       dy: wireJoy.dy,
       active: wireJoy.active,
       mag: wireJoy.mag,
-    }).catch((err) => {
+    };
+    if (Number.isFinite(canonicalLocalInput?.x) && Number.isFinite(canonicalLocalInput?.y)) {
+      outgoing.x = canonicalLocalInput.x;
+      outgoing.y = canonicalLocalInput.y;
+    }
+    this.sendInput(outgoing).catch((err) => {
       this.logger?.('RollbackCoordinator: sendInput failed', err);
     });
 
@@ -219,6 +224,10 @@ export class RollbackCoordinator {
             mag:    event.mag    ?? 0,
           }, { normalizeMag: false }),
         };
+    if (Number.isFinite(event.x) && Number.isFinite(event.y)) {
+      remoteInput.x = event.x;
+      remoteInput.y = event.y;
+    }
 
     // Store the actual input
     this.remoteInputHistory[tick] = remoteInput;

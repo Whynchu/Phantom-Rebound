@@ -88,4 +88,25 @@ console.log('\n=== R0.4 step 5 — clock seam tests ===\n');
   console.log('✓ legacy state.worldW/H fallback still works');
 }
 
-console.log('\n=== R0.4 step 5 — all 5 tests pass ===\n');
+// Test 6: authoritative peer positions re-anchor slot bodies
+{
+  const state = createSimState({ seed: 1, slotCount: 2, worldW: 800, worldH: 600 });
+  state.run.roomPhase = 'spawning';
+  state.slots[0].body.x = 200;
+  state.slots[0].body.y = 200;
+  state.slots[1].body.x = 300;
+  state.slots[1].body.y = 300;
+  hostSimStep(
+    state,
+    { joy: { dx: 1, dy: 0, active: true, mag: 60 }, x: 411.2, y: 255.6 },
+    { joy: { dx: -1, dy: 0, active: true, mag: 60 }, x: 123.4, y: 444.4 },
+    1 / 60
+  );
+  assert.strictEqual(state.slots[0].body.x, 411.2);
+  assert.strictEqual(state.slots[0].body.y, 255.6);
+  assert.strictEqual(state.slots[1].body.x, 123.4);
+  assert.strictEqual(state.slots[1].body.y, 444.4);
+  console.log('✓ hostSimStep applies authoritative input x/y anchors');
+}
+
+console.log('\n=== R0.4 step 5 — all 6 tests pass ===\n');

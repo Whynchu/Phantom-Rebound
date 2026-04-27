@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.150',
+      label: 'ROLLBACK PEER POSITION ANCHORS',
+      summary: ['Rollback input now preserves peer x/y position stamps so hostSimStep can target the same player locations on both devices.'],
+      highlights: [
+        'hostSimStep now re-anchors slots from authoritative peer positions, reducing immediate enemy path divergence and target jitter after GO.',
+      ]
+    },
+  {
       version: '1.20.149',
       label: 'ROLLBACK INTRO BARRIER',
       summary: ['Rollback hostSimStep now treats READY/GO intro as a hard simulation barrier so guests cannot move, fire, or advance enemy combat before GO.'],
