@@ -71,6 +71,22 @@ console.log('\n=== RollbackBuffer Tests ===\n');
   console.log('✓ PASS');
 }
 
+// Test 2b: Rollback snapshots discard visual effect descriptors
+{
+  console.log('Test 2b: Rollback snapshots scrub effectQueue');
+  const buf = new RollbackBuffer(4);
+  const state = createSimState();
+  state.effectQueue.push({ kind: 'visible.damageNumber', x: 1, y: 2 });
+
+  buf.push(state, {}, {});
+  assert.strictEqual(buf.getLatest().state.effectQueue.length, 0, 'buffer snapshot effectQueue should be empty');
+
+  state.effectQueue.push({ kind: 'visible.damageNumber', x: 3, y: 4 });
+  buf.replaceAtTick(0, state, {}, {});
+  assert.strictEqual(buf.getLatest().state.effectQueue.length, 0, 'replacement snapshot effectQueue should be empty');
+  console.log('✓ PASS');
+}
+
 // Test 3: Get snapshot by exact tick
 {
   console.log('Test 3: Get snapshot by exact tick');

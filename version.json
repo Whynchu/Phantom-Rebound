@@ -1,1 +1,1 @@
-{ "version": "1.20.146", "label": "DR-2: rollback partial resync + 20-tick window (was 8) — prevents permanent guest divergence" }
+{ "version": "1.20.147", "label": "ROLLBACK INPUT STABILITY" }

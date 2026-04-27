@@ -61,6 +61,9 @@ export function setupRollback(
     simStepOpts = {},
     logging = false,
     skipSimStepOnForward = true,
+    inputDeadzoneMag = 0,
+    inputJoyMax = 0,
+    canonicalJoyMax = 0,
   } = options;
 
   // Wrap realSimStepFn with opts so coordinator.step() only needs (state,s0,s1,dt).
@@ -93,6 +96,9 @@ export function setupRollback(
     maxRollbackTicks: 20,
     bufferCapacity: 42,
     skipSimStepOnForward,
+    inputDeadzoneMag,
+    inputJoyMax,
+    canonicalJoyMax,
     logger: logging ? (msg) => console.log('[rollback]', msg) : null,
   });
 

@@ -349,4 +349,84 @@ console.log('\n=== RollbackCoordinator Tests ===\n');
   console.log('✓ PASS');
 }
 
+// Test 13: Local joy is canonicalized before sim and wire send
+{
+  console.log('Test 13: Local joy input is canonicalized before sim and send');
+  const state = createSimState({ slotCount: 2 });
+  const sentInputs = [];
+  let captured = null;
+  const coordinator = new RollbackCoordinator({
+    simState: state,
+    simStep: (st, s0, s1) => { captured = s0; },
+    localSlotIndex: 0,
+    sendInput: async (frame) => { sentInputs.push(frame); },
+    onRemoteInput: (cb) => { /* noop */ },
+    inputDeadzoneMag: 3,
+    inputJoyMax: 56,
+    canonicalJoyMax: 28,
+  });
+
+  coordinator.step({ joy: { dx: 0.1234, dy: 0.9876, active: true, mag: 56 } }, 1 / 60);
+
+  assert.strictEqual(captured.joy.dx, 0.12);
+  assert.strictEqual(captured.joy.dy, 0.99);
+  assert.strictEqual(captured.joy.mag, 28);
+  assert.strictEqual(sentInputs[0].dx, 0.12);
+  assert.strictEqual(sentInputs[0].dy, 0.99);
+  assert.strictEqual(sentInputs[0].mag, 28);
+  console.log('✓ PASS');
+}
+
+// Test 14: Neutral/under-deadzone active touches do not create prediction misses
+{
+  console.log('Test 14: active true with neutral magnitude quantizes to inactive');
+  const state = createSimState();
+  const coordinator = new RollbackCoordinator({
+    simState: state,
+    simStep: counterSimStep,
+    localSlotIndex: 0,
+    sendInput: async () => {},
+    onRemoteInput: (cb) => { /* noop */ },
+    inputDeadzoneMag: 3,
+  });
+
+  assert.deepStrictEqual(
+    coordinator._quantizeJoy({ dx: 0, dy: 0, active: true, mag: 0 }),
+    { active: false, dx: 0, dy: 0, mag: 0 },
+  );
+  assert.deepStrictEqual(
+    coordinator._quantizeJoy({ dx: 1, dy: 0, active: true, mag: 3 }),
+    { active: false, dx: 0, dy: 0, mag: 0 },
+  );
+  console.log('✓ PASS');
+}
+
+// Test 15: Rollback resim effects are discarded after correction
+{
+  console.log('Test 15: rollback resim clears effectQueue instead of leaking effects');
+  const state = createSimState({ slotCount: 2 });
+  const slot1StartX = state.slots[1].body.x;
+  let remoteInputCallback = null;
+  const coordinator = new RollbackCoordinator({
+    simState: state,
+    simStep: (st, s0, s1) => {
+      st.effectQueue.push({ kind: 'resim.damageNumber', x: 1, y: 2 });
+      if (s1?.joy?.active) st.slots[1].body.x += 1;
+    },
+    localSlotIndex: 0,
+    sendInput: async () => {},
+    onRemoteInput: (cb) => { remoteInputCallback = cb; },
+    skipSimStepOnForward: true,
+    maxRollbackTicks: 8,
+  });
+
+  coordinator.step({ joy: { dx: 0, dy: 0, active: false, mag: 0 } }, 1 / 60);
+  coordinator.step({ joy: { dx: 0, dy: 0, active: false, mag: 0 } }, 1 / 60);
+  remoteInputCallback({ tick: 0, slot: 1, dx: 1, dy: 0, active: true, mag: 60 });
+
+  assert.strictEqual(state.effectQueue.length, 0, 'resim effects must not drain into visible frame effects');
+  assert.strictEqual(state.slots[1].body.x, slot1StartX + 1, 'resim still mutates gameplay state');
+  console.log('✓ PASS');
+}
+
 console.log('\n=== All RollbackCoordinator Tests Passed ===\n');

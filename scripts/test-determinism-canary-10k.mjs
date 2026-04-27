@@ -98,6 +98,10 @@ function runCanary(ticks) {
 // run this test, copy the printed values, and update these constants in the
 // SAME commit. Any unexpected drift will fail the test.
 const EXPECTED = {
+  // Re-pinned in v1.20.147 after the DR-2 rollback branch had advanced the
+  // deterministic hostSimStep surface through room/combat parity. Parallel
+  // run-A == run-B still passes; this restores the baseline guard for the
+  // current deterministic state shape.
   // Re-pinned in v1.20.102 when state.run gained 7 run-scope counter fields
   // (runElapsedMs, gameOverShown, boonRerolls, damagelessRooms, tookDamageThisRoom,
   // lastStallSpawnAt, bossClears) for R0.4 step 9 GAP 3 closure.
@@ -105,9 +109,9 @@ const EXPECTED = {
   // 7 additional fields in state.run (default initialization).
   // Parallel run-A == run-B continues to pass — refactor is observably equivalent.
   // Prior re-pin v1.20.101 (R0.4 step 8 — GAP 1 death/pop fields).
-  tick100:   'e0d34ae4fb511187c4f6610b19e7f06621a65484bbb7e18f510ecfe02596b9c5',
-  tick5000:  '7e9051a628b97631a6798191677717937e3cbf45ee942ee31d8943171dde6f23',
-  tick10000: '6be36f7617d0d61fedc2600627cf859b6df439226c78f1c631b27d301b4e3ccb',
+  tick100:   '9d40c31177915eaaf14d313986d7c32f1656a961b77862e5c93cc9088f1f07fd',
+  tick5000:  '10bb11ab456a15d52a0f0d10ef92157f29d8b00b3128f04ce91599d52f7bc051',
+  tick10000: '43d5c20d37b0d03d3d1fc7611e6ef410d6ac8bc97d08218bf5c97fa3953f0f18',
 };
 
 test('R0.6: 10000-tick canary state hash matches baseline', () => {

@@ -17,6 +17,12 @@
 
 import { snapshotState, restoreState, serialize } from './simStateSerialize.js';
 
+export function snapshotStateForRollback(simState) {
+  const state = snapshotState(simState);
+  if (Array.isArray(state.effectQueue)) state.effectQueue = [];
+  return state;
+}
+
 /**
  * @typedef RollbackSnapshot
  * @property {number} tick - Tick number this snapshot was captured at
@@ -46,7 +52,7 @@ export class RollbackBuffer {
   push(simState, worldInputs, slot1Inputs) {
     const snapshot = {
       tick: this.tick,
-      state: snapshotState(simState),
+      state: snapshotStateForRollback(simState),
       worldInputs: { ...worldInputs },
       slot1Inputs: { ...slot1Inputs }
     };
@@ -94,7 +100,7 @@ export class RollbackBuffer {
   replaceAtTick(targetTick, simState, worldInputs, slot1Inputs) {
     const snap = this.buffer.find(s => s.tick === targetTick);
     if (!snap) return false;
-    snap.state = snapshotState(simState);
+    snap.state = snapshotStateForRollback(simState);
     snap.worldInputs = { ...worldInputs };
     snap.slot1Inputs = { ...slot1Inputs };
     return true;

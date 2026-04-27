@@ -2757,7 +2757,7 @@ function installCoopInputUplink(armedCoop) {
             get baseSpeed() { return 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (UPG.speedMult || 1)); },
             get baseSpeedRaw() { return 165 * GLOBAL_SPEED_LIFT; },
             deadzone: JOY_DEADZONE,
-            get joyMax() { return joy.max || JOY_MAX; },
+            joyMax: JOY_MAX,
             get gate() { return simState.run.roomPhase !== 'intro'; },
             get phaseWalk() { return !!UPG.phaseWalk; },
             get bossDamageMultiplier() { return currentBossDamageMultiplier || 1; },
@@ -2785,7 +2785,10 @@ function installCoopInputUplink(armedCoop) {
             get getBossEscortRespawnMs() { return getBossEscortRespawnMs; },
             get getReinforcementIntervalMs() { return getReinforcementIntervalMs; },
           },
-          logging: true,
+          inputDeadzoneMag: JOY_DEADZONE,
+          inputJoyMax: () => joy.max || JOY_MAX,
+          canonicalJoyMax: JOY_MAX,
+          logging: COOP_DIAG,
         }
       );
       console.info(`[coop] rollback coordinator armed (DR-2: skipForward=${role === 'host'})`);

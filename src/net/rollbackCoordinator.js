@@ -18,8 +18,9 @@
  *   (separate snapshot channel still provides world-sync until R0.4)
  */
 
-import { RollbackBuffer } from '../sim/rollbackBuffer.js';
-import { restoreState, snapshotState } from '../sim/simStateSerialize.js';
+import { RollbackBuffer, snapshotStateForRollback } from '../sim/rollbackBuffer.js';
+import { restoreState } from '../sim/simStateSerialize.js';
+import { clear as clearEffects } from '../sim/effectQueue.js';
 
 /**
  * @typedef RollbackCoordinatorConfig
@@ -44,6 +45,9 @@ export class RollbackCoordinator {
       bufferCapacity = 16,
       maxRollbackTicks = 8,
       logger = null,
+      inputDeadzoneMag = 0,
+      inputJoyMax = 0,
+      canonicalJoyMax = 0,
       // When true the coordinator is operating in "snapshot-only" mode: the
       // game loop (update()) already advanced state each tick, so the forward
       // path must NOT call simStep again or we'd double-advance. simStep is
@@ -78,6 +82,9 @@ export class RollbackCoordinator {
     this.bufferCapacity = bufferCapacity;
     this.maxRollbackTicks = maxRollbackTicks;
     this.logger = logger;
+    this.inputDeadzoneMag = inputDeadzoneMag;
+    this.inputJoyMax = inputJoyMax;
+    this.canonicalJoyMax = canonicalJoyMax;
 
     // Ring buffer stores last N ticks
     this.buffer = new RollbackBuffer(bufferCapacity);
@@ -87,7 +94,7 @@ export class RollbackCoordinator {
     // This allows rollback to tick 0 to start from a clean slate
     this.buffer.buffer.push({
       tick: -1,
-      state: snapshotState(simState),
+      state: snapshotStateForRollback(simState),
       worldInputs: {},
       slot1Inputs: {}
     });
@@ -125,25 +132,27 @@ export class RollbackCoordinator {
    * @param {number} dt - Timestep (1/60 typically)
    */
   step(localInput, dt) {
+    const canonicalLocalInput = this._canonicalizeInput(localInput);
+
     // Store local input
-    this.localInputHistory[this.currentTick] = { ...localInput };
+    this.localInputHistory[this.currentTick] = this._cloneInput(canonicalLocalInput);
 
     // Get remote input: actual if available, else prediction
     let remoteInput = this.remoteInputHistory[this.currentTick];
     if (!remoteInput) {
       // Predict: repeat-last or neutral
       const lastRemote = this.remoteInputHistory[this.currentTick - 1];
-      remoteInput = lastRemote ? { ...lastRemote } : this._neutralInput();
+      remoteInput = lastRemote ? this._cloneInput(lastRemote) : this._neutralInput();
       // Store the actual predicted input so we can compare correctly when
       // the real remote input arrives. Earlier code stored `true` here,
       // which made _onRemoteInputArrived assume we always predicted neutral
       // — causing a spurious rollback even when repeat-last was correct.
-      this.remotePredictions[this.currentTick] = { ...remoteInput };
+      this.remotePredictions[this.currentTick] = this._cloneInput(remoteInput);
     }
 
     // Prepare slot inputs in world/slot1 order
-    const slot0Input = this.localSlotIndex === 0 ? localInput : remoteInput;
-    const slot1Input = this.localSlotIndex === 1 ? localInput : remoteInput;
+    const slot0Input = this.localSlotIndex === 0 ? canonicalLocalInput : remoteInput;
+    const slot1Input = this.localSlotIndex === 1 ? canonicalLocalInput : remoteInput;
 
     // Simulate forward — skip when game loop's update() already did it
     // (skipSimStepOnForward mode). simStep is still used during _rollbackAndResim.
@@ -155,7 +164,9 @@ export class RollbackCoordinator {
     this.buffer.push(this.simState, slot0Input, slot1Input);
 
     // Send local input to peer
-    const wireJoy = this._quantizeJoy(localInput && localInput.joy);
+    const wireJoy = canonicalLocalInput?.joy
+      ? { ...canonicalLocalInput.joy }
+      : this._neutralInput().joy;
     this.sendInput({
       tick: this.currentTick,
       slot: this.localSlotIndex,
@@ -199,14 +210,14 @@ export class RollbackCoordinator {
     // event = { tick, slot, dx?, dy?, active?, mag? } — flat joy fields for transport
     const { tick } = event;
     const remoteInput = event.joy
-      ? { joy: this._quantizeJoy(event.joy) }
+      ? { joy: this._quantizeJoy(event.joy, { normalizeMag: false }) }
       : {
-          joy: {
+          joy: this._quantizeJoy({
             dx:     event.dx     ?? 0,
             dy:     event.dy     ?? 0,
             active: event.active ?? false,
             mag:    event.mag    ?? 0,
-          },
+          }, { normalizeMag: false }),
         };
 
     // Store the actual input
@@ -272,6 +283,7 @@ export class RollbackCoordinator {
         this.buffer.replaceAtTick(tick, this.simState, slot0Input, slot1Input);
         this.remotePredictions[tick] = null;
       }
+      this._clearResimEffects();
       this.logger?.(
         `RollbackCoordinator: partial resync from tick ${partialStart} (divergence at ${divergenceTick} depth=${rollbackDepth} > max=${this.maxRollbackTicks})`
       );
@@ -315,6 +327,7 @@ export class RollbackCoordinator {
       // matching remoteInputHistory[tick] entry was already set by the caller.)
       this.remotePredictions[tick] = null;
     }
+    this._clearResimEffects();
 
     this.logger?.(
       `RollbackCoordinator: rolled back ${rollbackDepth} ticks from divergence at tick ${divergenceTick}`
@@ -334,7 +347,8 @@ export class RollbackCoordinator {
    */
   _inputsEqual(a, b) {
     if (!a || !b) return a === b;
-    const aq = this._quantizeJoy(a.joy), bq = this._quantizeJoy(b.joy);
+    const aq = this._quantizeJoy(a.joy, { normalizeMag: false });
+    const bq = this._quantizeJoy(b.joy, { normalizeMag: false });
     if (aq.active !== bq.active) return false;
     if (!aq.active) return true; // both inactive — direction doesn't matter
     return aq.dx === bq.dx && aq.dy === bq.dy && aq.mag === bq.mag;
@@ -349,6 +363,20 @@ export class RollbackCoordinator {
     return { joy: { dx: 0, dy: 0, active: false, mag: 0 } };
   }
 
+  _cloneInput(input) {
+    if (!input || typeof input !== 'object') return {};
+    if (input.joy && typeof input.joy === 'object') {
+      return { ...input, joy: { ...input.joy } };
+    }
+    return { ...input };
+  }
+
+  _canonicalizeInput(input) {
+    const cloned = this._cloneInput(input);
+    if (cloned.joy) cloned.joy = this._quantizeJoy(cloned.joy);
+    return cloned;
+  }
+
   /**
    * Quantize a raw joy value to stable, comparable scalars.
    * dx/dy rounded to 2dp; mag rounded to 1dp.
@@ -356,14 +384,42 @@ export class RollbackCoordinator {
    *
    * @private
    */
-  _quantizeJoy(joy) {
+  _quantizeJoy(joy, { normalizeMag = true } = {}) {
     if (!joy || !joy.active) return { active: false, dx: 0, dy: 0, mag: 0 };
+    const dx = Number.isFinite(joy.dx) ? joy.dx : 0;
+    const dy = Number.isFinite(joy.dy) ? joy.dy : 0;
+    const rawMag = Number.isFinite(joy.mag) ? joy.mag : Math.hypot(dx, dy);
+    const deadzone = this._readNumber(this.inputDeadzoneMag, 0);
+    const localJoyMax = this._readNumber(this.inputJoyMax, 0);
+    const canonicalJoyMax = this._readNumber(this.canonicalJoyMax, 0);
+    let mag = rawMag;
+
+    if (normalizeMag && localJoyMax > deadzone && canonicalJoyMax > deadzone) {
+      const t = Math.min(Math.max((rawMag - deadzone) / (localJoyMax - deadzone), 0), 1);
+      mag = t <= 0 ? 0 : deadzone + t * (canonicalJoyMax - deadzone);
+    }
+
+    const qdx = Math.round(dx * 100) / 100;
+    const qdy = Math.round(dy * 100) / 100;
+    const qmag = Math.round((mag || 0) * 10) / 10;
+    if (qmag <= deadzone || (qdx === 0 && qdy === 0)) {
+      return { active: false, dx: 0, dy: 0, mag: 0 };
+    }
     return {
       active: true,
-      dx:  Math.round((joy.dx  || 0) * 100) / 100,
-      dy:  Math.round((joy.dy  || 0) * 100) / 100,
-      mag: Math.round((joy.mag || 0) * 10)  / 10,
+      dx: qdx,
+      dy: qdy,
+      mag: qmag,
     };
+  }
+
+  _readNumber(value, fallback) {
+    const raw = typeof value === 'function' ? value() : value;
+    return Number.isFinite(raw) ? raw : fallback;
+  }
+
+  _clearResimEffects() {
+    try { clearEffects(this.simState); } catch (_) {}
   }
 
   /**

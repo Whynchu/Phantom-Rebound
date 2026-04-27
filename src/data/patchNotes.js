@@ -2,6 +2,15 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.147',
+      label: 'ROLLBACK INPUT STABILITY',
+      summary: ['Rollback now simulates the same canonical joystick frames it sends over the network, preventing raw local input from drifting away from quantized remote input.'],
+      highlights: [
+        'Rollback resim effects are discarded instead of draining into visible damage numbers, which should stop host-side damage-number spam during guest movement corrections.',
+        'Rollback verbose packet logging is now gated behind ?coopdiag=1, and the 10k canary baseline is re-pinned to the current deterministic DR-2 sim output.',
+      ]
+    },
+  {
       version: '1.20.146',
       label: 'DR-2: ROLLBACK PARTIAL RESYNC + WIDER WINDOW',
       summary: ['Fixed permanent guest divergence caused by network latency spikes. The rollback window was only 8 ticks (133ms); real sessions showed 44-tick (730ms) input gaps that exceeded the window, causing the coordinator to silently give up and leaving guest state permanently wrong. Fix 1: partial resync — when divergence exceeds the max, correct the last maxRollbackTicks using real inputs instead of giving up. Fix 2: window widened from 8 to 20 ticks (333ms) to handle normal mobile latency.'],
