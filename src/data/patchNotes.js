@@ -143,6 +143,7 @@ const PATCH_NOTES_RECENT = [
         'All 74 tests green.',
       ]
     },
+  {
       label: 'DR-2: FIX LEGENDARYROOMSSINCEREJECTION GETTER TYPO',
       summary: ['Fixed ReferenceError: legendaryRoomsSinceReject is not defined — simState.run getter referenced the wrong variable name (missing "ion" suffix), crashing coordinator setup during initial snapshot.'],
       highlights: [
@@ -150,6 +151,7 @@ const PATCH_NOTES_RECENT = [
         'All 74 tests green.',
       ]
     },
+  {
       label: 'DR-2: FIX JOYMAXREFERENCEERROR IN INSTALLCOOPINPUTUPLINK',
       summary: ['Fixed ReferenceError: joyMax is not defined that caused rollback coordinator setup to fail silently on guest, leaving rollbackCoordinator null and the guest permanently stuck at READY?.'],
       highlights: [
