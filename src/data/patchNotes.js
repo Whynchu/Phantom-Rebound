@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.151',
+      label: 'HYBRID COOP PLAN',
+      summary: ['Added the hybrid coop authority plan documenting host-authoritative combat with guest-local prediction.'],
+      highlights: [
+        'Defines the recovery path away from full-combat rollback toward snapshots as correction anchors plus authoritative gameplay events.',
+      ]
+    },
+  {
       version: '1.20.150',
       label: 'ROLLBACK PEER POSITION ANCHORS',
       summary: ['Rollback input now preserves peer x/y position stamps so hostSimStep can target the same player locations on both devices.'],
