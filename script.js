@@ -1846,6 +1846,7 @@ function hideCoopGuestWaitOverlay() {
 // a real remote input.  Hides automatically when remote input resumes.
 // Only rendered when ROLLBACK_ENABLED; no DOM cost on the normal path.
 let _rollbackStallEl = null;
+let _rollbackStallWarned = false;
 
 function showRollbackStallIndicator() {
   if (typeof document === 'undefined' || !document.body) return;
@@ -1874,6 +1875,7 @@ function showRollbackStallIndicator() {
 
 function hideRollbackStallIndicator() {
   if (_rollbackStallEl) _rollbackStallEl.style.display = 'none';
+  _rollbackStallWarned = false;
 }
 
 // R4.2: Expose rollback telemetry to the console for real-device debugging
@@ -2730,18 +2732,39 @@ function installCoopInputUplink(armedCoop) {
   // the D-series coop path.
   if (ROLLBACK_ENABLED) {
     try {
+      const rollbackInputBatch = [];
+      const flushRollbackInputBatch = async () => {
+        if (rollbackInputBatch.length === 0) return;
+        const frames = rollbackInputBatch.splice(0, rollbackInputBatch.length);
+        try { await session.sendGameplay({ kind: 'rollback-input-batch', frames }); } catch (_) {}
+      };
+      const deliverRollbackInputFrame = (frame, callback) => {
+        if (!frame) return;
+        ingestRollbackFrameForLegacySlot(frame);
+        callback(frame);
+      };
       setupRollback(
         simState,
         localSlotIndex,
         async (frame) => {
-          try { await session.sendGameplay({ kind: 'rollback-input', frame }); } catch (_) {}
+          const positionedFrame = attachRollbackFramePosition(frame, localSlotIndex);
+          rollbackInputBatch.push(positionedFrame);
+          if (rollbackInputBatch.length >= ROLLBACK_INPUT_BATCH_SIZE) {
+            await flushRollbackInputBatch();
+          }
         },
         // R0.4-H: hostSimStep now covers room state + player fire — complete enough
         // for host coordinator to apply rollback corrections on slot 1 position.
         (callback) => session.onGameplay((ev) => {
           const payload = ev && ev.payload;
-          if (!payload || payload.kind !== 'rollback-input') return;
-          if (payload.frame) callback(payload.frame);
+          if (!payload) return;
+          if (payload.kind === 'rollback-input' && payload.frame) {
+            deliverRollbackInputFrame(payload.frame, callback);
+            return;
+          }
+          if (payload.kind === 'rollback-input-batch' && Array.isArray(payload.frames)) {
+            for (const frame of payload.frames) deliverRollbackInputFrame(frame, callback);
+          }
         }),
         {
           simStep: hostSimStep,
@@ -4325,6 +4348,52 @@ function burstBlueDissipate(x, y) {
   spawnBlueDissipateBurst(x, y, (a) => C.getRgba(threat.danger.light, a));
 }
 
+const ROLLBACK_INPUT_BATCH_SIZE = 4;
+
+function attachRollbackFramePosition(frame, slotIndex) {
+  const slot = playerSlots[slotIndex];
+  const body = slot && slot.body;
+  if (!body || !Number.isFinite(body.x) || !Number.isFinite(body.y)) return frame;
+  return {
+    ...frame,
+    x: Math.round(body.x * 10) / 10,
+    y: Math.round(body.y * 10) / 10,
+  };
+}
+
+function rollbackFrameToLegacyInputFrame(frame) {
+  const active = !!frame?.active;
+  const mag = Number.isFinite(frame?.mag) ? frame.mag : 0;
+  const t = active
+    ? Math.max(0, Math.min(1, (mag - JOY_DEADZONE) / (JOY_MAX - JOY_DEADZONE)))
+    : 0;
+  const legacy = {
+    tick: frame.tick >>> 0,
+    dx: Math.max(-127, Math.min(127, Math.round((frame.dx || 0) * 127))),
+    dy: Math.max(-127, Math.min(127, Math.round((frame.dy || 0) * 127))),
+    t: Math.max(0, Math.min(255, Math.round(t * 255))),
+    still: active ? 0 : 1,
+  };
+  if (Number.isFinite(frame.x) && Number.isFinite(frame.y)) {
+    legacy.x = frame.x;
+    legacy.y = frame.y;
+  }
+  return legacy;
+}
+
+function ingestRollbackFrameForLegacySlot(frame) {
+  if (!ROLLBACK_ENABLED || !coopInputSync || !frame) return;
+  try {
+    coopInputSync.ingest({
+      kind: 'input',
+      slot: frame.slot,
+      frames: [rollbackFrameToLegacyInputFrame(frame)],
+    });
+  } catch (err) {
+    try { console.warn('[rollback] legacy frame bridge failed', err); } catch (_) {}
+  }
+}
+
 // R4: dispatch effect descriptors produced by hostSimStep during rollback resim.
 // Only fires for corrected (post-rollback) ticks — non-rollback ticks leave the
 // queue empty because skipSimStepOnForward=true skips hostSimStep on the forward path.
@@ -5078,7 +5147,10 @@ function loop(ts){
               },
             }, SIM_STEP_SEC);
             if (_stepResult && _stepResult.stalled) {
-              try { console.warn('[rollback] coordinator stalled — remote input age exceeds maxRollbackTicks'); } catch (_) {}
+              if (!_rollbackStallWarned) {
+                try { console.warn('[rollback] coordinator stalled — remote input age exceeds maxRollbackTicks'); } catch (_) {}
+                _rollbackStallWarned = true;
+              }
               try { showRollbackStallIndicator(); } catch (_) {}
             } else {
               try { hideRollbackStallIndicator(); } catch (_) {}
@@ -5259,8 +5331,10 @@ function update(dt,ts){
     // batch hits size 4 (~15 msg/s at 60 Hz, well under Supabase's
     // 20 msg/s cap). Errors inside sendGameplay are logged and do not
     // interrupt the guest's render loop.
-    try { coopInputSync && coopInputSync.sampleFrame(simTick); } catch (err) {
-      try { console.warn('[coop] sampleFrame error', err); } catch (_) {}
+    if (!ROLLBACK_ENABLED) {
+      try { coopInputSync && coopInputSync.sampleFrame(simTick); } catch (err) {
+        try { console.warn('[coop] sampleFrame error', err); } catch (_) {}
+      }
     }
     // DR-2 (Step 11): updateOnlineGuestPrediction retired — hostSimStep drives
     // slot 1 movement every forward tick via skipSimStepOnForward:false.

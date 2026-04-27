@@ -2,6 +2,15 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.148',
+      label: 'ROLLBACK INPUT BATCHING',
+      summary: ['Rollback input frames are now batched to stay under realtime message-rate limits instead of sending one gameplay packet every sim tick.'],
+      highlights: [
+        'The obsolete guest input upload path is disabled while rollback is active, and received rollback frames now feed the host slot-1 render adapter so the displayed guest uses the same network data as rollback.',
+        'Rollback stall warnings now log once per stall episode instead of dumping repeated RAF stack traces.',
+      ]
+    },
+  {
       version: '1.20.147',
       label: 'ROLLBACK INPUT STABILITY',
       summary: ['Rollback now simulates the same canonical joystick frames it sends over the network, preventing raw local input from drifting away from quantized remote input.'],
