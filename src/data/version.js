@@ -1,4 +1,4 @@
-const VERSION = { num: '1.20.142', label: 'DR-2: fix legendaryRoomsSinceReject getter typo crashing coordinator init' };
+const VERSION = { num: '1.20.143', label: 'DR-2: fix W/H scope errors in simStepOpts crashing coordinator step' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

@@ -2,7 +2,15 @@
 
 const PATCH_NOTES_RECENT = [
   {
-      version: '1.20.142',
+      version: '1.20.143',
+      label: 'DR-2: FIX W/H SCOPE ERRORS IN SIMSTEPOPTS',
+      summary: ['Fixed ReferenceError: W is not defined — simStepOpts worldW/worldH getters and spawnEnemy callback used the local W/H aliases from update() which are not in scope inside installCoopInputUplink. Replaced with module-level WORLD_W/WORLD_H.'],
+      highlights: [
+        'script.js lines 2753-2754: worldW/worldH getters now use WORLD_W/WORLD_H instead of W/H.',
+        'script.js lines 2772-2773: spawnEnemy callback also fixed to use WORLD_W/WORLD_H.',
+        'All 74 tests green.',
+      ]
+    },
       label: 'DR-2: FIX LEGENDARYROOMSSINCEREJECTION GETTER TYPO',
       summary: ['Fixed ReferenceError: legendaryRoomsSinceReject is not defined — simState.run getter referenced the wrong variable name (missing "ion" suffix), crashing coordinator setup during initial snapshot.'],
       highlights: [

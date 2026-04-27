@@ -2750,8 +2750,8 @@ function installCoopInputUplink(armedCoop) {
           // forward path, resim-only for host corrections.
           skipSimStepOnForward: role === 'host',
           simStepOpts: {
-            get worldW() { return simState.world && simState.world.w ? simState.world.w : (W || 800); },
-            get worldH() { return simState.world && simState.world.h ? simState.world.h : (H || 600); },
+            get worldW() { return simState.world && simState.world.w ? simState.world.w : (WORLD_W || 800); },
+            get worldH() { return simState.world && simState.world.h ? simState.world.h : (WORLD_H || 600); },
             // P4: provide base speed as a getter so it stays current with GLOBAL_SPEED_LIFT.
             // baseSpeedRaw = pre-upg speed; hostSimStep applies per-slot speedMult for slot1.
             get baseSpeed() { return 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (UPG.speedMult || 1)); },
@@ -2769,8 +2769,8 @@ function installCoopInputUplink(armedCoop) {
             queueEffects: true,
             spawnEnemy: (type, isBoss, bossScale) => {
               const enemy = createEnemy(type, {
-                width: simState.world && simState.world.w ? simState.world.w : (W || 800),
-                height: simState.world && simState.world.h ? simState.world.h : (H || 600),
+                width: simState.world && simState.world.w ? simState.world.w : (WORLD_W || 800),
+                height: simState.world && simState.world.h ? simState.world.h : (WORLD_H || 600),
                 margin: M,
                 roomIndex: simState.run ? simState.run.roomIndex : 0,
                 nextEnemyId: simState.nextEnemyId++,
