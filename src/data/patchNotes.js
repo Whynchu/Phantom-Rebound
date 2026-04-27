@@ -2,6 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.155',
+      label: 'ENEMY ID FIX SNAPSHOT BROADCAST',
+      summary: ['[COOP] Critical fix: enemies now appear and move on the guest screen. Host snapshot broadcasts were silently failing because enemies use the field name eid (not id) — the encoder threw on every enemy, causing zero snapshots to reach the guest.'],
+      highlights: [
+        'collectHostSnapshotState() now maps e.eid correctly into the id wire field.',
+        'Guest receives full enemy state at 10 Hz: positions, HP, types, fire timers.',
+        'Host player (slot 0) position also now visible on guest screen via snapshots.',
+      ]
+    },
+  {
       version: '1.20.154',
       label: 'GUEST INTRO LOCAL ADVANCE',
       summary: ['[COOP] Critical fix: guest now advances its own READY?→GO! intro timer locally instead of waiting for snapshots. Eliminates the "stuck at READY?" hang regardless of snapshot delivery timing.'],

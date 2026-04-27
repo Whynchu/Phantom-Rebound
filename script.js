@@ -3158,7 +3158,7 @@ function collectHostSnapshotState() {
   }));
 
   const enemiesData = enemies.map(e => ({
-    id: e.id,
+    id: e.eid,
     x: e.x, y: e.y,
     vx: e.vx || 0, vy: e.vy || 0,
     hp: e.hp,
