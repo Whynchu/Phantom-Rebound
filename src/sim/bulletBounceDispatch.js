@@ -22,7 +22,7 @@
 //
 // resolveDangerBounceState / resolveOutputBounceState (in bulletRuntime.js)
 // retain their existing bullet mutations (state, decayStart, bounceLeft,
-// hasSplit, wallBounces, dangerBounceBudget, bounceCount). The dispatcher
+// hasSplit, wallBounces, dangerBounceBudget, dangerContinueBounces, bounceCount). The dispatcher
 // adds ONE new mutation it owns: phantom-rebound conversion of an output
 // bullet to grey (state='grey', decayStart=ts) when the source bullet would
 // otherwise be removed.
@@ -112,7 +112,7 @@ export function dispatchBulletBounce(bullet, ts, ctx = {}) {
         size: 35,
       });
     }
-    // 'triangle-continue' / 'double-bounce-continue': no extra effects
+    // 'triangle-continue' / 'danger-bounce-continue' / 'double-bounce-continue': no extra effects
     // beyond the burstBlueDissipate already pushed. Keep bullet alive.
     return result;
   }

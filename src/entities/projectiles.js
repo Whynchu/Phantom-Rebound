@@ -135,7 +135,7 @@ function spawnTriangleBurst({
       angle,
       speed: burstSpd,
       radius: 5,
-      extras: { dangerBounceBudget: 1 },
+      extras: { dangerContinueBounces: 1 },
       onSpawn,
     });
   }
@@ -195,7 +195,7 @@ function spawnEliteTriangleBurst({
       angle,
       speed: burstSpd,
       stage: 2,
-      extras: { dangerBounceBudget: 1 },
+      extras: { dangerContinueBounces: 1 },
       onSpawn,
       getThreatPalette,
       getRgba,

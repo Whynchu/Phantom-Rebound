@@ -416,6 +416,12 @@ test('bullet runtime helpers keep expiry and bounce transitions deterministic', 
   assert.equal(budgetBullet.decayStart, 900);
   assert.equal(budgetBullet.dangerBounceBudget, 0);
 
+  const continueDangerBullet = { state: 'danger', dangerContinueBounces: 1 };
+  const continueDangerResult = resolveDangerBounceState(continueDangerBullet, 950);
+  assert.equal(continueDangerResult.kind, 'danger-bounce-continue');
+  assert.equal(continueDangerBullet.state, 'danger');
+  assert.equal(continueDangerBullet.dangerContinueBounces, 0);
+
   const doubleBounceBullet = { state: 'danger', doubleBounce: true, bounceCount: 0 };
   const doubleFirst = resolveDangerBounceState(doubleBounceBullet, 1000);
   assert.equal(doubleFirst.kind, 'double-bounce-continue');

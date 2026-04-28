@@ -74,6 +74,7 @@ function copyRenderFlags(target, source) {
   target.doubleBounce = !!source.doubleBounce;
   target.bounceCount = source.bounceCount | 0;
   target.dangerBounceBudget = source.dangerBounceBudget | 0;
+  target.dangerContinueBounces = source.dangerContinueBounces | 0;
   target.eliteStage = source.eliteStage === null || source.eliteStage === undefined ? undefined : (source.eliteStage | 0);
   target.eliteColor = source.eliteColor || undefined;
   target.eliteCore = source.eliteCore || undefined;

@@ -131,7 +131,7 @@ function _spawnTriangleBurstSim(state, fu) {
       angle,
       speed: burstSpd,
       radius: 5,
-      extras: { dangerBounceBudget: 1 },
+      extras: { dangerContinueBounces: 1 },
     });
   }
 }

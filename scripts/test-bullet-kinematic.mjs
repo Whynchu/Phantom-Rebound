@@ -117,4 +117,21 @@ function makeState(bullets, timeMs = 0, worldW = 800, worldH = 600) {
   console.log('✓ PASS');
 }
 
+// Test 10: Triangle burst children keep one danger bounce after wall-adjacent spawn
+{
+  console.log('Test 10: Triangle burst children — danger follow-up bounce budget');
+  const W = 800;
+  const M = 16;
+  const r = 7;
+  const bullet = { state: 'danger', x: W - M - r - 1, y: 300, vx: 200, vy: 0, r, isTriangle: true, wallBounces: 0 };
+  const state = makeState([bullet], 1000, W);
+  state.nextBulletId = 10;
+  state.run = { roomIndex: 0 };
+  tickBulletsKinematic(state, 1 / 60);
+  assert.strictEqual(state.bullets.length, 3, 'triangle source should be replaced by 3 burst children');
+  assert(state.bullets.every((b) => b.state === 'danger'), 'all burst children should be danger bullets');
+  assert(state.bullets.every((b) => b.dangerContinueBounces === 1), 'burst children should survive one immediate wall bounce as danger');
+  console.log('✓ PASS');
+}
+
 console.log('\n✅ All tickBulletsKinematic tests passed.\n');

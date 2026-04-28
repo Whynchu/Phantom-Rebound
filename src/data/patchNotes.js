@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.20.152',
+      label: 'PROJECTILE FIXES',
+      summary: ['Fixed Volatile Rounds child bullets re-hitting the enemy that triggered the split.'],
+      highlights: [
+        'Kept triangle burst projectiles dangerous after wall-adjacent splits instead of immediately turning into grey pickups.',
+      ]
+    },
+  {
       version: '1.3.0',
       label: 'CO-OP MODE',
       summary: ['MAJOR UPDATE: Full co-op multiplayer implementation. Play with a partner over the internet in real-time. Hosts create rooms via Supabase; guests join via code. All game features (boons, enemies, rooms, bosses, scoring) now support 2-player simultaneous gameplay with low-latency synchronization.'],

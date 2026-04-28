@@ -15,6 +15,10 @@ function resolveDangerBounceState(bullet, ts) {
     if(bullet.wallBounces >= 1) return { kind: 'triangle-burst', removeBullet: true };
     return { kind: 'triangle-continue' };
   }
+  if((bullet.dangerContinueBounces || 0) > 0) {
+    bullet.dangerContinueBounces--;
+    return { kind: 'danger-bounce-continue' };
+  }
   if((bullet.dangerBounceBudget || 0) > 0) {
     bullet.dangerBounceBudget--;
     bullet.state = 'grey';

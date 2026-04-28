@@ -126,8 +126,15 @@ console.log('\n=== outputHitDispatch tests ===\n');
   assert.equal(state.bullets.filter((b) => b.state === 'output').length, 5);
   assert.equal(state.bullets[0].id, 1);
   assert.equal(state.bullets.slice(1).every((b) => b.expireAt === 2100), true);
+  assert.equal(state.bullets.slice(1).every((b) => hasHitId(b, 99)), true);
   assert.equal(state.effectQueue.some((fx) => fx.kind === 'output.volatileBurst' && fx.slotIndex === 0), true);
-  console.log('PASS volatile rounds spawn deterministic radial output burst');
+
+  const hpAfterBurst = state.enemies[0].hp;
+  const repeatedHits = resolveOutputHits(state, { queueEffects: true, spawnGreyDropsOnKill: false });
+
+  assert.equal(repeatedHits, 0);
+  assert.equal(state.enemies[0].hp, hpAfterBurst);
+  console.log('PASS volatile rounds spawn deterministic radial output burst without re-hitting trigger target');
 }
 
 console.log('\nAll outputHitDispatch tests passed.\n');

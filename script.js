@@ -3163,6 +3163,7 @@ function collectHostSnapshotState() {
     doubleBounce: !!b.doubleBounce,
     bounceCount: b.bounceCount || 0,
     dangerBounceBudget: b.dangerBounceBudget || 0,
+    dangerContinueBounces: b.dangerContinueBounces || 0,
     eliteStage: b.eliteStage != null ? b.eliteStage : null,
     eliteColor: b.eliteColor || null,
     eliteCore: b.eliteCore || null,
@@ -6592,6 +6593,7 @@ function update(dt,ts){
                 crit: false,
                 dmg: b.dmg * 0.65,
                 expireAt: vNow + 1600,
+                extras: { hitIds: new Set([e.eid]) },
               });
               sparks(b.x,b.y,C.green,6,60);
             }

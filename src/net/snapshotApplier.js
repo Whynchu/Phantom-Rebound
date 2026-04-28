@@ -114,6 +114,7 @@ function hydrateBullet(snapBullet, lerpedX, lerpedY, lerpedVx, lerpedVy) {
     doubleBounce: !!snapBullet.doubleBounce,
     bounceCount: snapBullet.bounceCount | 0,
     dangerBounceBudget: snapBullet.dangerBounceBudget | 0,
+    dangerContinueBounces: snapBullet.dangerContinueBounces | 0,
     eliteStage: snapBullet.eliteStage === null || snapBullet.eliteStage === undefined ? undefined : (snapBullet.eliteStage | 0),
     eliteColor: snapBullet.eliteColor || undefined,
     eliteCore: snapBullet.eliteCore || undefined,

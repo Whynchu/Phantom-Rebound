@@ -93,6 +93,7 @@ function resolveOutputHits(state, opts = {}) {
             dmg: (bullet.dmg || 1) * 0.65,
             expireAt: ts + 1600,
             ownerId: bullet.ownerId || 0,
+            extras: { hitIds: new Set([enemyId]) },
           });
           emitEffect(state, opts, 'output.volatileBurst', {
             slotIndex: ownerSlot?.index ?? (Number.isInteger(bullet.ownerId) ? bullet.ownerId : 0),

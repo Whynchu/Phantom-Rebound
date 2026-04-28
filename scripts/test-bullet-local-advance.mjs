@@ -228,6 +228,7 @@ test('danger bullet render flags survive reconcile and getBullets', () => {
     doubleBounce: true,
     bounceCount: 0,
     dangerBounceBudget: 1,
+    dangerContinueBounces: 1,
     eliteStage: 1,
     eliteColor: '#123456',
     eliteCore: '#abcdef',
@@ -237,6 +238,7 @@ test('danger bullet render flags survive reconcile and getBullets', () => {
   assertEq(b.doubleBounce, true);
   assertEq(b.bounceCount, 0);
   assertEq(b.dangerBounceBudget, 1);
+  assertEq(b.dangerContinueBounces, 1);
   assertEq(b.eliteStage, 1);
   assertEq(b.eliteColor, '#123456');
   assertEq(b.eliteCore, '#abcdef');

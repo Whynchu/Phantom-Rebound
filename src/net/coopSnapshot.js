@@ -177,6 +177,7 @@ function encodeBullet(src, idx) {
     doubleBounce: !!src.doubleBounce,
     bounceCount: u32(src.bounceCount ?? 0, 'bullets[' + idx + '].bounceCount'),
     dangerBounceBudget: u32(src.dangerBounceBudget ?? 0, 'bullets[' + idx + '].dangerBounceBudget'),
+    dangerContinueBounces: u32(src.dangerContinueBounces ?? 0, 'bullets[' + idx + '].dangerContinueBounces'),
     eliteStage,
     eliteColor: src.eliteColor == null ? null : String(src.eliteColor),
     eliteCore: src.eliteCore == null ? null : String(src.eliteCore),

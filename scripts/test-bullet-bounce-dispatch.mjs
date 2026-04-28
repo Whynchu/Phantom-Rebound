@@ -122,6 +122,18 @@ console.log('\n=== bulletBounceDispatch tests ===\n');
     r.effects.length === 2 && r.effects[1].color === '#9ca3af');
 }
 
+// --- DANGER: dangerContinueBounces preserves danger for one follow-up wall hit ---
+{
+  const b = makeDangerBullet({ dangerContinueBounces: 1 });
+  const r = dispatchBulletBounce(b, 999, {});
+  ok('dangerContinueBounces: budget decremented', b.dangerContinueBounces === 0);
+  ok('dangerContinueBounces: state stays danger', b.state === 'danger');
+  ok('dangerContinueBounces: only burst effect',
+    r.effects.length === 1 && r.effects[0].kind === 'burstBlueDissipate');
+  ok('dangerContinueBounces: no remove, no skip',
+    !r.removeSourceBullet && !r.skipRestOfFrame);
+}
+
 // --- OUTPUT: continue (bounceLeft consumed, no split) ---
 {
   const b = makeOutputBullet({ bounceLeft: 2 });

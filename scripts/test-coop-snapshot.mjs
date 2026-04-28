@@ -97,7 +97,7 @@ test('encode: full state round-trips via JSON', () => {
     ],
     bullets: [
       { id: 1, x: 120, y: 130, vx: 300, vy: 0, r: 6, type: 'p', state: 'output', ownerSlot: 0, bounces: 0, spawnTick: 2510 },
-      { id: 2, x: 130, y: 140, vx: -200, vy: 50, r: 8, type: 't', state: 'danger', ownerSlot: 99, bounces: 1, spawnTick: 2515, doubleBounce: true, bounceCount: 0, dangerBounceBudget: 1, eliteStage: 1, eliteColor: '#123456', eliteCore: '#abcdef', isTriangle: true },
+      { id: 2, x: 130, y: 140, vx: -200, vy: 50, r: 8, type: 't', state: 'danger', ownerSlot: 99, bounces: 1, spawnTick: 2515, doubleBounce: true, bounceCount: 0, dangerBounceBudget: 1, dangerContinueBounces: 1, eliteStage: 1, eliteColor: '#123456', eliteCore: '#abcdef', isTriangle: true },
     ],
     enemies: [
       { id: 10, x: 250, y: 100, vx: 10, vy: 0, hp: 12, r: 13, type: 'circle', fT: 0.2, fRate: 1800 },
@@ -124,6 +124,7 @@ test('encode: full state round-trips via JSON', () => {
   assertEq(roundTrip.bullets[1].doubleBounce, true);
   assertEq(roundTrip.bullets[1].bounceCount, 0);
   assertEq(roundTrip.bullets[1].dangerBounceBudget, 1);
+  assertEq(roundTrip.bullets[1].dangerContinueBounces, 1);
   assertEq(roundTrip.bullets[1].eliteStage, 1);
   assertEq(roundTrip.bullets[1].eliteColor, '#123456');
   assertEq(roundTrip.bullets[1].eliteCore, '#abcdef');
