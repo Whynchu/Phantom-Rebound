@@ -2,7 +2,7 @@
 
 const PATCH_NOTES_RECENT = [
   {
-      version: '1.20.152',
+      version: '1.3.1',
       label: 'PROJECTILE FIXES',
       summary: ['Fixed Volatile Rounds child bullets re-hitting the enemy that triggered the split.'],
       highlights: [
