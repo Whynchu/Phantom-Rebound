@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.3.4',
+      label: 'EARLY POWER HOTFIX',
+      summary: ['Fixed a crash that could end a run immediately after it began, including some orb-heavy setups.'],
+      highlights: [
+        'Room 1 is still a 3-choice boon pick; the early power rebalance remains otherwise intact.',
+      ]
+    },
+  {
       version: '1.3.3',
       label: 'EARLY POWER FOLLOW-UP',
       summary: ['Fixed a bug that could end a run immediately after starting.'],

@@ -1,4 +1,4 @@
-const VERSION = { num: '1.3.3', label: 'EARLY POWER FOLLOW-UP' };
+const VERSION = { num: '1.3.4', label: 'EARLY POWER HOTFIX' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;
