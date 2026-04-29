@@ -6,12 +6,13 @@ function isSameLocalDay(ts, nowTs = Date.now()) {
     && a.getDate() === b.getDate();
 }
 
-function getVisibleLeaderboardRows(leaderboard, lbPeriod, lbScope, playerName) {
+function getVisibleLeaderboardRows(leaderboard, lbPeriod, lbScope, playerName, lbMode = 'solo') {
   let rows = Array.isArray(leaderboard) ? leaderboard.slice() : [];
   if(lbPeriod === 'daily') rows = rows.filter((row) => isSameLocalDay(row.ts));
   if(lbScope === 'personal') rows = rows.filter((row) => row.name === playerName);
+  rows = rows.filter((row) => (row.runMode === 'coop' ? 'coop' : 'solo') === lbMode);
   rows.sort((a, b) => b.score - a.score || b.ts - a.ts);
-  return rows.slice(0, 10);
+  return rows.slice(0, 100);
 }
 
 function getLeaderboardRowRunTimeMs(row) {
@@ -33,9 +34,12 @@ function syncLeaderboardStatusBadge(lbStatus, statusMode, statusText) {
   lbStatus.classList.add(statusMode);
 }
 
-function syncLeaderboardToggleStates(lbPeriodBtns, lbScopeBtns, lbPeriod, lbScope) {
+function syncLeaderboardToggleStates(lbPeriodBtns, lbScopeBtns, lbPeriod, lbScope, lbModeBtns = null, lbMode = null) {
   lbPeriodBtns?.forEach((btn) => btn.classList.toggle('active', btn.dataset.lbPeriod === lbPeriod));
   lbScopeBtns?.forEach((btn) => btn.classList.toggle('active', btn.dataset.lbScope === lbScope));
+  if(lbModeBtns && lbMode) {
+    lbModeBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.lbMode === lbMode));
+  }
 }
 
 function renderLeaderboard({
@@ -44,6 +48,7 @@ function renderLeaderboard({
   lbList,
   lbPeriod,
   lbScope,
+  lbMode = 'solo',
   playerName,
   lbStatusMode,
   lbStatusText,
@@ -55,24 +60,26 @@ function renderLeaderboard({
   onOpenBoons,
   lbPeriodBtns,
   lbScopeBtns,
+  lbModeBtns,
 }) {
   const periodLabel = lbPeriod === 'daily' ? 'DAILY' : 'ALL TIME';
   const scopeLabel = lbScope === 'personal' ? 'PERSONAL' : 'EVERYONE';
-  lbCurrent.textContent = `RUNNER: ${playerName} · ${periodLabel} · ${scopeLabel}`;
+  const modeLabel = lbMode === 'coop' ? 'CO-OP' : 'SOLO';
+  lbCurrent.textContent = `RUNNER: ${playerName} · ${periodLabel} · ${scopeLabel} · ${modeLabel}`;
   lbStatus.textContent = lbStatusText;
   lbList.innerHTML = '';
   const rows = lbStatusMode === 'syncing'
     ? []
     : (useRemoteLeaderboardRows
       ? remoteLeaderboardRows
-      : getVisibleLeaderboardRows(leaderboard, lbPeriod, lbScope, playerName));
+      : getVisibleLeaderboardRows(leaderboard, lbPeriod, lbScope, playerName, lbMode));
 
   if(rows.length === 0) {
     const li = document.createElement('li');
     li.className = 'lb-empty';
     li.textContent = lbStatusMode === 'syncing' ? 'Syncing records...' : 'No runs match this view yet.';
     lbList.appendChild(li);
-    syncLeaderboardToggleStates(lbPeriodBtns, lbScopeBtns, lbPeriod, lbScope);
+    syncLeaderboardToggleStates(lbPeriodBtns, lbScopeBtns, lbPeriod, lbScope, lbModeBtns, lbMode);
     return;
   }
 
@@ -103,7 +110,7 @@ function renderLeaderboard({
     lbList.appendChild(li);
   }
 
-  syncLeaderboardToggleStates(lbPeriodBtns, lbScopeBtns, lbPeriod, lbScope);
+  syncLeaderboardToggleStates(lbPeriodBtns, lbScopeBtns, lbPeriod, lbScope, lbModeBtns, lbMode);
 }
 
 export { renderLeaderboard, syncLeaderboardStatusBadge, syncLeaderboardToggleStates };
