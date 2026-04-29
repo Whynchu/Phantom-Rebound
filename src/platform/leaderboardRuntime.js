@@ -49,6 +49,7 @@ async function submitLeaderboardEntryRemote({
       boons: entry.boons,
       playerColor: entry.color,
       durationSeconds: entry.runTimeMs != null ? Math.round(entry.runTimeMs / 1000) : null,
+      runMode: entry.runMode === 'coop' ? 'coop' : 'solo',
     });
     return { ok: true };
   } catch {

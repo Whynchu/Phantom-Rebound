@@ -2,6 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.3.5',
+      label: 'LEADERBOARD COOP TOGGLE',
+      summary: ['Leaderboard now shows up to 100 results (was 10).'],
+      highlights: [
+        'New Solo / Co-op toggle on the leaderboard screen — co-op runs are tracked separately.',
+        'Co-op runs now submit to the leaderboard (each player gets their own entry tagged co-op).',
+        'Supabase: leaderboard_scores gains a run_mode column; submit_score / get_leaderboard accept p_run_mode. Migration in supabase/leaderboard.sql.',
+      ]
+    },
+  {
       version: '1.3.4',
       label: 'EARLY POWER HOTFIX',
       summary: ['Fixed a crash that could end a run immediately after it began, including some orb-heavy setups.'],

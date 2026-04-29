@@ -34,6 +34,7 @@ function buildLocalScoreEntry({
   boons,
   telemetry,
   ts = Date.now(),
+  runMode = 'solo',
 }) {
   return {
     name: playerName,
@@ -44,6 +45,7 @@ function buildLocalScoreEntry({
     version: gameVersion,
     color,
     boonOrder,
+    runMode: runMode === 'coop' ? 'coop' : 'solo',
     boons: {
       picks: boons,
       color,

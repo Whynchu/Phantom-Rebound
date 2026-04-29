@@ -8,6 +8,10 @@ function normalizeScope(scope) {
   return scope === 'personal' ? 'personal' : 'everyone';
 }
 
+function normalizeRunMode(mode) {
+  return mode === 'coop' ? 'coop' : 'solo';
+}
+
 function mapRemoteRow(row) {
   return {
     name: row.player_name,
@@ -18,6 +22,7 @@ function mapRemoteRow(row) {
     color: row.player_color || 'green',
     boonOrder: row.boon_order || '',
     durationSeconds: row.duration_seconds != null ? Number(row.duration_seconds) : null,
+    runMode: row.run_mode === 'coop' ? 'coop' : 'solo',
   };
 }
 
@@ -42,18 +47,19 @@ async function callLeaderboardRpc(fnName, payload) {
   return response.json();
 }
 
-async function fetchRemoteLeaderboard({ period, scope, playerName, gameVersion, limit = 10 }) {
+async function fetchRemoteLeaderboard({ period, scope, playerName, gameVersion, limit = 100, mode = 'solo' }) {
   const rows = await callLeaderboardRpc('get_leaderboard', {
     p_period: normalizePeriod(period),
     p_scope: normalizeScope(scope),
     p_player_name: playerName,
     p_game_version: gameVersion,
     p_limit: limit,
+    p_run_mode: normalizeRunMode(mode),
   });
   return Array.isArray(rows) ? rows.map(mapRemoteRow) : [];
 }
 
-async function submitRemoteScore({ playerName, score, room, gameVersion, boons, playerColor = 'green', durationSeconds = null }) {
+async function submitRemoteScore({ playerName, score, room, gameVersion, boons, playerColor = 'green', durationSeconds = null, runMode = 'solo' }) {
   const payload = {
     p_player_name: playerName,
     p_score: score,
@@ -61,6 +67,7 @@ async function submitRemoteScore({ playerName, score, room, gameVersion, boons, 
     p_game_version: gameVersion,
     p_boons: boons || null,
     p_player_color: playerColor,
+    p_run_mode: normalizeRunMode(runMode),
   };
   if (durationSeconds != null && Number.isFinite(durationSeconds) && durationSeconds >= 0) {
     payload.p_duration_seconds = Math.max(0, Math.round(durationSeconds));

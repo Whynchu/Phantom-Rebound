@@ -58,8 +58,15 @@ alter table public.leaderboard_scores
 alter table public.leaderboard_scores
   add column if not exists duration_seconds integer default null;
 
+alter table public.leaderboard_scores
+  add column if not exists run_mode text default 'solo'
+  check (run_mode in ('solo', 'coop'));
+
 create index if not exists leaderboard_scores_score_idx
   on public.leaderboard_scores (game_version, score desc, created_at desc);
+
+create index if not exists leaderboard_scores_mode_score_idx
+  on public.leaderboard_scores (game_version, run_mode, score desc, created_at desc);
 
 create index if not exists leaderboard_scores_created_idx
   on public.leaderboard_scores (game_version, created_at desc);
@@ -109,6 +116,7 @@ drop function if exists public.submit_score(text, integer, integer, text);
 drop function if exists public.submit_score(text, integer, integer, text, jsonb);
 drop function if exists public.submit_score(text, integer, integer, text, jsonb, text);
 drop function if exists public.submit_score(text, integer, integer, text, jsonb, text, integer);
+drop function if exists public.submit_score(text, integer, integer, text, jsonb, text, integer, text);
 create or replace function public.submit_score(
   p_player_name text,
   p_score integer,
@@ -116,7 +124,8 @@ create or replace function public.submit_score(
   p_game_version text,
   p_boons jsonb default null,
   p_player_color text default 'green',
-  p_duration_seconds integer default null
+  p_duration_seconds integer default null,
+  p_run_mode text default 'solo'
 )
 returns jsonb
 language plpgsql
@@ -129,6 +138,7 @@ declare
   v_color text;
   v_boon_order text;
   v_duration integer;
+  v_run_mode text;
 begin
   v_name := upper(trim(coalesce(p_player_name, '')));
   v_version := trim(coalesce(p_game_version, ''));
@@ -161,6 +171,11 @@ begin
     v_color := 'green';
   end if;
 
+  v_run_mode := lower(coalesce(p_run_mode, 'solo'));
+  if v_run_mode not in ('solo', 'coop') then
+    v_run_mode := 'solo';
+  end if;
+
   if p_boons is not null then
     -- Support both legacy array and new object format
     if jsonb_typeof(p_boons) = 'array' then
@@ -178,8 +193,8 @@ begin
     end if;
   end if;
 
-  insert into public.leaderboard_scores (player_name, score, room, game_version, boons, player_color, boon_order, duration_seconds)
-  values (v_name, p_score, p_room, v_version, p_boons, v_color, v_boon_order, v_duration);
+  insert into public.leaderboard_scores (player_name, score, room, game_version, boons, player_color, boon_order, duration_seconds, run_mode)
+  values (v_name, p_score, p_room, v_version, p_boons, v_color, v_boon_order, v_duration, v_run_mode);
 
   return jsonb_build_object('ok', true);
 end;
@@ -241,12 +256,14 @@ $$;
 
 drop function if exists public.get_leaderboard(text, text, text, integer);
 drop function if exists public.get_leaderboard(text, text, text, text, integer);
+drop function if exists public.get_leaderboard(text, text, text, text, integer, text);
 create or replace function public.get_leaderboard(
   p_period text default 'daily',
   p_scope text default 'everyone',
   p_player_name text default 'RUNNER',
   p_game_version text default '',
-  p_limit integer default 10
+  p_limit integer default 10,
+  p_run_mode text default 'solo'
 )
 returns table (
   player_name text,
@@ -255,7 +272,9 @@ returns table (
   created_at timestamptz,
   boons jsonb,
   player_color text,
-  boon_order text
+  boon_order text,
+  duration_seconds integer,
+  run_mode text
 )
 language sql
 security definer
@@ -269,7 +288,9 @@ as $$
       ls.created_at,
       ls.boons,
       coalesce(ls.player_color, 'green') as player_color,
-      ls.boon_order
+      ls.boon_order,
+      ls.duration_seconds,
+      coalesce(ls.run_mode, 'solo') as run_mode
     from public.leaderboard_scores ls
     where
       ls.game_version = trim(coalesce(p_game_version, ''))
@@ -278,6 +299,10 @@ as $$
         coalesce(p_scope, 'everyone') <> 'personal'
         or ls.player_name = upper(trim(coalesce(p_player_name, 'RUNNER')))
       )
+      and coalesce(ls.run_mode, 'solo') = case
+        when lower(coalesce(p_run_mode, 'solo')) in ('solo', 'coop') then lower(p_run_mode)
+        else 'solo'
+      end
   )
   select
     filtered.player_name,
@@ -286,12 +311,14 @@ as $$
     filtered.created_at,
     filtered.boons,
     filtered.player_color,
-    filtered.boon_order
+    filtered.boon_order,
+    filtered.duration_seconds,
+    filtered.run_mode
   from filtered
   order by filtered.score desc, filtered.created_at desc
-  limit greatest(1, least(coalesce(p_limit, 10), 25));
+  limit greatest(1, least(coalesce(p_limit, 10), 100));
 $$;
 
-grant execute on function public.submit_score(text, integer, integer, text, jsonb, text, integer) to anon, authenticated;
+grant execute on function public.submit_score(text, integer, integer, text, jsonb, text, integer, text) to anon, authenticated;
 grant execute on function public.submit_run_diagnostic(text, integer, integer, text, jsonb, text) to anon, authenticated;
-grant execute on function public.get_leaderboard(text, text, text, text, integer) to anon, authenticated;
+grant execute on function public.get_leaderboard(text, text, text, text, integer, text) to anon, authenticated;

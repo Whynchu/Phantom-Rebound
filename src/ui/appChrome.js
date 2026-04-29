@@ -20,10 +20,12 @@ function bindLeaderboardControls({
   closeButton,
   periodButtons = [],
   scopeButtons = [],
+  modeButtons = [],
   onOpen,
   onClose,
   onPeriodChange,
   onScopeChange,
+  onModeChange,
 } = {}) {
   openButtons.forEach((button) => {
     button?.addEventListener('click', () => onOpen?.());
@@ -34,6 +36,9 @@ function bindLeaderboardControls({
   });
   scopeButtons.forEach((button) => {
     button.addEventListener('click', () => onScopeChange?.(button.dataset.lbScope));
+  });
+  modeButtons.forEach((button) => {
+    button.addEventListener('click', () => onModeChange?.(button.dataset.lbMode));
   });
 }
 

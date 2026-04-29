@@ -431,6 +431,7 @@ const roomIntroEl = document.getElementById('room-intro');
 const roomIntroTextEl = document.getElementById('room-intro-txt');
 const lbPeriodBtns = document.querySelectorAll('[data-lb-period]');
 const lbScopeBtns = document.querySelectorAll('[data-lb-scope]');
+const lbModeBtns = document.querySelectorAll('[data-lb-mode]');
 const goBoonsBtn = document.getElementById('btn-go-boons');
 const goBoonsPanel = document.getElementById('go-boons-panel');
 const goBoonsList = document.getElementById('go-boons-list');
@@ -1010,6 +1011,7 @@ let playerName = 'RUNNER';
 let leaderboard = [];
 let lbPeriod = 'daily';
 let lbScope = 'everyone';
+let lbMode = 'solo';
 const lbSync = createLeaderboardSyncState();
 let raf=0, lastT=0;
 // Simulation clock — advances by accumulated dt inside the main loop.
@@ -4901,6 +4903,7 @@ function buildScoreEntry() {
   const boons = getActiveBoonEntries(UPG);
   const playerColor = getPlayerColor();
   const boonOrder = (UPG.boonSelectionOrder || []).join(',');
+  const runMode = (() => { try { return isCoopRun() ? 'coop' : 'solo'; } catch (_) { return 'solo'; } })();
   const entry = buildLocalScoreEntry({
     playerName,
     score,
@@ -4912,6 +4915,7 @@ function buildScoreEntry() {
     boons,
     telemetry: buildRunTelemetryPayload(),
     continued: UPG._continued || false,
+    runMode,
   });
   return entry;
 }
@@ -4927,6 +4931,7 @@ function renderLeaderboard() {
     lbList,
     lbPeriod,
     lbScope,
+    lbMode,
     playerName,
     lbStatusMode: lbSync.statusMode,
     lbStatusText: lbSync.statusText,
@@ -4938,6 +4943,7 @@ function renderLeaderboard() {
     onOpenBoons: showLbBoonsPopup,
     lbPeriodBtns,
     lbScopeBtns,
+    lbModeBtns,
   });
 }
 
@@ -4946,9 +4952,10 @@ async function refreshLeaderboardView() {
     lbSync,
     period: lbPeriod,
     scope: lbScope,
+    mode: lbMode,
     playerName,
     gameVersion: VERSION.num,
-    limit: 10,
+    limit: 100,
     fetchRemoteLeaderboard,
     beginLeaderboardSync,
     applyLeaderboardSyncSuccess,
@@ -4964,12 +4971,6 @@ async function refreshLeaderboardView() {
 }
 
 function pushLeaderboardEntry() {
-  // C2f — coop runs don't submit to the solo leaderboard.
-  // C3a-pre-1: key off isCoopRun() (unified gate for COOP_DEBUG + online).
-  if (isCoopRun()) {
-    clearLegacyRunRecovery();
-    return;
-  }
   const entry = buildScoreEntry();
   leaderboard = upsertLocalLeaderboardEntry(leaderboard, entry, 500);
   saveLeaderboard();
@@ -7329,6 +7330,7 @@ bindLeaderboardControls({
   closeButton: lbCloseBtn,
   periodButtons: [...lbPeriodBtns],
   scopeButtons: [...lbScopeBtns],
+  modeButtons: [...lbModeBtns],
   onOpen: openLeaderboardScreen,
   onClose: () => lbScreen.classList.add('off'),
   onPeriodChange: (period) => {
@@ -7337,6 +7339,10 @@ bindLeaderboardControls({
   },
   onScopeChange: (scope) => {
     lbScope = scope;
+    refreshLeaderboardView();
+  },
+  onModeChange: (mode) => {
+    lbMode = mode === 'coop' ? 'coop' : 'solo';
     refreshLeaderboardView();
   },
 });
