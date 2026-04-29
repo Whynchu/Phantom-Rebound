@@ -30,7 +30,7 @@ function renderActiveBoons(upg) {
 }
 
 function showBoonSelection({ upg, hp, maxHp, roomIdx = 0, rerolls = 0, onReroll = null, onSelect, pendingLegendary = null, onLegendaryAccept = null, onLegendaryReject = null, boonsOverride = null, cardsContainer = document.getElementById('up-cards'), panel = document.getElementById('s-up') }) {
-  const defaultChoiceCount = pendingLegendary && onLegendaryAccept ? 2 : (roomIdx === 1 ? 4 : 3);
+  const defaultChoiceCount = pendingLegendary && onLegendaryAccept ? 2 : 3;
   // Coop D14 — boonsOverride lets the caller supply an explicit list of boon
   // objects (used by the online-coop handshake to keep host/guest picker UIs
   // in sync without depending on simRng position). When set, rerolls are

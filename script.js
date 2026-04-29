@@ -2242,7 +2242,7 @@ function handleCoopBoonStartGuest(payload) {
             const j = (simRng.next() * (i + 1)) | 0;
             [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
           }
-          return shuffled.slice(0, roomIndex === 0 ? 4 : 3);
+          return shuffled.slice(0, 3);
         } catch (err) {
           try { console.warn('[coop] guest reroll failed', err); } catch (_) {}
           return null;
@@ -6069,6 +6069,47 @@ function update(dt,ts){
     }
   }
 
+  if(combatActive && UPG.conduit && UPG.orbitSphereTier >= 2){
+    syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
+    const conduitPoints = [];
+    for(let si = 0; si < UPG.orbitSphereTier; si++){
+      if((_orbCooldown[si] || 0) > 0) continue;
+      conduitPoints.push(getOrbitSlotPosition({
+        index: si,
+        orbitSphereTier: UPG.orbitSphereTier,
+        ts,
+        rotationSpeed: ORBIT_ROTATION_SPD,
+        radius: getOrbitRadius(),
+        originX: player.x,
+        originY: player.y,
+      }));
+    }
+    const applyConduitSegment = (a, z) => {
+      for(let ei = enemies.length - 1; ei >= 0; ei--){
+        const e = enemies[ei];
+        if(pointToSegmentDistance(e.x, e.y, a.x, a.y, z.x, z.y) > e.r + 6) continue;
+        if(ts - (e.lastConduitHit ?? -Infinity) < (UPG.conduitArcTickMs || 120)) continue;
+        e.lastConduitHit = ts;
+        e.hp -= UPG.conduitArcDmg || 0;
+        if(e.hp <= 0){
+          score += e.pts;
+          enemies.splice(ei, 1);
+        }
+      }
+      for(let bi = bullets.length - 1; bi >= 0; bi--){
+        const b = bullets[bi];
+        if(!b || b.state !== 'danger') continue;
+        if(pointToSegmentDistance(b.x, b.y, a.x, a.y, z.x, z.y) > (b.r || 0) + 6) continue;
+        if(ts - (b.lastConduitHit ?? -Infinity) < (UPG.conduitArcTickMs || 120)) continue;
+        b.lastConduitHit = ts;
+        sparks(b.x, b.y, '#67e8f9', 4, 80);
+        bullets.splice(bi, 1);
+      }
+    };
+    for(let i = 0; i < conduitPoints.length - 1; i++) applyConduitSegment(conduitPoints[i], conduitPoints[i + 1]);
+    if(conduitPoints.length >= 3) applyConduitSegment(conduitPoints[conduitPoints.length - 1], conduitPoints[0]);
+  }
+
   if(combatActive && UPG.aegisBattery && UPG.shieldTier > 0 && enemies.length > 0){
     const readyShieldCount = getReadyShieldCount();
     const aegisStep = advanceAegisBatteryTimer({
@@ -7024,47 +7065,6 @@ function draw(ts){
       for(let i = 0; i < conduitPoints.length - 1; i++) drawConduitSegment(conduitPoints[i], conduitPoints[i + 1]);
       if(conduitPoints.length >= 3) drawConduitSegment(conduitPoints[conduitPoints.length - 1], conduitPoints[0]);
     }
-  }
-
-  if(combatActive && UPG.conduit && UPG.orbitSphereTier >= 2){
-    syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
-    const conduitPoints = [];
-    for(let si = 0; si < UPG.orbitSphereTier; si++){
-      if((_orbCooldown[si] || 0) > 0) continue;
-      conduitPoints.push(getOrbitSlotPosition({
-        index: si,
-        orbitSphereTier: UPG.orbitSphereTier,
-        ts,
-        rotationSpeed: ORBIT_ROTATION_SPD,
-        radius: getOrbitRadius(),
-        originX: player.x,
-        originY: player.y,
-      }));
-    }
-    const applyConduitSegment = (a, b) => {
-      for(let ei = enemies.length - 1; ei >= 0; ei--){
-        const e = enemies[ei];
-        if(pointToSegmentDistance(e.x, e.y, a.x, a.y, b.x, b.y) > e.r + 6) continue;
-        if(ts - (e.lastConduitHit ?? -Infinity) < (UPG.conduitArcTickMs || 120)) continue;
-        e.lastConduitHit = ts;
-        e.hp -= UPG.conduitArcDmg || 0;
-        if(e.hp <= 0){
-          score += e.pts;
-          enemies.splice(ei, 1);
-        }
-      }
-      for(let bi = bullets.length - 1; bi >= 0; bi--){
-        const b = bullets[bi];
-        if(!b || b.state !== 'danger') continue;
-        if(pointToSegmentDistance(b.x, b.y, a.x, a.y, b.x, b.y) > (b.r || 0) + 6) continue;
-        if(ts - (b.lastConduitHit ?? -Infinity) < (UPG.conduitArcTickMs || 120)) continue;
-        b.lastConduitHit = ts;
-        sparks(b.x, b.y, '#67e8f9', 4, 80);
-        bullets.splice(bi, 1);
-      }
-    };
-    for(let i = 0; i < conduitPoints.length - 1; i++) applyConduitSegment(conduitPoints[i], conduitPoints[i + 1]);
-    if(conduitPoints.length >= 3) applyConduitSegment(conduitPoints[conduitPoints.length - 1], conduitPoints[0]);
   }
 
   // Enemy projectiles stay visually above the ghost and orbit visuals.
