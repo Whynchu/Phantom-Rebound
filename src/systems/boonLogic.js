@@ -134,13 +134,13 @@ function getActiveBoonEntries(upg) {
     });
   }
   if(upg.shotLifeTier > 0) entries.push({ icon:'➶', name:'Long Reach', detail:`+${Math.round((upg.shotLifeMult - 1) * 100)}% shot lifespan` });
-  if(upg.extraLifeTier > 0) entries.push({ icon:'◉', name:'Extra Life', detail:`Tier ${upg.extraLifeTier}` });
+  if(upg.extraLifeTier > 0) entries.push({ icon:'◉', name:'Extra Life', detail:`Tier ${upg.extraLifeTier} — +HP, ${Math.round((1 - (upg.extraLifeSlowMult || 1)) * 100)}% slow` });
   if(upg.speedTier > 0) entries.push({ icon:'👻', name:'Ghost Velocity', detail:`+${Math.round((upg.speedMult - 1) * 100)}% move speed` });
   if(upg.regenTick > 0) entries.push({ icon:'💚', name:'Room Regen', detail:`${upg.regenTick} HP per room clear` });
   if(upg.armorTier > 0) entries.push({ icon: upg.livingFortress?'🧱+':'🧱', name: upg.livingFortress?'Living Fortress':'Armor Weave', detail:`${Math.round((1 - upg.damageTakenMult) * 100)}% damage reduction` });
   if(upg.capacitorTier > 0) entries.push({ icon:'⚕️', name:'Hit Battery', detail:`+${upg.hitChargeGain.toFixed(1)} charge on hit` });
   const miniTier = Math.max(upg.miniTier || 0, upg.miniTaken ? 1 : 0);
-  if(miniTier > 0) entries.push({ icon:'·', name:'MINI', detail:`Tier ${miniTier} — -20% size, -10% max HP per tier` });
+  if(miniTier > 0) entries.push({ icon:'·', name:'MINI', detail:`Tier ${miniTier} — -20% size, -10% HP, +${Math.round(((upg.miniShotSpdMult || 1) - 1) * 100)}% shot speed, ${Math.round((upg.critChance || 0) * 100)}% crit` });
   if(upg.titanTier > 0) entries.push({ icon:'⬢', name:'Titan Heart', detail:`Tier ${upg.titanTier} - +${Math.round((upg.playerDamageMult - 1) * 100)}% dmg, -${Math.round((1 - upg.titanSlowMult) * 100)}% speed` });
   if(upg.shieldTier > 0) entries.push({ icon:'🛡️', name:'Shield Plate', detail:`${upg.shieldTier} plate${upg.shieldTier === 1 ? '' : 's'}` });
   if(upg.shieldTempered) entries.push({ icon:'🛡️+', name:'Tempered Shield', detail:'2-stage shields' });
@@ -150,6 +150,7 @@ function getActiveBoonEntries(upg) {
   if(upg.shieldRegenTier>0) entries.push({ icon:'⚡🛡️', name:'Swift Ward', detail:`Shields recharge in ${Math.max(1.5, 4.5-upg.shieldRegenTier*2).toFixed(1)}s` });
   if(upg.aegisBattery) entries.push({ icon:'🔋', name:'Aegis Battery', detail:'Ready shields boost returns; full set fires bolts' });
   if(upg.orbitSphereTier > 0) entries.push({ icon:'🔮', name:'Orbit Spheres', detail:`${upg.orbitSphereTier} sphere${upg.orbitSphereTier === 1 ? '' : 's'}` });
+  if(upg.conduit) entries.push({ icon:'⚡', name:'CONDUIT', detail:`${upg.conduitArcDmg || 0} arc damage every ${(upg.conduitArcTickMs || 0)}ms` });
   if(upg.denseTier > 0) entries.push({ icon:'◈', name:'Dense Core', detail:`Tier ${upg.denseTier} — ×${upg.denseDamageMult.toFixed(2)} dmg, cap: ${upg.maxCharge}` });
   if(upg.heavyRoundsTier > 0) entries.push({ icon:'🔨', name:'Heavy Rounds', detail:`Tier ${upg.heavyRoundsTier} — ×${upg.heavyRoundsDamageMult.toFixed(2)} dmg, ${Math.round((1 - upg.heavyRoundsFireMult) * 100)}% slower` });
   if(upg.slipTier>0) entries.push({icon: upg.fluxState?'〜+':'〜', name: upg.fluxState?'Flux State':'Slipstream', detail:`+${upg.slipChargeGain.toFixed(2)} charge/near-miss`});
@@ -186,6 +187,9 @@ function getActiveBoonEntries(upg) {
   if(upg.payload) entries.push({icon:'💣',name:'Payload',detail:`Shots explode on impact${upg.payloadRadiusTier > 0 ? `, ${Math.round(getPayloadBlastRadius(upg))}px blast` : `, ${Math.round(getPayloadBlastRadius(upg))}px default blast`}`});
   if(upg.payloadRadiusTier > 0) entries.push({icon:'💣+',name:'Payload Bloom',detail:`Tier ${upg.payloadRadiusTier} — ${Math.round(getPayloadBlastRadius(upg))}px blast`});
   if(upg.shockwave) entries.push({icon:'⚡',name:'Shockwave',detail:'Full charge → push enemies'});
+  if(upg.glassCannonTier > 0) entries.push({icon:'⚗',name:'Glass Cannon',detail:`Tier ${upg.glassCannonTier} — ×${(upg.playerDamageMult || 1).toFixed(2)} total damage`});
+  if(upg.adrenalSurgeTier > 0) entries.push({icon:'🫀',name:'Adrenal Surge',detail:`${Math.min(upg.adrenalSurgeTier, Array.isArray(upg.adrenalStackExpiries) ? upg.adrenalStackExpiries.length : 0)}/${upg.adrenalSurgeTier} active stacks`});
+  if(upg.tetherOrbit) entries.push({icon:'🪢',name:'Tether Orbit',detail:'Orbit ring slows danger bullets'});
 
   if(upg.gravityWell2) entries.push({icon:'⊙+',name:'Gravity Well II',detail:'Field-slow bullets, also slows nearby enemies'});
   else if(upg.gravityWell) entries.push({icon:'⊙',name:'Gravity Well',detail:'Field-slows nearby danger bullets'});

@@ -14,6 +14,7 @@ import { generateWeightedWave } from '../src/systems/spawnBudget.js';
 import { pickBoonChoices, weightedPickBoon } from '../src/systems/boonLogic.js';
 import { ENEMY_TYPES } from '../src/entities/enemyTypes.js';
 import { BOONS } from '../src/data/boonDefinitions.js';
+import { getDefaultUpgrades } from '../src/systems/boonHelpers.js';
 
 let passed = 0;
 let failed = 0;
@@ -124,23 +125,26 @@ test('generateWeightedWave: different seeds produce different waves at same room
 // --- boon pick determinism ------------------------------------------------
 
 function freshUpg() {
-  return {
-    healTier: 0, longReach: 0, fastShot: 0, bigShot: 0, extraLives: 0,
-    ghostVel: 0, quickHarv: 0, kinetic: 0, multiShot: 0, pierce: 0,
-    dashCharges: 0, vampiric: 0, berserker: 0, orbTier: 0, chargedOrb: 0,
-    lateBloom: 0, payload: 0, wallBounce: 0, richGetRich: 0, escalation: 0,
-    shockwave: 0, mirrorTide: 0, phaseDash: 0, predator: 0, bloodPact: 0,
-    legendaries: [], reset: 0,
-  };
+  return getDefaultUpgrades();
 }
 
 test('pickBoonChoices: same seed + same upgrade state → identical 3-choice set', () => {
   const upg = freshUpg();
   simRng.reseed(42);
-  const picksA = pickBoonChoices(upg, 5, 5, 3).map((b) => b && b.id);
+  const picksA = pickBoonChoices(upg, 5, 5, 3).map((b) => b && b.name);
   simRng.reseed(42);
-  const picksB = pickBoonChoices(upg, 5, 5, 3).map((b) => b && b.id);
+  const picksB = pickBoonChoices(upg, 5, 5, 3).map((b) => b && b.name);
   assert.deepEqual(picksA, picksB);
+});
+
+test('pickBoonChoices: same seed + same upgrade state → identical 4-choice set', () => {
+  const upg = freshUpg();
+  simRng.reseed(84);
+  const picksA = pickBoonChoices(upg, 200, 200, 4).map((b) => b && b.name);
+  simRng.reseed(84);
+  const picksB = pickBoonChoices(upg, 200, 200, 4).map((b) => b && b.name);
+  assert.deepEqual(picksA, picksB);
+  assert.equal(picksA.length, 4);
 });
 
 test('weightedPickBoon: same seed → identical pick from same pool', () => {
@@ -151,7 +155,7 @@ test('weightedPickBoon: same seed → identical pick from same pool', () => {
   const a = weightedPickBoon(pool, upg);
   simRng.reseed(11);
   const b = weightedPickBoon(pool, upg);
-  assert.equal(a && a.id, b && b.id);
+  assert.equal(a && a.name, b && b.name);
 });
 
 // --- compound sim replay --------------------------------------------------
@@ -168,7 +172,7 @@ test('compound replay: 50 rooms of waves + boon choices byte-identical across ru
       const wave = generateWeightedWave(roomIdx, ENEMY_TYPES);
       log.push({ room: roomIdx, wave });
       if (roomIdx % 3 === 2) {
-        const picks = pickBoonChoices(upg, 5, 5, 3).map((b) => b && b.id);
+        const picks = pickBoonChoices(upg, 5, 5, roomIdx === 0 ? 4 : 3).map((b) => b && b.name);
         log.push({ room: roomIdx, picks });
       }
     }

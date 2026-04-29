@@ -99,7 +99,7 @@ function detectGreyAbsorb(bullet, ctx) {
       const titanSlow = UPG.colossus
         ? 1 - (1 - (UPG.titanSlowMult || 1)) * 0.5
         : (UPG.titanSlowMult || 1);
-      const maxSpd = 165 * Math.min(2.5, (UPG.speedMult || 1) * titanSlow);
+      const maxSpd = 165 * Math.min(2.5, (UPG.speedMult || 1) * titanSlow * (UPG.extraLifeSlowMult || 1));
       const frac = Math.min(1, spd / Math.max(1, maxSpd));
       absorbGain *= 0.5 + frac * 1.1;
     }

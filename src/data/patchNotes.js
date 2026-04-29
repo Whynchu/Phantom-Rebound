@@ -2,6 +2,15 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.3.2',
+      label: 'EARLY POWER REBALANCE',
+      summary: ['The opening stretch of a run should feel stronger and more flexible now. Early rooms are a little softer, your first boon pick gives you more options, and several survival picks have been retuned to create clearer build identities.'],
+      highlights: [
+        'Room 1 now offers 4 boon cards, rooms 1-8 are a bit less tanky, Titan Heart is less of an automatic best pick, MINI now boosts shot speed and crits, and Extra Life gives a much bigger HP jump in exchange for a slight speed loss.',
+        'New build splitters: Glass Cannon, Adrenal Surge, Tether Orbit, and CONDUIT.',
+      ]
+    },
+  {
       version: '1.3.1',
       label: 'PROJECTILE FIXES',
       summary: ['Fixed Volatile Rounds child bullets re-hitting the enemy that triggered the split.'],

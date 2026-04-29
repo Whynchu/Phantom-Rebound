@@ -29,14 +29,15 @@ function renderActiveBoons(upg) {
   }
 }
 
-function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSelect, pendingLegendary = null, onLegendaryAccept = null, onLegendaryReject = null, boonsOverride = null, cardsContainer = document.getElementById('up-cards'), panel = document.getElementById('s-up') }) {
+function showBoonSelection({ upg, hp, maxHp, roomIdx = 0, rerolls = 0, onReroll = null, onSelect, pendingLegendary = null, onLegendaryAccept = null, onLegendaryReject = null, boonsOverride = null, cardsContainer = document.getElementById('up-cards'), panel = document.getElementById('s-up') }) {
+  const defaultChoiceCount = pendingLegendary && onLegendaryAccept ? 2 : (roomIdx === 1 ? 4 : 3);
   // Coop D14 — boonsOverride lets the caller supply an explicit list of boon
   // objects (used by the online-coop handshake to keep host/guest picker UIs
   // in sync without depending on simRng position). When set, rerolls are
   // hidden because the choice list is host-authoritative.
   let pool = Array.isArray(boonsOverride) && boonsOverride.length > 0
     ? boonsOverride.slice()
-    : pickBoonChoices(upg, hp, maxHp, pendingLegendary && onLegendaryAccept ? 2 : 3);
+    : pickBoonChoices(upg, hp, maxHp, defaultChoiceCount);
   // D18.12 — when boonsOverride is set, callers may still allow reroll by
   // passing onReroll that returns a fresh array of boon objects. Used by
   // the coop guest picker so the guest can reroll its own slot1-safe pool
@@ -48,7 +49,7 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
   const activeCloseBtn = document.getElementById('btn-up-active-close');
 
   cardsContainer.innerHTML = '';
-  cardsContainer.dataset.cardCount = '3';
+  cardsContainer.dataset.cardCount = String(Math.max(1, pool.length + ((pendingLegendary && onLegendaryAccept) ? 1 : 0)));
   renderActiveBoons(upg);
   if(activePanel) activePanel.classList.add('off');
 
@@ -173,8 +174,9 @@ function showBoonSelection({ upg, hp, maxHp, rerolls = 0, onReroll = null, onSel
           pool = result.slice();
         }
       } else {
-        pool = pickBoonChoices(upg, hp, maxHp, pendingLegendary && onLegendaryAccept ? 2 : 3);
+        pool = pickBoonChoices(upg, hp, maxHp, defaultChoiceCount);
       }
+      cardsContainer.dataset.cardCount = String(Math.max(1, pool.length + ((pendingLegendary && onLegendaryAccept) ? 1 : 0)));
       buildMainCards();
       updateRerollCard();
     };

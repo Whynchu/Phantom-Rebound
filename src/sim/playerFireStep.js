@@ -76,7 +76,7 @@ function fireSimSlot(state, slot, targetX, targetY) {
 
   // Damage computation (mirrors firePlayer).
   const snipeScale = 1 + (upg.snipePower || 0) * 0.18;
-  const bspd = 230 * GLOBAL_SPEED_LIFT * Math.min(2.0, upg.shotSpd || 1) * snipeScale;
+  const bspd = 230 * GLOBAL_SPEED_LIFT * Math.min(2.0, upg.shotSpd || 1) * (upg.miniShotSpdMult || 1) * snipeScale;
   const baseRadius = 4.5 * Math.min(2.5, upg.shotSize || 1) * (1 + (upg.snipePower || 0) * 0.15);
   const predatorBonus = upg.predatorInstinct && upg.predatorKillStreak >= 2
     ? 1 + Math.min(upg.predatorKillStreak * 0.25, 1.25) : 1;
@@ -263,7 +263,14 @@ export function tickPlayerFire(state, slot0Input, slot1Input, dt, opts = {}) {
 
     // fireT advance and auto-fire gate.
     if (combatActive && (metrics.charge || 0) >= 1 && (upg.sps || 0) > 0) {
-      const interval = 1 / ((upg.sps) * 2 * (upg.heavyRoundsFireMult || 1));
+      const adrenalExpiries = Array.isArray(upg.adrenalStackExpiries)
+        ? upg.adrenalStackExpiries.filter((expiry) => expiry > timeMs)
+        : [];
+      upg.adrenalStackExpiries = adrenalExpiries;
+      const adrenalStacks = Math.min(upg.adrenalSurgeTier || 0, adrenalExpiries.length);
+      const effectiveSpsTier = Math.min(5, (upg.spsTier || 0) + adrenalStacks);
+      const effectiveSps = [0.8, 1.2, 2.2, 3.8, 6.0, 8.8][effectiveSpsTier] || upg.sps || 0;
+      const interval = 1 / (effectiveSps * 2 * (upg.heavyRoundsFireMult || 1));
       const mobileChargeMult = isStill ? 1.0 : (upg.mobileChargeRate || 0.10);
       metrics.fireT = (metrics.fireT || 0) + dt * mobileChargeMult;
       if (!isStill) {

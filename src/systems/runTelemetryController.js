@@ -186,6 +186,7 @@ export function createRunTelemetryController({
       moveChargeRate: roundTelemetryValue(getKineticChargeRate(UPG) * (UPG.fluxState ? 2 : 1)),
       shieldCount: UPG.shieldTier || 0,
       orbitCount: UPG.orbitSphereTier || 0,
+      conduit: Boolean(UPG.conduit),
       playerSizeMult: roundTelemetryValue(UPG.playerSizeMult || 1),
       viewportMode: getViewportModeLabel(),
       canvasWidth: size.width,

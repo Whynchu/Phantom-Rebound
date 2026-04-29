@@ -2222,6 +2222,7 @@ function handleCoopBoonStartGuest(payload) {
       upg: slot1.upg,
       hp: slot1.metrics.hp,
       maxHp: slot1.metrics.maxHp,
+      roomIdx: roomIndex + 1,
       // D18.12 — give guest their own reroll button. onReroll returns a
       // freshly shuffled slot1-safe pool so the picker swaps in new
       // choices without round-tripping through the host. Host's pick
@@ -2241,7 +2242,7 @@ function handleCoopBoonStartGuest(payload) {
             const j = (simRng.next() * (i + 1)) | 0;
             [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
           }
-          return shuffled.slice(0, 3);
+          return shuffled.slice(0, roomIndex === 0 ? 4 : 3);
         } catch (err) {
           try { console.warn('[coop] guest reroll failed', err); } catch (_) {}
           return null;
@@ -3587,7 +3588,14 @@ function updateGuestFire(dt, combatActive) {
     slot.aim.hasTarget = true;
 
     if ((slot.metrics.charge || 0) < 1) continue;
-    const interval = 1 / ((upg.sps || 0.8) * 2);
+    const adrenalExpiries = Array.isArray(upg.adrenalStackExpiries)
+      ? upg.adrenalStackExpiries.filter((expiry) => expiry > simNowMs)
+      : [];
+    upg.adrenalStackExpiries = adrenalExpiries;
+    const adrenalStacks = Math.min(upg.adrenalSurgeTier || 0, adrenalExpiries.length);
+    const effectiveSpsTier = Math.min(SPS_LADDER.length - 1, (upg.spsTier || 0) + adrenalStacks);
+    const effectiveSps = SPS_LADDER[effectiveSpsTier] || upg.sps || 0.8;
+    const interval = 1 / (effectiveSps * 2);
     slot.metrics.fireT = (slot.metrics.fireT || 0) + dt;
     if (!isStill || noSignal) slot.metrics.fireT = Math.min(slot.metrics.fireT, interval);
     if (slot.metrics.fireT >= interval && isStill && !noSignal) {
@@ -4442,7 +4450,7 @@ function firePlayer(slot, tx, ty) {
   if (availableShots <= 0) return;
 
   const snipeScale = 1 + upg.snipePower * 0.18;
-  const bspd = 230 * GLOBAL_SPEED_LIFT * Math.min(2.0, upg.shotSpd) * snipeScale;
+  const bspd = 230 * GLOBAL_SPEED_LIFT * Math.min(2.0, upg.shotSpd) * (upg.miniShotSpdMult || 1) * snipeScale;
   const baseRadius = 4.5 * Math.min(2.5, upg.shotSize) * (1 + upg.snipePower * 0.15);
   // Predator's Instinct: apply kill streak damage multiplier (25% per kill, max +125%)
   const predatorBonus = upg.predatorInstinct && upg.predatorKillStreak >= 2 ? 1 + Math.min(upg.predatorKillStreak * 0.25, 1.25) : 1;
@@ -4555,6 +4563,17 @@ const burstPayloadExplosion = spawnPayloadExplosion;
 function burstBlueDissipate(x, y) {
   const threat = getThreatPalette();
   spawnBlueDissipateBurst(x, y, (a) => C.getRgba(threat.danger.light, a));
+}
+
+function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if(lenSq <= 1e-9) return Math.hypot(px - x1, py - y1);
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+  const projX = x1 + t * dx;
+  const projY = y1 + t * dy;
+  return Math.hypot(px - projX, py - projY);
 }
 
 const ROLLBACK_INPUT_BATCH_SIZE = 4;
@@ -4777,6 +4796,7 @@ function showUpgradesForGuestSlot(slot) {
     upg: slot.upg,
     hp: slot.metrics.hp,
     maxHp: slot.metrics.maxHp,
+    roomIdx: roomIndex + 1,
     rerolls: 0,
     onSelect: (boon) => {
       const state = { hp: slot.metrics.hp, maxHp: slot.metrics.maxHp };
@@ -4807,6 +4827,7 @@ function showUpgrades() {
     upg: UPG,
     hp,
     maxHp,
+    roomIdx: roomIndex + 1,
     rerolls: boonRerolls,
     onReroll: () => { boonRerolls--; },
     pendingLegendary: (!legendaryOffered && pendingLegendary) ? pendingLegendary : null,
@@ -5598,7 +5619,7 @@ function update(dt,ts){
   const titanSlow = UPG.colossus ? 1 - (1 - (UPG.titanSlowMult || 1)) * 0.5 : (UPG.titanSlowMult || 1);
   const bloodRushMult = UPG.bloodRush && UPG.bloodRushTimer > ts ? 1 + ((UPG.bloodRushStacks || 0) * 0.10) : 1;
   const lateBloomMoveMods = getLateBloomMods(roomIndex || 0);
-  const BASE_SPD=165*GLOBAL_SPEED_LIFT*Math.min(2.5,(UPG.speedMult || 1) * titanSlow * bloodRushMult * lateBloomMoveMods.speed);
+  const BASE_SPD=165*GLOBAL_SPEED_LIFT*Math.min(2.5,(UPG.speedMult || 1) * titanSlow * (UPG.extraLifeSlowMult || 1) * bloodRushMult * lateBloomMoveMods.speed);
   const joyMax = joy.max || JOY_MAX;
 
   // Drift anchor when thumb wanders far past max radius
@@ -5784,7 +5805,14 @@ function update(dt,ts){
   }
 
   if(combatActive && charge >= 1){
-    const interval = 1 / (UPG.sps * 2 * (UPG.heavyRoundsFireMult || 1));
+    const adrenalExpiries = Array.isArray(UPG.adrenalStackExpiries)
+      ? UPG.adrenalStackExpiries.filter((expiry) => expiry > simNowMs)
+      : [];
+    UPG.adrenalStackExpiries = adrenalExpiries;
+    const adrenalStacks = Math.min(UPG.adrenalSurgeTier || 0, adrenalExpiries.length);
+    const effectiveSpsTier = Math.min(SPS_LADDER.length - 1, (UPG.spsTier || 0) + adrenalStacks);
+    const effectiveSps = SPS_LADDER[effectiveSpsTier] || UPG.sps || 0.8;
+    const interval = 1 / (effectiveSps * 2 * (UPG.heavyRoundsFireMult || 1));
     const mobileChargeMult = isStill ? 1.0 : (UPG.mobileChargeRate || 0.10);
     fireT += dt * mobileChargeMult;
     if(!isStill) fireT = Math.min(fireT, interval); // cap while moving — prevents pre-accumulated double shot
@@ -5868,6 +5896,11 @@ function update(dt,ts){
           recordPlayerDamage(rusherHit.damage, 'contact');
           player.invincible = rusherHit.invincibleSeconds;
           player.distort = rusherHit.distortSeconds;
+          if((UPG.adrenalSurgeTier || 0) > 0){
+            UPG.adrenalStackExpiries = (Array.isArray(UPG.adrenalStackExpiries) ? UPG.adrenalStackExpiries : []).filter((expiry) => expiry > simNowMs);
+            UPG.adrenalStackExpiries.push(simNowMs + 4000);
+            while(UPG.adrenalStackExpiries.length > (UPG.adrenalSurgeTier || 0)) UPG.adrenalStackExpiries.shift();
+          }
           sparks(player.x,player.y,C.danger,10,90);
           const rusherAftermath = resolvePostHitAftermath({
             hitResult: rusherHit,
@@ -6241,6 +6274,28 @@ function update(dt,ts){
       }
     }
 
+    if(b.state==='danger' && UPG.tetherOrbit && UPG.orbitSphereTier>0){
+      syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
+      const tetherRadius = getOrbitRadius();
+      for(let oi = 0; oi < UPG.orbitSphereTier; oi++){
+        if((_orbCooldown[oi] || 0) > 0) continue;
+        const orbitSlot = getOrbitSlotPosition({
+          index: oi,
+          orbitSphereTier: UPG.orbitSphereTier,
+          ts,
+          rotationSpeed: ORBIT_ROTATION_SPD,
+          radius: tetherRadius,
+          originX: player.x,
+          originY: player.y,
+        });
+        if(Math.hypot(b.x - orbitSlot.x, b.y - orbitSlot.y) <= tetherRadius){
+          b.vx *= 0.8;
+          b.vy *= 0.8;
+          break;
+        }
+      }
+    }
+
     // Volatile Orbs: a danger bullet near any alive orbit sphere destroys the sphere + bullet.
     // R0.4 step 7: collision logic carved into src/sim/volatileOrbDispatch.js.
     if(b.state==='danger' && UPG.volatileOrbs && UPG.orbitSphereTier>0 && slot0Timers.volatileOrbGlobalCooldown<=0){
@@ -6352,6 +6407,11 @@ function update(dt,ts){
         spawnDmgNumber(player.x, player.y, dangerHit.damage, b.col || getThreatPalette().danger.hex);
         player.distort = dangerHit.distortSeconds;
         tookDamageThisRoom = true;
+        if((UPG.adrenalSurgeTier || 0) > 0){
+          UPG.adrenalStackExpiries = (Array.isArray(UPG.adrenalStackExpiries) ? UPG.adrenalStackExpiries : []).filter((expiry) => expiry > simNowMs);
+          UPG.adrenalStackExpiries.push(simNowMs + 4000);
+          while(UPG.adrenalStackExpiries.length > (UPG.adrenalSurgeTier || 0)) UPG.adrenalStackExpiries.shift();
+        }
         if(dangerHit.shouldGainHitCharge) gainCharge(UPG.hitChargeGain, 'hitReward');
         UPG.voidZoneActive = dangerHit.nextVoidZoneActive;
         UPG.voidZoneTimer = dangerHit.nextVoidZoneTimer;
@@ -6402,6 +6462,11 @@ function update(dt,ts){
         player.invincible = dangerHit.invincibleSeconds;
         player.distort = dangerHit.distortSeconds;
         tookDamageThisRoom = true;
+        if((UPG.adrenalSurgeTier || 0) > 0){
+          UPG.adrenalStackExpiries = (Array.isArray(UPG.adrenalStackExpiries) ? UPG.adrenalStackExpiries : []).filter((expiry) => expiry > simNowMs);
+          UPG.adrenalStackExpiries.push(simNowMs + 4000);
+          while(UPG.adrenalStackExpiries.length > (UPG.adrenalSurgeTier || 0)) UPG.adrenalStackExpiries.shift();
+        }
         if(dangerHit.shouldGainHitCharge) gainCharge(UPG.hitChargeGain, 'hitReward');
         if(dangerHit.shouldEmpBurst){
           UPG.empBurstUsed = dangerHit.nextEmpBurstUsed;
@@ -6477,7 +6542,7 @@ function update(dt,ts){
             hp,
             maxHp,
             upgrades: UPG,
-            critDamageFactor: CRIT_DAMAGE_FACTOR,
+            critDamageFactor: CRIT_DAMAGE_FACTOR * (1 + (UPG.critDamageBonus || 0)),
             bloodPactBaseHealCap: BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET,
           });
           e.hp = hitResolution.enemyHpAfterHit;
@@ -6906,6 +6971,7 @@ function draw(ts){
     const orbR = getOrbitRadius();
     const orbVis = getOrbVisualRadius();
     const orbInner = 2 * (UPG.orbSizeMult || 1);
+    const conduitPoints = [];
     for(let si=0;si<UPG.orbitSphereTier;si++){
       const sAngle=Math.PI*2/UPG.orbitSphereTier*si+simNowMs*ORBIT_ROTATION_SPD;
       const sx=player.x+Math.cos(sAngle)*orbR;
@@ -6927,7 +6993,78 @@ function draw(ts){
       ctx.fillStyle=C.getRgba(C.ghost, 0.92);
       ctx.beginPath();ctx.arc(sx,sy,orbInner,0,Math.PI*2);ctx.fill();
       ctx.restore();
+      if(UPG.conduit) conduitPoints.push({ x: sx, y: sy });
     }
+    if(UPG.conduit && conduitPoints.length >= 2){
+      const drawConduitSegment = (a, b) => {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = 'rgba(103, 232, 249, 0.95)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        const segments = 4;
+        for(let i = 1; i < segments; i++){
+          const t = i / segments;
+          const jitter = Math.sin(ts * 0.03 + i * 2.1) * 2;
+          ctx.lineTo(a.x + dx * t + nx * jitter, a.y + dy * t + ny * jitter);
+        }
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(34, 211, 238, 0.22)';
+        ctx.lineWidth = 6;
+        ctx.stroke();
+        ctx.restore();
+      };
+      for(let i = 0; i < conduitPoints.length - 1; i++) drawConduitSegment(conduitPoints[i], conduitPoints[i + 1]);
+      if(conduitPoints.length >= 3) drawConduitSegment(conduitPoints[conduitPoints.length - 1], conduitPoints[0]);
+    }
+  }
+
+  if(combatActive && UPG.conduit && UPG.orbitSphereTier >= 2){
+    syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
+    const conduitPoints = [];
+    for(let si = 0; si < UPG.orbitSphereTier; si++){
+      if((_orbCooldown[si] || 0) > 0) continue;
+      conduitPoints.push(getOrbitSlotPosition({
+        index: si,
+        orbitSphereTier: UPG.orbitSphereTier,
+        ts,
+        rotationSpeed: ORBIT_ROTATION_SPD,
+        radius: getOrbitRadius(),
+        originX: player.x,
+        originY: player.y,
+      }));
+    }
+    const applyConduitSegment = (a, b) => {
+      for(let ei = enemies.length - 1; ei >= 0; ei--){
+        const e = enemies[ei];
+        if(pointToSegmentDistance(e.x, e.y, a.x, a.y, b.x, b.y) > e.r + 6) continue;
+        if(ts - (e.lastConduitHit ?? -Infinity) < (UPG.conduitArcTickMs || 120)) continue;
+        e.lastConduitHit = ts;
+        e.hp -= UPG.conduitArcDmg || 0;
+        if(e.hp <= 0){
+          score += e.pts;
+          enemies.splice(ei, 1);
+        }
+      }
+      for(let bi = bullets.length - 1; bi >= 0; bi--){
+        const b = bullets[bi];
+        if(!b || b.state !== 'danger') continue;
+        if(pointToSegmentDistance(b.x, b.y, a.x, a.y, b.x, b.y) > (b.r || 0) + 6) continue;
+        if(ts - (b.lastConduitHit ?? -Infinity) < (UPG.conduitArcTickMs || 120)) continue;
+        b.lastConduitHit = ts;
+        sparks(b.x, b.y, '#67e8f9', 4, 80);
+        bullets.splice(bi, 1);
+      }
+    };
+    for(let i = 0; i < conduitPoints.length - 1; i++) applyConduitSegment(conduitPoints[i], conduitPoints[i + 1]);
+    if(conduitPoints.length >= 3) applyConduitSegment(conduitPoints[conduitPoints.length - 1], conduitPoints[0]);
   }
 
   // Enemy projectiles stay visually above the ghost and orbit visuals.

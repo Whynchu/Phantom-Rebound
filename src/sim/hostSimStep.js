@@ -41,6 +41,7 @@ import { resolveVolatileOrbHits } from './volatileOrbStep.js';
 import { resolveOrbitSphereContactHits } from './orbitSphereContactStep.js';
 import { resolveGreyAbsorbs } from './greyAbsorbStep.js';
 import { resolveChargedOrbFires } from './chargedOrbStep.js';
+import { resolveConduitArcs } from './conduitStep.js';
 import { tickPlayerFire } from './playerFireStep.js';
 import { tickRoomState } from './roomStateStep.js';
 
@@ -122,8 +123,11 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
     // P4: slot1 uses its own speedMult — matches updateGuestSlotMovement() in script.js.
     // opts.baseSpeedRaw is the pre-upg base speed (165 * GLOBAL_SPEED_LIFT); when provided
     // we apply slot1's own speedMult so each slot moves at its correct rate during resim.
+    const slot1TitanSlow = slot1.upg?.colossus
+      ? 1 - (1 - (slot1.upg?.titanSlowMult || 1)) * 0.5
+      : (slot1.upg?.titanSlowMult || 1);
     const slot1Speed = opts.baseSpeedRaw != null
-      ? opts.baseSpeedRaw * Math.min(2.5, (slot1.upg && slot1.upg.speedMult) || 1)
+      ? opts.baseSpeedRaw * Math.min(2.5, ((slot1.upg && slot1.upg.speedMult) || 1) * slot1TitanSlow * (slot1.upg?.extraLifeSlowMult || 1))
       : baseSpeed;
     applyJoystickVelocity(slot1.body, joy1, slot1Speed, deadzone, joyMax, movementGate);
     tickBodyPosition(slot1.body, dt, world, phaseOpts);
@@ -161,6 +165,7 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   tickEnemyCombat(state, dt, opts);
   // R3 parity — charged orbs spend charge and fire output bullets during combat.
   resolveChargedOrbFires(state, slot0Input, { ...opts, dt });
+  resolveConduitArcs(state, opts);
   // R3.4 — rusher contact damage: must run BEFORE bullet kinematics so the
   // contact invuln set here gates same-tick projectile hits in resolveDangerHits.
   resolveRusherContactHits(state, opts);

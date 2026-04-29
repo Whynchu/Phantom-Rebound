@@ -16,9 +16,11 @@
 import { advanceBulletWithSubsteps } from '../systems/bulletRuntime.js';
 import { dispatchBulletBounce } from './bulletBounceDispatch.js';
 import { pushSimOutputBullet, pushSimDangerBullet } from './simProjectiles.js';
+import { getOrbitSlotPosition } from '../entities/defenseRuntime.js';
 
 // Mirrors enemyCombatStep.js constant — must stay in sync with GLOBAL_SPEED_LIFT.
 const GLOBAL_SPEED_LIFT = 1.55;
+const ORBIT_ROTATION_SPD = 0.003;
 
 /**
  * Advance all bullets by dt seconds.
@@ -54,6 +56,30 @@ export function tickBulletsKinematic(state, dt) {
     if (b.expireAt != null && state.timeMs >= b.expireAt) {
       bullets.splice(i, 1);
       continue;
+    }
+
+    const slot0Upg = state.slots?.[0]?.upg || {};
+    const slot0Body = state.slots?.[0]?.body || null;
+    const orbCooldowns = state.slots?.[0]?.orbState?.cooldowns || [];
+    if (b.state === 'danger' && slot0Body && slot0Upg.tetherOrbit && (slot0Upg.orbitSphereTier || 0) > 0) {
+      const orbitRadius = 22 + (slot0Upg.orbitRadiusBonus || 0);
+      for (let oi = 0; oi < (slot0Upg.orbitSphereTier || 0); oi++) {
+        if ((orbCooldowns[oi] || 0) > 0) continue;
+        const orbitSlot = getOrbitSlotPosition({
+          index: oi,
+          orbitSphereTier: slot0Upg.orbitSphereTier,
+          ts,
+          rotationSpeed: ORBIT_ROTATION_SPD,
+          radius: orbitRadius,
+          originX: slot0Body.x,
+          originY: slot0Body.y,
+        });
+        if (Math.hypot((b.x || 0) - orbitSlot.x, (b.y || 0) - orbitSlot.y) <= orbitRadius) {
+          b.vx *= 0.8;
+          b.vy *= 0.8;
+          break;
+        }
+      }
     }
 
     // Advance position (wall bounce handled inside advanceBulletWithSubsteps)

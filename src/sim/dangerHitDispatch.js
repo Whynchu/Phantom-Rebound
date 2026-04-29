@@ -234,6 +234,7 @@ function resolveRusherContactHits(state, opts = {}) {
     body.invincible = hit.invincibleSeconds;
     body.distort = hit.distortSeconds;
     if (state.run) state.run.tookDamageThisRoom = true;
+    applyAdrenalSurgeStack(targetSlot, ts);
 
     applyAftermath(state, targetSlot, hit, { enableShockwave: true, shouldTriggerLastStand: Boolean(upg.lastStand && hit.lifelineTriggered), opts });
 
@@ -270,6 +271,7 @@ function applyPhaseDashHit(state, slot, hit, bullet, opts) {
   metrics.hp = hit.nextHp;
   body.distort = hit.distortSeconds;
   if (state.run) state.run.tookDamageThisRoom = true;
+  applyAdrenalSurgeStack(slot, ts);
   if (hit.shouldGainHitCharge) gainSlotCharge(slot, upg.hitChargeGain);
   upg.voidZoneActive = hit.nextVoidZoneActive;
   upg.voidZoneTimer = hit.nextVoidZoneTimer;
@@ -325,6 +327,7 @@ function applyDirectHit(state, slot, hit, bullet, opts) {
   body.invincible = hit.invincibleSeconds;
   body.distort = hit.distortSeconds;
   if (state.run) state.run.tookDamageThisRoom = true;
+  applyAdrenalSurgeStack(slot, Number.isFinite(state.timeMs) ? state.timeMs : 0);
   if (hit.shouldGainHitCharge) gainSlotCharge(slot, upg.hitChargeGain);
 
   if (hit.shouldEmpBurst) {
@@ -396,6 +399,15 @@ function gainSlotCharge(slot, amount) {
   const upg = slot.upg || {};
   const maxCharge = Math.max(1, upg.maxCharge || 1);
   metrics.charge = Math.min(maxCharge, (metrics.charge || 0) + Math.max(0, amount || 0));
+}
+
+function applyAdrenalSurgeStack(slot, nowMs) {
+  const upg = slot?.upg;
+  if (!upg || (upg.adrenalSurgeTier || 0) <= 0) return;
+  const expiries = Array.isArray(upg.adrenalStackExpiries) ? upg.adrenalStackExpiries.filter((expiry) => expiry > nowMs) : [];
+  expiries.push(nowMs + 4000);
+  while (expiries.length > (upg.adrenalSurgeTier || 0)) expiries.shift();
+  upg.adrenalStackExpiries = expiries;
 }
 
 function removeDangerBullets(state, opts) {

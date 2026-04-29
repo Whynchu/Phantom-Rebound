@@ -50,7 +50,7 @@ function resolveOutputHits(state, opts = {}) {
         hp: ownerMetrics.hp || 0,
         maxHp: ownerMetrics.maxHp || 1,
         upgrades: ownerUpg,
-        critDamageFactor: opts.critDamageFactor ?? CRIT_DAMAGE_FACTOR,
+        critDamageFactor: opts.critDamageFactor ?? (CRIT_DAMAGE_FACTOR * (1 + (ownerUpg.critDamageBonus || 0))),
         bloodPactBaseHealCap: opts.bloodPactBaseHealCap ?? BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET,
       });
 

@@ -20,6 +20,7 @@ import {
   resolveOutputEnemyHit,
   resolveSanguineBurst,
 } from '../src/systems/outputHit.js';
+import { resolveConduitArcs } from '../src/sim/conduitStep.js';
 import {
   resolveEnemyKillEffects,
   resolveOrbitKillEffects,
@@ -155,6 +156,14 @@ import {
 import { bindGestureGuards } from '../src/platform/gestureGuards.js';
 import { setPlayerColor, getPlayerColor, getPlayerColorScheme } from '../src/data/colorScheme.js';
 import { BOONS, getDefaultUpgrades } from '../src/data/boons.js';
+import {
+  TITAN_HP_PCT,
+  EXTRA_LIFE_GAINS,
+  EXTRA_LIFE_SLOW_PER_TIER,
+  MINI_SHOT_SPD_PER_TIER,
+  MINI_CRIT_CHANCE_PER_TIER,
+  MINI_T3_CRIT_DMG_BONUS,
+} from '../src/data/boonConstants.js';
 import { registerBoonHook, runBoonHook, getBoonHookCount } from '../src/systems/boonHooks.js';
 
 const pendingTests = [];
@@ -393,6 +402,57 @@ test('computeProjectileHitDamage applies external multipliers', () => {
   assert.equal(damage, 4);
 });
 
+test('early-power boon constants match rebalance plan', () => {
+  assert.deepEqual(TITAN_HP_PCT, [0.50, 0.30, 0.18, 0.10, 0.05]);
+  assert.deepEqual(EXTRA_LIFE_GAINS, [100, 60, 45, 36, 28, 22]);
+  assert.equal(EXTRA_LIFE_SLOW_PER_TIER, 0.98);
+  assert.equal(MINI_SHOT_SPD_PER_TIER, 0.10);
+  assert.equal(MINI_CRIT_CHANCE_PER_TIER, 0.05);
+  assert.equal(MINI_T3_CRIT_DMG_BONUS, 0.20);
+});
+
+test('MINI applies speed and crit bonuses while shrinking HP', () => {
+  const mini = BOONS.find((boon) => boon.name === 'MINI');
+  const upg = getDefaultUpgrades();
+  const state = { hp: 200, maxHp: 200 };
+
+  mini.apply(upg, state);
+  assert.equal(upg.miniTier, 1);
+  assert.equal(upg.miniShotSpdMult, 1.10);
+  assert.equal(upg.critChance, 0.05);
+  assert.equal(upg.critDamageBonus, 0);
+  assert.equal(state.maxHp, 180);
+  assert.equal(state.hp, 180);
+
+  mini.apply(upg, state);
+  mini.apply(upg, state);
+  assert.equal(upg.miniTier, 3);
+  assert.equal(upg.miniShotSpdMult, 1.30);
+  assert.ok(Math.abs(upg.critChance - 0.15) < 1e-9);
+  assert.equal(upg.critDamageBonus, 0.20);
+});
+
+test('Titan Heart first tier now grants half current max HP', () => {
+  const titan = BOONS.find((boon) => boon.name === 'Titan Heart');
+  const upg = getDefaultUpgrades();
+  const state = { hp: 200, maxHp: 200 };
+  titan.apply(upg, state);
+  assert.equal(upg.titanTier, 1);
+  assert.equal(state.maxHp, 300);
+  assert.equal(state.hp, 200);
+});
+
+test('Extra Life gives larger early HP gains and compounds movement slow', () => {
+  const extraLife = BOONS.find((boon) => boon.name === 'Extra Life');
+  const upg = getDefaultUpgrades();
+  const state = { hp: 100, maxHp: 200 };
+  extraLife.apply(upg, state);
+  assert.equal(upg.extraLifeTier, 1);
+  assert.equal(state.maxHp, 300);
+  assert.equal(state.hp, 200);
+  assert.equal(upg.extraLifeSlowMult, 0.98);
+});
+
 test('bullet runtime helpers keep expiry and bounce transitions deterministic', () => {
   assert.equal(shouldExpireOutputBullet({ state: 'output', expireAt: 100 }, 100), true);
   assert.equal(shouldExpireOutputBullet({ state: 'danger', expireAt: 100 }, 100), false);
@@ -445,6 +505,24 @@ test('bullet runtime helpers keep expiry and bounce transitions deterministic', 
   const removeResult = resolveOutputBounceState({ bounceLeft: 0 }, { splitShot: false });
   assert.equal(removeResult.kind, 'remove');
   assert.equal(removeResult.removeBullet, true);
+});
+
+test('conduit arcs damage enemies and clear danger bullets on segment contact', () => {
+  const state = {
+    timeMs: 1000,
+    slots: [{
+      body: { x: 0, y: 0 },
+      upg: { conduit: true, conduitArcDmg: 6, conduitArcTickMs: 120, orbitSphereTier: 2, orbitRadiusBonus: 0 },
+      orbState: { cooldowns: [0, 0] },
+    }],
+    enemies: [{ x: 0, y: 0, r: 8, hp: 10 }],
+    bullets: [{ x: 0, y: 0, r: 4, state: 'danger' }],
+    effectQueue: [],
+  };
+  const hits = resolveConduitArcs(state, {});
+  assert.ok(hits >= 2);
+  assert.equal(state.enemies[0].hp, 4);
+  assert.equal(state.bullets.length, 0);
 });
 
 test('output hit helpers keep damage, pierce, and reward cadence deterministic', () => {
