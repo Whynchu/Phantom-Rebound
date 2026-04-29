@@ -6,6 +6,7 @@ import {
   ESCALATION_KILL_PCT,
   ESCALATION_MAX_BONUS,
 } from '../data/boonConstants.js';
+import { simRng } from './seededRng.js';
 import { BOONS, LEGENDARY_SEQUENCES } from '../data/boonDefinitions.js';
 import {
   getKineticChargeMultiplier,
@@ -57,23 +58,23 @@ function getEvolvedBoon(boon, upg) {
   return { ...boon, ...boon.evolvedVersion, apply: boon.evolvedVersion.apply || boon.apply };
 }
 
-function checkLegendarySequences(history, upg, rejectedIds = new Set(), roomsSinceReject = new Map(), currentRoom = 0) {
+function checkLegendarySequences(history, upg, rejectedIds = [], roomsSinceReject = {}, currentRoom = 0) {
   const available = [];
   for(const seq of LEGENDARY_SEQUENCES){
     if(upg[seq.id]) continue; // already have it
-    if(rejectedIds.has(seq.id)) {
-      const rejectedAtRoom = roomsSinceReject.get(seq.id) || 0;
+    if(rejectedIds.includes(seq.id)) {
+      const rejectedAtRoom = roomsSinceReject[seq.id] || 0;
       if(currentRoom - rejectedAtRoom < 2) continue; // skip if within 2-room cooldown
     }
     if(seq.check(history)) available.push(seq.boon);
   }
   // Return random legendary from available pool, or null if none available
-  return available.length > 0 ? available[Math.floor(Math.random() * available.length)] : null;
+  return available.length > 0 ? available[Math.floor(simRng.next() * available.length)] : null;
 }
 
 function weightedPickBoon(pool, upg) {
   const totalWeight = pool.reduce((sum, boon) => sum + getBoonWeight(boon, upg), 0);
-  let roll = Math.random() * totalWeight;
+  let roll = simRng.next() * totalWeight;
   for(const boon of pool) {
     roll -= getBoonWeight(boon, upg);
     if(roll <= 0) return boon;
@@ -133,13 +134,13 @@ function getActiveBoonEntries(upg) {
     });
   }
   if(upg.shotLifeTier > 0) entries.push({ icon:'➶', name:'Long Reach', detail:`+${Math.round((upg.shotLifeMult - 1) * 100)}% shot lifespan` });
-  if(upg.extraLifeTier > 0) entries.push({ icon:'◉', name:'Extra Life', detail:`Tier ${upg.extraLifeTier}` });
+  if(upg.extraLifeTier > 0) entries.push({ icon:'◉', name:'Extra Life', detail:`Tier ${upg.extraLifeTier} — +HP, ${Math.round((1 - (upg.extraLifeSlowMult || 1)) * 100)}% slow` });
   if(upg.speedTier > 0) entries.push({ icon:'👻', name:'Ghost Velocity', detail:`+${Math.round((upg.speedMult - 1) * 100)}% move speed` });
   if(upg.regenTick > 0) entries.push({ icon:'💚', name:'Room Regen', detail:`${upg.regenTick} HP per room clear` });
   if(upg.armorTier > 0) entries.push({ icon: upg.livingFortress?'🧱+':'🧱', name: upg.livingFortress?'Living Fortress':'Armor Weave', detail:`${Math.round((1 - upg.damageTakenMult) * 100)}% damage reduction` });
   if(upg.capacitorTier > 0) entries.push({ icon:'⚕️', name:'Hit Battery', detail:`+${upg.hitChargeGain.toFixed(1)} charge on hit` });
   const miniTier = Math.max(upg.miniTier || 0, upg.miniTaken ? 1 : 0);
-  if(miniTier > 0) entries.push({ icon:'·', name:'MINI', detail:`Tier ${miniTier} — -20% size, -10% max HP per tier` });
+  if(miniTier > 0) entries.push({ icon:'·', name:'MINI', detail:`Tier ${miniTier} — -20% size, -10% HP, +${Math.round(((upg.miniShotSpdMult || 1) - 1) * 100)}% shot speed, ${Math.round((upg.critChance || 0) * 100)}% crit` });
   if(upg.titanTier > 0) entries.push({ icon:'⬢', name:'Titan Heart', detail:`Tier ${upg.titanTier} - +${Math.round((upg.playerDamageMult - 1) * 100)}% dmg, -${Math.round((1 - upg.titanSlowMult) * 100)}% speed` });
   if(upg.shieldTier > 0) entries.push({ icon:'🛡️', name:'Shield Plate', detail:`${upg.shieldTier} plate${upg.shieldTier === 1 ? '' : 's'}` });
   if(upg.shieldTempered) entries.push({ icon:'🛡️+', name:'Tempered Shield', detail:'2-stage shields' });
@@ -149,6 +150,7 @@ function getActiveBoonEntries(upg) {
   if(upg.shieldRegenTier>0) entries.push({ icon:'⚡🛡️', name:'Swift Ward', detail:`Shields recharge in ${Math.max(1.5, 4.5-upg.shieldRegenTier*2).toFixed(1)}s` });
   if(upg.aegisBattery) entries.push({ icon:'🔋', name:'Aegis Battery', detail:'Ready shields boost returns; full set fires bolts' });
   if(upg.orbitSphereTier > 0) entries.push({ icon:'🔮', name:'Orbit Spheres', detail:`${upg.orbitSphereTier} sphere${upg.orbitSphereTier === 1 ? '' : 's'}` });
+  if(upg.conduit) entries.push({ icon:'⚡', name:'CONDUIT', detail:`${upg.conduitArcDmg || 0} arc damage every ${(upg.conduitArcTickMs || 0)}ms` });
   if(upg.denseTier > 0) entries.push({ icon:'◈', name:'Dense Core', detail:`Tier ${upg.denseTier} — ×${upg.denseDamageMult.toFixed(2)} dmg, cap: ${upg.maxCharge}` });
   if(upg.heavyRoundsTier > 0) entries.push({ icon:'🔨', name:'Heavy Rounds', detail:`Tier ${upg.heavyRoundsTier} — ×${upg.heavyRoundsDamageMult.toFixed(2)} dmg, ${Math.round((1 - upg.heavyRoundsFireMult) * 100)}% slower` });
   if(upg.slipTier>0) entries.push({icon: upg.fluxState?'〜+':'〜', name: upg.fluxState?'Flux State':'Slipstream', detail:`+${upg.slipChargeGain.toFixed(2)} charge/near-miss`});
@@ -185,6 +187,9 @@ function getActiveBoonEntries(upg) {
   if(upg.payload) entries.push({icon:'💣',name:'Payload',detail:`Shots explode on impact${upg.payloadRadiusTier > 0 ? `, ${Math.round(getPayloadBlastRadius(upg))}px blast` : `, ${Math.round(getPayloadBlastRadius(upg))}px default blast`}`});
   if(upg.payloadRadiusTier > 0) entries.push({icon:'💣+',name:'Payload Bloom',detail:`Tier ${upg.payloadRadiusTier} — ${Math.round(getPayloadBlastRadius(upg))}px blast`});
   if(upg.shockwave) entries.push({icon:'⚡',name:'Shockwave',detail:'Full charge → push enemies'});
+  if(upg.glassCannonTier > 0) entries.push({icon:'⚗',name:'Glass Cannon',detail:`Tier ${upg.glassCannonTier} — ×${(upg.playerDamageMult || 1).toFixed(2)} total damage`});
+  if(upg.adrenalSurgeTier > 0) entries.push({icon:'🫀',name:'Adrenal Surge',detail:`${Math.min(upg.adrenalSurgeTier, Array.isArray(upg.adrenalStackExpiries) ? upg.adrenalStackExpiries.length : 0)}/${upg.adrenalSurgeTier} active stacks`});
+  if(upg.tetherOrbit) entries.push({icon:'🪢',name:'Tether Orbit',detail:'Orbit ring slows danger bullets'});
 
   if(upg.gravityWell2) entries.push({icon:'⊙+',name:'Gravity Well II',detail:'Field-slow bullets, also slows nearby enemies'});
   else if(upg.gravityWell) entries.push({icon:'⊙',name:'Gravity Well',detail:'Field-slows nearby danger bullets'});
@@ -208,12 +213,28 @@ function getActiveBoonEntries(upg) {
   return entries;
 }
 
+// Fisher–Yates shuffle using simRng. Replaces `.sort(() => simRng.next() - 0.5)`
+// which is NOT deterministic across engines — V8's TimSort calls the comparator a
+// variable number of times depending on input order, so two peers running the
+// same seed but different engine versions could produce different orderings.
+// Fisher–Yates touches each slot exactly once and consumes a fixed number of RNG
+// values, so it is byte-deterministic across any engine that runs the same JS.
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(simRng.next() * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
 function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
   const available = BOONS.filter((boon) => boonHasEffect(boon, upg, hp, maxHp));
   const byTag = {
-    OFFENSE: available.filter((boon) => boon.tag === 'OFFENSE').sort(() => Math.random() - 0.5),
-    UTILITY: available.filter((boon) => boon.tag === 'UTILITY').sort(() => Math.random() - 0.5),
-    SURVIVE: available.filter((boon) => boon.tag === 'SURVIVE').sort(() => Math.random() - 0.5),
+    OFFENSE: shuffleInPlace(available.filter((boon) => boon.tag === 'OFFENSE')),
+    UTILITY: shuffleInPlace(available.filter((boon) => boon.tag === 'UTILITY')),
+    SURVIVE: shuffleInPlace(available.filter((boon) => boon.tag === 'SURVIVE')),
   };
   const picks = [];
   for(const tag of ['OFFENSE', 'UTILITY', 'SURVIVE']) {
@@ -224,9 +245,9 @@ function pickBoonChoices(upg, hp, maxHp, choiceCount = 3) {
     }
   }
   if(picks.length < choiceCount) {
-    const remaining = [...available]
-      .filter((boon) => !picks.includes(boon))
-      .sort(() => Math.random() - 0.5);
+    const remaining = shuffleInPlace(
+      [...available].filter((boon) => !picks.includes(boon)),
+    );
     while(picks.length < choiceCount && remaining.length > 0) picks.push(remaining.shift());
   }
   return picks;

@@ -1,207 +1,58 @@
-import { PATCH_NOTES_ARCHIVE } from './patchNotesArchive.js';
+// Older notes archived in patchNotesArchive.js. Only the 50 most recent entries are loaded in-client.
 
 const PATCH_NOTES_RECENT = [
   {
-      version: '1.19.32',
-      label: 'PATCH NOTES HOTFIX',
-      summary: ['Hotfix: re-declare module-level pausePanel/pauseBoonsPanel refs in script.js.'],
+      version: '1.3.4',
+      label: 'EARLY POWER HOTFIX',
+      summary: ['Fixed a crash that could end a run immediately after it began, including some orb-heavy setups.'],
       highlights: [
-        'The panelManager patchNotes beforeOpen/beforeClose callbacks referenced these refs, but p4-pause extraction moved them into pauseController\'s closure, so clicking the Patch Notes button threw ReferenceError and the panel never opened.',
+        'Room 1 is still a 3-choice boon pick; the early power rebalance remains otherwise intact.',
       ]
     },
   {
-      version: '1.19.31',
-      label: 'PAUSE BTN HOTFIX',
-      summary: ['Hotfix: re-declare module-level btnPause/btnPatchNotes refs in script.js.'],
+      version: '1.3.3',
+      label: 'EARLY POWER FOLLOW-UP',
+      summary: ['Fixed a bug that could end a run immediately after starting.'],
       highlights: [
-        'p4-pause extraction removed them from script.js scope but legacy game-state paths (boon apply, legendary, init) still referenced them directly, crashing the run start with ReferenceError.',
+        'The room-1 boon picker is back to 3 choices, while the rest of the early power rebalance stays in place.',
       ]
     },
   {
-      version: '1.19.30',
-      label: 'EXTRACT TELEMETRY',
-      summary: ['Decomposition: run telemetry + per-room recorders now live in src/systems/runTelemetryController.js.'],
+      version: '1.3.2',
+      label: 'EARLY POWER REBALANCE',
+      summary: ['The opening stretch of a run should feel stronger and more flexible now. Early rooms are a little softer, your first boon pick gives you more options, and several survival picks have been retuned to create clearer build identities.'],
       highlights: [
-        'script.js trimmed another 115 lines (3755 to 3640).',
+        'Room 1 now offers 4 boon cards, rooms 1-8 are a bit less tanky, Titan Heart is less of an automatic best pick, MINI now boosts shot speed and crits, and Extra Life gives a much bigger HP jump in exchange for a slight speed loss.',
+        'New build splitters: Glass Cannon, Adrenal Surge, Tether Orbit, and CONDUIT.',
       ]
     },
   {
-      version: '1.19.29',
-      label: 'EXTRACT PAUSE',
-      summary: ['Decomposition: pause overlay + Escape toggle + confirm dialog now live in src/ui/pauseController.js.'],
+      version: '1.3.1',
+      label: 'PROJECTILE FIXES',
+      summary: ['Fixed Volatile Rounds child bullets re-hitting the enemy that triggered the split.'],
       highlights: [
-        'script.js trimmed another 113 lines (3868 → 3755).',
+        'Kept triangle burst projectiles dangerous after wall-adjacent splits instead of immediately turning into grey pickups.',
       ]
     },
   {
-      version: '1.19.28',
-      label: 'EXTRACT OBSTACLES',
-      summary: ['Refactor — no gameplay changes.'],
+      version: '1.3.0',
+      label: 'CO-OP MODE',
+      summary: ['MAJOR UPDATE: Full co-op multiplayer implementation. Play with a partner over the internet in real-time. Hosts create rooms via Supabase; guests join via code. All game features (boons, enemies, rooms, bosses, scoring) now support 2-player simultaneous gameplay with low-latency synchronization.'],
       highlights: [
-        'Extracted 8 obstacle/collision functions (createRoomObstacles, getCircleRectContactNormal, resolveEntityObstacleCollisions, isEntityOverlappingObstacle, ejectEntityFromObstacles, resolveBulletObstacleCollision, segmentIntersectsRect, hasObstacleLineBlock) from script.js into src/systems/obstacles.js.',
-        'script.js is now 98 lines smaller (3705 → 3607). The obstacle module takes the obstacles array as an argument so it has no hidden globals — easy to test and reason about.',
-      ]
-    },
-  {
-      version: '1.19.27',
-      label: 'AGENT FRIENDLINESS',
-      summary: ['Internal / docs only — no gameplay changes.'],
-      highlights: [
-        'Rewrote agents.md into a real onboarding doc (file map, symbol cheatsheet, boon hook reference, release checklist).',
-        'Added scripts/bump-version.mjs: one command now updates all five version-sync points (was 5 manual edits).',
-        'Split src/data/patchNotes.js: recent entries stay in patchNotes.js, older entries moved to patchNotesArchive.js so agents can view/edit release notes without hitting the view-tool truncation limit.',
-        'Added a TOC header to script.js so agents can jump around the 4500-line file by grepping section dividers.',
-      ]
-    },
-  {
-      version: '1.19.26',
-      label: 'ROOM CLEAR DEDUPE + JANITOR',
-      summary: ['Internal refactor — no gameplay changes.'],
-      highlights: [
-        'Collapsed the two duplicated room-clear transition blocks into a single finalizeRoomClearState() helper so any future addition to the room-clear sequence happens in exactly one spot.',
-        'Janitor pass: removed five stale .gitkeep placeholder files from directories that now hold real source (assets/, example.assets/, src/core/, src/entities/, src/input/).',
-      ]
-    },
-    {
-      version: '1.19.25',
-      label: 'BOON HOOKS: ROOM START',
-      summary: ['Internal refactor — boon registry phase wraps up.'],
-      highlights: [
-        'Migrated room-start boon inits (predator kill streak reset, mirror tide + phase dash seeding) onto a new onRoomStart hook.',
-        'That closes the clean batch of boon-hook migrations: room-start/room-clear/per-frame tick/pause-adjust are now pluggable. Remaining UPG.* references live inside the fire, hit, and damage paths where the local context makes hook indirection higher cost than reward.',
-      ]
-    },
-    {
-      version: '1.19.24',
-      label: 'BOON HOOKS: TICK + PAUSE',
-      summary: ['Internal refactor — no gameplay changes.'],
-      highlights: [
-        'Migrated per-frame cooldown ticks (shockwave, refraction, mirror tide, overload, phase dash, void walker, predator instinct, blood rush) onto the onTick boon hook. Main loop now fires a single runBoonHook(\'onTick\') instead of eight inline UPG.* gates.',
-        'Migrated pause-time timer adjustments (predator/blood rush/void zone/sustained fire/aegis) onto a new onPauseAdjust hook, so when pause shifts absolute timestamps forward, each boon owns its own set of timers.',
-      ]
-    },
-    {
-      version: '1.19.23',
-      label: 'BOON HOOK REGISTRY',
-      summary: ['Internal refactor — no gameplay changes.'],
-      highlights: [
-        'Introduced a lightweight boon hook registry in src/systems/boonHooks.js so boon effects can register tick/room-clear/kill/fire/damage callbacks instead of being hand-gated inside script.js.',
-        'Migrated the regen-on-clear, escalation reset, and EMP-burst reset effects onto the onRoomClear hook as the pilot pattern. Behavior is identical; the two duplicated room-clear blocks collapse into a single hook fire.',
-      ]
-    },
-    {
-      version: '1.19.22',
-      label: 'LEADERBOARD TIME DISPLAY',
-      summary: ['Remote leaderboard rows now show run time.'],
-      highlights: [
-        'Once 1.19.20\'s duration_seconds column is flowing, leaderboard rows will display each run\'s duration alongside the score — even if the row has no telemetry attached.',
-      ]
-    },
-    {
-      version: '1.19.21',
-      label: 'SCORE BREAKDOWN ENCAPSULATION',
-      summary: ['Internal refactor — no gameplay changes.'],
-      highlights: [
-        'Moved the score breakdown object (kills, pace, flawless, clutch, and friends) into src/core/gameState.js alongside the entity arrays. One more chunk of global state now lives in a dedicated module.',
-      ]
-    },
-    {
-      version: '1.19.20',
-      label: 'LEADERBOARD DURATION',
-      summary: ['Run length is now recorded alongside scores.'],
-      highlights: [
-        'Remote leaderboard submissions now include duration_seconds so future views/analytics can sort by time-to-finish, show pace, or split fast vs. slow runs.',
-        'Schema migration: added duration_seconds column to leaderboard_scores and a new p_duration_seconds parameter on the submit_score RPC (both optional/nullable, fully backwards-compatible).',
-      ]
-    },
-    {
-      version: '1.19.19',
-      label: 'STATE ENCAPSULATION',
-      summary: ['Under-the-hood refactor — no gameplay changes.'],
-      highlights: [
-        'Moved the live entity arrays (bullets, enemies, shockwaves, spawn queue) into a dedicated src/core/gameState.js module so future systems can import them directly instead of reaching into script.js.',
-        'Room/wave reset paths now clear arrays in place instead of reassigning, keeping every module\'s reference stable.',
-      ]
-    },
-    {
-      version: '1.19.18',
-      label: 'GAME OVER POLISH',
-      summary: ['Tighter Game Over screen — the full breakdown fits without fighting you.'],
-      highlights: [
-        'Final score heading is smaller so the breakdown (now 11 categories) fits on phone screens without dominating the view.',
-        'Removed the redundant "Room X · N enemies eliminated" caption; that info already appears once below the breakdown alongside run time.',
-        'Tightened spacing between breakdown rows.',
-      ]
-    },
-    {
-      version: '1.19.17',
-      label: 'DYNAMIC SCORING',
-      summary: ['Score now reacts to every second and every playstyle.'],
-      highlights: [
-        'Continuous pace curve: every second shaved off a room now adds score (no more 30s all-or-nothing cutoff). Deep rooms multiply all bonuses via a per-room depth scale.',
-        'HP efficiency: partial damage is now rewarded based on % HP kept — flawless still pays the most, but chip damage no longer zeroes you out.',
-        'Clutch: finishing a room at ≤25% HP after taking a hit awards a sizeable bonus for risky comebacks.',
-        'Combat density: kills-per-second rewards AOE / sweep builds; overkill damage (damage dealt past an enemy\'s HP) awards a small per-kill bonus for burst builds.',
-        'Accuracy: kills / shots fired rewards precise builds. Dodge bonus: counts near-misses from enemy projectiles for evasion-focused runs.',
-        'End-of-run breakdown now lists all categories so you can see exactly where your score came from.',
-      ]
-    },
-    {
-      version: '1.19.16',
-      label: 'SCORING REWORK',
-      summary: ['Score now rewards how you played, not just what you crit.'],
-      highlights: [
-        'Crits no longer double your score. Critical hits still do bonus damage — they just stop inflating the leaderboard.',
-        'New score sources awarded every cleared room: Room clears (scales with depth), Pace bonus (faster than 30s), Flawless rooms (no damage taken), Boss takedowns.',
-        'Existing 5-room streak checkpoint is now labeled "Streak bonus" on the Game Over screen for clarity.',
-        'Leaderboard context: scores from 1.19.16+ include these new bonuses, so expect per-run totals to read a bit higher than pre-patch runs.',
-      ]
-    },
-    {
-      version: '1.19.15',
-      label: 'RUN SCORE BREAKDOWN',
-      summary: ['End-of-run screen now shows where your score came from.'],
-      highlights: [
-        'Game Over: the final score panel now lists a breakdown — kill points, critical bonus, orbit strikes, room bonuses — plus a quick stats line with kills, rooms cleared, run time, and clean rooms.',
-        'Scoring is tracked per-category at the source, so the breakdown is exact, not estimated.',
-        'No balance changes.',
-      ]
-    },
-    {
-      version: '1.19.14',
-      label: 'LEADERBOARD BUTTON FIX',
-      summary: ['Desktop main menu now expands to fit content — no more clipped Leaderboard button, no scrollbar.'],
-      highlights: [
-        'Desktop: on the main menu, the start panel now sizes to its own content instead of being trapped inside a fixed-height wrap. The Leaderboard button is always visible, and there is no scrollbar either. Hides the unused background canvas on the main menu so the layout can breathe.',
-        'No changes to gameplay, mobile, or iPhone.',
-      ]
-    },
-    {
-      version: '1.19.13',
-      label: 'ANDROID WEBAPK FIX',
-      summary: ['Fix Android "Unsafe app blocked" warning for installed web app users.'],
-      highlights: [
-        'Android install fix: updated the web app manifest (id, scope, orientation, maskable icons, categories) so Chrome re-mints the WebAPK against a current Android SDK. This clears the "Unsafe app blocked — built for an older version of Android" popup.',
-        'If you still see the warning: reopen the game in Chrome once and give it ~24h, or uninstall + reinstall from the home screen for an immediate refresh.',
-        'Bonus: maskable icon support means Android now draws the app icon edge-to-edge instead of inside a white rounded box.',
-        'iPhone, desktop, and in-browser play are unchanged.',
-      ]
-    },
-    {
-      version: '1.19.12',
-      label: 'REFACTOR + SCROLLBAR TAKE 3',
-      summary: ['More code tidy-up, patch notes now load on demand, another shot at the desktop scrollbar.'],
-      highlights: [
-        'Desktop scrollbar: targeted fix — hide the main-menu start panel scrollbar on ≥1024px viewports (it was the #s-start panel overflowing, not the page). If it still shows up, it is a browser extension or genuine content overflow, not layout.',
-        'Perf: patch notes (73KB) now load only when the panel is opened instead of at startup. Faster first paint, same content.',
-        'Refactor (invisible): canvas drawing for the ghost and bullets moved to dedicated renderer modules (src/ui/drawing/). Boon tunables split out to src/data/boonConstants.js. Fixed a stale unit test.',
-        'New: docs/ARCHITECTURE.md added for contributors.',
+        'Supabase real-time sessions: host creates runId via postCoopRun(); guests join via joinCoopRun(runId). Automatic cleanup and state tracking.',
+        'H1+H2 hybrid authority: host runs full simulation and broadcasts snapshots at 10Hz. Guest runs local prediction for movement + cosmetics; receives authoritative state from host for collision/damage/room events.',
+        'Smooth 60fps rendering on guest: per-frame interpolation sweeps between 10Hz snapshots; no jitter or frame freezing.',
+        'Network-resilient architecture: guest auto-syncs on snapshot arrival; room phase advances independently of snapshot timing; automatic peer-to-peer input relay via Supabase.',
+        'Full feature parity: all 50+ boons, all enemy types and room progressions, boss mechanics, shields, orbs, legendary sequences — all work seamlessly in co-op.',
+        'Visual sync: partner colors override (guest sees host in correct color), cosmetic sync (shields, orbs, hats, damage numbers), charge ring animation, enemy windup rings, shockwave effects.',
+        'Spectator mode: defeated players spectate their partner at 30% opacity with frown expression while the partner continues playing.',
+        'Score tracking: per-player room scores, combo chains, boon selections, and run statistics synced across peers and persisted to Supabase.',
       ]
     },
 ];
 
-const PATCH_NOTES = [...PATCH_NOTES_RECENT, ...PATCH_NOTES_ARCHIVE];
+const PATCH_NOTES = PATCH_NOTES_RECENT.slice(0, 50);
 
-const PATCH_NOTES_ARCHIVE_MESSAGE = 'In-client notes currently begin at v1.16.1. Older builds were not archived in this panel.';
+const PATCH_NOTES_ARCHIVE_MESSAGE = 'In-client notes show the 50 most recent updates. Older builds were not archived in this panel.';
 
 export { PATCH_NOTES, PATCH_NOTES_ARCHIVE_MESSAGE };

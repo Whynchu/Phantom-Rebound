@@ -1,3 +1,6 @@
+import { simRng } from '../systems/seededRng.js';
+import { nextHostBulletId } from './bulletIds.js';
+
 function createOutputBullet({
   x,
   y,
@@ -10,9 +13,11 @@ function createOutputBullet({
   crit = false,
   dmg = 1,
   expireAt,
+  ownerId = 0,
   extras = {},
 } = {}) {
   return {
+    id: nextHostBulletId(),
     x,
     y,
     vx,
@@ -26,6 +31,7 @@ function createOutputBullet({
     crit,
     dmg,
     expireAt,
+    ownerId,
     hitIds: new Set(),
     ...extras,
   };
@@ -48,6 +54,7 @@ function pushGreyBullet({
   extras = {},
 } = {}) {
   const bullet = {
+    id: nextHostBulletId(),
     x,
     y,
     vx,
@@ -69,7 +76,7 @@ function spawnGreyDrops({
   ts,
   count,
   maxBullets,
-  random = Math.random,
+  random = () => simRng.next(),
 } = {}) {
   const dropCount = Math.max(1, Math.floor(count));
   const room = Math.min(dropCount, maxBullets - bullets.length);
@@ -112,6 +119,7 @@ function spawnSplitOutputBullets({
       crit: sourceBullet.crit,
       dmg: sourceBullet.dmg * damageFactor,
       expireAt,
+      ownerId: sourceBullet.ownerId || 0,
       extras: {
         hasSplit: true,
         hasPayload: Boolean(sourceBullet.hasPayload),
@@ -135,6 +143,7 @@ function spawnRadialOutputBurst({
   crit = false,
   dmg,
   expireAt,
+  ownerId = 0,
   extras = {},
 } = {}) {
   const total = Math.max(1, Math.floor(count || 1));
@@ -153,6 +162,7 @@ function spawnRadialOutputBurst({
       crit,
       dmg,
       expireAt,
+      ownerId,
       extras,
     });
   }

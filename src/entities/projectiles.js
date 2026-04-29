@@ -1,3 +1,6 @@
+import { simRng } from '../systems/seededRng.js';
+import { nextHostBulletId } from './bulletIds.js';
+
 function getEliteBulletStagePalette({ getThreatPalette, getRgba }) {
   const threat = getThreatPalette();
   return [
@@ -41,6 +44,7 @@ function spawnEnemyBullet({
   onSpawn = () => {},
 }) {
   bullets.push({
+    id: nextHostBulletId(),
     x,
     y,
     vx: Math.cos(angle) * speed,
@@ -67,7 +71,7 @@ function spawnAimedEnemyBullet({
   radius = 4.5,
   extras = {},
   onSpawn = () => {},
-  random = Math.random,
+  random = () => simRng.next(),
 }) {
   const baseAngle = angleOverride === null ? Math.atan2(player.y - y, player.x - x) : angleOverride;
   const angle = baseAngle + (random() - 0.5) * spread;
@@ -131,7 +135,7 @@ function spawnTriangleBurst({
       angle,
       speed: burstSpd,
       radius: 5,
-      extras: { dangerBounceBudget: 1 },
+      extras: { dangerContinueBounces: 1 },
       onSpawn,
     });
   }
@@ -151,6 +155,7 @@ function spawnEliteBullet({
   getRgba,
 }) {
   const bullet = {
+    id: nextHostBulletId(),
     x,
     y,
     vx: Math.cos(angle) * speed,
@@ -190,7 +195,7 @@ function spawnEliteTriangleBurst({
       angle,
       speed: burstSpd,
       stage: 2,
-      extras: { dangerBounceBudget: 1 },
+      extras: { dangerContinueBounces: 1 },
       onSpawn,
       getThreatPalette,
       getRgba,

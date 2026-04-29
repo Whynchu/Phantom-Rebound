@@ -11,7 +11,7 @@ Locked-in design decisions (user confirmed, session 2026-04-23):
 | Boon sync | Both pick simultaneously; next room starts when both are locked in |
 | Death behavior | Downed → partner can revive by standing near 3s; if both down, run ends |
 | Disconnect | 30s grace period to reconnect; otherwise remaining player banks score and run ends |
-| Leaderboard | Shared team score (sum of both players) on a dedicated co-op board |
+| Leaderboard | Individual scores on a dedicated co-op board (each player banks their own score; entries tagged with partner's name) |
 | Room join | 6-char alphanumeric code **AND** shareable URL (`?room=XXXXXX`) |
 | Scope | Full (revive, spectator cam, reconnect, polish) — shipped in phases |
 
@@ -25,7 +25,7 @@ Locked-in design decisions (user confirmed, session 2026-04-23):
 - Each client renders enemies tinted to the **local** player's color (purely cosmetic).
 - Enemies have **2× HP** in co-op to keep room difficulty meaningful with two damage sources.
 - Friendly fire is **off**: a player's bullets pass through their partner.
-- Scoring is **per-player** on screen; **team total** (sum) is what banks to the leaderboard.
+- Scoring is **per-player** on screen; **each player's individual score** is what banks to the co-op leaderboard. Entries are tagged with the partner's name so co-op runs are identifiable but each player's achievement is their own.
 - Downed state + revive creates tension and incentivizes staying near your partner.
 - Disconnect is recoverable within a 30s window.
 
@@ -164,13 +164,14 @@ URL param `?room=ABC123` skips the menu and goes directly to join.
 Add a "PARTNER: picking…" / "PARTNER: locked in (Long Reach)" footer. Next-room button grays out until both locked.
 
 ### 4.4 Game over
-Shows both players' individual scores + team total. Only team total submits to co-op leaderboard.
+Shows both players' individual scores. Each player's own score submits to the co-op leaderboard as a separate entry, with the partner's name attached for context.
 
 ### 4.5 Co-op leaderboard
 New board tab alongside existing Global/Friends. Entry shape:
 ```
-{ teamName, p1Name, p2Name, teamScore, room, duration, submittedBy }
+{ playerName, score, partnerName, room, duration, submittedBy }
 ```
+Both players produce one entry each per run.
 
 ---
 
@@ -205,12 +206,9 @@ All files listed in §2.2 — replace simulation `Math.random()` calls with `rng
 ```sql
 create table coop_scores (
   id uuid primary key default gen_random_uuid(),
-  team_name text,
-  p1_name text not null,
-  p2_name text not null,
-  team_score int not null,
-  p1_score int not null,
-  p2_score int not null,
+  player_name text not null,
+  score int not null,
+  partner_name text not null,
   room int not null,
   duration_ms int not null,
   version text not null,
@@ -218,6 +216,7 @@ create table coop_scores (
   submitted_at timestamptz default now()
 );
 -- + RLS + submit_coop_score() RPC parallel to existing submit_score().
+-- Each player in a co-op run writes their own row.
 ```
 
 ---

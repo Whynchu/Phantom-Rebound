@@ -1,10 +1,12 @@
+import { simRng } from './seededRng.js';
+
 function getUnlockedEnemyTypes(roomIdx, enemyTypes) {
   return Object.entries(enemyTypes)
     .filter(([, def]) => roomIdx >= def.unlockRoom)
     .map(([type]) => type);
 }
 
-function weightedPick(candidates, randomFn = Math.random) {
+function weightedPick(candidates, randomFn = () => simRng.next()) {
   const total = candidates.reduce((sum, candidate) => sum + candidate.weight, 0);
   let roll = randomFn() * total;
   for(const candidate of candidates) {
@@ -22,7 +24,7 @@ const LATE_PREMIUM_TYPES = new Set([
   'orange_zoner',
 ]);
 
-function generateWeightedWave(roomIdx, enemyTypes, randomFn = Math.random) {
+function generateWeightedWave(roomIdx, enemyTypes, randomFn = () => simRng.next()) {
   const unlocked = getUnlockedEnemyTypes(roomIdx, enemyTypes);
   const entries = new Map();
   const earlyRoomBudgetPenalty = roomIdx >= 12 && roomIdx <= 14 ? 2.25 : 0;

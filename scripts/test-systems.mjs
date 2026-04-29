@@ -20,6 +20,7 @@ import {
   resolveOutputEnemyHit,
   resolveSanguineBurst,
 } from '../src/systems/outputHit.js';
+import { resolveConduitArcs } from '../src/sim/conduitStep.js';
 import {
   resolveEnemyKillEffects,
   resolveOrbitKillEffects,
@@ -91,6 +92,7 @@ import {
   fireEnemyBurst,
   applyOrbitSphereContact,
 } from '../src/entities/enemyRuntime.js';
+import { createEnemy } from '../src/entities/enemyTypes.js';
 import {
   createLaneOffsets,
   buildPlayerShotPlan,
@@ -123,6 +125,7 @@ import {
   createRoomTelemetry,
   buildRunTelemetryPayload,
 } from '../src/systems/telemetry.js';
+import { createSeededRng, simRng, parseSeedParam, seedFromString } from '../src/systems/seededRng.js';
 import { applyDamagelessRoomProgression } from '../src/systems/progression.js';
 import { orderBoonsForDisplay } from '../src/ui/boonsPanel.js';
 import { buildPatchNoteCardHtml } from '../src/ui/patchNotes.js';
@@ -153,6 +156,14 @@ import {
 import { bindGestureGuards } from '../src/platform/gestureGuards.js';
 import { setPlayerColor, getPlayerColor, getPlayerColorScheme } from '../src/data/colorScheme.js';
 import { BOONS, getDefaultUpgrades } from '../src/data/boons.js';
+import {
+  TITAN_HP_PCT,
+  EXTRA_LIFE_GAINS,
+  EXTRA_LIFE_SLOW_PER_TIER,
+  MINI_SHOT_SPD_PER_TIER,
+  MINI_CRIT_CHANCE_PER_TIER,
+  MINI_T3_CRIT_DMG_BONUS,
+} from '../src/data/boonConstants.js';
 import { registerBoonHook, runBoonHook, getBoonHookCount } from '../src/systems/boonHooks.js';
 
 const pendingTests = [];
@@ -179,6 +190,85 @@ function test(name, fn) {
     process.exitCode = 1;
   }
 }
+
+test('seededRng produces identical sequences from identical seeds', () => {
+  const a = createSeededRng(12345);
+  const b = createSeededRng(12345);
+  for (let i = 0; i < 100; i++) {
+    assert.equal(a.next(), b.next(), `divergence at step ${i}`);
+  }
+});
+
+test('seededRng diverges for different seeds', () => {
+  const a = createSeededRng(1);
+  const b = createSeededRng(2);
+  // Over 10 draws, at least one value must differ.
+  let diverged = false;
+  for (let i = 0; i < 10; i++) {
+    if (a.next() !== b.next()) { diverged = true; break; }
+  }
+  assert.ok(diverged, 'different seeds should produce different streams');
+});
+
+test('seededRng.reseed restarts the stream', () => {
+  const rng = createSeededRng(42);
+  const first = [rng.next(), rng.next(), rng.next()];
+  rng.reseed(42);
+  const second = [rng.next(), rng.next(), rng.next()];
+  assert.deepEqual(first, second);
+});
+
+test('seededRng.range and .int cover expected bounds', () => {
+  const rng = createSeededRng(7);
+  for (let i = 0; i < 500; i++) {
+    const r = rng.range(10, 20);
+    assert.ok(r >= 10 && r < 20, `range out of bounds: ${r}`);
+    const n = rng.int(3, 5);
+    assert.ok(n >= 3 && n <= 5 && Number.isInteger(n), `int out of bounds: ${n}`);
+  }
+});
+
+test('seededRng.pick selects from array deterministically', () => {
+  const a = createSeededRng(99);
+  const b = createSeededRng(99);
+  const arr = ['red', 'green', 'blue', 'yellow'];
+  for (let i = 0; i < 20; i++) {
+    assert.equal(a.pick(arr), b.pick(arr));
+  }
+  assert.equal(createSeededRng(1).pick([]), undefined);
+});
+
+test('seededRng.fork produces independent but deterministic substreams', () => {
+  const parentA = createSeededRng(555);
+  const parentB = createSeededRng(555);
+  const forkA = parentA.fork();
+  const forkB = parentB.fork();
+  for (let i = 0; i < 30; i++) {
+    assert.equal(forkA.next(), forkB.next());
+  }
+  // Parent and fork are not the same stream.
+  assert.notEqual(parentA.next(), forkA.next());
+});
+
+test('parseSeedParam accepts ints, strings, and rejects empty', () => {
+  assert.equal(parseSeedParam(null), null);
+  assert.equal(parseSeedParam(''), null);
+  assert.equal(parseSeedParam('   '), null);
+  assert.equal(parseSeedParam('12345'), 12345);
+  assert.equal(parseSeedParam('-5'), (-5 >>> 0));
+  // Any non-empty non-numeric string must yield a stable hash.
+  assert.equal(parseSeedParam('hello'), seedFromString('hello'));
+  assert.equal(parseSeedParam('hello'), parseSeedParam('hello'));
+  assert.notEqual(parseSeedParam('hello'), parseSeedParam('world'));
+});
+
+test('simRng singleton is reseedable and shared across imports', () => {
+  simRng.reseed(1000);
+  const a = [simRng.next(), simRng.next(), simRng.next()];
+  simRng.reseed(1000);
+  const b = [simRng.next(), simRng.next(), simRng.next()];
+  assert.deepEqual(a, b);
+});
 
 test('kill sustain cap scales by room and respects max', () => {
   const config = { baseHealCap: 14, perRoomHealCap: 0.22, maxHealCap: 34 };
@@ -312,6 +402,57 @@ test('computeProjectileHitDamage applies external multipliers', () => {
   assert.equal(damage, 4);
 });
 
+test('early-power boon constants match rebalance plan', () => {
+  assert.deepEqual(TITAN_HP_PCT, [0.50, 0.30, 0.18, 0.10, 0.05]);
+  assert.deepEqual(EXTRA_LIFE_GAINS, [100, 60, 45, 36, 28, 22]);
+  assert.equal(EXTRA_LIFE_SLOW_PER_TIER, 0.98);
+  assert.equal(MINI_SHOT_SPD_PER_TIER, 0.10);
+  assert.equal(MINI_CRIT_CHANCE_PER_TIER, 0.05);
+  assert.equal(MINI_T3_CRIT_DMG_BONUS, 0.20);
+});
+
+test('MINI applies speed and crit bonuses while shrinking HP', () => {
+  const mini = BOONS.find((boon) => boon.name === 'MINI');
+  const upg = getDefaultUpgrades();
+  const state = { hp: 200, maxHp: 200 };
+
+  mini.apply(upg, state);
+  assert.equal(upg.miniTier, 1);
+  assert.equal(upg.miniShotSpdMult, 1.10);
+  assert.equal(upg.critChance, 0.05);
+  assert.equal(upg.critDamageBonus, 0);
+  assert.equal(state.maxHp, 180);
+  assert.equal(state.hp, 180);
+
+  mini.apply(upg, state);
+  mini.apply(upg, state);
+  assert.equal(upg.miniTier, 3);
+  assert.equal(upg.miniShotSpdMult, 1.30);
+  assert.ok(Math.abs(upg.critChance - 0.15) < 1e-9);
+  assert.equal(upg.critDamageBonus, 0.20);
+});
+
+test('Titan Heart first tier now grants half current max HP', () => {
+  const titan = BOONS.find((boon) => boon.name === 'Titan Heart');
+  const upg = getDefaultUpgrades();
+  const state = { hp: 200, maxHp: 200 };
+  titan.apply(upg, state);
+  assert.equal(upg.titanTier, 1);
+  assert.equal(state.maxHp, 300);
+  assert.equal(state.hp, 200);
+});
+
+test('Extra Life gives larger early HP gains and compounds movement slow', () => {
+  const extraLife = BOONS.find((boon) => boon.name === 'Extra Life');
+  const upg = getDefaultUpgrades();
+  const state = { hp: 100, maxHp: 200 };
+  extraLife.apply(upg, state);
+  assert.equal(upg.extraLifeTier, 1);
+  assert.equal(state.maxHp, 300);
+  assert.equal(state.hp, 200);
+  assert.equal(upg.extraLifeSlowMult, 0.98);
+});
+
 test('bullet runtime helpers keep expiry and bounce transitions deterministic', () => {
   assert.equal(shouldExpireOutputBullet({ state: 'output', expireAt: 100 }, 100), true);
   assert.equal(shouldExpireOutputBullet({ state: 'danger', expireAt: 100 }, 100), false);
@@ -334,6 +475,12 @@ test('bullet runtime helpers keep expiry and bounce transitions deterministic', 
   assert.equal(budgetBullet.state, 'grey');
   assert.equal(budgetBullet.decayStart, 900);
   assert.equal(budgetBullet.dangerBounceBudget, 0);
+
+  const continueDangerBullet = { state: 'danger', dangerContinueBounces: 1 };
+  const continueDangerResult = resolveDangerBounceState(continueDangerBullet, 950);
+  assert.equal(continueDangerResult.kind, 'danger-bounce-continue');
+  assert.equal(continueDangerBullet.state, 'danger');
+  assert.equal(continueDangerBullet.dangerContinueBounces, 0);
 
   const doubleBounceBullet = { state: 'danger', doubleBounce: true, bounceCount: 0 };
   const doubleFirst = resolveDangerBounceState(doubleBounceBullet, 1000);
@@ -358,6 +505,24 @@ test('bullet runtime helpers keep expiry and bounce transitions deterministic', 
   const removeResult = resolveOutputBounceState({ bounceLeft: 0 }, { splitShot: false });
   assert.equal(removeResult.kind, 'remove');
   assert.equal(removeResult.removeBullet, true);
+});
+
+test('conduit arcs damage enemies and clear danger bullets on segment contact', () => {
+  const state = {
+    timeMs: 1000,
+    slots: [{
+      body: { x: 0, y: 0 },
+      upg: { conduit: true, conduitArcDmg: 6, conduitArcTickMs: 120, orbitSphereTier: 2, orbitRadiusBonus: 0 },
+      orbState: { cooldowns: [0, 0] },
+    }],
+    enemies: [{ x: 0, y: 0, r: 8, hp: 10 }],
+    bullets: [{ x: 0, y: 0, r: 4, state: 'danger' }],
+    effectQueue: [],
+  };
+  const hits = resolveConduitArcs(state, {});
+  assert.ok(hits >= 2);
+  assert.equal(state.enemies[0].hp, 4);
+  assert.equal(state.bullets.length, 0);
 });
 
 test('output hit helpers keep damage, pierce, and reward cadence deterministic', () => {
@@ -1759,7 +1924,8 @@ test('player fire helpers build lane offsets, shot plan, and volley specs determ
     getBloodPactHealCap: () => 9,
     now: 1000,
     random: (() => {
-      const rolls = [0.4, 0.8, 0.2];
+      const neutralDamageRoll = (1 - 0.88) / (1.14 - 0.88);
+      const rolls = [0.4, neutralDamageRoll, 0.8, neutralDamageRoll, 0.2, neutralDamageRoll];
       let idx = 0;
       return () => rolls[idx++];
     })(),
@@ -2097,6 +2263,27 @@ test('enemy runtime helpers keep movement and fire cadence deterministic', () =>
   assert.equal(cooldownApplied, true);
   assert.equal(ranged.disruptorBulletCount, 0);
   assert.equal(ranged.disruptorCooldown, 800);
+});
+
+test('createEnemy applies optional hpMultiplier to hp and maxHp only', () => {
+  const baseArgs = {
+    width: 800,
+    height: 600,
+    margin: 24,
+    roomIndex: 10,
+    nextEnemyId: 1,
+  };
+  simRng.reseed(1234);
+  const solo = createEnemy('chaser', baseArgs);
+  simRng.reseed(1234);
+  const coop = createEnemy('chaser', { ...baseArgs, hpMultiplier: 2 });
+
+  assert.equal(coop.hp, solo.hp * 2);
+  assert.equal(coop.maxHp, solo.maxHp * 2);
+  assert.equal(coop.x, solo.x);
+  assert.equal(coop.y, solo.y);
+  assert.equal(coop.spd, solo.spd);
+  assert.equal(coop.fRate, solo.fRate);
 });
 
 test('enemy fire helper routes burst patterns by enemy type deterministically', () => {

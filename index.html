@@ -9,11 +9,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Phantom Rebound">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="manifest" href="site.webmanifest?v=1.19.13">
-<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png?v=1.19.13">
-<link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=1.19.13">
+<link rel="manifest" href="site.webmanifest?v=1.20.32">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png?v=1.20.32">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=1.20.32">
 <script>
-window.__APP_BUILD__ = '1.19.32';
+window.__APP_BUILD__ = '1.3.4';
 (function () {
   const currentBuild = window.__APP_BUILD__;
   const updateFlagKey = 'phantom-rebound-update-available';
@@ -28,7 +28,7 @@ window.__APP_BUILD__ = '1.19.32';
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=1.19.32">
+<link rel="stylesheet" href="styles.css?v=1.3.4">
 </head>
 <body class="app-loading menu-chrome-visible">
 <div id="wrap">
@@ -162,7 +162,7 @@ window.__APP_BUILD__ = '1.19.32';
     <div id="room-intro"><div id="room-intro-txt">READY?</div></div>
 
     <div class="screen" id="s-start">
-      <div class="eyebrow" id="version-tag">// prototype v1.16.97 - HORN FINAL TUNE</div>
+      <div class="eyebrow" id="version-tag">// prototype v1.3.4 - EARLY POWER HOTFIX</div>
       <div class="big-title">Phantom<span>Rebound</span></div>
       <div class="start-preview-row">
         <div class="start-preview-shell">
@@ -187,13 +187,16 @@ window.__APP_BUILD__ = '1.19.32';
       </div>
       <div class="rule-line"></div>
       <button class="btn" id="btn-start">Initiate Run</button>
+      <button class="btn btn-secondary off" id="btn-coop" type="button">Co-op (experimental)</button>
       <button class="btn btn-secondary off" id="btn-continue-run" type="button">Continue Run</button>
       <button class="btn btn-secondary btn-menu-sub" id="btn-lb-open" type="button">Leaderboards</button>
-      <button class="btn btn-secondary btn-settings-open" id="btn-settings-open" type="button" aria-haspopup="dialog" aria-controls="settings-panel" aria-label="Open settings" title="Settings">⚙</button>
+      <button class="btn btn-secondary btn-settings-open" id="btn-settings-open" type="button" aria-haspopup="dialog" aria-controls="settings-panel" aria-label="Open settings" title="Settings">
+        <img class="settings-open-icon" src="assets/sprites/1-bit_Pixel_Icons/Sprites_Cropped/Software_Options_Settings_Cogwheel_Gear_Mechanics.png" alt="" aria-hidden="true" decoding="async" draggable="false">
+      </button>
     </div>
 
     <div class="screen off" id="s-up">
-      <div id="up-title">// Room Clear — Choose a Reward</div>
+      <div id="up-title">// Room Clear &mdash; Choose a Reward</div>
       <div id="up-toolbar"><button class="btn btn-secondary btn-up-sub" id="btn-up-active" type="button">Active Boons</button></div>
       <div id="up-cards"></div>
       <div id="up-active-panel" class="off">
@@ -221,6 +224,39 @@ window.__APP_BUILD__ = '1.19.32';
         <div class="up-active-head">Run Loadout</div>
         <div id="go-boons-list"></div>
         <button class="btn btn-secondary btn-up-sub" id="btn-go-boons-close" type="button">Back</button>
+      </div>
+    </div>
+
+    <div class="screen off" id="s-go-coop">
+      <div class="eyebrow">// Coop Run Complete</div>
+      <div id="go-coop-sub">Final Score</div>
+      <div id="go-coop-score">0</div>
+      <div id="go-coop-breakdown" class="go-breakdown"></div>
+      <div id="go-coop-note"></div>
+      <div id="go-coop-roster" class="go-coop-roster">
+        <div class="go-coop-peer" id="go-coop-host-card">
+          <div class="go-coop-peer-tag">HOST</div>
+          <div class="go-coop-peer-name" id="go-coop-host-name">YOU</div>
+        </div>
+        <div class="go-coop-peer" id="go-coop-guest-card">
+          <div class="go-coop-peer-tag">GUEST</div>
+          <div class="go-coop-peer-name" id="go-coop-guest-name">PARTNER</div>
+        </div>
+      </div>
+      <div id="go-coop-meta" class="go-coop-meta"></div>
+      <div id="go-coop-status" class="go-coop-status"></div>
+      <div class="name-row">
+        <label class="name-lbl" for="name-input-go-coop">Runner Name</label>
+        <input id="name-input-go-coop" class="name-input" type="text" maxlength="14" placeholder="ENTER CALLSIGN" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+      <button class="btn" id="btn-coop-rematch">Rematch</button>
+      <button class="btn btn-secondary btn-menu-sub" id="btn-coop-leave" type="button">Leave Run</button>
+      <button class="btn btn-secondary btn-menu-sub" id="btn-go-coop-boons" type="button">Run Boons</button>
+      <button class="btn btn-secondary btn-menu-sub" id="btn-lb-open-go-coop" type="button">Leaderboards</button>
+      <div id="go-coop-boons-panel" class="off">
+        <div class="up-active-head">Run Loadout</div>
+        <div id="go-coop-boons-list"></div>
+        <button class="btn btn-secondary btn-up-sub" id="btn-go-coop-boons-close" type="button">Back</button>
       </div>
     </div>
   </div>
@@ -257,11 +293,79 @@ window.__APP_BUILD__ = '1.19.32';
       <button class="btn btn-secondary btn-up-sub" id="btn-lb-boons-close" type="button">Back</button>
     </div>
   </div>
+
+  <div class="screen off" id="s-coop-lobby" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="eyebrow">// Co-op Lobby (experimental)</div>
+    <div class="big-title">Two-Player</div>
+
+    <div id="coop-create-view" class="coop-view">
+      <div class="screen-body">
+        Host a new room. Your partner joins with the code or the share link.<br>
+        Each player keeps their own boons. Enemies scale up.
+      </div>
+      <div class="rule-line"></div>
+      <button class="btn" id="coop-create-start" type="button">Create Room</button>
+      <button class="btn btn-secondary btn-menu-sub" data-coop-mode="join" type="button">Join Existing</button>
+      <button class="btn btn-secondary btn-menu-sub" data-coop-back type="button">Back</button>
+    </div>
+
+    <div id="coop-join-view" class="coop-view off">
+      <div class="screen-body">Enter the 6-character code your partner shared.</div>
+      <div class="name-row">
+        <label class="name-lbl" for="coop-join-code">Room Code</label>
+        <div class="name-input-wrap">
+          <input id="coop-join-code" class="name-input" type="text" maxlength="6" placeholder="ABC234" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false">
+        </div>
+      </div>
+      <div class="rule-line"></div>
+      <button class="btn" id="coop-join-start" type="button">Join Room</button>
+      <button class="btn btn-secondary btn-menu-sub" data-coop-mode="create" type="button">Create Instead</button>
+      <button class="btn btn-secondary btn-menu-sub" data-coop-back type="button">Back</button>
+    </div>
+
+    <div id="coop-waiting-view" class="coop-view off">
+      <div class="screen-body">
+        Room code: <span id="coop-waiting-code" class="hi">------</span><br>
+        Waiting for partner...
+      </div>
+      <div class="name-row">
+        <label class="name-lbl" for="coop-waiting-share">Share Link</label>
+        <div class="name-input-wrap">
+          <input id="coop-waiting-share" class="name-input" type="text" readonly>
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-menu-sub" id="coop-copy-share" type="button">Share / Copy Link</button>
+      <div class="rule-line"></div>
+      <button class="btn btn-secondary btn-menu-sub" data-coop-back type="button">Cancel</button>
+    </div>
+
+    <div id="coop-ready-view" class="coop-view off">
+      <div class="screen-body">
+        <span class="gn">Ready!</span><br>
+        Role: <span id="coop-ready-role" class="hi">HOST</span><br>
+        Partner: <span id="coop-ready-partner" class="hi">PARTNER</span><br>
+        Seed: <span id="coop-ready-seed" class="hi">0</span>
+      </div>
+      <div class="rule-line"></div>
+      <button id="coop-ready-start" class="btn btn-menu-sub" type="button">Start Run</button>
+      <button class="btn btn-secondary btn-menu-sub" data-coop-back type="button">Leave Room</button>
+    </div>
+
+    <div id="coop-error-view" class="coop-view off">
+      <div class="screen-body">
+        <span style="color:var(--player-danger)">Connection failed.</span><br>
+        <span id="coop-error-msg">unknown error</span>
+      </div>
+      <div class="rule-line"></div>
+      <button class="btn btn-secondary btn-menu-sub" data-coop-back type="button">Back</button>
+    </div>
+  </div>
 </div>
 
-<script type="module" src="script.js?v=1.19.32"></script>
+<script type="module" src="script.js?v=1.3.4"></script>
 </body>
 </html>
+
 
 
 

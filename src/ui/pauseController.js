@@ -21,6 +21,7 @@ export function createPauseController({
   setMenuChromeVisible,
   openLeaderboard,
   openPatchNotes,
+  onExitToMenu = null,
   doc = document,
 } = {}) {
   const pausePanel = doc.getElementById('pause-panel');
@@ -33,14 +34,17 @@ export function createPauseController({
   const btnConfirmNo = doc.getElementById('btn-pause-confirm-no');
 
   let prePauseState = null;
-  let pauseStartedAt = 0;
   let pendingConfirmAction = null;
 
+  // Sim-clock note (Phase C1a): simNowMs is advanced only inside the
+  // game loop. When cancelLoop() runs on pause, simNowMs freezes, so
+  // bullet expireAt/decayStart (sim-clock values) are naturally
+  // correct on resume without any offset shifting. Boon onPauseAdjust
+  // hooks are still invoked with pauseDuration=0 so any future hooks
+  // that react to pauses keep working.
+
   function offsetAbsoluteTimestamps(pauseDuration) {
-    for (const b of bullets) {
-      if (b.expireAt) b.expireAt += pauseDuration;
-      if (b.decayStart) b.decayStart += pauseDuration;
-    }
+    // Left as no-op for bullet timers: simNowMs freezes during pause.
     runBoonHook('onPauseAdjust', { UPG: getUpg(), pauseDuration });
   }
 
@@ -49,7 +53,6 @@ export function createPauseController({
     if (gstate !== 'playing' && gstate !== 'upgrade') return;
     prePauseState = gstate;
     setGameState('paused');
-    pauseStartedAt = performance.now();
     cancelLoop();
     pausePanel.classList.remove('off');
     pausePanel.setAttribute('aria-hidden', 'false');
@@ -58,8 +61,7 @@ export function createPauseController({
 
   function resumeGame() {
     if (getGameState() !== 'paused') return;
-    const pauseDuration = performance.now() - pauseStartedAt;
-    offsetAbsoluteTimestamps(pauseDuration);
+    offsetAbsoluteTimestamps(0);
     const next = prePauseState || 'playing';
     setGameState(next);
     pausePanel.classList.add('off');
@@ -92,6 +94,19 @@ export function createPauseController({
     setGameState('start');
     cancelLoop();
     pausePanel.classList.add('off');
+    // D18.5 — hide the boon picker if the user came in from the upgrade
+    // phase. Without this, s-up overlays s-start and the user's "Main Menu"
+    // tap looks broken; then any subsequent boon click leaks pause-button
+    // visibility back over the menu chrome.
+    try { doc.getElementById('s-up')?.classList.add('off'); } catch (_) {}
+    // D18.3 — also tear down any active coop run state. Without this, an
+    // exit-to-menu during a coop run leaves the snapshot applier, input
+    // uplink, rematch listener, and AFK timer alive — they'd then fight
+    // any subsequent solo run for control of playerSlots[1] / activeCoopSession,
+    // wedging the start screen until app restart.
+    if (typeof onExitToMenu === 'function') {
+      try { onExitToMenu(); } catch (_) {}
+    }
     setMenuChromeVisible(true);
     doc.getElementById('s-start').classList.remove('off');
     if (btnPatchNotes) btnPatchNotes.style.display = 'inline-flex';

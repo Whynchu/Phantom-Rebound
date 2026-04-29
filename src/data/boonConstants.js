@@ -4,18 +4,22 @@
 export const SPS_LADDER = [0.8, 1.2, 2.2, 3.8, 6.0, 8.8];
 export const MAX_SHIELD_TIER = 4;
 
-export const TITAN_HP_PCT = [1.00, 0.50, 0.25, 0.10, 0.05];
+export const TITAN_HP_PCT = [0.50, 0.30, 0.18, 0.10, 0.05];
 export const TITAN_SLOW_PCT = 0.05;
 export const TITAN_MAX_SIZE_MULT = 2.0;
 
 export const MINI_MAX_TIER = 3;
 export const MINI_SIZE_MULT_PER_TIER = 0.80;
 export const MINI_HP_MULT_PER_TIER = 0.90;
+export const MINI_SHOT_SPD_PER_TIER = 0.10;
+export const MINI_CRIT_CHANCE_PER_TIER = 0.05;
+export const MINI_T3_CRIT_DMG_BONUS = 0.20;
 
 export const HEAL_PCT = [1.00, 0.66, 0.66];
 export const BERSERKER_HP = 50;
 
-export const EXTRA_LIFE_GAINS = [40, 34, 28, 22, 18, 14];
+export const EXTRA_LIFE_GAINS = [100, 60, 45, 36, 28, 22];
+export const EXTRA_LIFE_SLOW_PER_TIER = 0.98;
 export const ROOM_REGEN_PER_PICK = 18;
 export const ROOM_REGEN_MAX = 54;
 

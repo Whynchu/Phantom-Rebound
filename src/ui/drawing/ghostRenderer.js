@@ -8,20 +8,89 @@ import { drawGhostHatLayer } from './hatRenderer.js';
 import { getHatHeightMultiplier } from '../../data/hats.js';
 import { BASE_PLAYER_HP, GAME_OVER_ANIM_MS } from '../../data/constants.js';
 
-export function drawGhostSprite(ctx, ts, {
-  playerState,
-  chargeValue,
-  maxChargeValue,
-  fireProgress,
-  gameState,
-  hpValue,
-  maxHpValue,
-  hatKey,
-  basePlayerHp = BASE_PLAYER_HP,
-  idleStill = false,
-} = {}) {
+// Cached offscreen canvas for compositing when bodyAlpha < 1.
+// iOS Safari resets ctx.globalAlpha when ctx.shadowBlur is set to a non-zero
+// value, so the old globalAlpha-at-top-of-save approach silently broke on iPhone
+// (spectator ghosts rendered at 100% opacity instead of 30%). The fix: render at
+// full opacity onto a cached offscreen canvas, then blit the result onto the real
+// canvas with globalAlpha=bodyAlpha in a single drawImage (no shadowBlur involved).
+let _alphaCompCanvas = null;
+let _alphaCompCtx = null;
+
+export function drawGhostSprite(ctx, ts, opts = {}) {
+  const {
+    playerState,
+    chargeValue,
+    maxChargeValue,
+    fireProgress,
+    gameState,
+    hpValue,
+    maxHpValue,
+    hatKey,
+    basePlayerHp = BASE_PLAYER_HP,
+    idleStill = false,
+    // D18.7 — optional per-instance color override. When present, all reads
+    // that previously hit the global C palette (player/ghost colors) use
+    // this scheme instead. Solo / local-player paths leave this undefined →
+    // C.green/C.ghost behavior unchanged → byte-identical canary.
+    // Shape: { hex, light, dark } from PLAYER_COLORS.
+    colorScheme = null,
+    // D18.15a — when true, draw the dead-frown arc (mirrors the gameState
+    // 'dying' frown at line 131) without triggering the death pop animation
+    // or the smile-eyes pulse. Used by coop spectator render so dead
+    // partners look sad while still walking around.
+    forceFrown = false,
+    bodyAlpha = 1,
+  } = opts;
   const p = playerState;
   if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
+
+  // D18.16 revised — iOS Safari compositing fix.
+  // iOS Safari resets ctx.globalAlpha when ctx.shadowBlur changes, so the ghost
+  // body rendered opaque on iPhone even with globalAlpha=0.3 set at the top.
+  // Work-around: draw at full opacity on a cached offscreen canvas, then blit
+  // with globalAlpha=bodyAlpha in a single drawImage (no shadowBlur involved).
+  // Assumptions: call sites use an identity/default transform when bodyAlpha < 1
+  // (verified: both spectator call sites in script.js have no active transform;
+  // the startGhostPreview caller always passes bodyAlpha=1 so never hits this path).
+  if (bodyAlpha < 1) {
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
+    if (!_alphaCompCanvas) {
+      _alphaCompCanvas = document.createElement('canvas');
+      _alphaCompCtx = _alphaCompCanvas.getContext('2d');
+    }
+    if (_alphaCompCanvas.width !== w || _alphaCompCanvas.height !== h) {
+      _alphaCompCanvas.width = w;
+      _alphaCompCanvas.height = h;
+    } else {
+      _alphaCompCtx.clearRect(0, 0, w, h);
+    }
+    drawGhostSprite(_alphaCompCtx, ts, { ...opts, bodyAlpha: 1 });
+    ctx.save();
+    ctx.globalAlpha = (ctx.globalAlpha || 1) * bodyAlpha;
+    ctx.drawImage(_alphaCompCanvas, 0, 0);
+    ctx.restore();
+    return;
+  }
+  // Resolve effective player-color reads. For null colorScheme we point at
+  // the live C getters so a runtime palette swap (player picked a new color
+  // from the start menu) keeps animating. For an override we precompute
+  // hex/rgb once per draw call.
+  const _hex2rgb = (hex) => ({ r: parseInt(hex.slice(1,3),16), g: parseInt(hex.slice(3,5),16), b: parseInt(hex.slice(5,7),16) });
+  const _mixHex = (baseHex, tintHex, amount) => {
+    const a = _hex2rgb(baseHex), b = _hex2rgb(tintHex);
+    const mix = (from, to) => Math.round(from + (to - from) * amount).toString(16).padStart(2, '0');
+    return `#${mix(a.r,b.r)}${mix(a.g,b.g)}${mix(a.b,b.b)}`;
+  };
+  const greenHex = colorScheme ? colorScheme.hex : C.green;
+  const ghostHex = colorScheme ? colorScheme.light : C.ghost;
+  const greenRgb = colorScheme ? _hex2rgb(greenHex) : C.greenRgb;
+  const ghostRgb = colorScheme ? _hex2rgb(ghostHex) : C.ghostRgb;
+  // ghostBody is `_mixHex('#f7fbff', green, 0.18)` in C; mirror it here when overriding.
+  const ghostBodyHex = colorScheme ? _mixHex('#f7fbff', greenHex, 0.18) : C.ghostBody;
+  const ghostBodyRgb = colorScheme ? _hex2rgb(ghostBodyHex) : C.ghostBodyRgb;
+  const greenRgba = (alpha) => `rgba(${greenRgb.r},${greenRgb.g},${greenRgb.b},${alpha})`;
   const t = ts / 1000;
   const chargeFrac = Math.min(1, chargeValue / Math.max(1, maxChargeValue || 10));
   const fireFrac = chargeValue >= 1 ? Math.max(0, Math.min(1, fireProgress || 0)) : 0;
@@ -45,7 +114,7 @@ export function drawGhostSprite(ctx, ts, {
   }
 
   const pulse = .55 + .45 * Math.sin(ts * .0025);
-  const gRgb = C.ghostRgb;
+  const gRgb = ghostRgb;
   const ga = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 3);
   ga.addColorStop(0, gameState === 'dying'
     ? `rgba(248,180,199,${0.14 + deathFrac * 0.16})`
@@ -57,11 +126,11 @@ export function drawGhostSprite(ctx, ts, {
   ctx.beginPath(); ctx.arc(0, 0, size * 3, 0, Math.PI * 2); ctx.fill();
 
   ctx.shadowBlur = 22 + chargeFrac * 14;
-  ctx.shadowColor = gameState === 'dying' ? '#f8b4c7' : C.ghost;
+  ctx.shadowColor = gameState === 'dying' ? '#f8b4c7' : ghostHex;
 
   const inv = (p.invincible || 0) > 0 ? Math.min(1, (p.invincible || 0) / .4) : 0;
-  const baseRgb = C.ghostBodyRgb;
-  const accentRgb = C.greenRgb;
+  const baseRgb = ghostBodyRgb;
+  const accentRgb = greenRgb;
   let bodyR, bodyG, bodyB;
   if (gameState === 'dying') {
     bodyR = 208;
@@ -105,13 +174,21 @@ export function drawGhostSprite(ctx, ts, {
     ctx.beginPath(); ctx.arc(-5.5, -size * .25 - 2, 1.5, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.arc(5.5, -size * .25 - 2, 1.5, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.arc(0, size * .08, 4.6, Math.PI + .25, Math.PI * 2 - .25); ctx.stroke();
+  } else if (forceFrown) {
+    // D18.15a — coop spectator: dead pose, but still walking. Frown arc
+    // sits noticeably below the eyes (eyes at -size*.25-2; frown center
+    // at size*.45) so the expression reads as "sad mouth" not "another
+    // pair of squinted eyes". Same downward open arc shape as dying.
+    ctx.strokeStyle = 'rgba(12,20,16,0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(0, size * .45, 4.6, Math.PI + .25, Math.PI * 2 - .25); ctx.stroke();
   } else {
-    ctx.fillStyle = C.getRgba(C.green, 0.9);
+    ctx.fillStyle = greenRgba(0.9);
     ctx.beginPath(); ctx.arc(-4.5, -size * .3 - 2, 1.3, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(4.5, -size * .3 - 2, 1.3, 0, Math.PI * 2); ctx.fill();
   }
 
-  if (chargeFrac > 0.3 && gameState !== 'dying') {
+  if (chargeFrac > 0.3 && gameState !== 'dying' && !forceFrown) {
     ctx.strokeStyle = 'rgba(0,0,0,0.55)';
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(0, -size * .15, 4.5, .65, Math.PI - .65); ctx.stroke();
@@ -124,8 +201,8 @@ export function drawGhostSprite(ctx, ts, {
   ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
   ctx.stroke();
   if (chargeValue >= 1) {
-    ctx.strokeStyle = C.green;
-    ctx.shadowColor = C.green;
+    ctx.strokeStyle = greenHex;
+    ctx.shadowColor = greenHex;
     ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.arc(0, 0, ringRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fireFrac);
@@ -141,7 +218,7 @@ export function drawGhostSprite(ctx, ts, {
   const hpFrac = Math.max(0, hpValue / Math.max(1, maxHpValue));
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.beginPath(); ctx.roundRect(barX - 1, barY - 1, barW + 2, barH + 2, 2); ctx.fill();
-  const hpCol = hpFrac > 0.5 ? C.green : hpFrac > 0.25 ? '#fbbf24' : '#f87171';
+  const hpCol = hpFrac > 0.5 ? greenHex : hpFrac > 0.25 ? '#fbbf24' : '#f87171';
   ctx.shadowBlur = 6; ctx.shadowColor = hpCol;
   ctx.fillStyle = hpCol;
   ctx.beginPath(); ctx.roundRect(barX, barY, barW * hpFrac, barH, 2); ctx.fill();

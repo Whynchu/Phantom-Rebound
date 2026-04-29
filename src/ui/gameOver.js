@@ -78,4 +78,4 @@ function formatDuration(ms) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export { showGameOverScreen };
+export { showGameOverScreen, renderScoreBreakdown };

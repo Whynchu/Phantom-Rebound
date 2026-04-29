@@ -76,8 +76,8 @@ body.keyboard-open::before {
 }
 #wrap {
   position: relative;
-  width: min(400px, calc(100vw - 16px));
-  max-width: 400px;
+  width: min(380px, calc(100vw - 16px));
+  max-width: 380px;
   max-height: 100vh;
   max-height: 100dvh;
   overflow: hidden;
@@ -345,7 +345,8 @@ body.compact-viewport #wrap {
   width: 100%;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   touch-action: pan-y;
   padding-right: 2px;
 }
@@ -555,6 +556,7 @@ body.keyboard-open .screen {
   background: rgba(22,22,22,0.98);
 }
 .screen.off { display:none; }
+.coop-view.off { display:none; }
 .screen.screen-entering { opacity:0; transform:translateY(10px); }
 .screen.screen-leaving { opacity:0; transform:translateY(10px); pointer-events:none; }
 .eyebrow { font-size:9px; letter-spacing:.25em; text-transform:uppercase; color:var(--dim); }
@@ -724,6 +726,19 @@ body.menu-chrome-visible:not(.compact-viewport) #s-start .btn-menu-sub {
   font-size: 17px;
   line-height: 1;
   z-index: 2;
+}
+.settings-open-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  image-rendering: pixelated;
+  opacity: 0.92;
+  filter: brightness(0) saturate(100%) invert(92%) sepia(9%) saturate(243%) hue-rotate(73deg) brightness(94%) contrast(87%);
+  pointer-events: none;
+}
+.btn-settings-open:hover .settings-open-icon {
+  opacity: 1;
+  filter: brightness(0) saturate(100%) invert(71%) sepia(73%) saturate(430%) hue-rotate(88deg) brightness(93%) contrast(90%);
 }
 .hats-grid {
   width: 100%;
@@ -947,10 +962,10 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
 .up-desc { font-size:9px; color:var(--muted); line-height:1.45; }
 .up-tag  { font-size:7px; letter-spacing:.14em; text-transform:uppercase; margin-top:2px; }
 /* GAME OVER */
-#go-score { font-family:'Syne',sans-serif; font-weight:800; font-size:44px; color:var(--accent); line-height:1; }
-#go-sub   { font-size:9px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase; }
-#go-note  { font-size:11px; color:var(--muted); text-align:center; max-width:250px; line-height:1.7; }
-#go-note:empty { display:none; }
+#go-score, #go-coop-score { font-family:'Syne',sans-serif; font-weight:800; font-size:44px; color:var(--accent); line-height:1; }
+#go-sub, #go-coop-sub   { font-size:9px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase; }
+#go-note, #go-coop-note  { font-size:11px; color:var(--muted); text-align:center; max-width:250px; line-height:1.7; }
+#go-note:empty, #go-coop-note:empty { display:none; }
 .go-breakdown {
   display:flex;
   flex-direction:column;
@@ -963,6 +978,61 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
   letter-spacing:.02em;
 }
 .go-breakdown:empty { display:none; }
+/* D15 — coop end-of-run roster */
+.go-coop-roster {
+  display:flex;
+  gap:14px;
+  width:100%;
+  max-width:340px;
+  margin:6px auto 4px;
+  justify-content:center;
+}
+.go-coop-peer {
+  flex:1 1 0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:3px;
+  padding:8px 10px;
+  border:1px solid rgba(255,255,255,0.10);
+  border-radius:6px;
+  background:rgba(0,0,0,0.18);
+}
+.go-coop-peer-tag {
+  font-size:9px;
+  letter-spacing:.18em;
+  color:var(--dim);
+  text-transform:uppercase;
+}
+.go-coop-peer-name {
+  font-family:'Syne',sans-serif;
+  font-weight:700;
+  font-size:14px;
+  color:#fff;
+  letter-spacing:.04em;
+  max-width:140px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.go-coop-meta {
+  margin:4px auto 0;
+  font-size:10px;
+  letter-spacing:.16em;
+  color:var(--dim);
+  text-transform:uppercase;
+  text-align:center;
+}
+.go-coop-meta:empty { display:none; }
+.go-coop-status {
+  margin:4px auto 0;
+  min-height:14px;
+  font-size:11px;
+  letter-spacing:.10em;
+  color:var(--player-accent-light);
+  text-align:center;
+}
+.go-coop-status:empty { display:none; }
 .go-breakdown-row {
   display:flex;
   justify-content:space-between;
@@ -981,7 +1051,7 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
   text-transform:uppercase;
   color:var(--dim);
 }
-#go-boons-panel {
+#go-boons-panel, #go-coop-boons-panel {
   position:absolute;
   inset:20px;
   display:flex;
@@ -993,8 +1063,8 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
   border-radius:8px;
   box-shadow:0 0 30px rgba(0,0,0,0.35);
 }
-#go-boons-panel.off { display:none; }
-#go-boons-list {
+#go-boons-panel.off, #go-coop-boons-panel.off { display:none; }
+#go-boons-list, #go-coop-boons-list {
   flex:1;
   width:100%;
   display:flex;

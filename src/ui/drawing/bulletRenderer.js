@@ -149,7 +149,17 @@ export function drawBulletSprite(ctx, b, ts, deps) {
     ctx.shadowBlur = 0;
 
   } else if (b.state === 'output') {
-    const col = b.crit ? C.ghost : C.green;
+    // D18.10b — coop bullet color attribution. Default to local C.green
+    // palette (byte-identical solo/host path). When deps.getOwnerColorScheme
+    // returns a non-null { hex, light } for this bullet's ownerId, use it
+    // so the partner's bullets render in the partner's chosen color
+    // instead of the local player's color.
+    const ownerScheme = (typeof deps.getOwnerColorScheme === 'function')
+      ? deps.getOwnerColorScheme(b)
+      : null;
+    const greenHex = ownerScheme ? ownerScheme.hex : C.green;
+    const ghostHex = ownerScheme ? ownerScheme.light : C.ghost;
+    const col = b.crit ? ghostHex : greenHex;
     ctx.shadowColor = col;
     ctx.shadowBlur = b.crit ? 28 : 18;
     drawGooBall(
@@ -157,8 +167,8 @@ export function drawBulletSprite(ctx, b, ts, deps) {
       b.x,
       b.y,
       b.r,
-      b.crit ? C.getRgba(C.ghost, 0.82) : C.getRgba(C.green, 0.72),
-      b.crit ? 'rgba(255,255,255,0.94)' : C.getRgba(C.ghost, 0.84),
+      b.crit ? C.getRgba(ghostHex, 0.82) : C.getRgba(greenHex, 0.72),
+      b.crit ? 'rgba(255,255,255,0.94)' : C.getRgba(ghostHex, 0.84),
       ts * 0.013 + b.x * 0.09 + b.y * 0.07,
       0.92,
     );

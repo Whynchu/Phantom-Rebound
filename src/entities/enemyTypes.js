@@ -1,4 +1,5 @@
 import { getThreatPalette } from '../data/colorScheme.js';
+import { simRng } from '../systems/seededRng.js';
 
 const GLOBAL_SPEED_LIFT = 1.55;
 
@@ -70,21 +71,22 @@ function getEnemyDefinition(type) {
   };
 }
 
-function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBoss = false, bossScale = 1 }) {
+function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBoss = false, bossScale = 1, hpMultiplier = 1 }) {
   const def = getEnemyDefinition(type);
   const palette = getThreatPalette();
   const effectiveR = isBoss ? def.r * 3 : def.r;
-  const edge = Math.floor(Math.random() * 4);
+  const edge = Math.floor(simRng.next() * 4);
   let x;
   let y;
 
-  if(edge === 0){x = margin + Math.random() * (width - 2 * margin); y = margin + effectiveR;}
-  else if(edge === 1){x = width - margin - effectiveR; y = margin + Math.random() * (height - 2 * margin);}
-  else if(edge === 2){x = margin + Math.random() * (width - 2 * margin); y = height - margin - effectiveR;}
-  else {x = margin + effectiveR; y = margin + Math.random() * (height - 2 * margin);}
+  if(edge === 0){x = margin + simRng.next() * (width - 2 * margin); y = margin + effectiveR;}
+  else if(edge === 1){x = width - margin - effectiveR; y = margin + simRng.next() * (height - 2 * margin);}
+  else if(edge === 2){x = margin + simRng.next() * (width - 2 * margin); y = height - margin - effectiveR;}
+  else {x = margin + effectiveR; y = margin + simRng.next() * (height - 2 * margin);}
 
   const roomRamp = Math.min(1, roomIndex / 10);
   const hpScale = (0.28 + roomRamp * 0.72) * (1 + Math.log(roomIndex + 1) * 0.17);
+  const earlyHpEase = roomIndex < 9 ? 0.85 : 1;
   const earlyMidHpEase = roomIndex >= 9 && roomIndex < 20 ? 0.88 : 1;
   const tierOver20 = Math.max(0, roomIndex - 19);
   const tierOver40 = Math.max(0, roomIndex - 39);
@@ -99,7 +101,7 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
     roomIndex >= 60 ? 1.75 :
     roomIndex >= 40 ? 1.4 :
     1;
-  const hpMult = hpScale * earlyMidHpEase * room20Mult * midTierHpMult * lateTierHpMult * lateRoomHpMult;
+  const hpMult = hpScale * earlyHpEase * earlyMidHpEase * room20Mult * midTierHpMult * lateTierHpMult * lateRoomHpMult;
   // Speed and fire pressure step up again in deep late game.
   const lateRoomSpdMult =
     roomIndex >= 160 ? 1.32 :
@@ -118,7 +120,7 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
     roomIndex >= 40 ? 0.3 :
     0;
   // Bosses skip elite roll; normal enemies become increasingly elite-heavy after room 80.
-  const isElite = !isBoss && eliteChance > 0 && Math.random() < eliteChance;
+  const isElite = !isBoss && eliteChance > 0 && simRng.next() < eliteChance;
   const eliteCol = palette.elite.hex;
   const eliteGlowCol = hexToRgba(eliteCol, 0.82);
   const fireRateMult =
@@ -130,9 +132,11 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
     1;
   const effectiveFireRate = def.fRate >= 9000 ? def.fRate : Math.max(480, def.fRate * fireRateMult * (isElite ? 0.92 : 1) / (isBoss ? bossScale : 1));
 
-  const hpVal = isBoss
+  const safeHpMultiplier = Number.isFinite(hpMultiplier) && hpMultiplier > 0 ? hpMultiplier : 1;
+  const baseHpVal = isBoss
     ? Math.max(1, Math.round(def.hp * hpMult * 5 * bossScale * 10)) // 10x HP scale
     : Math.max(1, Math.round(def.hp * hpMult * getLateThreatHpMultiplier(type, roomIndex) * (isElite ? 1.3 : 1) * 10)); // 10x HP scale
+  const hpVal = Math.max(1, Math.round(baseHpVal * safeHpMultiplier));
 
   return {
     ...def,
@@ -148,7 +152,7 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
     spd: def.spd * GLOBAL_SPEED_LIFT * spdMult * (isBoss ? 0.6 : (isElite ? 1.15 : 1)),
     pts: isBoss ? def.pts * 5 : def.pts,
     fRate: effectiveFireRate,
-    fT: Math.random() * effectiveFireRate,
+    fT: simRng.next() * effectiveFireRate,
     forcePurpleShots: Boolean(def.forcePurpleShots),
     isBoss,
     isElite,
@@ -163,5 +167,5 @@ function canEnemyUsePurpleShots(enemy) {
   return Boolean(enemy.forcePurpleShots);
 }
 
-export { ENEMY_TYPES, PURPLE_BULLET_ROOM_THRESHOLD, createEnemy, canEnemyUsePurpleShots };
+export { ENEMY_TYPES, PURPLE_BULLET_ROOM_THRESHOLD, createEnemy, canEnemyUsePurpleShots, getEnemyDefinition };
 
