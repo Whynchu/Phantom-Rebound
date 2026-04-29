@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.3.3',
+      label: 'EARLY POWER FOLLOW-UP',
+      summary: ['Fixed a bug that could end a run immediately after starting.'],
+      highlights: [
+        'The room-1 boon picker is back to 3 choices, while the rest of the early power rebalance stays in place.',
+      ]
+    },
+  {
       version: '1.3.2',
       label: 'EARLY POWER REBALANCE',
       summary: ['The opening stretch of a run should feel stronger and more flexible now. Early rooms are a little softer, your first boon pick gives you more options, and several survival picks have been retuned to create clearer build identities.'],
