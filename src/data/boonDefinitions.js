@@ -40,7 +40,7 @@ const BOONS = [
   {name:'Bigger Bullets',tag:'OFFENSE',icon:'🔵',desc:'Larger shots. Diminishing returns.',apply(upg){upg.biggerBulletsTier++;const scale=getHyperbolicScale(upg.biggerBulletsTier);upg.shotSize=scale*(upg.biggerBulletsTier===1?1.06:1);}},
   {name:'Faster Bullets',tag:'OFFENSE',icon:'💨',desc:'Faster shots. Diminishing returns.',apply(upg){upg.fasterBulletsTier++;const scale=getHyperbolicScale(upg.fasterBulletsTier);upg.shotSpd=scale*(upg.fasterBulletsTier===1?1.06:1);}},
   {name:'Critical Hit',tag:'OFFENSE',icon:'💥',desc:'+25% crit chance. Max 3.',apply(upg){upg.critTier=Math.min(3,upg.critTier+1);upg.critChance=Math.min(0.75,0.25*upg.critTier);}},
-  {name:'Ricochet',tag:'UTILITY',icon:'↯',desc:'Shots bounce off walls.',apply(upg){upg.bounceTier=Math.max(1,upg.bounceTier);}},
+  {name:'Ricochet',tag:'UTILITY',icon:'↯',desc:'Shots bounce off walls.',apply(upg){upg.bounceTier=(upg.bounceTier||0)+1;}},
   {name:'Homing',tag:'UTILITY',icon:'🌀',desc:'Shots curve into enemies. Max 4.',apply(upg){upg.homingTier=Math.min(4,upg.homingTier+1);}},
   {name:'Pierce',tag:'UTILITY',icon:'→',desc:'+1 pierce per tier. Max 3.',apply(upg){upg.pierceTier=Math.min(3,upg.pierceTier+1);}},
   {name:'Quick Harvest',tag:'UTILITY',icon:'⬇',desc:'Grey absorbs grant more charge.',apply(upg){upg.absorbTier++;upg.absorbValue=1+0.40*getHyperbolicScale(upg.absorbTier);}},

@@ -2,6 +2,22 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.14.0',
+      label: 'REBOUND BUMP',
+      summary: ['Shots now start with one wall bounce by default, and Ricochet adds another bounce instead of merely enabling the mechanic.'],
+      highlights: [
+        'Shots now start with one wall bounce by default, and Ricochet adds another bounce instead of merely enabling the mechanic.',
+      ]
+    },
+  {
+      version: '1.3.12',
+      label: 'HOTFIX',
+      summary: ['Shots now start with one wall bounce by default, and Ricochet adds another bounce instead of merely enabling the mechanic.'],
+      highlights: [
+        'Shots now start with one wall bounce by default, and Ricochet adds another bounce instead of merely enabling the mechanic.',
+      ]
+    },
+  {
       version: '1.3.11',
       label: 'HOTFIX',
       summary: ['Moving now clears stored fire timer progress, so Twin Lance cannot bank a hidden follow-up shot while strafing.'],

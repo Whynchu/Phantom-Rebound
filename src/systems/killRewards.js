@@ -128,7 +128,7 @@ function buildKillRewardActions({
       count: killEffects.sanguineBurstCount,
       speed: 220 * globalSpeedLift,
       radius: 5.5,
-      bounceLeft: upgrades.bounceTier,
+      bounceLeft: 1 + (upgrades.bounceTier || 0),
       pierceLeft: upgrades.pierceTier,
       homing: upgrades.homingTier > 0,
       crit: false,

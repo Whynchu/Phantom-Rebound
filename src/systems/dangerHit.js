@@ -205,7 +205,7 @@ function buildLastStandBurstSpec({
     count: Math.max(1, Math.floor(maxCharge || 1)),
     speed,
     radius: 4.5,
-    bounceLeft: bounceTier > 0 ? 2 : 0,
+    bounceLeft: 1 + (bounceTier || 0),
     pierceLeft: pierceTier,
     homing: false,
     crit: false,

@@ -81,7 +81,7 @@ function buildPlayerVolleySpecs({
       vx: Math.cos(angle) * bulletSpeed,
       vy: Math.sin(angle) * bulletSpeed,
       radius: crit ? scaledRadius * 1.28 : scaledRadius,
-      bounceLeft: (upg.bounceTier || 0) > 0 ? 2 : 0,
+      bounceLeft: 1 + (upg.bounceTier || 0),
       pierceLeft: hasPayload ? 0 : getPierceLeft(shot) + (shot.isSpreadExtra ? (upg.spreadShotPierceBonus || 0) : 0),
       homing: (upg.homingTier || 0) > 0,
       crit,

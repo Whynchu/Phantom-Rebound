@@ -272,7 +272,7 @@ export function tickPlayerFire(state, slot0Input, slot1Input, dt, opts = {}) {
       const interval = 1 / (effectiveSps * 2 * (upg.heavyRoundsFireMult || 1));
       const mobileChargeMult = isStill ? 1.0 : (upg.mobileChargeRate || 0.10);
       metrics.fireT = (metrics.fireT || 0) + dt * mobileChargeMult;
-      if (!isStill) metrics.fireT = 0;
+      if (!isStill) metrics.fireT = Math.min(metrics.fireT, interval);
       if (metrics.fireT >= interval && isStill && autoTarget) {
         metrics.fireT = metrics.fireT % interval;
         fireSimSlot(state, slot, autoTarget.e.x, autoTarget.e.y);
