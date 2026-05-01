@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.1',
+      label: 'HOTFIX',
+      summary: ['Leaderboard run summaries now accept boon data from nested picks, flat boon arrays, or boonIds so loadouts render reliably.'],
+      highlights: [
+        'Leaderboard run summaries now accept boon data from nested picks, flat boon arrays, or boonIds so loadouts render reliably.',
+      ]
+    },
+  {
       version: '1.14.0',
       label: 'REBOUND BUMP',
       summary: ['Shots now start with one wall bounce by default, and Ricochet adds another bounce instead of merely enabling the mechanic.'],

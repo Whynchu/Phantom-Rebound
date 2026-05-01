@@ -7662,7 +7662,13 @@ function showLbBoonsPopup(row = null) {
     rooms: row?.room || 0,
     elapsedMs: runTimeMs || 0,
   };
-  const boons = Array.isArray(row?.boons?.picks) ? row.boons.picks : [];
+  const boons = Array.isArray(row?.boons?.picks)
+    ? row.boons.picks
+    : (Array.isArray(row?.boons)
+      ? row.boons
+      : (Array.isArray(row?.boonIds)
+        ? row.boonIds.map((name) => ({ name, icon: '•', detail: '' }))
+        : []));
   showLeaderboardBoonsPopup({
     popup: lbBoonsPopup,
     titleEl: lbBoonsPopupTitle,
@@ -7676,7 +7682,7 @@ function showLbBoonsPopup(row = null) {
     breakdown: row?.boons?.scoreBreakdown || row?.scoreBreakdown || null,
     stats,
     boons,
-    boonOrder: row?.boonOrder || row?.boons?.order || '',
+    boonOrder: row?.boonOrder || row?.boons?.order || row?.boons?.boonOrder || '',
   });
 }
 

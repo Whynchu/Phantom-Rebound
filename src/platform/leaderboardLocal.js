@@ -46,6 +46,9 @@ function buildLocalScoreEntry({
     version: gameVersion,
     color,
     boonOrder,
+    boonIds: Array.isArray(boons)
+      ? boons.map((boon) => (boon && typeof boon === 'object' ? boon.name : String(boon || ''))).filter(Boolean)
+      : [],
     runMode: runMode === 'coop' ? 'coop' : 'solo',
     boons: {
       picks: boons,

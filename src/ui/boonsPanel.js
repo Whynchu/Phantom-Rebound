@@ -67,8 +67,10 @@ function showLeaderboardBoonsPopup(args) {
   const stats = args.stats || null;
   const boons = Array.isArray(args.boons)
     ? args.boons
-    : (args.boons?.picks || []);
-  const boonOrder = args.boonOrder || args.boons?.order || '';
+    : (Array.isArray(args.boonIds)
+      ? args.boonIds.map((name) => ({ name, icon: '•', detail: '' }))
+      : (args.boons?.picks || []));
+  const boonOrder = args.boonOrder || args.boons?.order || args.boons?.boonOrder || '';
   return showLeaderboardRunSummaryPopup({
     ...args,
     runnerName,
