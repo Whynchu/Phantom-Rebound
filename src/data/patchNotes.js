@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.3.10',
+      label: 'HOTFIX',
+      summary: ['The charge ring now fills again at normal SPS, while only the full-charge glow stays locked to exact max charge.'],
+      highlights: [
+        'The charge ring now fills again at normal SPS, while only the full-charge glow stays locked to exact max charge.',
+      ]
+    },
+  {
       version: '1.3.9',
       label: 'HOTFIX',
       summary: ['Payload-ready ring now uses the opposite tint on the normal ring, and tether ring slows enemy shots without freezing them.'],

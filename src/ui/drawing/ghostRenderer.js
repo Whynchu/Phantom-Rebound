@@ -206,11 +206,11 @@ export function drawGhostSprite(ctx, ts, opts = {}) {
   ctx.beginPath();
   ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
   ctx.stroke();
-  if (fullCharge) {
+  if (chargeValue >= 1) {
     const ringHex = payloadReadyColor || greenHex;
     ctx.strokeStyle = ringHex;
     ctx.shadowColor = ringHex;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = fullCharge ? 10 : 6;
     ctx.beginPath();
     ctx.arc(0, 0, ringRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fireFrac);
     ctx.stroke();
