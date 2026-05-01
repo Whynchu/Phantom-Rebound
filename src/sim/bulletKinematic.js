@@ -63,6 +63,9 @@ export function tickBulletsKinematic(state, dt) {
     const orbCooldowns = state.slots?.[0]?.orbState?.cooldowns || [];
     if (b.state === 'danger' && slot0Body && slot0Upg.tetherOrbit && (slot0Upg.orbitSphereTier || 0) > 0) {
       const orbitRadius = 22 + (slot0Upg.orbitRadiusBonus || 0);
+      const currentSpeed = Math.hypot(b.vx, b.vy);
+      if (!b.tetherOrbitBaseSpeed) b.tetherOrbitBaseSpeed = Math.max(40, currentSpeed);
+      let inTetherRing = false;
       for (let oi = 0; oi < (slot0Upg.orbitSphereTier || 0); oi++) {
         if ((orbCooldowns[oi] || 0) > 0) continue;
         const orbitSlot = getOrbitSlotPosition({
@@ -75,10 +78,18 @@ export function tickBulletsKinematic(state, dt) {
           originY: slot0Body.y,
         });
         if (Math.hypot((b.x || 0) - orbitSlot.x, (b.y || 0) - orbitSlot.y) <= orbitRadius) {
-          b.vx *= 0.8;
-          b.vy *= 0.8;
+          inTetherRing = true;
+          const targetSpeed = Math.max(40, b.tetherOrbitBaseSpeed * 0.8);
+          if (currentSpeed > 0.0001) {
+            const nextSpeed = currentSpeed + (targetSpeed - currentSpeed) * 0.25;
+            b.vx = (b.vx / currentSpeed) * nextSpeed;
+            b.vy = (b.vy / currentSpeed) * nextSpeed;
+          }
           break;
         }
+      }
+      if (!inTetherRing) {
+        delete b.tetherOrbitBaseSpeed;
       }
     }
 

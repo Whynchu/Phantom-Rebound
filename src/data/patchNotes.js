@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.3.9',
+      label: 'HOTFIX',
+      summary: ['Payload-ready ring now uses the opposite tint on the normal ring, and tether ring slows enemy shots without freezing them.'],
+      highlights: [
+        'Payload-ready ring now uses the opposite tint on the normal ring, and tether ring slows enemy shots without freezing them.',
+      ]
+    },
+  {
       version: '1.3.8',
       label: 'HOTFIX',
       summary: ['Payload-ready ring now uses the player color, and full-charge glow/size only triggers at exact max charge.'],

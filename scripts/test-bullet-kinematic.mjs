@@ -134,4 +134,24 @@ function makeState(bullets, timeMs = 0, worldW = 800, worldH = 600) {
   console.log('✓ PASS');
 }
 
+// Test 11: Tether ring slows without freezing or compounding forever
+{
+  console.log('Test 11: Tether ring — slows danger bullets without freeze');
+  const bullet = { state: 'danger', x: 100, y: 100, vx: 120, vy: 0, r: 5 };
+  const state = makeState([bullet], 0);
+  state.slots = [{
+    body: { x: 100, y: 100 },
+    upg: { tetherOrbit: true, orbitSphereTier: 1 },
+    orbState: { cooldowns: [0] },
+  }];
+  tickBulletsKinematic(state, 1 / 60);
+  const speedAfter1 = Math.hypot(bullet.vx, bullet.vy);
+  tickBulletsKinematic(state, 1 / 60);
+  const speedAfter2 = Math.hypot(bullet.vx, bullet.vy);
+  assert(speedAfter1 > 40, `expected bullet to keep moving, got ${speedAfter1}`);
+  assert(speedAfter2 >= 40, `expected bullet to stay above floor, got ${speedAfter2}`);
+  assert(speedAfter2 <= speedAfter1, 'tether should slow toward target, not accelerate');
+  console.log('✓ PASS');
+}
+
 console.log('\n✅ All tickBulletsKinematic tests passed.\n');

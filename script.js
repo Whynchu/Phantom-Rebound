@@ -4618,6 +4618,14 @@ let payloadCooldownMs = 0;
 
 const sparks = spawnSparks;
 const burstPayloadExplosion = spawnPayloadExplosion;
+function getPayloadReadyRingColor(hex = getPlayerColorScheme().hex) {
+  if(typeof hex !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(hex)) return '#ff6b35';
+  const rr = parseInt(hex.slice(1, 3), 16);
+  const gg = parseInt(hex.slice(3, 5), 16);
+  const bb = parseInt(hex.slice(5, 7), 16);
+  if(!Number.isFinite(rr) || !Number.isFinite(gg) || !Number.isFinite(bb)) return '#ff6b35';
+  return `rgb(${255 - rr},${255 - gg},${255 - bb})`;
+}
 function burstBlueDissipate(x, y) {
   const threat = getThreatPalette();
   spawnBlueDissipateBurst(x, y, (a) => C.getRgba(threat.danger.light, a));
@@ -6373,6 +6381,9 @@ function update(dt,ts){
     if(b.state==='danger' && UPG.tetherOrbit && UPG.orbitSphereTier>0){
       syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
       const tetherRadius = getOrbitRadius();
+      const currentSpeed = Math.hypot(b.vx, b.vy);
+      if (!b.tetherOrbitBaseSpeed) b.tetherOrbitBaseSpeed = Math.max(40, currentSpeed);
+      let inTetherRing = false;
       for(let oi = 0; oi < UPG.orbitSphereTier; oi++){
         if((_orbCooldown[oi] || 0) > 0) continue;
         const orbitSlot = getOrbitSlotPosition({
@@ -6385,11 +6396,17 @@ function update(dt,ts){
           originY: player.y,
         });
         if(Math.hypot(b.x - orbitSlot.x, b.y - orbitSlot.y) <= tetherRadius){
-          b.vx *= 0.8;
-          b.vy *= 0.8;
+          inTetherRing = true;
+          const targetSpeed = Math.max(40, b.tetherOrbitBaseSpeed * 0.8);
+          if(currentSpeed > 0.0001){
+            const nextSpeed = currentSpeed + (targetSpeed - currentSpeed) * 0.25;
+            b.vx = (b.vx / currentSpeed) * nextSpeed;
+            b.vy = (b.vy / currentSpeed) * nextSpeed;
+          }
           break;
         }
       }
+      if(!inTetherRing) delete b.tetherOrbitBaseSpeed;
     }
 
     // Volatile Orbs: a danger bullet near any alive orbit sphere destroys the sphere + bullet.
@@ -7194,7 +7211,7 @@ function drawGhost(ts){
   const heavyMult = (slotUpg && slotUpg.heavyRoundsFireMult) || 1;
   const shotInterval = 1 / (sps * 2 * heavyMult);
   const payloadReadyColor = slotUpg?.payload && payloadCooldownMs <= 0
-    ? getPlayerColorScheme().hex
+    ? getPayloadReadyRingColor(getPlayerColorScheme().hex)
     : null;
   drawGhostSprite(ctx, ts, {
     playerState: body,
