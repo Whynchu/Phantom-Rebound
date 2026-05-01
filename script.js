@@ -3359,6 +3359,10 @@ function updateOnlineGuestPrediction(dt) {
 // moves guests. Simplified movement (no obstacles, no phase-walk nuance) is
 // intentional for the C2c milestone — C2d formalizes guest combat.
 function updateGuestSlotMovement(dt, W, H) {
+  // Online guests own slot 1 through updateOnlineGuestPrediction(); running
+  // this legacy loop again double-drives the same body and fights the
+  // snapshot/prediction path. Host / COOP_DEBUG still use it for slot 1.
+  if (typeof isCoopGuest === 'function' && isCoopGuest() && onlineGuestSlot1Installed) return;
   for (let i = 1; i < playerSlots.length; i++) {
     const slot = playerSlots[i];
     if (!slot || !slot.input) continue;

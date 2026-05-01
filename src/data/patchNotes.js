@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.2',
+      label: 'HOTFIX',
+      summary: ['Online coop guests no longer run the legacy slot-1 movement loop, which restores host-side motion and prevents the guest from fighting its own prediction path.'],
+      highlights: [
+        'Online coop guests no longer run the legacy slot-1 movement loop, which restores host-side motion and prevents the guest from fighting its own prediction path.',
+      ]
+    },
+  {
       version: '1.4.1',
       label: 'HOTFIX',
       summary: ['Leaderboard run summaries now accept boon data from nested picks, flat boon arrays, or boonIds so loadouts render reliably.'],
