@@ -16,6 +16,7 @@ import {
   resolvePostHitAftermath,
   convertNearbyDangerBulletsToGrey,
 } from '../systems/dangerHit.js';
+import { computeDodgeScore } from '../systems/scoring.js';
 import { emit } from './effectQueue.js';
 import {
   pushSimOutputBullet,
@@ -114,6 +115,13 @@ function resolveDangerHits(state, opts = {}) {
       if (slipstream.shouldTrigger) {
         gainSlotCharge(slot, slipstream.chargeGain);
         if (slot.timers) slot.timers.slipCooldown = slipstream.nextSlipCooldown;
+        if (state.run) {
+          const dodgeScore = computeDodgeScore({ room: state.run.roomIndex }, 1);
+          state.run.score += dodgeScore;
+          if (state.run.scoreBreakdown) {
+            state.run.scoreBreakdown.dodge = (state.run.scoreBreakdown.dodge || 0) + dodgeScore;
+          }
+        }
         emitEffect(state, opts, 'danger.slipstream', {
           slotIndex: si,
           bulletId: bullet.id,

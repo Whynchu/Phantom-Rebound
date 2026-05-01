@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.4',
+      label: 'DODGE TICK',
+      summary: ['Live dodge score now ticks on near-miss instead of waiting for room clear.'],
+      highlights: [
+        'Room-clear bonuses stay deferred; dodge is no longer double-awarded at room end.',
+      ]
+    },
+  {
       version: '1.4.3',
       label: 'HOTFIX',
       summary: ['The HUD score now counts up rapidly during the room instead of waiting for the end-of-room summary, while the final score still stays exact.'],

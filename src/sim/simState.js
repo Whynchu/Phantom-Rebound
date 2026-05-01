@@ -131,6 +131,7 @@ export function createSimState({
         overkill: 0,
         rooms: 0,
         bonus: 0,
+        dodge: 0,
       },
       gameOver: false,
       paused: false,

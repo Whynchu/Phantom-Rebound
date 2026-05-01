@@ -214,7 +214,7 @@ import {
   getKillSustainCapForRoom as getKillSustainCapForRoomValue,
   applyKillSustainHeal as applyKillSustainHealValue,
 } from './src/systems/sustain.js';
-import { computeKillScore, computeRoomClearBonuses, computeFiveRoomCheckpointBonus } from './src/systems/scoring.js';
+import { computeKillScore, computeDodgeScore, computeRoomClearBonuses, computeFiveRoomCheckpointBonus } from './src/systems/scoring.js';
 import { applyDamagelessRoomProgression as applyDamagelessRoomProgressionValue } from './src/systems/progression.js';
 import { computeProjectileHitDamage } from './src/systems/damage.js';
 import {
@@ -3900,7 +3900,6 @@ function awardRoomClearBonuses(room) {
   awardScore(bonuses.density, 'density');
   awardScore(bonuses.clutch, 'clutch');
   awardScore(bonuses.accuracy, 'accuracy');
-  awardScore(bonuses.dodge, 'dodge');
 }
 
 function applyRoomClearProgression() {
@@ -6258,9 +6257,12 @@ function update(dt,ts){
     });
 
     // R0.4 step 4d: near-miss telemetry detection extracted to bulletRuntime.detectBulletNearMiss
-    detectBulletNearMiss(b, player, telemetryController.getCurrentRoom(), {
+    const nearMissRoom = telemetryController.getCurrentRoom();
+    if(detectBulletNearMiss(b, player, nearMissRoom, {
       playerInvincible: player.invincible,
-    });
+    }) && nearMissRoom){
+      awardScore(computeDodgeScore(nearMissRoom, 1), 'dodge');
+    }
 
     if(bounced){
       // R0.4 step 6: bounce dispatch carved into src/sim/bulletBounceDispatch.js.

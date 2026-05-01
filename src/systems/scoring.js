@@ -2,6 +2,14 @@ function computeKillScore(points) {
   return Number(points) || 0;
 }
 
+function computeDodgeScore(room, nearMissCount = 1) {
+  const count = Math.max(0, Number(nearMissCount) || 0);
+  if (!room || count <= 0) return 0;
+  const roomNumber = Number(room.room) || 0;
+  const depthScale = 1 + roomNumber * 0.08;
+  return Math.round(count * (4 + roomNumber * 0.3) * depthScale);
+}
+
 function computeRoomClearBonuses(room, context = {}) {
   if (!room) return { clear: 0, pace: 0, efficiency: 0, flawless: 0, boss: 0, density: 0, clutch: 0, accuracy: 0, dodge: 0 };
   const maxHp = Math.max(1, Number(context.maxHp) || 100);
@@ -45,7 +53,7 @@ function computeRoomClearBonuses(room, context = {}) {
     : 0;
 
   // Dodge: near-miss count. Rewards evasion.
-  const dodge = Math.round(nearMisses * (4 + roomNumber * 0.3) * depthScale);
+  const dodge = computeDodgeScore(room, nearMisses);
 
   return { clear, pace, efficiency, flawless, boss, density, clutch, accuracy, dodge };
 }
@@ -71,4 +79,4 @@ function computeFiveRoomCheckpointBonus(rooms) {
   return Math.round(baseBonus * paceMultiplier * avoidanceMultiplier + consistencyBonus);
 }
 
-export { computeKillScore, computeRoomClearBonuses, computeFiveRoomCheckpointBonus };
+export { computeKillScore, computeDodgeScore, computeRoomClearBonuses, computeFiveRoomCheckpointBonus };

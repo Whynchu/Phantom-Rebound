@@ -231,6 +231,7 @@ export function restoreState(liveState, snapshot) {
       if (snapshot.run.scoreBreakdown.overkill !== undefined) liveState.run.scoreBreakdown.overkill = snapshot.run.scoreBreakdown.overkill;
       if (snapshot.run.scoreBreakdown.rooms !== undefined) liveState.run.scoreBreakdown.rooms = snapshot.run.scoreBreakdown.rooms;
       if (snapshot.run.scoreBreakdown.bonus !== undefined) liveState.run.scoreBreakdown.bonus = snapshot.run.scoreBreakdown.bonus;
+      if (snapshot.run.scoreBreakdown.dodge !== undefined) liveState.run.scoreBreakdown.dodge = snapshot.run.scoreBreakdown.dodge;
     }
     if (snapshot.run.gameOver !== undefined) liveState.run.gameOver = snapshot.run.gameOver;
     if (snapshot.run.paused !== undefined) liveState.run.paused = snapshot.run.paused;
