@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.3.11',
+      label: 'HOTFIX',
+      summary: ['Moving now clears stored fire timer progress, so Twin Lance cannot bank a hidden follow-up shot while strafing.'],
+      highlights: [
+        'Moving now clears stored fire timer progress, so Twin Lance cannot bank a hidden follow-up shot while strafing.',
+      ]
+    },
+  {
       version: '1.3.10',
       label: 'HOTFIX',
       summary: ['The charge ring now fills again at normal SPS, while only the full-charge glow stays locked to exact max charge.'],

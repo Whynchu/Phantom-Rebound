@@ -40,7 +40,7 @@ function tickGuestFireCore(slot, dt, isStill, hasEnemy) {
   if ((slot.metrics.charge || 0) < 1) return { fired: false };
   const interval = 1 / ((upg.sps || 0.8) * 2);
   slot.metrics.fireT = (slot.metrics.fireT || 0) + dt;
-  if (!isStill) slot.metrics.fireT = Math.min(slot.metrics.fireT, interval);
+  if (!isStill) slot.metrics.fireT = 0;
   if (slot.metrics.fireT >= interval && isStill) {
     slot.metrics.fireT = slot.metrics.fireT % interval;
     return { fired: true };
@@ -77,7 +77,7 @@ function tickGuestFireCore(slot, dt, isStill, hasEnemy) {
 {
   const slot = makeSlot({ charge: 1 });
   tickGuestFireCore(slot, 1.0, /* isStill */ false, true);
-  assert('moving player does not fire even at full charge', slot.metrics.fireT <= 1 / (0.8 * 2));
+  assert('moving player does not bank a fire timer at all', slot.metrics.fireT === 0);
 }
 
 console.log(`Guest-fire suite: ${pass} passed, ${fail} failed`);

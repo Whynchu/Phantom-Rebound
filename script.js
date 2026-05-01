@@ -5875,7 +5875,7 @@ function update(dt,ts){
     const interval = 1 / (effectiveSps * 2 * (UPG.heavyRoundsFireMult || 1));
     const mobileChargeMult = isStill ? 1.0 : (UPG.mobileChargeRate || 0.10);
     fireT += dt * mobileChargeMult;
-    if(!isStill) fireT = Math.min(fireT, interval); // cap while moving — prevents pre-accumulated double shot
+    if(!isStill) fireT = 0; // moving should not bank a hidden follow-up shot
     if(fireT >= interval && isStill){
       fireT = fireT % interval;
       if(autoTarget) {
