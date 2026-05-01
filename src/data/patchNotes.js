@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.3',
+      label: 'HOTFIX',
+      summary: ['The HUD score now counts up rapidly during the room instead of waiting for the end-of-room summary, while the final score still stays exact.'],
+      highlights: [
+        'The HUD score now counts up rapidly during the room instead of waiting for the end-of-room summary, while the final score still stays exact.',
+      ]
+    },
+  {
       version: '1.4.2',
       label: 'HOTFIX',
       summary: ['Online coop guests no longer run the legacy slot-1 movement loop, which restores host-side motion and prevents the guest from fighting its own prediction path.'],

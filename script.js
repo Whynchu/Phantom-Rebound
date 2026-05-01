@@ -827,6 +827,7 @@ const BASE_PLAYER_HP = 200;
 let gstate = 'start';
 let player = {};
 let score=0, kills=0;
+let displayScore = 0;
 function awardKillPoints(pts) {
   const base = Number(pts) || 0;
   if (!base) return 0;
@@ -5316,6 +5317,7 @@ function init() {
   simRng.reseed(runSeed);
   if (continueRunBtn) continueRunBtn.classList.add('off');
   score = runMetrics.score; kills = runMetrics.kills;
+  displayScore = score;
   resetScoreBreakdown();
   charge = runMetrics.charge; fireT = runMetrics.fireT; stillTimer = runMetrics.stillTimer; prevStill = runMetrics.prevStill;
   hp = runMetrics.hp; maxHp = runMetrics.maxHp;
@@ -7287,6 +7289,13 @@ function drawHatOptionPreview(canvas, hatKey) {
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
 function hudUpdate(){
+  const scoreGap = score - displayScore;
+  if (scoreGap > 0) {
+    displayScore += Math.max(1, Math.ceil(scoreGap * 0.45));
+    if (displayScore > score) displayScore = score;
+  } else if (scoreGap < 0) {
+    displayScore = score;
+  }
   // D5a — charge/sps come from the local render slot so the online guest
   // sees its OWN bar/sps once D5b ships the guest body. roomIndex/score/
   // runElapsedMs are game-wide and stay global. Solo/host/COOP_DEBUG: local
@@ -7300,7 +7309,7 @@ function hudUpdate(){
   renderHud({
     roomIndex,
     runElapsedMs,
-    score,
+    score: displayScore,
     charge: localCharge,
     maxCharge: localMaxCharge,
     sps: localSps,
