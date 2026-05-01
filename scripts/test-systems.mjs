@@ -132,6 +132,7 @@ import { showLeaderboardRunSummaryPopup } from '../src/ui/boonsPanel.js';
 import { buildPatchNoteCardHtml } from '../src/ui/patchNotes.js';
 import { syncLeaderboardStatusBadge, syncLeaderboardToggleStates } from '../src/ui/leaderboard.js';
 import { showGameOverScreen } from '../src/ui/gameOver.js';
+import { isFullChargeVisual } from '../src/ui/drawing/ghostRenderer.js';
 import {
   revealAppShell,
   syncColorDrivenCopy,
@@ -647,6 +648,32 @@ test('output hit helpers keep damage, pierce, and reward cadence deterministic',
   assert.equal(volatileHit.shouldBloodPactHeal, false);
   assert.equal(volatileHit.nextPierceLeft, 0);
   assert.equal(volatileHit.shouldTriggerVolatile, true);
+
+  const payloadHit = resolveOutputEnemyHit({
+    bullet: {
+      crit: false,
+      dmg: 3,
+      pierceLeft: 3,
+      hasPayload: true,
+      bloodPactHeals: 0,
+      bloodPactHealCap: 2,
+    },
+    enemyHp: 20,
+    hp: 10,
+    maxHp: 100,
+    upgrades: {
+      deadManTrigger: true,
+      finalForm: false,
+      bloodPact: true,
+      volatileRounds: false,
+      volatileAllTargets: false,
+    },
+    critDamageFactor: 2.4,
+    bloodPactBaseHealCap: 1,
+  });
+  assert.equal(payloadHit.piercesAfterHit, false);
+  assert.equal(payloadHit.removeBullet, true);
+  assert.equal(payloadHit.shouldBloodPactHeal, false);
 
   const removeHit = resolveOutputEnemyHit({
     bullet: { crit: false, dmg: 3, pierceLeft: 0 },
@@ -1322,6 +1349,13 @@ test('leaderboard run summary renders score breakdown above boon list', () => {
   assert.ok(breakdownEl.children.length > 0);
   assert.ok(listEl.children.length > 0);
   assert.ok(listEl.children[0].innerHTML.includes('Rapid Fire'));
+});
+
+test('ghost renderer only treats exact max charge as full charge', () => {
+  assert.equal(isFullChargeVisual(9, 10), false);
+  assert.equal(isFullChargeVisual(10, 10), true);
+  assert.equal(isFullChargeVisual(0.99, 1), false);
+  assert.equal(isFullChargeVisual(1, 1), true);
 });
 
 test('room layouts rotate deterministically and keep safe spawn bounds', () => {
@@ -2051,6 +2085,7 @@ test('player fire helpers build lane offsets, shot plan, and volley specs determ
     getPierceLeft: (shot) => shot.offset === 0 ? 2 : 1,
     getBloodPactHealCap: () => 9,
     now: 1000,
+    payloadReady: true,
     random: (() => {
       const neutralDamageRoll = (1 - 0.88) / (1.14 - 0.88);
       const rolls = [0.4, neutralDamageRoll, 0.8, neutralDamageRoll, 0.2, neutralDamageRoll];
@@ -2066,12 +2101,15 @@ test('player fire helpers build lane offsets, shot plan, and volley specs determ
   assert.equal(volley[0].radius, 5.12);
   assert.equal(volley[1].radius, 4);
   assert.equal(volley[0].bounceLeft, 2);
+  assert.equal(volley[0].pierceLeft, 0);
   assert.equal(volley[1].pierceLeft, 1);
   assert.equal(volley[2].pierceLeft, 2);
   assert.equal(volley[0].homing, true);
   assert.ok(Math.abs(volley[0].dmg - 21.6) < 1e-9);
   assert.equal(volley[0].expireAt, 1800);
   assert.equal(volley[0].extras.hasPayload, true);
+  assert.equal(volley[1].extras.hasPayload, false);
+  assert.equal(volley[2].extras.hasPayload, false);
   assert.equal(volley[0].extras.bloodPactHealCap, 9);
   assert.equal(volley[0].x, 100);
   assert.equal(volley[0].y, 46.5);

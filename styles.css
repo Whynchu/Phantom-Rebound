@@ -27,7 +27,7 @@ input, textarea, select {
 }
 /* Prevent iOS from auto-scaling small text (triggers column zoom) */
 html { -webkit-text-size-adjust: none; text-size-adjust: none; }
-html { background: #050505; }
+html { background: #121212; }
 /* Disable ALL touch handling on display-only areas that have small text — prevents iOS text-column zoom */
 #cv, #bot-hud, #legend, #room-clear, #room-intro { touch-action: none; }
 html, body {
@@ -39,7 +39,9 @@ html, body {
   overflow: hidden;
 }
 body {
-  background: #050505;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.035), rgba(0,0,0,0.12)),
+    #121212;
   color: var(--text);
   font-family: 'IBM Plex Mono', monospace;
   width: 100%;
@@ -68,7 +70,9 @@ body {
 body::before {
   content:'';
   position:fixed; inset:0;
-  background: repeating-linear-gradient(0deg,rgba(0,0,0,0.055) 0px,rgba(0,0,0,0.055) 1px,transparent 1px,transparent 3px);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(var(--accent-rgb),0.055), transparent 58%),
+    repeating-linear-gradient(0deg,rgba(0,0,0,0.07) 0px,rgba(0,0,0,0.07) 1px,transparent 1px,transparent 3px);
   pointer-events:none; z-index:100;
 }
 body.keyboard-open::before {
@@ -499,7 +503,19 @@ body.compact-viewport #wrap {
   border-top: 1px solid var(--border);
 }
 /* CANVAS */
-#cv { display:block; border-radius:5px; border:1px solid var(--border2); cursor:none; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+#cv {
+  display:block;
+  margin-left:auto;
+  margin-right:auto;
+  max-width:100%;
+  border-radius:5px;
+  border:1px solid var(--border2);
+  cursor:none;
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-touch-callout:none;
+}
 /* BOTTOM HUD */
 #bot-hud {
   display: none;

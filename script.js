@@ -4137,12 +4137,12 @@ function startRoom(idx) {
 }
 
 function triggerPayloadBlast(bullet, enemies, ts) {
-  if(!bullet?.hasPayload || !enemies || enemies.length === 0) return;
+  if(!bullet?.hasPayload) return;
   if(payloadCooldownMs > 0) return;
   const aoeRadius = getPayloadBlastRadius(UPG, bullet.r || 4.5);
   const impactDamage = bullet.dmg * 0.6;
   let hitCount = 0;
-  for(let j = enemies.length - 1; j >= 0; j--){
+  for(let j = (enemies?.length || 0) - 1; j >= 0; j--){
     const e = enemies[j];
     if(Math.hypot(e.x - bullet.x, e.y - bullet.y) < aoeRadius + e.r){
       e.hp -= impactDamage;
@@ -4178,7 +4178,7 @@ function triggerPayloadBlast(bullet, enemies, ts) {
       }
     }
   }
-  if(hitCount > 0) payloadCooldownMs = 5000;
+  payloadCooldownMs = 5000;
   burstPayloadExplosion(bullet.x, bullet.y, aoeRadius);
   sparks(bullet.x, bullet.y, '#ff6b35', 12 + Math.min(12, Math.round((aoeRadius - 80) / 6)), 80 + aoeRadius * 0.2);
 }
@@ -4524,6 +4524,7 @@ function firePlayer(slot, tx, ty) {
   const overchargeBonus = (upg.overchargeVent && metrics.charge >= upg.maxCharge) ? 1.6 : 1;
   const volleyTotalDamageMult = getVolleyTotalDamageMultiplier(availableShots);
   const volleyPerBulletDamageMult = volleyTotalDamageMult / availableShots;
+  const payloadReady = Boolean(upg.payload && payloadCooldownMs <= 0);
   
   // Overload converts the full bank into one scaled volley worth the charge it burns.
   let overloadBonus = 1;
@@ -4553,6 +4554,7 @@ function firePlayer(slot, tx, ty) {
     getBloodPactHealCap,
     now,
     ownerId,
+    payloadReady,
   });
   volleySpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
   const shotsVolleyRoom = telemetryController.getCurrentRoom();
@@ -4601,6 +4603,7 @@ function firePlayer(slot, tx, ty) {
         random: () => 1,
         damageVarianceMin: 1,
         damageVarianceMax: 1,
+        payloadReady: false,
       });
       echoSpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
       const shotsEchoRoom = telemetryController.getCurrentRoom();
@@ -5918,6 +5921,7 @@ function update(dt,ts){
         height: H,
         margin: M,
         gravityWell2: UPG.gravityWell2,
+        tetherOrbit: UPG.tetherOrbit,
         windupMs: WINDUP_MS,
         obstacles: roomObstacles,
       });
@@ -6733,6 +6737,11 @@ function update(dt,ts){
             }
             enemies.splice(j,1);
           }
+          if(b.hasPayload){
+            triggerPayloadBlast(b, enemies, ts);
+            removeBullet = true;
+            break;
+          }
           if(hitResolution.piercesAfterHit){
             b.pierceLeft = hitResolution.nextPierceLeft;
             if(hitResolution.shouldTriggerVolatile){
@@ -6965,8 +6974,7 @@ function draw(ts){
   }
 
   // Ghost player sprite
-  // Payload-ready ring indicator (drawn before ghost so ghost is on top)
-  // D18.2 — source position + UPG/aim/invuln from the local render slot.
+// D18.2 — source position + UPG/aim/invuln from the local render slot.
   // On host/solo this collapses to slot 0 (player + UPG + playerAim*) so
   // the determinism canary is unaffected. On the online guest, localIdx is
   // 1, so the ring + blink + aim triangle now anchor to the GUEST's own
@@ -6974,27 +6982,9 @@ function draw(ts){
   // globals (which on a guest reflect the host, not the local player).
   const localRenderSlot = getLocalRenderSlot();
   const localBody = (localRenderSlot && localRenderSlot.body) || player;
-  const localUpg = (localRenderSlot && localRenderSlot.upg) || UPG;
   const localAim = (localRenderSlot && localRenderSlot.aim) || null;
   const localAimAngle = localAim ? (localAim.angle || 0) : playerAimAngle;
   const localAimHasTarget = localAim ? !!localAim.hasTarget : playerAimHasTarget;
-  const localPayloadCooldown = (localRenderSlot && localRenderSlot.metrics && Number.isFinite(localRenderSlot.metrics.payloadCooldownMs))
-    ? localRenderSlot.metrics.payloadCooldownMs
-    : payloadCooldownMs;
-  if(localUpg.payload && localPayloadCooldown <= 0){
-    const hex = getPlayerColorScheme().hex;
-    const rr = parseInt(hex.slice(1,3),16), gg = parseInt(hex.slice(3,5),16), bb = parseInt(hex.slice(5,7),16);
-    const compR = 255 - rr, compG = 255 - gg, compB = 255 - bb;
-    const pulse = 0.4 + 0.3 * Math.sin(ts * 0.006);
-    ctx.save();
-    ctx.globalAlpha = pulse;
-    ctx.strokeStyle = `rgb(${compR},${compG},${compB})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(localBody.x, localBody.y, localBody.r + 6, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
   // D18.15a — coop spectator: never blink. Their body.invincible is the
   // sticky 1e9 sentinel, so the legacy blink would strobe forever. We
   // want a steady 30% alpha render via drawGhost's spectator branch.
@@ -7203,6 +7193,9 @@ function drawGhost(ts){
   const sps = (slotUpg && slotUpg.sps) || UPG.sps;
   const heavyMult = (slotUpg && slotUpg.heavyRoundsFireMult) || 1;
   const shotInterval = 1 / (sps * 2 * heavyMult);
+  const payloadReadyColor = slotUpg?.payload && payloadCooldownMs <= 0
+    ? getPlayerColorScheme().hex
+    : null;
   drawGhostSprite(ctx, ts, {
     playerState: body,
     chargeValue: isSpectator ? 0 : chargeValue,
@@ -7214,6 +7207,7 @@ function drawGhost(ts){
     forceFrown: isSpectator,
     bodyAlpha: isSpectator ? 0.3 : 1,
     hatKey: playerHat,
+    payloadReadyColor: isSpectator ? null : payloadReadyColor,
   });
 }
 

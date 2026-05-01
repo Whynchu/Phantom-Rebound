@@ -2,6 +2,22 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.3.8',
+      label: 'HOTFIX',
+      summary: ['Payload-ready ring now uses the player color, and full-charge glow/size only triggers at exact max charge.'],
+      highlights: [
+        'Payload-ready ring now uses the player color, and full-charge glow/size only triggers at exact max charge.',
+      ]
+    },
+  {
+      version: '1.3.7',
+      label: 'HOTFIX',
+      summary: ['Softened the Gravity Well II and Tether Orbit interaction so ranged enemies keep moving instead of appearing frozen.'],
+      highlights: [
+        'Softened the Gravity Well II and Tether Orbit interaction so ranged enemies keep moving instead of appearing frozen.',
+      ]
+    },
+  {
       version: '1.3.6',
       label: 'ROOM LAYOUTS',
       summary: ['Leaderboards now open a full run summary with your score breakdown and boon loadout.'],

@@ -17,6 +17,10 @@ import { BASE_PLAYER_HP, GAME_OVER_ANIM_MS } from '../../data/constants.js';
 let _alphaCompCanvas = null;
 let _alphaCompCtx = null;
 
+function isFullChargeVisual(chargeValue, maxChargeValue) {
+  return chargeValue >= Math.max(1, maxChargeValue || 10);
+}
+
 export function drawGhostSprite(ctx, ts, opts = {}) {
   const {
     playerState,
@@ -41,6 +45,7 @@ export function drawGhostSprite(ctx, ts, opts = {}) {
     // partners look sad while still walking around.
     forceFrown = false,
     bodyAlpha = 1,
+    payloadReadyColor = null,
   } = opts;
   const p = playerState;
   if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
@@ -92,9 +97,10 @@ export function drawGhostSprite(ctx, ts, opts = {}) {
   const ghostBodyRgb = colorScheme ? _hex2rgb(ghostBodyHex) : C.ghostBodyRgb;
   const greenRgba = (alpha) => `rgba(${greenRgb.r},${greenRgb.g},${greenRgb.b},${alpha})`;
   const t = ts / 1000;
+  const fullCharge = isFullChargeVisual(chargeValue, maxChargeValue);
   const chargeFrac = Math.min(1, chargeValue / Math.max(1, maxChargeValue || 10));
   const fireFrac = chargeValue >= 1 ? Math.max(0, Math.min(1, fireProgress || 0)) : 0;
-  const overload = chargeFrac >= 0.95;
+  const overload = fullCharge;
   const overloadPulse = overload ? Math.sin(t * 12) * 0.3 + 0.7 : 1;
   const lean = idleStill ? 0 : Math.max(-.3, Math.min(.3, p.vx / 300));
   const wobble = idleStill ? 0 : Math.sin(t * 3) * 2;
@@ -200,9 +206,10 @@ export function drawGhostSprite(ctx, ts, opts = {}) {
   ctx.beginPath();
   ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
   ctx.stroke();
-  if (chargeValue >= 1) {
-    ctx.strokeStyle = greenHex;
-    ctx.shadowColor = greenHex;
+  if (fullCharge) {
+    const ringHex = payloadReadyColor || greenHex;
+    ctx.strokeStyle = ringHex;
+    ctx.shadowColor = ringHex;
     ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.arc(0, 0, ringRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fireFrac);
@@ -226,3 +233,5 @@ export function drawGhostSprite(ctx, ts, opts = {}) {
 
   ctx.restore();
 }
+
+export { isFullChargeVisual };

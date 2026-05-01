@@ -184,6 +184,7 @@ export function restoreState(liveState, snapshot) {
         if (snapshotSlot.timers.killSustainHealedThisRoom !== undefined) liveSlot.timers.killSustainHealedThisRoom = snapshotSlot.timers.killSustainHealedThisRoom;
         if (snapshotSlot.timers.colossusShockwaveCd !== undefined) liveSlot.timers.colossusShockwaveCd = snapshotSlot.timers.colossusShockwaveCd;
         if (snapshotSlot.timers.volatileOrbGlobalCooldown !== undefined) liveSlot.timers.volatileOrbGlobalCooldown = snapshotSlot.timers.volatileOrbGlobalCooldown;
+        if (snapshotSlot.timers.payloadCooldownMs !== undefined) liveSlot.timers.payloadCooldownMs = snapshotSlot.timers.payloadCooldownMs;
       } else if (snapshotSlot.timers && !liveSlot.timers) {
         // Live slot was created before timers field existed — adopt snapshot copy.
         liveSlot.timers = { ...snapshotSlot.timers };

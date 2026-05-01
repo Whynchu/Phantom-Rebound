@@ -99,6 +99,28 @@ console.log('\n=== outputHitDispatch tests ===\n');
 
 {
   const state = makeState();
+  const bullet = outputBullet({ dmg: 4, pierceLeft: 3, hasPayload: true });
+  state.bullets.push(bullet);
+  state.enemies.push(enemy({ eid: 101, hp: 10, maxHp: 10 }));
+  state.enemies.push(enemy({ eid: 102, x: 126, y: 100, hp: 10, maxHp: 10 }));
+
+  const hits = resolveOutputHits(state, {
+    queueEffects: true,
+    spawnGreyDropsOnKill: false,
+    getPayloadBlastRadius: () => 50,
+  });
+
+  assert.equal(hits, 1);
+  assert.equal(state.bullets.length, 0);
+  assert.equal(state.slots[0].timers.payloadCooldownMs, 5000);
+  assert.equal(state.effectQueue.some((fx) => fx.kind === 'payload.blast' && fx.hitCount === 2), true);
+  assert.ok(Math.abs(state.enemies.find((e) => e.eid === 101).hp - 3.6) < 1e-9);
+  assert.ok(Math.abs(state.enemies.find((e) => e.eid === 102).hp - 7.6) < 1e-9);
+  console.log('PASS payload detonates on enemy contact and consumes non-piercing bullet');
+}
+
+{
+  const state = makeState();
   state.slots[0].metrics.hp = 40;
   state.slots[0].metrics.maxHp = 100;
   state.slots[0].upg.bloodPact = true;

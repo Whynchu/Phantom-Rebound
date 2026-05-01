@@ -77,6 +77,12 @@ function resolveOutputHits(state, opts = {}) {
         enemies.splice(j, 1);
       }
 
+      if (bullet.hasPayload) {
+        triggerPayloadBlast(state, bullet, ownerSlot, ownerUpg, opts, ts);
+        removeBullet = true;
+        break;
+      }
+
       if (hit.piercesAfterHit) {
         bullet.pierceLeft = hit.nextPierceLeft;
         if (hit.shouldTriggerVolatile) {
@@ -114,6 +120,52 @@ function resolveOutputHits(state, opts = {}) {
   }
 
   return hits;
+}
+
+function triggerPayloadBlast(state, bullet, ownerSlot, ownerUpg, opts, ts) {
+  const timers = ownerSlot?.timers || {};
+  if ((timers.payloadCooldownMs || 0) > 0) return 0;
+  timers.payloadCooldownMs = 5000;
+  const radius = getPayloadBlastRadius(ownerUpg, bullet.r || 4.5, opts);
+  const damage = (bullet.dmg || 1) * 0.6;
+  let hitCount = 0;
+  for (let j = state.enemies.length - 1; j >= 0; j--) {
+    const enemy = state.enemies[j];
+    if (!canEnemyBeHit(enemy)) continue;
+    if (Math.hypot((enemy.x || 0) - (bullet.x || 0), (enemy.y || 0) - (bullet.y || 0)) >= radius + (enemy.r || 0)) continue;
+    enemy.hp = (enemy.hp || 0) - damage;
+    hitCount++;
+    emitEffect(state, opts, 'payload.enemyHit', {
+      slotIndex: ownerSlot?.index ?? (Number.isInteger(bullet.ownerId) ? bullet.ownerId : 0),
+      bulletId: bullet.id,
+      enemyId: enemy.eid ?? enemy.id ?? null,
+      damage,
+      x: enemy.x,
+      y: enemy.y,
+    });
+    if (enemy.hp <= 0) {
+      awardEnemyKill(state, enemy, ownerSlot, bullet, opts);
+      spawnKillGreyDrops(state, enemy, ownerUpg, ts, opts);
+      state.enemies.splice(j, 1);
+    }
+  }
+  emitEffect(state, opts, 'payload.blast', {
+    slotIndex: ownerSlot?.index ?? (Number.isInteger(bullet.ownerId) ? bullet.ownerId : 0),
+    bulletId: bullet.id,
+    x: bullet.x,
+    y: bullet.y,
+    radius,
+    hitCount,
+  });
+  return hitCount;
+}
+
+function getPayloadBlastRadius(upg, bulletRadius, opts) {
+  if (typeof opts.getPayloadBlastRadius === 'function') {
+    return opts.getPayloadBlastRadius(upg, bulletRadius);
+  }
+  const payloadTier = Math.max(0, upg?.payloadRadiusTier || 0);
+  return Math.min(160, 80 + Math.max(0, (bulletRadius || 4.5) - 4.5) * 8 + payloadTier * 20);
 }
 
 function canEnemyBeHit(enemy) {

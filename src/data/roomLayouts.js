@@ -162,21 +162,18 @@ const ROOM_LAYOUTS = [
   buildLayout('offset_lanes', 'Offset Lanes', [
     ...(() => {
       const cells = [];
-      pushRectCells(cells, 2, 3, 4, 14);
-      pushRectCells(cells, 8, 8, 7, 17);
-      pushRectCells(cells, 5, 6, 10, 11);
-      pushRectCells(cells, 5, 6, 14, 15);
+      pushRectCells(cells, 2, 3, 5, 10);
+      pushRectCells(cells, 8, 9, 12, 17);
       return cells;
     })(),
   ]),
-  buildLayout('broken_ring', 'Broken Ring', [
+  buildLayout('split_bridge', 'Split Bridge', [
     ...(() => {
       const cells = [];
-      pushRectCells(cells, 4, 7, 6, 6);
-      pushRectCells(cells, 4, 7, 15, 15);
-      pushRectCells(cells, 4, 4, 7, 14);
-      pushRectCells(cells, 7, 7, 7, 14);
-      pushRectCells(cells, 5, 6, 10, 11);
+      pushRectCells(cells, 2, 5, 7, 7);
+      pushRectCells(cells, 5, 5, 8, 10);
+      pushRectCells(cells, 6, 9, 14, 14);
+      pushRectCells(cells, 6, 6, 11, 13);
       return cells;
     })(),
   ]),

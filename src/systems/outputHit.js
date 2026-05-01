@@ -13,14 +13,16 @@ function resolveOutputEnemyHit({
   const enemyHpAfterHit = enemyHp - damage;
   const bloodPactHealCap = bullet.bloodPactHealCap || bloodPactBaseHealCap;
   const bloodPactHeals = bullet.bloodPactHeals || 0;
+  const payloadImpact = Boolean(bullet.hasPayload);
   const shouldBloodPactHeal = Boolean(
+    !payloadImpact &&
     upgrades.bloodPact &&
     bullet.pierceLeft > 0 &&
     bloodPactHeals < bloodPactHealCap
   );
   const nextBloodPactHeals = shouldBloodPactHeal ? bloodPactHeals + 1 : bloodPactHeals;
 
-  const piercesAfterHit = deadManActive || bullet.pierceLeft > 0;
+  const piercesAfterHit = !payloadImpact && (deadManActive || bullet.pierceLeft > 0);
   let nextPierceLeft = bullet.pierceLeft || 0;
   let shouldTriggerVolatile = false;
   if(piercesAfterHit && !deadManActive) {

@@ -117,6 +117,7 @@ function tickEnemyCombat(state, dt, opts = {}) {
       height: world.height,
       margin: world.margin,
       gravityWell2: !!opts.gravityWell2,
+      tetherOrbit: !!opts.tetherOrbit,
       windupMs: opts.windupMs != null ? opts.windupMs : DEFAULT_WINDUP_MS,
       obstacles: world.obstacles,
     });

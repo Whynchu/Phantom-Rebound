@@ -69,6 +69,7 @@ export function tickPostMovementTimers(body, shields, timers, orbCooldown, dt, o
     }
     if (timers.chainMagnetTimer > 0) timers.chainMagnetTimer -= dt * 1000;
     if (timers.slipCooldown > 0) timers.slipCooldown -= dt * 1000;
+    if (timers.payloadCooldownMs > 0) timers.payloadCooldownMs = Math.max(0, timers.payloadCooldownMs - dt * 1000);
     if (colossusActive && timers.colossusShockwaveCd > 0) timers.colossusShockwaveCd -= dt;
 
     // 4. Volatile orb global cooldown (clamped)

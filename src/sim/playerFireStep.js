@@ -108,6 +108,8 @@ function fireSimSlot(state, slot, targetX, targetY) {
   const overchargeBonus = (upg.overchargeVent && metrics.charge >= upg.maxCharge) ? 1.6 : 1;
   const volleyTotalDamageMult = getVolleyTotalDamageMultiplier(availableShots);
   const volleyPerBulletDamageMult = volleyTotalDamageMult / availableShots;
+  const timers = slot.timers || {};
+  const payloadReady = Boolean(upg.payload && (timers.payloadCooldownMs || 0) <= 0);
 
   // Overload: spend full bank, scale damage + size.
   let overloadBonus = 1, overloadSizeScale = 1, chargeSpent = availableShots;
@@ -138,6 +140,7 @@ function fireSimSlot(state, slot, targetX, targetY) {
     now,
     ownerId: slot.index ?? 0,
     random: () => nextSimRandom(state),
+    payloadReady,
   });
 
   volleySpecs.forEach((spec) => pushSimOutputBullet(state, spec));
@@ -165,7 +168,6 @@ function fireSimSlot(state, slot, targetX, targetY) {
 
   // Echo fire — every 5th shot fires a no-variance echo volley.
   if (upg.echoFire) {
-    const timers = slot.timers || {};
     const nextEcho = (typeof timers.echoCounter === 'number') ? timers.echoCounter + 1 : 1;
     if (nextEcho >= 5) {
       timers.echoCounter = 0;
@@ -188,6 +190,7 @@ function fireSimSlot(state, slot, targetX, targetY) {
         random: () => 1,
         damageVarianceMin: 1,
         damageVarianceMax: 1,
+        payloadReady: false,
       });
       echoSpecs.forEach((spec) => pushSimOutputBullet(state, spec));
     } else {

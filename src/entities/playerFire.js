@@ -60,9 +60,11 @@ function buildPlayerVolleySpecs({
   random = () => simRng.next(),
   damageVarianceMin = 0.88,
   damageVarianceMax = 1.14,
+  payloadReady = false,
 } = {}) {
   const volleySpecs = [];
   const selectedShots = shots.slice(0, availableShots);
+  let payloadAssigned = false;
   for(const shot of selectedShots) {
     const angle = shot.angle;
     const sideX = Math.cos(angle + Math.PI / 2) * shot.offset;
@@ -71,6 +73,8 @@ function buildPlayerVolleySpecs({
     const varianceSpan = Math.max(0, damageVarianceMax - damageVarianceMin);
     const damageVariance = damageVarianceMin + random() * varianceSpan;
     const scaledRadius = baseRadius * overloadSizeScale;
+    const hasPayload = Boolean(upg.payload && payloadReady && !payloadAssigned);
+    if(hasPayload) payloadAssigned = true;
     volleySpecs.push({
       x: player.x + sideX,
       y: player.y + sideY,
@@ -78,7 +82,7 @@ function buildPlayerVolleySpecs({
       vy: Math.sin(angle) * bulletSpeed,
       radius: crit ? scaledRadius * 1.28 : scaledRadius,
       bounceLeft: (upg.bounceTier || 0) > 0 ? 2 : 0,
-      pierceLeft: getPierceLeft(shot) + (shot.isSpreadExtra ? (upg.spreadShotPierceBonus || 0) : 0),
+      pierceLeft: hasPayload ? 0 : getPierceLeft(shot) + (shot.isSpreadExtra ? (upg.spreadShotPierceBonus || 0) : 0),
       homing: (upg.homingTier || 0) > 0,
       crit,
       dmg: baseDamage * damageVariance * overchargeBonus * overloadBonus * (shot.isSpreadExtra ? (upg.spreadShotDamageMult || 1) : 1),
@@ -86,7 +90,7 @@ function buildPlayerVolleySpecs({
       ownerId,
       extras: {
         isRing: shot.isRing || false,
-        hasPayload: Boolean(upg.payload),
+        hasPayload,
         bloodPactHeals: 0,
         bloodPactHealCap: getBloodPactHealCap(),
       },

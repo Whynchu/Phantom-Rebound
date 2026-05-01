@@ -265,6 +265,7 @@ export function createSlot(index, baseHp = DEFAULT_BASE_PLAYER_HP) {
       killSustainHealedThisRoom: 0,   // count
       colossusShockwaveCd: 0,         // s
       volatileOrbGlobalCooldown: 0,   // s
+      payloadCooldownMs: 0,           // ms
     },
     // Per-shield runtime state. Each entry: { hardened: bool, cooldown: number }.
     // Length matches active shield count (0–8).
@@ -438,6 +439,7 @@ export function resetSimState(state, { seed = 1, baseHp = DEFAULT_BASE_PLAYER_HP
       chainMagnetTimer: 0, echoCounter: 0,
       vampiricRestoresThisRoom: 0, killSustainHealedThisRoom: 0,
       colossusShockwaveCd: 0, volatileOrbGlobalCooldown: 0,
+      payloadCooldownMs: 0,
     };
     slot.timers.barrierPulseTimer = 0;
     slot.timers.slipCooldown = 0;
@@ -449,6 +451,7 @@ export function resetSimState(state, { seed = 1, baseHp = DEFAULT_BASE_PLAYER_HP
     slot.timers.killSustainHealedThisRoom = 0;
     slot.timers.colossusShockwaveCd = 0;
     slot.timers.volatileOrbGlobalCooldown = 0;
+    slot.timers.payloadCooldownMs = 0;
     slot.shields.length = 0;
     slot.orbState.fireTimers.length = 0;
     slot.orbState.cooldowns.length = 0;

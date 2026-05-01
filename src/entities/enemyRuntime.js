@@ -291,6 +291,7 @@ function advanceRangedEnemyCombatState(enemy, {
   height,
   margin,
   gravityWell2 = false,
+  tetherOrbit = false,
   windupMs = 520,
   obstacles = [],
 } = {}) {
@@ -301,7 +302,7 @@ function advanceRangedEnemyCombatState(enemy, {
   const fearRange = Math.max(138, fleeRange + 20);
   const inFearRange = distance < fearRange;
   let speed = enemy.spd;
-  if(gravityWell2) speed *= 0.8;
+  if(gravityWell2) speed *= tetherOrbit ? 0.9 : 0.8;
 
   enemy.fT += dt * 1000;
   const canShootWithoutLos = enemy.type === 'zoner' || enemy.type === 'purple_zoner' || enemy.type === 'orange_zoner';

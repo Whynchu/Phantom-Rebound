@@ -3,6 +3,7 @@ import assert from 'assert';
 import { createSimState } from '../src/sim/simState.js';
 import { tickEnemyCombat } from '../src/sim/enemyCombatStep.js';
 import { hostSimStep } from '../src/sim/hostSimStep.js';
+import { advanceRangedEnemyCombatState } from '../src/entities/enemyRuntime.js';
 
 function makeState() {
   const state = createSimState({ seed: 99, slotCount: 2, worldW: 800, worldH: 600 });
@@ -60,6 +61,32 @@ console.log('\n=== enemyCombatStep tests ===\n');
   assert.deepEqual(JSON.parse(JSON.stringify(a.enemies)), JSON.parse(JSON.stringify(b.enemies)));
   assert.equal(a.rngState, b.rngState);
   console.log('PASS parallel enemy combat runs are byte-identical');
+}
+
+{
+  const enemy = makeRangedEnemy({
+    eid: 11,
+    x: 260,
+    y: 300,
+    fT: 0,
+    fRate: 2000,
+    spd: 40,
+    fleeRange: 30,
+  });
+  const startX = enemy.x;
+  const combatStep = advanceRangedEnemyCombatState(enemy, {
+    player: { x: 400, y: 300 },
+    ts: 0,
+    dt: 0.5,
+    width: 800,
+    height: 600,
+    margin: 10,
+    gravityWell2: true,
+    tetherOrbit: true,
+    windupMs: 520,
+  });
+  assert.notEqual(enemy.x, startX, 'gravity well + tether orbit should still allow enemy motion');
+  console.log('PASS gravity well + tether orbit keeps enemy movement alive');
 }
 
 {
