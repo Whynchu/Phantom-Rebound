@@ -11,6 +11,10 @@ import {
   createRoomTelemetry as createRoomTelemetryValue,
   buildRunTelemetryPayload as buildRunTelemetryPayloadValue,
 } from './telemetry.js';
+import {
+  getAdrenalSurgeEffectiveSps,
+  getAdrenalSurgeDamageMult,
+} from './boonHelpers.js';
 
 export function roundTelemetryValue(value) {
   return Math.round(value * 100) / 100;
@@ -24,6 +28,7 @@ export function createRunTelemetryController({
   getRoomPhase,
   getRoomTimer,
   getRoomIndex,
+  getSimNowMs,
   getScore,
   getTookDamageThisRoom,
   getEnemies,
@@ -166,12 +171,12 @@ export function createRunTelemetryController({
       room: roomNumber,
       hp: roundTelemetryValue(hp),
       maxHp: roundTelemetryValue(maxHp),
-      sps: roundTelemetryValue((UPG.sps || 0) * (UPG.heavyRoundsFireMult || 1)),
+      sps: roundTelemetryValue(getAdrenalSurgeEffectiveSps(UPG, getSimNowMs?.() || 0) * (UPG.heavyRoundsFireMult || 1)),
       maxCharge: roundTelemetryValue(UPG.maxCharge || 0),
       currentCharge: roundTelemetryValue(charge || 0),
       requiredShotCount: getRequiredShotCount(UPG),
       damageMult: roundTelemetryValue(
-        (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1) * (UPG.heavyRoundsDamageMult || 1)
+        (UPG.playerDamageMult || 1) * getAdrenalSurgeDamageMult(UPG, getSimNowMs?.() || 0) * (UPG.denseDamageMult || 1) * (UPG.heavyRoundsDamageMult || 1)
         * Math.min(1.45, 1 + Math.min(UPG.sustainedFireShots || 0, 15) * 0.03)
         * Math.max(0.5, 1 - (UPG.spsTier || 0) * 0.04),
       ),

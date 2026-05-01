@@ -23,6 +23,7 @@ const ICON_MAP = {
   '🧲':   'RPG_Stat_Magnetism.png',
   '➶':    'RPG_Item_Weapon_Bow_Drawn_Ranged_Shooting.png',
   '🎯+':  'Warfare_Crosshair_Marked_Sniper_Headshot_Accuracy_2.png',
+  '🔮⚔':  'RPG_Item_Weapon_Wand_Magic_Orb.png',
 
   // ── SURVIVAL ──
   '◉':    'RPG_Stat_HP_Health_Heart.png',
@@ -40,6 +41,9 @@ const ICON_MAP = {
   '💠+':  'RPG_Spell_Skill_Magic_Explosive_Explosion.png',
   '⬡':    'RPG_Debuff_Stunned_Disabled_CC_Crowd_Control.png',
   '⚡🛡️': 'Software_Power_Electricity_Battery_Thunder_Lightning_Bolt_Zap.png',
+  '⚗':    'Alchemy_Alembic_Crafting_Brewing_Station_Full.png',
+  '🫀':   'RPG_Stat_HP_Health_Heart.png',
+  '🪢':   'Software_Link_Chain_Shortcut_Combo.png',
 
   // ── ORB BOONS ──
   '🔮':   'RPG_Item_Weapon_Staff_Magic_Orb.png',
@@ -89,6 +93,7 @@ const ICON_MAP = {
   '💣':   'RPG_Item_Bomb_Grenade_Explosive.png',
   '💣+':  'RPG_Skill_Explosive_Shot_Bomb_Arrow.png',
   '💡':   'RPG_Item_Weapon_Wand_Magic_Glow_Damage.png',
+  '≋':    'Weather_Water_Sea_Ocean_Waves_Wavy.png',
 
   // ── LEGENDARIES ──
   '🏛️':   'Map_Markers_Building_Bank_Greek_Temple.png',

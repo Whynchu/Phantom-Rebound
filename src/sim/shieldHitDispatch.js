@@ -56,6 +56,7 @@ import {
   buildMirrorShieldReflectionSpec,
   buildShieldBurstSpec,
 } from '../entities/defenseRuntime.js';
+import { getAdrenalSurgeDamageMult } from '../systems/boonHelpers.js';
 
 /**
  * Detect and describe a danger bullet hitting a player shield plate.
@@ -125,7 +126,8 @@ function detectShieldHit(bullet, ctx) {
         denseDamageMult: UPG.denseDamageMult || 1,
         aegisTitan: !!UPG.aegisTitan,
         mirrorShieldDamageFactor,
-        aegisBatteryDamageMult,
+        aegisBatteryDamageMult: aegisBatteryDamageMult ?? 1,
+        adrenalDamageMult: getAdrenalSurgeDamageMult(UPG, ts),
         now: simNowMs,
         playerShotLifeMs,
         shotLifeMult: UPG.shotLifeMult || 1,
@@ -159,6 +161,7 @@ function detectShieldHit(bullet, ctx) {
         denseDamageMult: UPG.denseDamageMult || 1,
         aegisNovaDamageFactor,
         aegisBatteryDamageMult,
+        adrenalDamageMult: getAdrenalSurgeDamageMult(UPG, ts),
         now: simNowMs,
         playerShotLifeMs,
         shotLifeMult: UPG.shotLifeMult || 1,

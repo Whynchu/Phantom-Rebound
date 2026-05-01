@@ -15,6 +15,7 @@ import { pickBoonChoices, weightedPickBoon } from '../src/systems/boonLogic.js';
 import { ENEMY_TYPES } from '../src/entities/enemyTypes.js';
 import { BOONS } from '../src/data/boonDefinitions.js';
 import { getDefaultUpgrades } from '../src/systems/boonHelpers.js';
+import { getRoomLayout } from '../src/data/roomLayouts.js';
 
 let passed = 0;
 let failed = 0;
@@ -156,6 +157,19 @@ test('weightedPickBoon: same seed → identical pick from same pool', () => {
   simRng.reseed(11);
   const b = weightedPickBoon(pool, upg);
   assert.equal(a && a.name, b && b.name);
+});
+
+test('room layout selection rotates deterministically with room index', () => {
+  const a = [];
+  const b = [];
+  for (let roomIdx = 0; roomIdx < 24; roomIdx++) {
+    a.push(getRoomLayout(roomIdx).id);
+  }
+  for (let roomIdx = 0; roomIdx < 24; roomIdx++) {
+    b.push(getRoomLayout(roomIdx).id);
+  }
+  assert.equal(hash(a), hash(b));
+  assert.ok(new Set(a).size >= 6);
 });
 
 // --- compound sim replay --------------------------------------------------

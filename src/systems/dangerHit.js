@@ -1,3 +1,5 @@
+import { getAdrenalSurgeDamageMult } from './boonHelpers.js';
+
 function resolveLifelineRecovery({
   hpAfterDamage,
   lifeline,
@@ -193,6 +195,7 @@ function buildLastStandBurstSpec({
   pierceTier = 0,
   damageMult = 1,
   denseDamageMult = 1,
+  adrenalDamageMult = 1,
   now,
   bloodPactHealCap = 0,
 } = {}) {
@@ -206,7 +209,7 @@ function buildLastStandBurstSpec({
     pierceLeft: pierceTier,
     homing: false,
     crit: false,
-    dmg: damageMult * denseDamageMult,
+    dmg: damageMult * denseDamageMult * adrenalDamageMult,
     expireAt: now + 2000,
     extras: {
       bloodPactHeals: 0,
@@ -248,6 +251,7 @@ function resolvePostHitAftermath({
       pierceTier: upgrades?.pierceTier || 0,
       damageMult: upgrades?.playerDamageMult || 1,
       denseDamageMult: upgrades?.denseDamageMult || 1,
+      adrenalDamageMult: getAdrenalSurgeDamageMult(upgrades, now),
       now,
       bloodPactHealCap,
     });

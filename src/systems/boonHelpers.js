@@ -88,6 +88,24 @@ function getFlatChargeGain(tier) {
   return Math.max(4, Math.round(16 / (1 + scaledTier * 0.28)));
 }
 
+function getAdrenalSurgeActiveStacks(upg, nowMs = 0) {
+  if (!upg || (upg.adrenalSurgeTier || 0) <= 0) return 0;
+  const expiries = Array.isArray(upg.adrenalStackExpiries)
+    ? upg.adrenalStackExpiries.filter((expiry) => expiry > nowMs)
+    : [];
+  return Math.min(upg.adrenalSurgeTier || 0, expiries.length);
+}
+
+function getAdrenalSurgeEffectiveSps(upg, nowMs = 0) {
+  const stacks = getAdrenalSurgeActiveStacks(upg, nowMs);
+  const effectiveSpsTier = Math.min(SPS_LADDER.length - 1, (upg?.spsTier || 0) + stacks);
+  return SPS_LADDER[effectiveSpsTier] || upg?.sps || 0;
+}
+
+function getAdrenalSurgeDamageMult(upg, nowMs = 0) {
+  return 1 + getAdrenalSurgeActiveStacks(upg, nowMs) * 0.05;
+}
+
 function getDefaultUpgrades() {
   const upg = {
     speedMult:        1,
@@ -232,5 +250,8 @@ export {
   getPayloadBlastRadius,
   syncChargeCapacity,
   getFlatChargeGain,
+  getAdrenalSurgeActiveStacks,
+  getAdrenalSurgeEffectiveSps,
+  getAdrenalSurgeDamageMult,
   getDefaultUpgrades,
 };

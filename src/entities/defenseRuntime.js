@@ -84,6 +84,7 @@ function buildAegisBatteryBoltSpec({
   damageMult = 1,
   denseDamageMult = 1,
   readyShieldCount = 0,
+  adrenalDamageMult = 1,
   shotSpeed = 210,
   now = 0,
   expireMs = 1700,
@@ -96,7 +97,7 @@ function buildAegisBatteryBoltSpec({
   if(!target) return null;
 
   const aim = Math.atan2(target.enemy.y - originY, target.enemy.x - originX);
-  const batteryDamage = damageMult * denseDamageMult * (1.1 + readyShieldCount * 0.2);
+  const batteryDamage = damageMult * denseDamageMult * adrenalDamageMult * (1.1 + readyShieldCount * 0.2);
   return {
     x: originX,
     y: originY,
@@ -123,6 +124,7 @@ function buildMirrorShieldReflectionSpec({
   aegisTitan = false,
   mirrorShieldDamageFactor = 1,
   aegisBatteryDamageMult = 1,
+  adrenalDamageMult = 1,
   now = 0,
   playerShotLifeMs = 2000,
   shotLifeMult = 1,
@@ -137,7 +139,7 @@ function buildMirrorShieldReflectionSpec({
     pierceLeft: 0,
     homing: false,
     crit: false,
-    dmg: playerDamageMult * denseDamageMult * (aegisTitan ? mirrorShieldDamageFactor * 2 : mirrorShieldDamageFactor) * aegisBatteryDamageMult,
+    dmg: playerDamageMult * denseDamageMult * (aegisTitan ? mirrorShieldDamageFactor * 2 : mirrorShieldDamageFactor) * aegisBatteryDamageMult * adrenalDamageMult,
     expireAt: now + playerShotLifeMs * shotLifeMult,
   };
 }
@@ -152,6 +154,7 @@ function buildShieldBurstSpec({
   denseDamageMult = 1,
   aegisNovaDamageFactor = 1,
   aegisBatteryDamageMult = 1,
+  adrenalDamageMult = 1,
   now = 0,
   playerShotLifeMs = 2000,
   shotLifeMult = 1,
@@ -166,7 +169,7 @@ function buildShieldBurstSpec({
     pierceLeft: 0,
     homing: false,
     crit: false,
-    dmg: playerDamageMult * denseDamageMult * aegisNovaDamageFactor * aegisBatteryDamageMult,
+    dmg: playerDamageMult * denseDamageMult * aegisNovaDamageFactor * aegisBatteryDamageMult * adrenalDamageMult,
     expireAt: now + playerShotLifeMs * shotLifeMult,
   };
 }
@@ -196,6 +199,7 @@ function buildChargedOrbVolleyForSlot({
   focusDamageMult = 1,
   focusChargeScale = 0.8,
   overchargeDamageMult = 1,
+  adrenalDamageMult = 1,
   shotSpeed = 220,
   now,
   bloodPactHealCap = 0,
@@ -240,6 +244,7 @@ function buildChargedOrbVolleyForSlot({
   if(orbOvercharge) totalDamage *= 1 + chargeRatio * overchargeDamageMult;
   if(orbTwin) totalDamage *= twinDamageMult;
   totalDamage *= orbDamageBonus;
+  totalDamage *= adrenalDamageMult;
   const perShotDamage = totalDamage / shotsAvailable;
 
   const shotSpecs = shotAngles.slice(0, shotsAvailable).map((angle) => ({

@@ -34,3 +34,7 @@ export const WINDUP_MS_DRAW = 520;
 // ── Player baselines ─────────────────────────────────────────────────────────
 export const BASE_PLAYER_HP = 200;
 export const GAME_OVER_ANIM_MS = 850;
+export const CANONICAL_WORLD_W = 380;
+export const CANONICAL_WORLD_H = 676;
+export const ROOM_LAYOUT_GRID_SIZE = 28;
+export const ROOM_LAYOUT_WALL_CUBE_SIZE = 28;

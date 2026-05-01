@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.3.6',
+      label: 'ROOM LAYOUTS',
+      summary: ['Leaderboards now open a full run summary with your score breakdown and boon loadout.'],
+      highlights: [
+        'Rooms use the same layout scale on every device, with several layouts rotating through each run.',
+      ]
+    },
+  {
       version: '1.3.5',
       label: 'LEADERBOARD COOP TOGGLE',
       summary: ['Leaderboard now shows up to 100 results (was 10).'],

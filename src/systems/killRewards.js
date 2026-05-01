@@ -1,4 +1,5 @@
 import { simRng } from './seededRng.js';
+import { getAdrenalSurgeDamageMult } from './boonHelpers.js';
 
 function resolveEnemyKillEffects({
   enemy,
@@ -131,7 +132,7 @@ function buildKillRewardActions({
       pierceLeft: upgrades.pierceTier,
       homing: upgrades.homingTier > 0,
       crit: false,
-      dmg: (upgrades.playerDamageMult || 1) * (upgrades.denseDamageMult || 1),
+      dmg: (upgrades.playerDamageMult || 1) * (upgrades.denseDamageMult || 1) * getAdrenalSurgeDamageMult(upgrades, ts),
       expireAt: ts + 2200,
       extras: {
         bloodPactHeals: 0,

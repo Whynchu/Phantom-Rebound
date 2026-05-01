@@ -12,6 +12,7 @@ import { emit } from './effectQueue.js';
 import { pushSimOutputBullet, nextSimRandom } from './simProjectiles.js';
 import { getKineticChargeRate, getLateBloomGrowth } from '../data/boons.js';
 import { LATE_BLOOM_DAMAGE_PENALTY } from '../data/boonConstants.js';
+import { getAdrenalSurgeEffectiveSps, getAdrenalSurgeDamageMult } from '../systems/boonHelpers.js';
 
 // ── Module constants (mirror script.js counterparts) ─────────────────────────
 const JOY_DEADZONE = 0.15;
@@ -92,6 +93,7 @@ function fireSimSlot(state, slot, targetX, targetY) {
   const sustainedFireBonus = Math.min(1.45, 1 + Math.min(upg.sustainedFireShots || 0, 15) * 0.03);
   const baseDmg = (1 + (upg.snipePower || 0) * 0.35)
     * (upg.playerDamageMult || 1)
+    * getAdrenalSurgeDamageMult(upg, timeMs)
     * (upg.denseDamageMult || 1)
     * (upg.heavyRoundsDamageMult || 1)
     * predatorBonus
@@ -263,13 +265,7 @@ export function tickPlayerFire(state, slot0Input, slot1Input, dt, opts = {}) {
 
     // fireT advance and auto-fire gate.
     if (combatActive && (metrics.charge || 0) >= 1 && (upg.sps || 0) > 0) {
-      const adrenalExpiries = Array.isArray(upg.adrenalStackExpiries)
-        ? upg.adrenalStackExpiries.filter((expiry) => expiry > timeMs)
-        : [];
-      upg.adrenalStackExpiries = adrenalExpiries;
-      const adrenalStacks = Math.min(upg.adrenalSurgeTier || 0, adrenalExpiries.length);
-      const effectiveSpsTier = Math.min(5, (upg.spsTier || 0) + adrenalStacks);
-      const effectiveSps = [0.8, 1.2, 2.2, 3.8, 6.0, 8.8][effectiveSpsTier] || upg.sps || 0;
+      const effectiveSps = getAdrenalSurgeEffectiveSps(upg, timeMs);
       const interval = 1 / (effectiveSps * 2 * (upg.heavyRoundsFireMult || 1));
       const mobileChargeMult = isStill ? 1.0 : (upg.mobileChargeRate || 0.10);
       metrics.fireT = (metrics.fireT || 0) + dt * mobileChargeMult;

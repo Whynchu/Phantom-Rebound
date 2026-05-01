@@ -25,6 +25,16 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { C, ROOM_SCRIPTS, BOSS_ROOMS, DECAY_BASE, M, VERSION } from './src/data/gameData.js';
+import {
+  CANONICAL_WORLD_W,
+  CANONICAL_WORLD_H,
+  ROOM_LAYOUT_GRID_SIZE,
+  ROOM_LAYOUT_WALL_CUBE_SIZE,
+} from './src/data/constants.js';
+import {
+  getRoomLayout,
+  resolveSafePlayerSpawn,
+} from './src/data/roomLayouts.js';
 import { BOONS, SPS_LADDER, CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, getPayloadBlastRadius, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, pickBoonChoices, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots, getEnemyDefinition } from './src/entities/enemyTypes.js';
 import {
@@ -63,6 +73,10 @@ import {
   buildPlayerShotPlan,
   buildPlayerVolleySpecs,
 } from './src/entities/playerFire.js';
+import {
+  getAdrenalSurgeEffectiveSps,
+  getAdrenalSurgeDamageMult,
+} from './src/systems/boonHelpers.js';
 import {
   syncOrbRuntimeArrays,
   getOrbitSlotPosition,
@@ -333,14 +347,13 @@ const cv  = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 
 // ── WORLD-SPACE (Phase D0a, 2026-04-24) ──────────────────────────────────────
-// The sim runs in WORLD coordinates. In solo (and ?coopdebug=1) WORLD_W/WORLD_H
-// are mirrored from cv.width/cv.height in resize() so behavior is byte-identical.
-// In online coop (Phase D+) the host pins a fixed world size and the renderer
-// scales the canvas viewport into world space via a ctx transform in draw().
-// This gives host + guest a shared arena regardless of each device's screen.
-const worldSpace = createWorldSpace();
-let WORLD_W = 0;
-let WORLD_H = 0;
+// The sim runs in a single canonical world size on every device.
+// The canvas still scales to fit the viewport, but gameplay coordinates
+// remain fixed so room geometry, spawn logic, and obstacle placement stay
+// deterministic across browsers and devices.
+const worldSpace = createWorldSpace(CANONICAL_WORLD_W, CANONICAL_WORLD_H);
+let WORLD_W = CANONICAL_WORLD_W;
+let WORLD_H = CANONICAL_WORLD_H;
 // D12.1 — once the guest receives the host's world dimensions on coop-run-start
 // the world is "pinned": subsequent canvas resizes (orientation change, viewport
 // rescale, etc.) must NOT clobber WORLD_W/WORLD_H, only change the render
@@ -354,8 +367,8 @@ let coopWorldPinned = false;
 let _guestPrevRoomPhase = null;
 function syncWorldFromCanvas() {
   if (coopWorldPinned) return; // Coop guest: world is host-authoritative.
-  if (cv.width > 0 && cv.height > 0) {
-    worldSpace.set(cv.width, cv.height);
+  if (worldSpace.width !== CANONICAL_WORLD_W || worldSpace.height !== CANONICAL_WORLD_H) {
+    worldSpace.set(CANONICAL_WORLD_W, CANONICAL_WORLD_H);
     WORLD_W = worldSpace.width;
     WORLD_H = worldSpace.height;
   }
@@ -857,8 +870,8 @@ const ORBIT_SPHERE_R    = 40;   // orbital radius of passive orbit spheres (px)
 const ORBIT_ROTATION_SPD   = 0.003; // radians per millisecond (≈1 rev / 2.1 s)
 function getOrbitRadius() { return ORBIT_SPHERE_R + (UPG.orbitRadiusBonus || 0); }
 function getOrbVisualRadius() { return 5 * (UPG.orbSizeMult || 1); }
-const GRID_SIZE = 28;
-const WALL_CUBE_SIZE = GRID_SIZE;
+const GRID_SIZE = ROOM_LAYOUT_GRID_SIZE;
+const WALL_CUBE_SIZE = ROOM_LAYOUT_WALL_CUBE_SIZE;
 const TARGET_LOS_SOFT_PENALTY_PX = 30;
 const AIM_ARROW_OFFSET = 15;
 const AIM_TRI_SIDE = 8;
@@ -1207,6 +1220,7 @@ let roomClearTimer = 0;
 let roomPurpleShooterAssigned = false;
 let roomIntroTimer = 0;
 let roomObstacles = [];
+let currentRoomLayout = null;
 const ROOM_NAMES = ROOM_SCRIPTS.map((room) => room.name);
 const BASE_CONTACT_INVULN_S = 1.0;
 const BASE_PROJECTILE_INVULN_S = 1.2;
@@ -3590,13 +3604,7 @@ function updateGuestFire(dt, combatActive) {
     slot.aim.hasTarget = true;
 
     if ((slot.metrics.charge || 0) < 1) continue;
-    const adrenalExpiries = Array.isArray(upg.adrenalStackExpiries)
-      ? upg.adrenalStackExpiries.filter((expiry) => expiry > simNowMs)
-      : [];
-    upg.adrenalStackExpiries = adrenalExpiries;
-    const adrenalStacks = Math.min(upg.adrenalSurgeTier || 0, adrenalExpiries.length);
-    const effectiveSpsTier = Math.min(SPS_LADDER.length - 1, (upg.spsTier || 0) + adrenalStacks);
-    const effectiveSps = SPS_LADDER[effectiveSpsTier] || upg.sps || 0.8;
+    const effectiveSps = getAdrenalSurgeEffectiveSps(upg, simNowMs);
     const interval = 1 / (effectiveSps * 2);
     slot.metrics.fireT = (slot.metrics.fireT || 0) + dt;
     if (!isStill || noSignal) slot.metrics.fireT = Math.min(slot.metrics.fireT, interval);
@@ -3812,6 +3820,7 @@ const telemetryController = createRunTelemetryController({
   getRoomPhase: () => roomPhase,
   getRoomTimer: () => roomTimer,
   getRoomIndex: () => roomIndex,
+  getSimNowMs: () => simNowMs,
   getScore: () => score,
   getTookDamageThisRoom: () => tookDamageThisRoom,
   getEnemies: () => enemies,
@@ -3950,6 +3959,42 @@ function createRoomObstacles(width, height) {
   });
 }
 
+function syncRoomObstacles(nextObstacles) {
+  roomObstacles.length = 0;
+  if (Array.isArray(nextObstacles) && nextObstacles.length > 0) {
+    roomObstacles.push(...nextObstacles);
+  }
+  return roomObstacles;
+}
+
+function resolveCurrentRoomSpawn(preferred = null) {
+  const layout = currentRoomLayout || getRoomLayout(roomIndex);
+  const playerRadius = Math.max(9, player?.r || (9 * (UPG.playerSizeMult || 1)));
+  return resolveSafePlayerSpawn({
+    layout,
+    playerRadius,
+    worldWidth: WORLD_W,
+    worldHeight: WORLD_H,
+    margin: M,
+    obstacles: roomObstacles,
+    preferred,
+  });
+}
+
+function placeBodyAtRoomSpawn(body, preferred = null, options = {}) {
+  if (!body) return null;
+  const spawn = resolveCurrentRoomSpawn(preferred);
+  body.x = spawn.x;
+  body.y = spawn.y;
+  body.vx = 0;
+  body.vy = 0;
+  body.spawnX = spawn.x;
+  body.spawnY = spawn.y;
+  if (options.invincible != null) body.invincible = options.invincible;
+  if (options.distort != null) body.distort = options.distort;
+  return spawn;
+}
+
 function resolveEntityObstacleCollisions(entity, maxPasses = 3) {
   return resolveEntityObstacleCollisionsImpl(entity, roomObstacles, maxPasses);
 }
@@ -3991,10 +4036,8 @@ function beginWaveIntro(nextWaveIndex) {
   roomIntroTimer = 0;
   bullets.length = 0;
   clearParticles();
-  player.x = WORLD_W / 2;
-  player.y = WORLD_H / 2;
-  player.vx = 0;
-  player.vy = 0;
+  syncPlayerScale();
+  placeBodyAtRoomSpawn(player);
   showRoomIntro(`WAVE ${nextWaveIndex + 1}`, false);
 }
 
@@ -4015,7 +4058,14 @@ function startRoom(idx) {
   roomTimer = 0;
   roomIntroTimer = 0;
   roomPhase = 'intro';
-  roomObstacles = createRoomObstacles(WORLD_W, WORLD_H);
+  currentRoomLayout = getRoomLayout(idx, {
+    worldWidth: WORLD_W,
+    worldHeight: WORLD_H,
+    margin: M,
+    gridSize: GRID_SIZE,
+    wallCubeSize: WALL_CUBE_SIZE,
+  });
+  syncRoomObstacles(currentRoomLayout.obstacles);
   enemies.length = 0;
   bullets.length = 0;
   clearDmgNumbers();
@@ -4030,10 +4080,8 @@ function startRoom(idx) {
   escortRespawnTimer = 0;
   reinforceTimer = 0;
   currentRoomMaxOnScreen = getRoomMaxOnScreen(roomIndex, currentRoomIsBoss);
-  player.x = WORLD_W / 2;
-  player.y = WORLD_H / 2;
-  player.vx = 0;
-  player.vy = 0;
+  syncPlayerScale();
+  placeBodyAtRoomSpawn(player);
   // D12.4 — reset guest slot 1 body alongside host's (slot 0) so the
   // guest's character respawns at the room's center on every transition.
   // Pre-D12.4: slot 1's body retained whatever position it was at when
@@ -4043,16 +4091,14 @@ function startRoom(idx) {
   for (let i = 1; i < playerSlots.length; i++) {
     const s = playerSlots[i];
     if (!s || !s.body) continue;
-    const sx = WORLD_W / 2 + (i === 1 ? 60 : -60);
-    const sy = WORLD_H / 2;
-    s.body.x = sx;
-    s.body.y = sy;
-    s.body.vx = 0;
-    s.body.vy = 0;
-    s.body.spawnX = sx;
-    s.body.spawnY = sy;
-    s.body.invincible = Math.max(s.body.invincible || 0, 1.0);
-    s.body.distort = 0;
+    const fallbackPreferred = {
+      x: Math.min(WORLD_W - M - (s.body.r || 9), Math.max(M + (s.body.r || 9), WORLD_W / 2 + (i === 1 ? 60 : -60))),
+      y: WORLD_H / 2,
+    };
+    placeBodyAtRoomSpawn(s.body, fallbackPreferred, {
+      invincible: Math.max(s.body.invincible || 0, 1.0),
+      distort: 0,
+    });
     // D20.1 — reset position-snap history so the first frame from the new
     // room triggers a fresh snap (not treated as "already snapped").
     if (s.input && typeof s.input.resetSnapHistory === 'function') {
@@ -4070,7 +4116,14 @@ function startRoom(idx) {
   // room at 25% maxHp (or current hp, whichever is higher so HP boons
   // stack). Solo runs have no spectators so this is a no-op.
   revivePartialHpSpectators();
-  startRoomTelemetry(idx + 1, def);
+  startRoomTelemetry(idx + 1, {
+    ...def,
+    layoutSource: currentRoomLayout?.id || def.layoutSource,
+    layoutId: currentRoomLayout?.id || 'classic_gate',
+    layoutName: currentRoomLayout?.name || 'Classic Gate',
+    layoutIndex: currentRoomLayout?.layoutIndex ?? 0,
+    layoutCount: currentRoomLayout?.layoutCount ?? 1,
+  });
   // Spawn the first wave before READY so players can parse the room layout.
   while(
     spawnQueue.length
@@ -4465,7 +4518,7 @@ function firePlayer(slot, tx, ty) {
   const spsFireRateScaling = Math.max(0.5, 1 - (upg.spsTier || 0) * 0.04);
   // Sustained Fire bonus: +3% damage per consecutive shot, max +45%, decays 1s after last shot
   const sustainedFireBonus = Math.min(1.45, 1 + Math.min(upg.sustainedFireShots || 0, 15) * 0.03);
-  const baseDmg = (1 + upg.snipePower * 0.35) * (upg.playerDamageMult || 1) * (upg.denseDamageMult || 1) * (upg.heavyRoundsDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus * sustainedFireBonus * spsFireRateScaling * 10;
+  const baseDmg = (1 + upg.snipePower * 0.35) * (upg.playerDamageMult || 1) * getAdrenalSurgeDamageMult(upg, simNowMs) * (upg.denseDamageMult || 1) * (upg.heavyRoundsDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus * sustainedFireBonus * spsFireRateScaling * 10;
   const lifeMs = PLAYER_SHOT_LIFE_MS * (upg.shotLifeMult || 1) * (upg.phantomRebound ? 2.0 : 1.0);
   const now = simNowMs;
   const overchargeBonus = (upg.overchargeVent && metrics.charge >= upg.maxCharge) ? 1.6 : 1;
@@ -4914,6 +4967,7 @@ function buildScoreEntry() {
     boonOrder,
     boons,
     telemetry: buildRunTelemetryPayload(),
+    scoreBreakdown: { ...scoreBreakdown },
     continued: UPG._continued || false,
     runMode,
   });
@@ -5806,13 +5860,7 @@ function update(dt,ts){
   }
 
   if(combatActive && charge >= 1){
-    const adrenalExpiries = Array.isArray(UPG.adrenalStackExpiries)
-      ? UPG.adrenalStackExpiries.filter((expiry) => expiry > simNowMs)
-      : [];
-    UPG.adrenalStackExpiries = adrenalExpiries;
-    const adrenalStacks = Math.min(UPG.adrenalSurgeTier || 0, adrenalExpiries.length);
-    const effectiveSpsTier = Math.min(SPS_LADDER.length - 1, (UPG.spsTier || 0) + adrenalStacks);
-    const effectiveSps = SPS_LADDER[effectiveSpsTier] || UPG.sps || 0.8;
+    const effectiveSps = getAdrenalSurgeEffectiveSps(UPG, simNowMs);
     const interval = 1 / (effectiveSps * 2 * (UPG.heavyRoundsFireMult || 1));
     const mobileChargeMult = isStill ? 1.0 : (UPG.mobileChargeRate || 0.10);
     fireT += dt * mobileChargeMult;
@@ -6052,6 +6100,7 @@ function update(dt,ts){
         focusDamageMult: ORBITAL_FOCUS_CHARGED_ORB_DAMAGE_MULT,
         focusChargeScale: 0.8,
         overchargeDamageMult: ORB_OVERCHARGE_DAMAGE_MULT,
+        adrenalDamageMult: getAdrenalSurgeDamageMult(UPG, simNowMs),
         shotSpeed: 220 * GLOBAL_SPEED_LIFT,
         now: simNowMs,
         bloodPactHealCap: getBloodPactHealCap(),
@@ -6132,6 +6181,7 @@ function update(dt,ts){
         damageMult: UPG.playerDamageMult || 1,
         denseDamageMult: UPG.denseDamageMult || 1,
         readyShieldCount,
+        adrenalDamageMult: getAdrenalSurgeDamageMult(UPG, simNowMs),
         shotSpeed: 210 * GLOBAL_SPEED_LIFT,
         now: simNowMs,
       });
@@ -6489,7 +6539,7 @@ function update(dt,ts){
           pierceLeft: 0,
           homing: false,
           crit: false,
-          dmg: (UPG.playerDamageMult || 1) * (UPG.denseDamageMult || 1),
+          dmg: (UPG.playerDamageMult || 1) * getAdrenalSurgeDamageMult(UPG, simNowMs) * (UPG.denseDamageMult || 1),
           expireAt: mNow + 2000,
         });
         sparks(player.x, player.y, getThreatPalette().elite.hex, 12, 150);
@@ -7231,7 +7281,7 @@ function hudUpdate(){
   const slotUpg = slot ? slot.upg : UPG;
   const localCharge = slotMetrics ? slotMetrics.charge : charge;
   const localMaxCharge = (slotUpg && slotUpg.maxCharge) || UPG.maxCharge;
-  const localSps = ((slotUpg && slotUpg.sps) || UPG.sps) * ((slotUpg && slotUpg.heavyRoundsFireMult) || 1);
+  const localSps = getAdrenalSurgeEffectiveSps(slotUpg || UPG, simNowMs) * ((slotUpg && slotUpg.heavyRoundsFireMult) || 1);
   renderHud({
     roomIndex,
     runElapsedMs,
@@ -7265,7 +7315,10 @@ bindJoystickControls({
 });
 
 // Patch notes render lazily on first panel open (see setPatchNotesOpen).
-function openLeaderboardScreen() {
+function openLeaderboardScreen(defaultMode = null) {
+  if (defaultMode === 'solo' || defaultMode === 'coop') {
+    lbMode = defaultMode;
+  }
   lbScreen.classList.remove('off');
   refreshLeaderboardView();
 }
@@ -7568,20 +7621,51 @@ bindCoopLobby({
 
 const lbBoonsPopup = document.getElementById('lb-boons-popup');
 const lbBoonsPopupTitle = document.getElementById('lb-boons-popup-title');
+const lbBoonsPopupScore = document.getElementById('lb-boons-popup-score');
+const lbBoonsPopupNote = document.getElementById('lb-boons-popup-note');
+const lbBoonsPopupBreakdown = document.getElementById('lb-boons-popup-breakdown');
 const lbBoonsPopupList = document.getElementById('lb-boons-popup-list');
 bindPopupClose({
   closeButton: document.getElementById('btn-lb-boons-close'),
   panelEl: lbBoonsPopup,
 });
 
-function showLbBoonsPopup(runnerName, boons, boonOrder = '') {
+function showLbBoonsPopup(row = null) {
+  const runnerName = row?.name || 'RUNNER';
+  const runTimeMs = Number.isFinite(row?.runTimeMs)
+    ? row.runTimeMs
+    : (Number.isFinite(row?.durationSeconds) ? row.durationSeconds * 1000 : null);
+  const modeLabel = (row?.runMode === 'coop' ? 'CO-OP' : 'SOLO');
+  const telemetryRooms = Array.isArray(row?.boons?.telemetry?.rooms) ? row.boons.telemetry.rooms : [];
+  const note = [
+    Number.isFinite(row?.room) ? `Room ${row.room}` : null,
+    runTimeMs != null ? formatRunTime(runTimeMs) : null,
+    modeLabel,
+  ].filter(Boolean).join(' · ');
+  const stats = row?.boons?.telemetry?.summary ? {
+    kills: row.boons.telemetry.summary.totalKills || 0,
+    rooms: row.boons.telemetry.summary.roomsCleared || row.room || 0,
+    elapsedMs: runTimeMs || 0,
+    damagelessRooms: telemetryRooms.reduce((count, room) => count + (room.damageless ? 1 : 0), 0),
+  } : {
+    rooms: row?.room || 0,
+    elapsedMs: runTimeMs || 0,
+  };
+  const boons = Array.isArray(row?.boons?.picks) ? row.boons.picks : [];
   showLeaderboardBoonsPopup({
     popup: lbBoonsPopup,
     titleEl: lbBoonsPopupTitle,
+    scoreEl: lbBoonsPopupScore,
+    noteEl: lbBoonsPopupNote,
+    breakdownEl: lbBoonsPopupBreakdown,
     listEl: lbBoonsPopupList,
     runnerName,
+    score: row?.score || 0,
+    note,
+    breakdown: row?.boons?.scoreBreakdown || row?.scoreBreakdown || null,
+    stats,
     boons,
-    boonOrder,
+    boonOrder: row?.boonOrder || row?.boons?.order || '',
   });
 }
 

@@ -1,7 +1,7 @@
 // R3 parity — charged orb firing during rollback resim.
 
 import { CHARGED_ORB_FIRE_INTERVAL_MS } from '../data/boons.js';
-import { getRequiredShotCount } from '../systems/boonHelpers.js';
+import { getRequiredShotCount, getAdrenalSurgeDamageMult } from '../systems/boonHelpers.js';
 import { buildChargedOrbVolleyForSlot, getOrbitSlotPosition, syncOrbRuntimeArrays } from '../entities/defenseRuntime.js';
 import { pushSimOutputBullet } from './simProjectiles.js';
 
@@ -61,6 +61,7 @@ function resolveChargedOrbFires(state, slot0Input, opts = {}) {
       focusDamageMult: ORBITAL_FOCUS_CHARGED_ORB_DAMAGE_MULT,
       focusChargeScale: 0.8,
       overchargeDamageMult: ORB_OVERCHARGE_DAMAGE_MULT,
+      adrenalDamageMult: getAdrenalSurgeDamageMult(upg, Number.isFinite(state.timeMs) ? state.timeMs : 0),
       shotSpeed: 220 * GLOBAL_SPEED_LIFT,
       now: Number.isFinite(state.timeMs) ? state.timeMs : 0,
       bloodPactHealCap: getBloodPactHealCap(upg),

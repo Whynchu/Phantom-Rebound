@@ -10,7 +10,7 @@ export const TITAN_MAX_SIZE_MULT = 2.0;
 
 export const MINI_MAX_TIER = 3;
 export const MINI_SIZE_MULT_PER_TIER = 0.80;
-export const MINI_HP_MULT_PER_TIER = 0.90;
+export const MINI_HP_MULT_PER_TIER = 0.80;
 export const MINI_SHOT_SPD_PER_TIER = 0.10;
 export const MINI_CRIT_CHANCE_PER_TIER = 0.05;
 export const MINI_T3_CRIT_DMG_BONUS = 0.20;

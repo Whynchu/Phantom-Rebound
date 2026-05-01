@@ -33,6 +33,7 @@ function buildLocalScoreEntry({
   boonOrder,
   boons,
   telemetry,
+  scoreBreakdown,
   ts = Date.now(),
   runMode = 'solo',
 }) {
@@ -51,6 +52,7 @@ function buildLocalScoreEntry({
       color,
       order: boonOrder,
       telemetry,
+      scoreBreakdown: scoreBreakdown || null,
     },
   };
 }

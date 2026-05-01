@@ -28,7 +28,7 @@ function bindLeaderboardControls({
   onModeChange,
 } = {}) {
   openButtons.forEach((button) => {
-    button?.addEventListener('click', () => onOpen?.());
+    button?.addEventListener('click', () => onOpen?.(button.dataset.lbMode || null));
   });
   closeButton?.addEventListener('click', () => onClose?.());
   periodButtons.forEach((button) => {

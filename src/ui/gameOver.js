@@ -20,6 +20,8 @@ function showGameOverScreen({
 
 function renderScoreBreakdown(el, breakdown, stats) {
   el.innerHTML = '';
+  const doc = el?.ownerDocument || (typeof document !== 'undefined' ? document : null);
+  if (!doc) return;
   const rows = [];
   if (breakdown) {
     if (breakdown.kills)      rows.push(['Kill points',    breakdown.kills]);
@@ -36,12 +38,12 @@ function renderScoreBreakdown(el, breakdown, stats) {
     if (breakdown.streak)     rows.push(['Streak bonus',   breakdown.streak]);
   }
   for (const [label, value] of rows) {
-    const row = document.createElement('div');
+    const row = doc.createElement('div');
     row.className = 'go-breakdown-row';
-    const l = document.createElement('span');
+    const l = doc.createElement('span');
     l.className = 'go-breakdown-label';
     l.textContent = label;
-    const v = document.createElement('span');
+    const v = doc.createElement('span');
     v.className = 'go-breakdown-value';
     v.textContent = formatNumber(value);
     row.appendChild(l);
@@ -57,7 +59,7 @@ function renderScoreBreakdown(el, breakdown, stats) {
       parts.push(`${stats.damagelessRooms} clean ${stats.damagelessRooms === 1 ? 'room' : 'rooms'}`);
     }
     if (parts.length) {
-      const statRow = document.createElement('div');
+      const statRow = doc.createElement('div');
       statRow.className = 'go-breakdown-stats';
       statRow.textContent = parts.join(' · ');
       el.appendChild(statRow);

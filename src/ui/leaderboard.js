@@ -71,7 +71,7 @@ function renderLeaderboard({
   const rows = lbStatusMode === 'syncing'
     ? []
     : (useRemoteLeaderboardRows
-      ? remoteLeaderboardRows
+      ? getVisibleLeaderboardRows(remoteLeaderboardRows, lbPeriod, lbScope, playerName, lbMode)
       : getVisibleLeaderboardRows(leaderboard, lbPeriod, lbScope, playerName, lbMode));
 
   if(rows.length === 0) {
@@ -105,7 +105,11 @@ function renderLeaderboard({
     `;
     if(hasBoons) {
       li.querySelector('.lb-boons-btn')
-        ?.addEventListener('click', () => onOpenBoons?.(row.name, boonData.picks, boonOrder));
+        ?.addEventListener('click', () => onOpenBoons?.({
+          ...row,
+          boons: boonData.picks,
+          boonOrder,
+        }));
     }
     lbList.appendChild(li);
   }

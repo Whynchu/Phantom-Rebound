@@ -128,6 +128,7 @@ import {
 import { createSeededRng, simRng, parseSeedParam, seedFromString } from '../src/systems/seededRng.js';
 import { applyDamagelessRoomProgression } from '../src/systems/progression.js';
 import { orderBoonsForDisplay } from '../src/ui/boonsPanel.js';
+import { showLeaderboardRunSummaryPopup } from '../src/ui/boonsPanel.js';
 import { buildPatchNoteCardHtml } from '../src/ui/patchNotes.js';
 import { syncLeaderboardStatusBadge, syncLeaderboardToggleStates } from '../src/ui/leaderboard.js';
 import { showGameOverScreen } from '../src/ui/gameOver.js';
@@ -155,7 +156,17 @@ import {
 } from '../src/ui/sessionFlow.js';
 import { bindGestureGuards } from '../src/platform/gestureGuards.js';
 import { setPlayerColor, getPlayerColor, getPlayerColorScheme } from '../src/data/colorScheme.js';
+import {
+  CANONICAL_WORLD_W,
+  CANONICAL_WORLD_H,
+} from '../src/data/constants.js';
+import {
+  getRoomLayout,
+  resolveSafePlayerSpawn,
+} from '../src/data/roomLayouts.js';
 import { BOONS, getDefaultUpgrades } from '../src/data/boons.js';
+import { LEGENDARY_SEQUENCES } from '../src/data/boonDefinitions.js';
+import { ICON_MAP } from '../src/ui/iconRenderer.js';
 import {
   TITAN_HP_PCT,
   EXTRA_LIFE_GAINS,
@@ -164,6 +175,11 @@ import {
   MINI_CRIT_CHANCE_PER_TIER,
   MINI_T3_CRIT_DMG_BONUS,
 } from '../src/data/boonConstants.js';
+import {
+  getAdrenalSurgeActiveStacks,
+  getAdrenalSurgeEffectiveSps,
+  getAdrenalSurgeDamageMult,
+} from '../src/systems/boonHelpers.js';
 import { registerBoonHook, runBoonHook, getBoonHookCount } from '../src/systems/boonHooks.js';
 
 const pendingTests = [];
@@ -421,8 +437,8 @@ test('MINI applies speed and crit bonuses while shrinking HP', () => {
   assert.equal(upg.miniShotSpdMult, 1.10);
   assert.equal(upg.critChance, 0.05);
   assert.equal(upg.critDamageBonus, 0);
-  assert.equal(state.maxHp, 180);
-  assert.equal(state.hp, 180);
+  assert.equal(state.maxHp, 160);
+  assert.equal(state.hp, 160);
 
   mini.apply(upg, state);
   mini.apply(upg, state);
@@ -451,6 +467,30 @@ test('Extra Life gives larger early HP gains and compounds movement slow', () =>
   assert.equal(state.maxHp, 300);
   assert.equal(state.hp, 200);
   assert.equal(upg.extraLifeSlowMult, 0.98);
+});
+
+test('all boon icons resolve to icon-pack sprites', () => {
+  const seen = new Set();
+  const allBoons = [...BOONS, ...LEGENDARY_SEQUENCES.map((entry) => entry.boon)];
+  for (const boon of allBoons) {
+    if (!boon.icon) continue;
+    seen.add(boon.icon);
+    assert.ok(ICON_MAP[boon.icon], `${boon.name} icon is not mapped to a sprite`);
+  }
+  assert.ok(seen.size > 0);
+});
+
+test('Adrenal Surge boosts effective SPS and damage while stacks are alive', () => {
+  const upg = getDefaultUpgrades();
+  upg.spsTier = 2;
+  upg.sps = 2.2;
+  upg.adrenalSurgeTier = 2;
+  upg.adrenalStackExpiries = [1400, 2400];
+  assert.equal(getAdrenalSurgeActiveStacks(upg, 1000), 2);
+  assert.equal(getAdrenalSurgeEffectiveSps(upg, 1000), 6.0);
+  assert.equal(getAdrenalSurgeDamageMult(upg, 1000), 1.1);
+  assert.equal(getAdrenalSurgeEffectiveSps(upg, 3000), 2.2);
+  assert.equal(getAdrenalSurgeDamageMult(upg, 3000), 1);
 });
 
 test('bullet runtime helpers keep expiry and bounce transitions deterministic', () => {
@@ -1210,6 +1250,7 @@ test('buildLocalScoreEntry keeps leaderboard payload contract', () => {
     boonOrder: 'Rapid Fire,Shield',
     boons: [{ name: 'Rapid Fire' }],
     telemetry: { summary: { totalKills: 99 } },
+    scoreBreakdown: { kills: 100 },
     ts: 999,
   });
   assert.equal(entry.name, 'RUNNER');
@@ -1221,7 +1262,92 @@ test('buildLocalScoreEntry keeps leaderboard payload contract', () => {
   assert.equal(entry.boons.order, 'Rapid Fire,Shield');
   assert.equal(entry.boons.picks.length, 1);
   assert.equal(entry.boons.telemetry.summary.totalKills, 99);
+  assert.equal(entry.boons.scoreBreakdown.kills, 100);
   assert.equal(entry.ts, 999);
+});
+
+test('leaderboard run summary renders score breakdown above boon list', () => {
+  const popupClasses = new Set(['off']);
+  const popup = {
+    classList: {
+      remove: (name) => popupClasses.delete(name),
+    },
+  };
+  const makeNode = (tag = 'div') => ({
+    tagName: tag,
+    children: [],
+    innerHTML: '',
+    textContent: '',
+    className: '',
+    classList: {
+      add() {},
+      remove() {},
+    },
+    appendChild(child) {
+      this.children.push(child);
+      return child;
+    },
+  });
+  const doc = {
+    createElement: (tag) => makeNode(tag),
+  };
+  const titleEl = { textContent: '' };
+  const scoreEl = { textContent: '' };
+  const noteEl = { textContent: '' };
+  const breakdownEl = makeNode();
+  breakdownEl.ownerDocument = doc;
+  const listEl = makeNode();
+  listEl.ownerDocument = doc;
+
+  showLeaderboardRunSummaryPopup({
+    popup,
+    titleEl,
+    scoreEl,
+    noteEl,
+    breakdownEl,
+    listEl,
+    runnerName: 'RUNNER',
+    score: 12345,
+    note: 'Room 12 · 3:21 · SOLO',
+    breakdown: { kills: 900, streak: 12 },
+    stats: { kills: 40, rooms: 12, elapsedMs: 201000 },
+    boons: [{ name: 'Rapid Fire', detail: '+20%', icon: 'rapid' }],
+    boonOrder: 'Rapid Fire',
+  });
+
+  assert.equal(titleEl.textContent, 'RUNNER · Run Summary');
+  assert.equal(scoreEl.textContent, '12,345');
+  assert.equal(noteEl.textContent, 'Room 12 · 3:21 · SOLO');
+  assert.equal(popupClasses.has('off'), false);
+  assert.ok(breakdownEl.children.length > 0);
+  assert.ok(listEl.children.length > 0);
+  assert.ok(listEl.children[0].innerHTML.includes('Rapid Fire'));
+});
+
+test('room layouts rotate deterministically and keep safe spawn bounds', () => {
+  const seenIds = new Set();
+  for(let roomIndex = 0; roomIndex < 18; roomIndex++) {
+    const layout = getRoomLayout(roomIndex);
+    seenIds.add(layout.id);
+    assert.equal(layout.obstacles.every((o) => (
+      o.x >= 0
+      && o.y >= 0
+      && o.x + o.w <= CANONICAL_WORLD_W
+      && o.y + o.h <= CANONICAL_WORLD_H
+    )), true);
+    const spawn = resolveSafePlayerSpawn({
+      layout,
+      playerRadius: 30,
+      worldWidth: CANONICAL_WORLD_W,
+      worldHeight: CANONICAL_WORLD_H,
+      obstacles: layout.obstacles,
+    });
+    assert.equal(Number.isFinite(spawn.x), true);
+    assert.equal(Number.isFinite(spawn.y), true);
+    assert.equal(spawn.x >= 0 && spawn.x <= CANONICAL_WORLD_W, true);
+    assert.equal(spawn.y >= 0 && spawn.y <= CANONICAL_WORLD_H, true);
+  }
+  assert.equal(seenIds.size, 6);
 });
 
 test('diagnostics builder produces crash report envelope', () => {
@@ -1521,8 +1647,9 @@ test('app chrome bindings wire patch notes, leaderboard, and boon panels', () =>
   let closed = 0;
   const periodCalls = [];
   const scopeCalls = [];
+  const openModes = [];
   const lbOpenA = makeButton();
-  const lbOpenB = makeButton();
+  const lbOpenB = makeButton({ lbMode: 'coop' });
   const lbClose = makeButton();
   const periodBtn = makeButton({ lbPeriod: 'daily' });
   const scopeBtn = makeButton({ lbScope: 'personal' });
@@ -1531,7 +1658,7 @@ test('app chrome bindings wire patch notes, leaderboard, and boon panels', () =>
     closeButton: lbClose,
     periodButtons: [periodBtn],
     scopeButtons: [scopeBtn],
-    onOpen: () => { opened += 1; },
+    onOpen: (mode) => { opened += 1; openModes.push(mode); },
     onClose: () => { closed += 1; },
     onPeriodChange: (period) => periodCalls.push(period),
     onScopeChange: (scope) => scopeCalls.push(scope),
@@ -1543,6 +1670,7 @@ test('app chrome bindings wire patch notes, leaderboard, and boon panels', () =>
   scopeBtn.handlers.get('click')();
   assert.equal(opened, 2);
   assert.equal(closed, 1);
+  assert.deepEqual(openModes, [null, 'coop']);
   assert.deepEqual(periodCalls, ['daily']);
   assert.deepEqual(scopeCalls, ['personal']);
 

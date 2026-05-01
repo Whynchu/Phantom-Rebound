@@ -21,6 +21,7 @@ import {
   pushSimOutputBullet,
   spawnSimRadialOutputBurst,
 } from './simProjectiles.js';
+import { getAdrenalSurgeDamageMult } from '../systems/boonHelpers.js';
 
 const PHASE_DASH_DAMAGE_MULT = 0.25;
 const GLOBAL_SPEED_LIFT = 1.55;
@@ -305,7 +306,7 @@ function applyMirrorTide(state, slot, hit, bullet, opts) {
     pierceLeft: 0,
     homing: false,
     crit: false,
-    dmg: (upg.playerDamageMult || 1) * (upg.denseDamageMult || 1),
+    dmg: (upg.playerDamageMult || 1) * (upg.denseDamageMult || 1) * getAdrenalSurgeDamageMult(upg, ts),
     expireAt: ts + 2000,
     ownerId: slot.index || 0,
   });

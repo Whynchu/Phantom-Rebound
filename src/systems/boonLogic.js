@@ -188,7 +188,7 @@ function getActiveBoonEntries(upg) {
   if(upg.payloadRadiusTier > 0) entries.push({icon:'💣+',name:'Payload Bloom',detail:`Tier ${upg.payloadRadiusTier} — ${Math.round(getPayloadBlastRadius(upg))}px blast`});
   if(upg.shockwave) entries.push({icon:'⚡',name:'Shockwave',detail:'Full charge → push enemies'});
   if(upg.glassCannonTier > 0) entries.push({icon:'⚗',name:'Glass Cannon',detail:`Tier ${upg.glassCannonTier} — ×${(upg.playerDamageMult || 1).toFixed(2)} total damage`});
-  if(upg.adrenalSurgeTier > 0) entries.push({icon:'🫀',name:'Adrenal Surge',detail:`${Math.min(upg.adrenalSurgeTier, Array.isArray(upg.adrenalStackExpiries) ? upg.adrenalStackExpiries.length : 0)}/${upg.adrenalSurgeTier} active stacks`});
+  if(upg.adrenalSurgeTier > 0) entries.push({ icon:'🫀', name:'Adrenal Surge', detail:`${Math.min(upg.adrenalSurgeTier, Array.isArray(upg.adrenalStackExpiries) ? upg.adrenalStackExpiries.length : 0)}/${upg.adrenalSurgeTier} active stacks` });
   if(upg.tetherOrbit) entries.push({icon:'🪢',name:'Tether Orbit',detail:'Orbit ring slows danger bullets'});
 
   if(upg.gravityWell2) entries.push({icon:'⊙+',name:'Gravity Well II',detail:'Field-slow bullets, also slows nearby enemies'});
