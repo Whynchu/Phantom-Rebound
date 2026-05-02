@@ -1,7 +1,70 @@
 import { pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon } from '../data/boons.js';
+import { getDamageVarianceBounds, getCritDamageFactor, getLateBloomGrowth } from '../systems/boonHelpers.js';
 import { iconHTML } from './iconRenderer.js';
 
 const BOON_FADE_MS = 180;
+
+const GLOBAL_SPEED_LIFT = 1.55;
+
+function formatStatValue(value, digits = 1) {
+  if(!Number.isFinite(value)) return '0';
+  if(Math.abs(value - Math.round(value)) < 0.05) return String(Math.round(value));
+  return value.toFixed(digits);
+}
+
+function getLateBloomMenuMods(upg, roomIdx) {
+  const growth = getLateBloomGrowth(roomIdx || 0);
+  switch(upg?.lateBloomVariant) {
+    case 'power':
+      return { damage: growth, speed: 0.94 };
+    case 'speed':
+      return { damage: 1, speed: growth };
+    case 'defense':
+      return { damage: 0.94, speed: 1 };
+    default:
+      return { damage: 1, speed: 1 };
+  }
+}
+
+function buildRewardStats(upg, roomIdx) {
+  const variance = getDamageVarianceBounds(upg);
+  const lateBloomMods = getLateBloomMenuMods(upg, roomIdx);
+  const snipeScale = 1 + (upg?.snipePower || 0) * 0.35;
+  const spsPenalty = Math.max(0.5, 1 - (upg?.spsTier || 0) * 0.04);
+  const damageMult = snipeScale
+    * (upg?.playerDamageMult || 1)
+    * (upg?.denseDamageMult || 1)
+    * (upg?.heavyRoundsDamageMult || 1)
+    * lateBloomMods.damage
+    * spsPenalty;
+  const moveSpeedMult = (upg?.speedMult || 1)
+    * (upg?.titanSlowMult || 1)
+    * (upg?.extraLifeSlowMult || 1)
+    * lateBloomMods.speed;
+  const bulletSpeedMult = Math.min(2.0, upg?.shotSpd || 1)
+    * (upg?.miniShotSpdMult || 1)
+    * (1 + (upg?.snipePower || 0) * 0.18);
+  const critChancePct = Math.max(0, Math.min(95, Math.round((upg?.critChance || 0) * 100)));
+  const critDamagePct = Math.max(0, Math.round((getCritDamageFactor(upg) - 1) * 100));
+  const baseBulletSpeed = 230 * GLOBAL_SPEED_LIFT * bulletSpeedMult;
+  const baseMoveSpeed = 165 * GLOBAL_SPEED_LIFT * moveSpeedMult;
+  return {
+    damageMin: variance.min * damageMult * 10,
+    damageMax: variance.max * damageMult * 10,
+    critChancePct,
+    critDamagePct,
+    moveSpeed: baseMoveSpeed,
+    bulletSpeed: baseBulletSpeed,
+  };
+}
+
+function buildStatChip(label, value) {
+  return `
+    <div class="up-room-stat">
+      <div class="up-room-stat-label">${label}</div>
+      <div class="up-room-stat-value">${value}</div>
+    </div>`;
+}
 
 function renderActiveBoons(upg) {
   const panel = document.getElementById('up-active-panel');
@@ -70,6 +133,16 @@ function showBoonSelection({ upg, hp, maxHp, roomIdx = 0, rerolls = 0, onReroll 
   hpRow.innerHTML = `
     <span class="up-room-hp-label">HP</span>
     <span class="up-room-hp-value">${Math.ceil(hp)} / ${Math.ceil(maxHp)}</span>`;
+  const stats = buildRewardStats(upg, roomIdx);
+  const statsRow = document.createElement('div');
+  statsRow.className = 'up-room-stats';
+  statsRow.innerHTML = [
+    buildStatChip('DMG', `${formatStatValue(stats.damageMin)}-${formatStatValue(stats.damageMax)}`),
+    buildStatChip('CRIT', `${stats.critChancePct}%`),
+    buildStatChip('CRIT DMG', `+${stats.critDamagePct}%`),
+    buildStatChip('MOVE', `${Math.round(stats.moveSpeed)} px/s`),
+    buildStatChip('BULLET', `${Math.round(stats.bulletSpeed)} px/s`),
+  ].join('');
 
   function getMainCardEntries() {
     if(!(pendingLegendary && onLegendaryAccept)) return pool.map((boon) => ({ type: 'boon', boon }));
@@ -184,6 +257,7 @@ function showBoonSelection({ upg, hp, maxHp, roomIdx = 0, rerolls = 0, onReroll 
   }
 
   cardsContainer.appendChild(hpRow);
+  cardsContainer.appendChild(statsRow);
   cardsContainer.appendChild(mainRow);
   cardsContainer.appendChild(healRow);
 

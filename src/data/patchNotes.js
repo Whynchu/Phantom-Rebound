@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.5.3',
+      label: 'REWARD STATS',
+      summary: ['Reward menu now shows live damage, crit, move speed, and bullet speed under HP.'],
+      highlights: [
+        'Damage display uses the same variance and crit math as combat.',
+      ]
+    },
+  {
       version: '1.5.2',
       label: 'GLASS CANNON',
       summary: ['Glass Cannon now raises the damage floor too, not just the ceiling.'],
