@@ -6115,11 +6115,11 @@ function update(dt,ts){
   if (playerSlots.length > 1) updateGuestFire(dt, combatActive);
 
   prevStill = isStill;
+  const sharedPlayerDamageBase = Math.max(1, getPlayerShotDamageBase(UPG, simNowMs, roomIndex) || 10);
 
   // ── Enemies
   if(combatActive){
     const WINDUP_MS = 520; // tell duration before firing
-    const sharedPlayerDamageBase = Math.max(1, getPlayerShotDamageBase(UPG, simNowMs, roomIndex) || 10);
     if(enemies.length > 1){
       resolveEnemySeparation(enemies, {
         width: W,

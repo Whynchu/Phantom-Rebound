@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.7.4',
+      label: 'ORB HOTFIX 2',
+      summary: ['Hoisted the shared player-damage baseline high enough for both orb contact and Charged Orb fire paths, fixing the room-start crash when Charged Orbs are picked.'],
+      highlights: [
+        'Hoisted the shared player-damage baseline high enough for both orb contact and Charged Orb fire paths, fixing the room-start crash when Charged Orbs are picked.',
+      ]
+    },
+  {
       version: '1.7.3',
       label: 'ORB CACHE FIX',
       summary: ['Charged Orbs now use a shared damage baseline name in the live combat loop so stale cached code is less likely to trip the orb fire path.'],
