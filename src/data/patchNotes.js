@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.7.2',
+      label: 'DAMAGE NUMBERS',
+      summary: ['Floating damage numbers are smaller again and no longer use the outline pass.'],
+      highlights: [
+        'Floating damage numbers are smaller again and no longer use the outline pass.',
+      ]
+    },
+  {
       version: '1.7.1',
       label: 'ORB HOTFIX',
       summary: ['Fixed a Charged Orbs scope crash that could take down combat when the game tried to read the shared player damage baseline.'],

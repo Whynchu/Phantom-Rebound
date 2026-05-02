@@ -7420,14 +7420,11 @@ function draw(ts){
 
   // Floating damage numbers
   ctx.save();
-  ctx.font = 'bold 20px "IBM Plex Mono", monospace';
+  ctx.font = 'bold 18px "IBM Plex Mono", monospace';
   ctx.textAlign = 'center';
   for(const d of dmgNumbers){
     ctx.globalAlpha = Math.max(0, d.life * 0.9);
     ctx.fillStyle = d.color;
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(0,0,0,0.65)';
-    ctx.strokeText(d.text, d.x, d.y);
     ctx.fillText(d.text, d.x, d.y);
   }
   ctx.restore();

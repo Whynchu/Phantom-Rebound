@@ -4,13 +4,13 @@
 
 import { MAX_DMG_NUMBERS } from '../data/constants.js';
 
-// Damage numbers render as `bold 10px "IBM Plex Mono"`; each character is
+// Damage numbers render as `bold 18px "IBM Plex Mono"`; each character is
 // roughly CHAR_W pixels wide. We place with `textAlign = 'center'`, so the
 // minimum horizontal gap between two numbers' centers is half of each one's
 // width plus a small padding of ~1 character.
-const CHAR_W = 12;
+const CHAR_W = 10;
 const CHAR_GAP = CHAR_W;
-const VERTICAL_PROX = 18;
+const VERTICAL_PROX = 16;
 
 function halfWidth(text) {
   return (String(text).length * CHAR_W) / 2;
