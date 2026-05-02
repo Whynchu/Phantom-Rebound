@@ -6244,7 +6244,7 @@ function update(dt,ts){
         }
       }
 
-      const playerDamageBase = getPlayerShotDamageBase(UPG, simNowMs, roomIndex);
+      const playerDamageBase = Math.max(1, getPlayerShotDamageBase(UPG, simNowMs, roomIndex) || 10);
 
       if(UPG.orbitSphereTier > 0){
         // Sync arrays

@@ -96,31 +96,42 @@ function getCritDamageFactor(upg) {
 }
 
 function getPlayerShotDamageBase(upg, nowMs = 0, roomIndex = 0) {
-  const snipeScale = 1 + (upg?.snipePower || 0) * 0.35;
-  const predatorBonus = upg?.predatorInstinct && (upg?.predatorKillStreak || 0) >= 2
-    ? 1 + Math.min((upg?.predatorKillStreak || 0) * 0.25, 1.25)
+  const snipePower = Math.max(0, Number(upg?.snipePower) || 0);
+  const predatorKillStreak = Math.max(0, Number(upg?.predatorKillStreak) || 0);
+  const denseTier = Math.max(0, Number(upg?.denseTier) || 0);
+  const maxCharge = Math.max(0, Number(upg?.maxCharge) || 0);
+  const playerDamageMult = Number.isFinite(upg?.playerDamageMult) ? upg.playerDamageMult : 1;
+  const denseDamageMult = Number.isFinite(upg?.denseDamageMult) ? upg.denseDamageMult : 1;
+  const heavyRoundsDamageMult = Number.isFinite(upg?.heavyRoundsDamageMult) ? upg.heavyRoundsDamageMult : 1;
+  const spsTier = Math.max(0, Number(upg?.spsTier) || 0);
+  const sustainedFireShots = Math.max(0, Number(upg?.sustainedFireShots) || 0);
+  const escalationKills = Math.max(0, Number(upg?.escalationKills) || 0);
+  const snipeScale = 1 + snipePower * 0.35;
+  const predatorBonus = upg?.predatorInstinct && predatorKillStreak >= 2
+    ? 1 + Math.min(predatorKillStreak * 0.25, 1.25)
     : 1;
-  const denseDesperationBonus = (upg?.denseTier > 0 && (upg?.maxCharge || 0) === 1) ? 2.0 : 1;
+  const denseDesperationBonus = (denseTier > 0 && maxCharge === 1) ? 2.0 : 1;
   const lateBloomDamage = upg?.lateBloomVariant === 'power'
     ? getLateBloomGrowth(roomIndex)
     : (upg?.lateBloomVariant === 'defense' ? LATE_BLOOM_DAMAGE_PENALTY : 1);
   const escalationBonus = upg?.escalation
-    ? 1 + Math.min((upg?.escalationKills || 0) * ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS)
+    ? 1 + Math.min(escalationKills * ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS)
     : 1;
-  const sustainedFireBonus = Math.min(1.45, 1 + Math.min(upg?.sustainedFireShots || 0, 15) * 0.03);
-  const spsFireRateScaling = Math.max(0.5, 1 - (upg?.spsTier || 0) * 0.04);
-  return 10
+  const sustainedFireBonus = Math.min(1.45, 1 + Math.min(sustainedFireShots, 15) * 0.03);
+  const spsFireRateScaling = Math.max(0.5, 1 - spsTier * 0.04);
+  const total = 10
     * snipeScale
-    * (upg?.playerDamageMult || 1)
+    * playerDamageMult
     * getAdrenalSurgeDamageMult(upg, nowMs)
-    * (upg?.denseDamageMult || 1)
-    * (upg?.heavyRoundsDamageMult || 1)
+    * denseDamageMult
+    * heavyRoundsDamageMult
     * predatorBonus
     * denseDesperationBonus
     * lateBloomDamage
     * escalationBonus
     * sustainedFireBonus
     * spsFireRateScaling;
+  return Number.isFinite(total) && total > 0 ? total : 10;
 }
 
 function syncChargeCapacity(upg) {

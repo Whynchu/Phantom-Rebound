@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.6.1',
+      label: 'ORB SAFETY',
+      summary: ['Charged Orbs now have extra safety guards so malformed damage values can\'t crash the frame.'],
+      highlights: [
+        'Orb volleys still scale from the player\'s build, but they stay below the main shot baseline and remain readable.',
+      ]
+    },
+  {
       version: '1.6.0',
       label: 'ORB READABILITY',
       summary: ['Charged Orbs now scale from the player\'s real shot damage, but hit a bit lighter than the main gun.'],
