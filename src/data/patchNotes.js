@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.7.1',
+      label: 'ORB HOTFIX',
+      summary: ['Fixed a Charged Orbs scope crash that could take down combat when the game tried to read the shared player damage baseline.'],
+      highlights: [
+        'Fixed a Charged Orbs scope crash that could take down combat when the game tried to read the shared player damage baseline.',
+      ]
+    },
+  {
       version: '1.7.0',
       label: 'DAMAGE READOUT',
       summary: ['Damage numbers now render larger and more readable above enemies and players.'],

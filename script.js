@@ -6119,6 +6119,7 @@ function update(dt,ts){
   // ── Enemies
   if(combatActive){
     const WINDUP_MS = 520; // tell duration before firing
+    const playerDamageBase = Math.max(1, getPlayerShotDamageBase(UPG, simNowMs, roomIndex) || 10);
     if(enemies.length > 1){
       resolveEnemySeparation(enemies, {
         width: W,
@@ -6243,8 +6244,6 @@ function update(dt,ts){
           });
         }
       }
-
-      const playerDamageBase = Math.max(1, getPlayerShotDamageBase(UPG, simNowMs, roomIndex) || 10);
 
       if(UPG.orbitSphereTier > 0){
         // Sync arrays
