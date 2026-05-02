@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.15',
+      label: 'LEADERBOARD FALLBACK',
+      summary: ['Retry the legacy leaderboard RPC signature when the new prefix-based function is not yet deployed, so the leaderboard screen falls back cleanly instead of surfacing a 404.'],
+      highlights: [
+        'Retry the legacy leaderboard RPC signature when the new prefix-based function is not yet deployed, so the leaderboard screen falls back cleanly instead of surfacing a 404.',
+      ]
+    },
+  {
       version: '1.4.14',
       label: 'LEADERBOARD COHORT',
       summary: ['Keep 1.4.x leaderboard entries together so 1.4.8 scores remain visible after later experimental updates.'],

@@ -56,6 +56,11 @@ import {
 } from '../src/platform/leaderboardLocal.js';
 import { buildGameLoopCrashReport, saveRunCrashReport } from '../src/platform/diagnostics.js';
 import {
+  fetchRemoteLeaderboard,
+  submitRemoteScore,
+  submitRunDiagnostic,
+} from '../src/platform/leaderboardService.js';
+import {
   refreshLeaderboardSync,
   shouldRefreshLeaderboardAfterSubmit,
   submitLeaderboardEntryRemote,
@@ -1223,6 +1228,55 @@ test('leaderboard runtime helpers refresh and submit deterministically', async (
     playerName: 'A',
     entryName: 'A',
   }), true);
+});
+
+test('leaderboard remote fetch retries legacy rpc signature when prefix rpc is missing', async () => {
+  const originalFetch = globalThis.fetch;
+  const payloads = [];
+  let callCount = 0;
+  globalThis.fetch = async (_url, options) => {
+    payloads.push(JSON.parse(options.body));
+    callCount += 1;
+    if(callCount === 1) {
+      return {
+        ok: false,
+        status: 404,
+        text: async () => 'Could not find the function public.get_leaderboard(p_period, p_scope, p_player_name, p_game_version_prefix, p_limit, p_run_mode)',
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ([{
+        player_name: 'A',
+        score: 100,
+        room: 1,
+        created_at: '2025-01-01T00:00:00.000Z',
+        boons: null,
+        player_color: 'green',
+        boon_order: '',
+        duration_seconds: 12,
+        run_mode: 'solo',
+      }]),
+    };
+  };
+
+  try {
+    const rows = await fetchRemoteLeaderboard({
+      period: 'daily',
+      scope: 'everyone',
+      playerName: 'RUNNER',
+      gameVersionPrefix: '1.4.',
+      gameVersion: '1.4.14',
+    });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].name, 'A');
+    assert.equal(payloads.length, 2);
+    assert.equal(payloads[0].p_game_version_prefix, '1.4.');
+    assert.equal(payloads[1].p_game_version, '1.4.14');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('submitLeaderboardEntryRemote applies fallback on failure', async () => {

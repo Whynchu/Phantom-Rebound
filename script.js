@@ -5211,6 +5211,7 @@ async function refreshLeaderboardView() {
     mode: lbMode,
     playerName,
     gameVersionPrefix: getLeaderboardVersionPrefix(VERSION.num),
+    gameVersion: VERSION.num,
     limit: 100,
     fetchRemoteLeaderboard,
     beginLeaderboardSync,

@@ -47,16 +47,42 @@ async function callLeaderboardRpc(fnName, payload) {
   return response.json();
 }
 
-async function fetchRemoteLeaderboard({ period, scope, playerName, gameVersionPrefix = '', limit = 100, mode = 'solo' }) {
-  const rows = await callLeaderboardRpc('get_leaderboard', {
+function isMissingLeaderboardRpc(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return message.includes('404') || message.includes('could not find the function public.get_leaderboard');
+}
+
+async function fetchRemoteLeaderboard({
+  period,
+  scope,
+  playerName,
+  gameVersionPrefix = '',
+  gameVersion = '',
+  limit = 100,
+  mode = 'solo',
+}) {
+  const basePayload = {
     p_period: normalizePeriod(period),
     p_scope: normalizeScope(scope),
     p_player_name: playerName,
-    p_game_version_prefix: gameVersionPrefix,
     p_limit: limit,
     p_run_mode: normalizeRunMode(mode),
-  });
-  return Array.isArray(rows) ? rows.map(mapRemoteRow) : [];
+  };
+
+  try {
+    const rows = await callLeaderboardRpc('get_leaderboard', {
+      ...basePayload,
+      p_game_version_prefix: gameVersionPrefix,
+    });
+    return Array.isArray(rows) ? rows.map(mapRemoteRow) : [];
+  } catch (error) {
+    if(!gameVersion || !isMissingLeaderboardRpc(error)) throw error;
+    const rows = await callLeaderboardRpc('get_leaderboard', {
+      ...basePayload,
+      p_game_version: gameVersion,
+    });
+    return Array.isArray(rows) ? rows.map(mapRemoteRow) : [];
+  }
 }
 
 async function submitRemoteScore({ playerName, score, room, gameVersion, boons, playerColor = 'green', durationSeconds = null, runMode = 'solo' }) {
