@@ -40,8 +40,8 @@ function getRoomDef(idx, { roomNames, bossRooms, generateWeightedWave }) {
       const bossKeys = Object.keys(bossRooms).map(Number).sort((a, b) => a - b);
       const ci = (4 + Math.floor((roomNumber - 60) / 20)) % bossKeys.length;
       const secondaryConfig = bossRooms[bossKeys[(ci + 1) % bossKeys.length]];
-      wave.push({ t: secondaryConfig.bossType, n: 1, d: 0, isBoss: true, bossScale: 2 });
-      wave[0].bossScale = 2;
+      wave.push({ t: secondaryConfig.bossType, n: 1, d: 0, isBoss: true, bossScale: 1.8 });
+      wave[0].bossScale = 1.8;
       wave.push({ t: 'orange_zoner', n: 2, d: 0 });
       wave.push({ t: 'purple_disruptor', n: 2, d: 0 });
       wave.push({ t: 'triangle', n: 2, d: 0 });

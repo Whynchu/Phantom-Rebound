@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.5.0',
+      label: 'BOSS SIZE',
+      summary: ['Move the release line to 1.5.x and shrink bosses about 10% so they fit the wall structure better.'],
+      highlights: [
+        'Move the release line to 1.5.x and shrink bosses about 10% so they fit the wall structure better.',
+      ]
+    },
+  {
       version: '1.4.19',
       label: 'ENEMY CURVE',
       summary: ['Slightly soften the enemy damage curve while keeping the new random damage band, so early hits land closer to 17-28 by room 10 and around 40-70 by room 50.'],

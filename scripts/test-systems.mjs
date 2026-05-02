@@ -2692,8 +2692,8 @@ test('room flow generates non-boss and room-100 special boss layouts', () => {
   assert.equal(room100.bossDamageMultiplier, 2);
   const bossEntries = room100.waves[0].filter((entry) => entry.isBoss);
   assert.equal(bossEntries.length, 2);
-  assert.equal(bossEntries[0].bossScale, 2);
-  assert.equal(bossEntries[1].bossScale, 2);
+  assert.equal(bossEntries[0].bossScale, 1.8);
+  assert.equal(bossEntries[1].bossScale, 1.8);
 });
 
 test('room runtime intro and clear phase transitions', () => {
