@@ -3,6 +3,7 @@ const SOUND_COOLDOWN_MS = {
   enemyFire: 38,
   bounce: 18,
   hitSplat: 24,
+  playerHit: 90,
 };
 
 let audioCtx = null;
@@ -31,7 +32,7 @@ function getAudioContext() {
     compressor.release.value = 0.12;
 
     masterGain = audioCtx.createGain();
-    masterGain.gain.value = 0.28;
+    masterGain.gain.value = 0.48;
 
     lowpass.connect(compressor);
     compressor.connect(masterGain);
@@ -150,10 +151,10 @@ export function playRetroSfx(kind, opts = {}) {
         startFreq: 880 + intensity * 40,
         endFreq: 220 + intensity * 30,
         duration: 0.075,
-        gain: 0.065 + intensity * 0.008,
+        gain: 0.08 + intensity * 0.01,
         attack: 0.001,
         decay: 0.07,
-        noiseGain: 0.022 + intensity * 0.003,
+        noiseGain: 0.03 + intensity * 0.004,
         noiseDuration: 0.03,
         noiseFilter: 1800,
       });
@@ -164,11 +165,11 @@ export function playRetroSfx(kind, opts = {}) {
         startFreq: opts.elite ? 360 : 280,
         endFreq: opts.elite ? 120 : 150,
         duration: opts.elite ? 0.09 : 0.07,
-        gain: 0.04 + intensity * 0.006,
+        gain: 0.052 + intensity * 0.008,
         detune: opts.elite ? -7 : 0,
         attack: 0.001,
         decay: opts.elite ? 0.085 : 0.065,
-        noiseGain: opts.elite ? 0.014 : 0.009,
+        noiseGain: opts.elite ? 0.02 : 0.014,
         noiseDuration: 0.04,
         noiseFilter: opts.elite ? 900 : 1100,
       });
@@ -179,10 +180,10 @@ export function playRetroSfx(kind, opts = {}) {
         startFreq: opts.danger ? 1040 : 920,
         endFreq: opts.danger ? 520 : 640,
         duration: 0.06,
-        gain: 0.034 + intensity * 0.006,
+        gain: 0.046 + intensity * 0.008,
         attack: 0.001,
         decay: 0.055,
-        noiseGain: opts.danger ? 0.014 : 0.009,
+        noiseGain: opts.danger ? 0.02 : 0.013,
         noiseDuration: 0.025,
         noiseFilter: 2400,
       });
@@ -193,12 +194,27 @@ export function playRetroSfx(kind, opts = {}) {
         startFreq: opts.crit ? 420 : 260,
         endFreq: opts.crit ? 130 : 95,
         duration: opts.kill ? 0.105 : 0.075,
-        gain: (opts.kill ? 0.052 : 0.04) + intensity * 0.004,
+        gain: (opts.kill ? 0.07 : 0.052) + intensity * 0.005,
         attack: 0.001,
         decay: opts.kill ? 0.1 : 0.07,
-        noiseGain: opts.kill ? 0.058 : 0.045,
+        noiseGain: opts.kill ? 0.078 : 0.06,
         noiseDuration: opts.kill ? 0.07 : 0.05,
         noiseFilter: opts.crit ? 1350 : 980,
+      });
+      break;
+    case 'playerHit':
+      playTone(ctx, {
+        wave: opts.contact ? 'square' : 'sawtooth',
+        startFreq: opts.contact ? 190 : 260,
+        endFreq: opts.contact ? 64 : 82,
+        duration: opts.contact ? 0.115 : 0.095,
+        gain: 0.075 + intensity * 0.012,
+        detune: opts.contact ? -9 : -4,
+        attack: 0.001,
+        decay: opts.contact ? 0.11 : 0.09,
+        noiseGain: opts.contact ? 0.07 : 0.055,
+        noiseDuration: opts.contact ? 0.08 : 0.06,
+        noiseFilter: opts.contact ? 720 : 1050,
       });
       break;
     default:

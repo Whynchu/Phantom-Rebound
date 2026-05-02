@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.12',
+      label: 'LOUDER POP',
+      summary: ['Raised the procedural SFX mix after the first playtest.'],
+      highlights: [
+        'Added distinct player damage sounds for melee contact and danger bullet hits.',
+      ]
+    },
+  {
       version: '1.4.11',
       label: 'RETRO POP',
       summary: ['Added the first procedural retro SFX pass for ghost shots, enemy shots, wall bounces, and target splats.'],

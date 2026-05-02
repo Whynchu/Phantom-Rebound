@@ -3593,6 +3593,7 @@ function applyContactDamageToGuestSlot(slot, damage) {
   body.distort = 0.35;
   spawnDmgNumber(body.x, body.y, damage, C.danger);
   sparks(body.x, body.y, C.danger, 10, 90);
+  playRetroSfx('playerHit', { intensity: Math.max(1, damage / 12), contact: true });
   if (nextHp <= 0 && handleSlotDeathInCoop(slot)) gameOver();
 }
 
@@ -3605,6 +3606,7 @@ function applyDangerDamageToGuestSlot(slot, damage, color) {
   body.distort = 0.3;
   spawnDmgNumber(body.x, body.y, damage, color || C.danger);
   sparks(body.x, body.y, C.danger, 8, 70);
+  playRetroSfx('playerHit', { intensity: Math.max(1, damage / 12), contact: false });
   // D18.16 — slot 1 death paths previously discarded the
   // handleSlotDeathInCoop return. If host (slot 0) died first into
   // spectator state, then guest (slot 1) died, countLiveCoopSlots()
@@ -4885,6 +4887,10 @@ function dispatchSimEffects(effects) {
       case 'contact.rusherHit':
         if (Number.isFinite(fx.damage)) spawnDmgNumber(x, y, fx.damage, threat.danger.hex);
         sparks(x, y, C.danger, 10, 85);
+        playRetroSfx('playerHit', {
+          intensity: Math.max(1, (fx.damage || 0) / 12),
+          contact: fx.kind === 'contact.rusherHit',
+        });
         break;
       case 'output.enemyHit':
         if (Number.isFinite(fx.damage)) spawnDmgNumber(x, y, fx.damage, colorForSlot(fx.slotIndex));
@@ -6175,6 +6181,7 @@ function update(dt,ts){
             while(UPG.adrenalStackExpiries.length > (UPG.adrenalSurgeTier || 0)) UPG.adrenalStackExpiries.shift();
           }
           sparks(player.x,player.y,C.danger,10,90);
+          playRetroSfx('playerHit', { intensity: Math.max(1, rusherHit.damage / 12), contact: true });
           const rusherAftermath = resolvePostHitAftermath({
             hitResult: rusherHit,
             upgrades: UPG,
@@ -6743,6 +6750,7 @@ function update(dt,ts){
         hp = dangerHit.nextHp;
         recordPlayerDamage(dangerHit.damage, 'projectile');
         spawnDmgNumber(player.x, player.y, dangerHit.damage, b.col || getThreatPalette().danger.hex);
+        playRetroSfx('playerHit', { intensity: Math.max(1, dangerHit.damage / 12), contact: false });
         player.distort = dangerHit.distortSeconds;
         tookDamageThisRoom = true;
         if((UPG.adrenalSurgeTier || 0) > 0){
@@ -6797,6 +6805,7 @@ function update(dt,ts){
         hp = dangerHit.nextHp;
         recordPlayerDamage(dangerHit.damage, 'projectile');
         spawnDmgNumber(player.x, player.y, dangerHit.damage, b.col || getThreatPalette().danger.hex);
+        playRetroSfx('playerHit', { intensity: Math.max(1, dangerHit.damage / 12), contact: false });
         player.invincible = dangerHit.invincibleSeconds;
         player.distort = dangerHit.distortSeconds;
         tookDamageThisRoom = true;
