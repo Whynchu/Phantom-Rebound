@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.11',
+      label: 'RETRO POP',
+      summary: ['Added the first procedural retro SFX pass for ghost shots, enemy shots, wall bounces, and target splats.'],
+      highlights: [
+        'Lowered the overall SFX mix so the shot loop starts softer for playtesting.',
+      ]
+    },
+  {
       version: '1.4.10',
       label: 'PERF COPY',
       summary: ['Made performance export copy resilient when the browser blocks clipboard access.'],

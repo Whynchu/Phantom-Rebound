@@ -175,6 +175,7 @@ import {
 import { HAT_OPTIONS, getHatHeightMultiplier } from './src/data/hats.js';
 import { drawGhostHatLayer } from './src/ui/drawing/hatRenderer.js';
 import { drawGhostSprite } from './src/ui/drawing/ghostRenderer.js';
+import { playRetroSfx } from './src/systems/sfx.js';
 import {
   drawGooBall as drawGooBallImpl,
   drawBounceRings as drawBounceRingsImpl,
@@ -4316,6 +4317,7 @@ function triggerPayloadBlast(bullet, enemies, ts) {
       e.hp -= impactDamage;
       hitCount++;
       spawnDmgNumber(e.x, e.y - e.r, impactDamage, getPlayerColorScheme().hex);
+      playRetroSfx('hitSplat', { intensity: Math.max(1, impactDamage / 10), kill: e.hp <= 0 });
       if(e.hp <= 0){
         awardKillPoints(e.pts);
         kills++;
@@ -4726,6 +4728,11 @@ function firePlayer(slot, tx, ty) {
     payloadReady,
   });
   volleySpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
+  playRetroSfx('ghostFire', {
+    intensity: availableShots,
+    shots: availableShots,
+    elite: false,
+  });
   const shotsVolleyRoom = telemetryController.getCurrentRoom();
   if (shotsVolleyRoom) shotsVolleyRoom.shotsFired = (shotsVolleyRoom.shotsFired || 0) + volleySpecs.length;
   metrics.charge = Math.max(0, metrics.charge - chargeSpent);
@@ -4882,16 +4889,20 @@ function dispatchSimEffects(effects) {
       case 'output.enemyHit':
         if (Number.isFinite(fx.damage)) spawnDmgNumber(x, y, fx.damage, colorForSlot(fx.slotIndex));
         sparks(x, y, colorForSlot(fx.slotIndex), 5, 55);
+        playRetroSfx('hitSplat', { intensity: Math.max(1, (fx.damage || 0) / 10), kill: false });
         break;
       case 'output.enemyKilled':
         sparks(x, y, threat.elite.hex, 14, 95);
+        playRetroSfx('hitSplat', { intensity: 1.4, kill: true });
         break;
       case 'orbit.enemyHit':
         if (Number.isFinite(fx.damage)) spawnDmgNumber(x, y, fx.damage, colorForSlot(fx.slotIndex));
         sparks(x, y, colorForSlot(fx.slotIndex), 4, 45);
+        playRetroSfx('hitSplat', { intensity: Math.max(0.8, (fx.damage || 0) / 12), kill: false });
         break;
       case 'orbit.enemyKilled':
         sparks(x, y, threat.elite.hex, 14, 95);
+        playRetroSfx('hitSplat', { intensity: 1.2, kill: true });
         break;
       case 'shield.hit':
         sparks(x, y, fx.hitKind === 'temperedAbsorb' ? C.shieldEnhanced : C.shieldActive, 8, 60);
@@ -6219,6 +6230,12 @@ function update(dt,ts){
             spawnEliteBullet: (angle, speed, stage) => spawnEliteBullet(e.x, e.y, angle, speed, stage),
             spawnEnemyBullet: (angle) => spawnEB(e.x, e.y, angle, targetBody),
           });
+          playRetroSfx('enemyFire', {
+            intensity: e.burst || 1,
+            shots: e.burst || 1,
+            elite: !!e.isElite,
+            enemyType: e.type,
+          });
         }
       }
 
@@ -6461,6 +6478,10 @@ function update(dt,ts){
     }
 
     if(bounced){
+      playRetroSfx('bounce', {
+        intensity: b.state === 'danger' ? 1.1 : 1,
+        danger: b.state === 'danger',
+      });
       // R0.4 step 6: bounce dispatch carved into src/sim/bulletBounceDispatch.js.
       // The pure dispatcher returns {effects, removeSourceBullet, skipRestOfFrame,
       // followUp}. Effects are translated back to the legacy side-effect calls
@@ -6867,6 +6888,11 @@ function update(dt,ts){
           const hitColor = b.crit ? C.ghost : getCoopPlayerColorForSlot(hitOwnerSlot);
           sparks(b.x,b.y,b.crit?C.ghost:C.green,b.crit?8:5,b.crit?70:55);
           spawnDmgNumber(e.x, e.y - e.r, hitResolution.damage, hitColor);
+          playRetroSfx('hitSplat', {
+            intensity: Math.max(1, hitResolution.damage / 10),
+            crit: !!b.crit,
+            kill: e.hp <= 0,
+          });
           queueCoopEnemyDamageEvent({
             enemyId: e.eid,
             damage: hitResolution.damage,
