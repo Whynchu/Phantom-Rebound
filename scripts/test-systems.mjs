@@ -466,7 +466,7 @@ test('MINI applies speed and crit bonuses while shrinking HP', () => {
   mini.apply(upg, state);
   assert.equal(upg.miniTier, 1);
   assert.equal(upg.miniShotSpdMult, 1.10);
-  assert.equal(upg.critChance, 0.05);
+  assert.equal(upg.critChance, 0.10);
   assert.equal(upg.critDamageBonus, 0.5);
   assert.equal(state.maxHp, 160);
   assert.equal(state.hp, 160);
@@ -475,7 +475,7 @@ test('MINI applies speed and crit bonuses while shrinking HP', () => {
   mini.apply(upg, state);
   assert.equal(upg.miniTier, 3);
   assert.equal(upg.miniShotSpdMult, 1.30);
-  assert.ok(Math.abs(upg.critChance - 0.15) < 1e-9);
+  assert.ok(Math.abs(upg.critChance - 0.20) < 1e-9);
   assert.equal(upg.critDamageBonus, 0.7);
 });
 

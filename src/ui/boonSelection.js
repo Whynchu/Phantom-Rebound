@@ -1,10 +1,9 @@
 import { pickBoonChoices, createHealBoon, getActiveBoonEntries, getEvolvedBoon } from '../data/boons.js';
 import { getDamageVarianceBounds, getCritDamageFactor, getLateBloomGrowth } from '../systems/boonHelpers.js';
+import { PLAYER_BASE_MOVE_SPEED, PLAYER_BASE_BULLET_SPEED } from '../data/boonConstants.js';
 import { iconHTML } from './iconRenderer.js';
 
 const BOON_FADE_MS = 180;
-
-const GLOBAL_SPEED_LIFT = 1.55;
 
 function formatStatValue(value, digits = 1) {
   if(!Number.isFinite(value)) return '0';
@@ -46,8 +45,8 @@ function buildRewardStats(upg, roomIdx) {
     * (1 + (upg?.snipePower || 0) * 0.18);
   const critChancePct = Math.max(0, Math.min(95, Math.round((upg?.critChance || 0) * 100)));
   const critDamagePct = Math.max(0, Math.round((getCritDamageFactor(upg) - 1) * 100));
-  const baseBulletSpeed = 230 * GLOBAL_SPEED_LIFT * bulletSpeedMult;
-  const baseMoveSpeed = 165 * GLOBAL_SPEED_LIFT * moveSpeedMult;
+  const baseBulletSpeed = PLAYER_BASE_BULLET_SPEED * bulletSpeedMult;
+  const baseMoveSpeed = PLAYER_BASE_MOVE_SPEED * moveSpeedMult;
   return {
     damageMin: variance.min * damageMult * 10,
     damageMax: variance.max * damageMult * 10,

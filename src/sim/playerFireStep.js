@@ -12,7 +12,7 @@ import { getDamageVarianceBounds } from '../systems/boonHelpers.js';
 import { emit } from './effectQueue.js';
 import { pushSimOutputBullet, nextSimRandom } from './simProjectiles.js';
 import { getKineticChargeRate, getLateBloomGrowth } from '../data/boons.js';
-import { LATE_BLOOM_DAMAGE_PENALTY } from '../data/boonConstants.js';
+import { LATE_BLOOM_DAMAGE_PENALTY, PLAYER_BASE_BULLET_SPEED, PLAYER_BASE_CRIT_CHANCE } from '../data/boonConstants.js';
 import { getAdrenalSurgeEffectiveSps, getAdrenalSurgeDamageMult } from '../systems/boonHelpers.js';
 
 // ── Module constants (mirror script.js counterparts) ─────────────────────────
@@ -78,7 +78,7 @@ function fireSimSlot(state, slot, targetX, targetY) {
 
   // Damage computation (mirrors firePlayer).
   const snipeScale = 1 + (upg.snipePower || 0) * 0.18;
-  const bspd = 230 * GLOBAL_SPEED_LIFT * Math.min(2.0, upg.shotSpd || 1) * (upg.miniShotSpdMult || 1) * snipeScale;
+  const bspd = PLAYER_BASE_BULLET_SPEED * Math.min(2.0, upg.shotSpd || 1) * (upg.miniShotSpdMult || 1) * snipeScale;
   const baseRadius = 4.5 * Math.min(2.5, upg.shotSize || 1) * (1 + (upg.snipePower || 0) * 0.15);
   const predatorBonus = upg.predatorInstinct && upg.predatorKillStreak >= 2
     ? 1 + Math.min(upg.predatorKillStreak * 0.25, 1.25) : 1;
@@ -179,7 +179,7 @@ function fireSimSlot(state, slot, targetX, targetY) {
         shots: angs,
         availableShots,
         player: body,
-        upg: { ...upg, critChance: 0 },
+        upg: { ...upg, critChance: PLAYER_BASE_CRIT_CHANCE },
         bulletSpeed: bspd,
         baseRadius,
         baseDamage: baseDmg * volleyPerBulletDamageMult,

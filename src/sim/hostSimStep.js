@@ -64,7 +64,7 @@ function applyAuthoritativeInputPosition(body, input, world, phaseOpts) {
  * @param {object} [opts] - sim config + obstacle helpers (see below)
  *
  * opts fields (with defaults):
- *   baseSpeed=200, deadzone=0.15, joyMax=60, gate=true,
+ *   baseSpeed=225, deadzone=0.15, joyMax=60, gate=true,
  *   worldW=state.world.w||state.worldW||800,
  *   worldH=state.world.h||state.worldH||600, margin=16,
  *   phaseWalk=false, phaseWalkMaxOverlapMs=500, phaseWalkIdleEjectMs=250,
@@ -72,7 +72,7 @@ function applyAuthoritativeInputPosition(body, input, world, phaseOpts) {
  *   resolveCollisions=noop, isOverlapping=()=>false, eject=noop.
  */
 export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
-  const baseSpeed = opts.baseSpeed != null ? opts.baseSpeed : 200;
+  const baseSpeed = opts.baseSpeed != null ? opts.baseSpeed : 225;
   const deadzone = opts.deadzone != null ? opts.deadzone : 0.15;
   const joyMax = opts.joyMax != null ? opts.joyMax : 60;
   const gate = opts.gate !== false;
@@ -123,7 +123,7 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   if (slot1 && slot1.body) {
     const joy1 = slot1Input && slot1Input.joy;
     // P4: slot1 uses its own speedMult — matches updateGuestSlotMovement() in script.js.
-    // opts.baseSpeedRaw is the pre-upg base speed (165 * GLOBAL_SPEED_LIFT); when provided
+    // opts.baseSpeedRaw is the pre-upg base speed (225); when provided
     // we apply slot1's own speedMult so each slot moves at its correct rate during resim.
     const slot1TitanSlow = slot1.upg?.colossus
       ? 1 - (1 - (slot1.upg?.titanSlowMult || 1)) * 0.5

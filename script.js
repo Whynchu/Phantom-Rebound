@@ -36,6 +36,7 @@ import {
   resolveSafePlayerSpawn,
 } from './src/data/roomLayouts.js';
 import { BOONS, SPS_LADDER, CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, getPayloadBlastRadius, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, pickBoonChoices, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
+import { PLAYER_BASE_MOVE_SPEED, PLAYER_BASE_BULLET_SPEED } from './src/data/boonConstants.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePhaseShots, getEnemyDefinition } from './src/entities/enemyTypes.js';
 import {
   resolveEnemySeparation,
@@ -2985,8 +2986,8 @@ function installCoopInputUplink(armedCoop) {
               get worldH() { return simState.world && simState.world.h ? simState.world.h : (WORLD_H || 600); },
               // P4: provide base speed as a getter so it stays current with GLOBAL_SPEED_LIFT.
               // baseSpeedRaw = pre-upg speed; hostSimStep applies per-slot speedMult for slot1.
-              get baseSpeed() { return 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (UPG.speedMult || 1)); },
-              get baseSpeedRaw() { return 165 * GLOBAL_SPEED_LIFT; },
+              get baseSpeed() { return PLAYER_BASE_MOVE_SPEED * Math.min(2.5, (UPG.speedMult || 1)); },
+              get baseSpeedRaw() { return PLAYER_BASE_MOVE_SPEED; },
               deadzone: JOY_DEADZONE,
               joyMax: JOY_MAX,
               get gate() { return simState.run.roomPhase !== 'intro'; },
@@ -3505,7 +3506,7 @@ function updateOnlineGuestPrediction(dt) {
   }
   if (!slot.input || typeof slot.input.moveVector !== 'function') return;
   const { dx, dy, t, active } = slot.input.moveVector();
-  const SPD = 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (slot.upg?.speedMult || 1));
+  const SPD = PLAYER_BASE_MOVE_SPEED * Math.min(2.5, (slot.upg?.speedMult || 1));
   if (active) { body.vx = dx * SPD * t; body.vy = dy * SPD * t; }
   else { body.vx = 0; body.vy = 0; }
   body.x = Math.max(M + body.r, Math.min(WORLD_W - M - body.r, body.x + body.vx * dt));
@@ -3529,7 +3530,7 @@ function updateGuestSlotMovement(dt, W, H) {
     const body = slot.body;
     const { dx, dy, t, active, x: remoteX, y: remoteY } = slot.input.moveVector();
     // D19.6b — honor slot.upg.speedMult on slot 1+ host-side movement.
-    // Previously this used bare 165*GLOBAL_SPEED_LIFT, which silently
+    // Previously this used the base movement speed directly, which silently
     // ignored Ghost Velocity (a slot-1-safe boon) and any other
     // speedMult-affecting boon, so the guest's body moved at base speed
     // even when the boon should have made them faster. Cap matches
@@ -3537,7 +3538,7 @@ function updateGuestSlotMovement(dt, W, H) {
     // movement modifiers (titanSlow, bloodRushMult, lateBloomMoveMods.speed)
     // are intentionally NOT applied here — those touch UPG-only runtime
     // state that isn't mirrored to slot 1.
-    const SPD = 165 * GLOBAL_SPEED_LIFT * Math.min(2.5, (slot.upg?.speedMult || 1));
+    const SPD = PLAYER_BASE_MOVE_SPEED * Math.min(2.5, (slot.upg?.speedMult || 1));
     if (active) { body.vx = dx * SPD * t; body.vy = dy * SPD * t; }
     else { body.vx = 0; body.vy = 0; }
     // D19.7 — guest body position has priority. Movement intent alone can put
@@ -4683,7 +4684,7 @@ function firePlayer(slot, tx, ty) {
   if (availableShots <= 0) return;
 
   const snipeScale = 1 + upg.snipePower * 0.18;
-  const bspd = 230 * GLOBAL_SPEED_LIFT * Math.min(2.0, upg.shotSpd) * (upg.miniShotSpdMult || 1) * snipeScale;
+  const bspd = PLAYER_BASE_BULLET_SPEED * Math.min(2.0, upg.shotSpd) * (upg.miniShotSpdMult || 1) * snipeScale;
   const baseRadius = 4.5 * Math.min(2.5, upg.shotSize) * (1 + upg.snipePower * 0.15);
   // Predator's Instinct: apply kill streak damage multiplier (25% per kill, max +125%)
   const predatorBonus = upg.predatorInstinct && upg.predatorKillStreak >= 2 ? 1 + Math.min(upg.predatorKillStreak * 0.25, 1.25) : 1;
@@ -5910,7 +5911,7 @@ function update(dt,ts){
   const titanSlow = UPG.colossus ? 1 - (1 - (UPG.titanSlowMult || 1)) * 0.5 : (UPG.titanSlowMult || 1);
   const bloodRushMult = UPG.bloodRush && UPG.bloodRushTimer > ts ? 1 + ((UPG.bloodRushStacks || 0) * 0.10) : 1;
   const lateBloomMoveMods = getLateBloomMods(roomIndex || 0);
-  const BASE_SPD=165*GLOBAL_SPEED_LIFT*Math.min(2.5,(UPG.speedMult || 1) * titanSlow * (UPG.extraLifeSlowMult || 1) * bloodRushMult * lateBloomMoveMods.speed);
+  const BASE_SPD=PLAYER_BASE_MOVE_SPEED*Math.min(2.5,(UPG.speedMult || 1) * titanSlow * (UPG.extraLifeSlowMult || 1) * bloodRushMult * lateBloomMoveMods.speed);
   const joyMax = joy.max || JOY_MAX;
 
   // Drift anchor when thumb wanders far past max radius

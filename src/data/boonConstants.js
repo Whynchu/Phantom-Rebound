@@ -53,6 +53,10 @@ export const KINETIC_FAST_FILL_LOW_CAP = 12;
 export const KINETIC_FAST_FILL_HIGH_CAP = 120;
 export const KINETIC_FAST_FILL_MULT = 1.75;
 
+export const PLAYER_BASE_MOVE_SPEED = 225;
+export const PLAYER_BASE_BULLET_SPEED = 275;
+export const PLAYER_BASE_CRIT_CHANCE = 0.05;
+
 export const PAYLOAD_BASE_RADIUS = 288;
 export const PAYLOAD_RADIUS_PER_TIER = 84;
 export const PAYLOAD_RADIUS_MAX = 576;

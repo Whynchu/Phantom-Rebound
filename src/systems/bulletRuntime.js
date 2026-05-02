@@ -113,7 +113,7 @@ function applyBulletHoming(bullet, enemies, dt, opts = {}) {
   // Faster Bullets / Snipe scaling.
   const sp = Math.hypot(bullet.vx, bullet.vy);
   const homingSpeedMult = 1.2 + (homingTier || 1) * 0.05;
-  const maxSp = 230 * globalSpeedLift * Math.min(2.0, shotSpd) * (1 + snipePower * 0.18) * homingSpeedMult;
+  const maxSp = 275 * Math.min(2.0, shotSpd) * (1 + snipePower * 0.18) * homingSpeedMult;
   if (sp > maxSp) {
     bullet.vx = bullet.vx / sp * maxSp;
     bullet.vy = bullet.vy / sp * maxSp;

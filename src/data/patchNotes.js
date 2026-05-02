@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.5.4',
+      label: 'BASE SPEEDS',
+      summary: ['Raised the player base movement speed to 225 and base shot speed to 275.'],
+      highlights: [
+        'Player crit now starts at 5% so reward stats and combat match the same baseline.',
+      ]
+    },
+  {
       version: '1.5.3',
       label: 'REWARD STATS',
       summary: ['Reward menu now shows live damage, crit, move speed, and bullet speed under HP.'],
