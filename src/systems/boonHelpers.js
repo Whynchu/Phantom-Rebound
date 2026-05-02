@@ -10,7 +10,9 @@ import {
   DAMAGE_VARIANCE_BASE_MAX,
   DAMAGE_CEIL_STEP,
   DAMAGE_FLOOR_STEP,
+  CRIT_CHANCE_TIER_BONUS,
   CRIT_DAMAGE_BASE_BONUS,
+  CRIT_DAMAGE_TIER_BONUS,
   CRIT_DAMAGE_MAX_BONUS,
   ESCALATION_KILL_PCT,
   ESCALATION_MAX_BONUS,
@@ -81,11 +83,11 @@ function getDamageVarianceBounds(upg) {
   const floorTier = Math.max(0, upg?.damageFloorTier || 0);
   const min = Math.min(
     DAMAGE_VARIANCE_BASE_MAX,
-    DAMAGE_VARIANCE_BASE_MIN + floorTier * DAMAGE_FLOOR_STEP,
+    DAMAGE_VARIANCE_BASE_MIN + floorTier * DAMAGE_FLOOR_STEP + Math.max(0, Number(upg?.damageFloorBonus) || 0) / 10,
   );
   const max = Math.max(
     min,
-    DAMAGE_VARIANCE_BASE_MAX + ceilTier * DAMAGE_CEIL_STEP,
+    DAMAGE_VARIANCE_BASE_MAX + ceilTier * DAMAGE_CEIL_STEP + Math.max(0, Number(upg?.damageCeilBonus) || 0) / 10,
   );
   return { min, max };
 }
@@ -93,6 +95,25 @@ function getDamageVarianceBounds(upg) {
 function getCritDamageFactor(upg) {
   const bonus = Math.min(CRIT_DAMAGE_MAX_BONUS, Math.max(0, upg?.critDamageBonus ?? CRIT_DAMAGE_BASE_BONUS));
   return 1 + bonus;
+}
+
+function getCritChanceFromTier(tier = 0, miniBonus = 0) {
+  const safeTier = Math.max(0, Number(tier) || 0);
+  let chance = PLAYER_BASE_CRIT_CHANCE;
+  for(let i = 0; i < safeTier && i < CRIT_CHANCE_TIER_BONUS.length; i++) {
+    chance += CRIT_CHANCE_TIER_BONUS[i];
+  }
+  chance += Math.max(0, Number(miniBonus) || 0);
+  return Math.min(0.95, chance);
+}
+
+function getCritDamageBonusFromTier(tier = 0) {
+  const safeTier = Math.max(0, Number(tier) || 0);
+  let bonus = CRIT_DAMAGE_BASE_BONUS;
+  for(let i = 0; i < safeTier && i < CRIT_DAMAGE_TIER_BONUS.length; i++) {
+    bonus += CRIT_DAMAGE_TIER_BONUS[i];
+  }
+  return Math.min(CRIT_DAMAGE_MAX_BONUS, bonus);
 }
 
 function getPlayerShotDamageBase(upg, nowMs = 0, roomIndex = 0) {
@@ -221,8 +242,11 @@ function getDefaultUpgrades() {
     miniTier:         0,
     miniShotSpdMult:  1,
     critDamageBonus:  0.5,
+    critDamageTier:   0,
     damageFloorTier:  0,
     damageCeilTier:   0,
+    damageFloorBonus: 0,
+    damageCeilBonus:  0,
     playerSizeMult:   1,
     playerDamageMult: 1,
     titanSlowMult:    1,
@@ -288,6 +312,7 @@ function getDefaultUpgrades() {
     heavyRoundsTier: 0,
     heavyRoundsDamageMult: 1,
     heavyRoundsFireMult: 1,
+    critDamageTier: 0,
     sustainedFireShots: 0,
     sustainedFireBonus: 1,
     sustainedFireLastShotTime: 0,
@@ -320,6 +345,8 @@ export {
   getPayloadBlastRadius,
   getDamageVarianceBounds,
   getCritDamageFactor,
+  getCritChanceFromTier,
+  getCritDamageBonusFromTier,
   getPlayerShotDamageBase,
   syncChargeCapacity,
   getFlatChargeGain,

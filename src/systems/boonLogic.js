@@ -14,6 +14,7 @@ import {
   getKineticChargeRate,
   getPayloadBlastRadius,
   getLateBloomBonusPct,
+  getCritDamageFactor,
 } from './boonHelpers.js';
 
 function boonHasEffect(boon, upg, hp, maxHp) {
@@ -111,7 +112,8 @@ function getActiveBoonEntries(upg) {
   if(upg.forwardShotTier > 0) entries.push({ icon:'≫', name:'Twin Lance', detail:`+${upg.forwardShotTier} forward lane${upg.forwardShotTier === 1 ? '' : 's'}` });
   if(upg.biggerBulletsTier > 0) entries.push({ icon:'🔵', name:'Bigger Bullets', detail:`Tier ${upg.biggerBulletsTier}` });
   if(upg.fasterBulletsTier > 0) entries.push({ icon:'💨', name:'Faster Bullets', detail:`Tier ${upg.fasterBulletsTier}` });
-  if(upg.critTier > 0) entries.push({ icon:'💥', name:'Critical Hit', detail:`${Math.round(upg.critChance * 100)}% crit chance` });
+  if(upg.critTier > 0) entries.push({ icon:'💥', name:'Critical Hit', detail:`${Math.round((upg.critChance || 0) * 100)}% crit chance` });
+  if((upg.critDamageTier || 0) > 0) entries.push({ icon:'✦', name:'Critical Damage', detail:`×${getCritDamageFactor(upg).toFixed(2)} crit damage` });
   if(upg.bounceTier > 0) entries.push({ icon:'↯', name:'Ricochet', detail:'Bullets bounce on walls' });
   if(upg.homingTier > 0) entries.push({ icon:'🌀', name:'Homing', detail:`Tier ${upg.homingTier} – shots curve into targets` });
   if(upg.pierceTier > 0) entries.push({ icon:'→', name:'Pierce', detail:`Tier ${upg.pierceTier}` });
@@ -187,7 +189,7 @@ function getActiveBoonEntries(upg) {
   if(upg.payload) entries.push({icon:'💣',name:'Payload',detail:`Shots explode on impact${upg.payloadRadiusTier > 0 ? `, ${Math.round(getPayloadBlastRadius(upg))}px blast` : `, ${Math.round(getPayloadBlastRadius(upg))}px default blast`}`});
   if(upg.payloadRadiusTier > 0) entries.push({icon:'💣+',name:'Payload Bloom',detail:`Tier ${upg.payloadRadiusTier} — ${Math.round(getPayloadBlastRadius(upg))}px blast`});
   if(upg.shockwave) entries.push({icon:'⚡',name:'Shockwave',detail:'Full charge → push enemies'});
-  if(upg.glassCannonTier > 0) entries.push({icon:'⚗',name:'Glass Cannon',detail:`Tier ${upg.glassCannonTier} — ×${(upg.playerDamageMult || 1).toFixed(2)} total damage`});
+  if(upg.glassCannonTier > 0) entries.push({icon:'⚗',name:'Glass Cannon',detail:`Tier ${upg.glassCannonTier} — +${upg.damageFloorBonus || 0}/+${upg.damageCeilBonus || 0} damage range, -${Math.round((1 - 0.8) * 100)}% HP`});
   if(upg.adrenalSurgeTier > 0) entries.push({ icon:'🫀', name:'Adrenal Surge', detail:`${Math.min(upg.adrenalSurgeTier, Array.isArray(upg.adrenalStackExpiries) ? upg.adrenalStackExpiries.length : 0)}/${upg.adrenalSurgeTier} active stacks` });
   if(upg.tetherOrbit) entries.push({icon:'🪢',name:'Tether Orbit',detail:'Orbit ring slows danger bullets'});
 

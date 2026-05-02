@@ -35,7 +35,9 @@ export const DAMAGE_VARIANCE_BASE_MIN = 0.50;
 export const DAMAGE_VARIANCE_BASE_MAX = 1.20;
 export const DAMAGE_CEIL_STEP = 0.12;
 export const DAMAGE_FLOOR_STEP = 0.08;
+export const CRIT_CHANCE_TIER_BONUS = [0.25, 0.15, 0.10];
 export const CRIT_DAMAGE_BASE_BONUS = 0.50;
+export const CRIT_DAMAGE_TIER_BONUS = [0.50, 0.30, 0.20, 0.12];
 export const CRIT_DAMAGE_MAX_BONUS = 2.00;
 
 export const CHARGED_ORB_FIRE_INTERVAL_MS = 1400;

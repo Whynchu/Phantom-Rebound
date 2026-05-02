@@ -22,6 +22,8 @@ import {
   MAX_DEEP_RESERVE_BONUS,
   DENSE_CORE_DAMAGE_MULTS,
   DENSE_CORE_CAP_SCALES,
+  CRIT_CHANCE_TIER_BONUS,
+  CRIT_DAMAGE_TIER_BONUS,
   CRIT_DAMAGE_BASE_BONUS,
 } from './boonConstants.js';
 import {
@@ -30,6 +32,8 @@ import {
   getRequiredShotCount,
   hasLateBloomVariant,
   getFlatChargeGain,
+  getCritChanceFromTier,
+  getCritDamageBonusFromTier,
 } from '../systems/boonHelpers.js';
 
 const BOONS = [
@@ -42,7 +46,8 @@ const BOONS = [
   {name:'Twin Lance',tag:'OFFENSE',icon:'≫',damageRole:'neutral',desc:'+1 forward lane.',apply(upg){upg.forwardShotTier++;syncChargeCapacity(upg);}},
   {name:'Bigger Bullets',tag:'OFFENSE',icon:'🔵',damageRole:'neutral',desc:'Larger shots. Diminishing returns.',apply(upg){upg.biggerBulletsTier++;const scale=getHyperbolicScale(upg.biggerBulletsTier);upg.shotSize=scale*(upg.biggerBulletsTier===1?1.06:1);}},
   {name:'Faster Bullets',tag:'OFFENSE',icon:'💨',damageRole:'neutral',desc:'Faster shots. Diminishing returns.',apply(upg){upg.fasterBulletsTier++;const scale=getHyperbolicScale(upg.fasterBulletsTier);upg.shotSpd=scale*(upg.fasterBulletsTier===1?1.06:1);}},
-  {name:'Critical Hit',tag:'OFFENSE',icon:'💥',damageRole:'ceiling',desc:'+25% crit chance. Max 3.',apply(upg){upg.critTier=Math.min(3,upg.critTier+1);upg.critChance=Math.min(0.75,0.25*upg.critTier);upg.critDamageBonus=Math.max(CRIT_DAMAGE_BASE_BONUS, upg.critDamageBonus ?? CRIT_DAMAGE_BASE_BONUS);}},
+  {name:'Critical Hit',tag:'OFFENSE',icon:'💥',damageRole:'ceiling',desc:'Crit chance ramps with diminishing returns. Max 3.',apply(upg){upg.critTier=Math.min(CRIT_CHANCE_TIER_BONUS.length, (upg.critTier||0)+1);upg.critChance=getCritChanceFromTier(upg.critTier, (upg.miniTier || 0) * MINI_CRIT_CHANCE_PER_TIER);upg.critDamageBonus=Math.max(CRIT_DAMAGE_BASE_BONUS, upg.critDamageBonus ?? CRIT_DAMAGE_BASE_BONUS);}},
+  {name:'Critical Damage',tag:'OFFENSE',icon:'✦',damageRole:'ceiling',desc:'Crits hit harder with diminishing returns. Max 4.',apply(upg){upg.critDamageTier=Math.min(CRIT_DAMAGE_TIER_BONUS.length, (upg.critDamageTier||0)+1);upg.critDamageBonus=getCritDamageBonusFromTier(upg.critDamageTier);}},
   {name:'Ricochet',tag:'UTILITY',icon:'↯',desc:'Shots bounce off walls.',apply(upg){upg.bounceTier=(upg.bounceTier||0)+1;}},
   {name:'Homing',tag:'UTILITY',icon:'🌀',desc:'Shots curve into enemies. Max 4.',apply(upg){upg.homingTier=Math.min(4,upg.homingTier+1);}},
   {name:'Pierce',tag:'UTILITY',icon:'→',desc:'+1 pierce per tier. Max 3.',apply(upg){upg.pierceTier=Math.min(3,upg.pierceTier+1);}},
@@ -59,7 +64,7 @@ const BOONS = [
   {name:'Room Regen',tag:'SURVIVE',icon:'💚',desc:'+18 HP on room clear. Max 54.',apply(upg){upg.regenTick=Math.min(ROOM_REGEN_MAX,upg.regenTick+ROOM_REGEN_PER_PICK);}},
   {name:'Armor Weave',tag:'SURVIVE',icon:'🧱',desc:'Damage taken: -18% / -36% / -50%.',apply(upg){const multipliers=[1,0.82,0.64,0.5];upg.armorTier=Math.min(3,upg.armorTier+1);upg.damageTakenMult=multipliers[upg.armorTier];},evolvesWith:['Titan Heart'],evolvedVersion:{name:'Living Fortress',icon:'🧱+',desc:'Armor scales with missing HP.',apply(upg){const multipliers=[1,0.82,0.64,0.5];upg.armorTier=Math.min(3,upg.armorTier+1);upg.damageTakenMult=multipliers[upg.armorTier];upg.livingFortress=true;}}},
   {name:'Hit Battery',tag:'SURVIVE',icon:'⚕️',desc:'Getting hit grants charge. Max 3.',apply(upg){upg.capacitorTier=Math.min(3,upg.capacitorTier+1);upg.hitChargeGain=Math.min(6,upg.hitChargeGain+2);}},
-  {name:'MINI',tag:'SURVIVE',icon:'·',desc:'Tiered shrink (max 3). Each tier: -20% size, -10% max HP, +10% shot speed, +5% crit. T3: +20% crit damage. No Titan Heart.',apply(upg, state){const currentMiniTier = Math.max(upg.miniTier || 0, upg.miniTaken ? 1 : 0); if(currentMiniTier >= MINI_MAX_TIER || upg.titanTier > 0) return; const nextMiniTier = currentMiniTier + 1; upg.miniTier = nextMiniTier; upg.miniTaken = true; upg.playerSizeMult *= MINI_SIZE_MULT_PER_TIER; upg.miniShotSpdMult = 1 + nextMiniTier * MINI_SHOT_SPD_PER_TIER; upg.critChance = Math.min(0.95, (upg.critChance || 0) + MINI_CRIT_CHANCE_PER_TIER); upg.critDamageBonus = Math.min(2, Math.max(CRIT_DAMAGE_BASE_BONUS, upg.critDamageBonus ?? CRIT_DAMAGE_BASE_BONUS) + (nextMiniTier >= 3 ? MINI_T3_CRIT_DMG_BONUS : 0)); state.maxHp = Math.max(10, Math.round(state.maxHp * MINI_HP_MULT_PER_TIER)); state.hp = Math.min(state.maxHp, Math.max(1, Math.round(state.hp * MINI_HP_MULT_PER_TIER)));}},
+  {name:'MINI',tag:'SURVIVE',icon:'·',desc:'Tiered shrink (max 3). Each tier: -20% size, -10% max HP, +10% shot speed, +5% crit. T3: +20% crit damage. No Titan Heart.',apply(upg, state){const currentMiniTier = Math.max(upg.miniTier || 0, upg.miniTaken ? 1 : 0); if(currentMiniTier >= MINI_MAX_TIER || upg.titanTier > 0) return; const nextMiniTier = currentMiniTier + 1; upg.miniTier = nextMiniTier; upg.miniTaken = true; upg.playerSizeMult *= MINI_SIZE_MULT_PER_TIER; upg.miniShotSpdMult = 1 + nextMiniTier * MINI_SHOT_SPD_PER_TIER; upg.critChance = getCritChanceFromTier(upg.critTier || 0, nextMiniTier * MINI_CRIT_CHANCE_PER_TIER); upg.critDamageBonus = Math.min(2, Math.max(CRIT_DAMAGE_BASE_BONUS, upg.critDamageBonus ?? CRIT_DAMAGE_BASE_BONUS) + (nextMiniTier >= 3 ? MINI_T3_CRIT_DMG_BONUS : 0)); state.maxHp = Math.max(10, Math.round(state.maxHp * MINI_HP_MULT_PER_TIER)); state.hp = Math.min(state.maxHp, Math.max(1, Math.round(state.hp * MINI_HP_MULT_PER_TIER)));}},
   {name:'Titan Heart',tag:'SURVIVE',icon:'⬢',desc:'+HP, +3% dmg, -5% spd. No MINI.',apply(upg, state){const currentMiniTier = Math.max(upg.miniTier || 0, upg.miniTaken ? 1 : 0); if(currentMiniTier > 0 || upg.titanTier >= TITAN_HP_PCT.length) return; const hpPct = TITAN_HP_PCT[upg.titanTier]; upg.titanTier++; upg.playerSizeMult = Math.min(TITAN_MAX_SIZE_MULT, 1 + upg.titanTier * 0.25); upg.playerDamageMult = 1 + upg.titanTier * 0.03; upg.titanSlowMult = Math.max(0.7, 1 - upg.titanTier * TITAN_SLOW_PCT); const gain = Math.max(1, Math.round(state.maxHp * hpPct)); state.maxHp += gain; state.hp = Math.min(state.hp, state.maxHp);}},
   {name:'Shield Plate',tag:'SURVIVE',icon:'🛡️',desc:`+1 shield plate. Max ${MAX_SHIELD_TIER}.`,apply(upg){upg.shieldTier=Math.min(MAX_SHIELD_TIER,upg.shieldTier+1);}},
   {name:'Tempered Shield',tag:'SURVIVE',icon:'🛡️+',desc:'Shields gain a purple first layer.',apply(upg){if(upg.shieldTempered||upg.shieldTier===0)return; upg.shieldTempered=true;}},
@@ -110,7 +115,7 @@ const BOONS = [
   {name:'Shockwave',tag:'OFFENSE',icon:'⚡',desc:'Full charge releases a push wave.',apply(upg){if(upg.shockwave)return; upg.shockwave=true;}},
   // Null Zone removed — unfun invincibility loop
   {name:'Gravity Well',tag:'UTILITY',icon:'⊙',desc:'Picking this a 2nd time adds: enemies move 20% slower within 90px.',evolvesWith:['Gravity Well'],evolvedVersion:{name:'Gravity Well II',icon:'⊙+',desc:'Slows both danger bullets AND enemies 30%.'},apply(upg){if(!upg.gravityWell)return; if(upg.gravityWell2)return; upg.gravityWell2=true;}},
-  {name:'Glass Cannon',tag:'OFFENSE',icon:'⚗',damageRole:'ceiling',desc:'Big damage, a steadier floor, and a shrinking HP pool. Max 5.',apply(upg,state){const damageMults=[1.20,1.28,1.38,1.52,1.72];if(upg.glassCannonTier>=damageMults.length)return; const tier=upg.glassCannonTier; upg.glassCannonTier++; upg.playerDamageMult*=damageMults[tier]; upg.damageFloorTier=Math.min(4,(upg.damageFloorTier||0)+1); state.maxHp=Math.max(20,Math.round(state.maxHp*0.92)); state.hp=Math.min(state.hp,state.maxHp);}},
+  {name:'Glass Cannon',tag:'OFFENSE',icon:'⚗',damageRole:'ceiling',desc:'Flat damage boost, steadier floor, and a shrinking HP pool. Max 5.',apply(upg,state){const floorGains=[10,7,6,5,4]; const ceilGains=[20,14,12,10,8]; if(upg.glassCannonTier>=floorGains.length)return; const tier=upg.glassCannonTier; upg.glassCannonTier++; upg.damageFloorBonus=(upg.damageFloorBonus||0)+floorGains[tier]; upg.damageCeilBonus=(upg.damageCeilBonus||0)+ceilGains[tier]; upg.damageFloorTier=Math.min(4,(upg.damageFloorTier||0)+1); upg.damageCeilTier=Math.min(4,(upg.damageCeilTier||0)+1); state.maxHp=Math.max(20,Math.round(state.maxHp*0.8)); state.hp=Math.min(state.hp,state.maxHp);}},
   {name:'Adrenal Surge',tag:'SURVIVE',icon:'🫀',damageRole:'ramp',desc:'Taking damage stacks temporary fire-rate and damage tiers. Max 4.',apply(upg){if(upg.adrenalSurgeTier>=4)return; upg.adrenalSurgeTier++; if(!Array.isArray(upg.adrenalStackExpiries)) upg.adrenalStackExpiries=[];}},
   {name:'Tether Orbit',tag:'UTILITY',icon:'🪢',desc:'Orbit spheres slow danger bullets crossing their ring.',requires:upg=>upg.orbitSphereTier>0,apply(upg){if(upg.tetherOrbit)return; upg.tetherOrbit=true;}},
   

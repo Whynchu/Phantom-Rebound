@@ -13,6 +13,7 @@ const ICON_MAP = {
   '🔵':   'RPG_Item_Weapon_Bullet_Ammo_Ranged_Pierce_Damage.png',
   '💨':   'RPG_Skill_Dash_Dodge_Movement_Speed_Run_Sprint.png',
   '💥':   'Warfare_Explosion_Bomb.png',
+  '✦':    'RPG_Item_Weapon_Wand_Magic_Star_Damage.png',
   '↯':    'Arrows_Reload_Refresh_Rotate_Clockwise.png',
   '🌀':   'Weather_Tornado_Cyclone_Whirlwind_Natural_Disaster.png',
   '→':    'Arrows_Right_East.png',

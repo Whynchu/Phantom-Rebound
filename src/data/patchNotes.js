@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.7.5',
+      label: 'CRIT REWORK',
+      summary: ['Glass Cannon now adds flat damage to the floor and ceiling, while taking 20% max HP per pick.'],
+      highlights: [
+        'Critical Hit and Critical Damage now use diminishing-return ladders instead of one flat linear scaling path.',
+      ]
+    },
+  {
       version: '1.7.4',
       label: 'ORB HOTFIX 2',
       summary: ['Hoisted the shared player-damage baseline high enough for both orb contact and Charged Orb fire paths, fixing the room-start crash when Charged Orbs are picked.'],
