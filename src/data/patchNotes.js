@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.8.1',
+      label: 'DAMAGE FLOOR',
+      summary: ['Damage-side boons now raise the low end of the damage band a little instead of only pushing the ceiling.'],
+      highlights: [
+        'Damage-side boons now raise the low end of the damage band a little instead of only pushing the ceiling.',
+      ]
+    },
+  {
       version: '1.8.0',
       label: 'ORB TUNE',
       summary: ['Orbit sphere contact damage now tracks the player baseline more closely instead of starting from a doubled value.'],
