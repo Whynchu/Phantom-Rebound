@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.17',
+      label: 'CEILING TUNE',
+      summary: ['Retune the main damage ceiling boons so they push top-end damage harder without broadening the floor: stronger Heavy Rounds, sharper Dense Core, and a more explosive Glass Cannon.'],
+      highlights: [
+        'Retune the main damage ceiling boons so they push top-end damage harder without broadening the floor: stronger Heavy Rounds, sharper Dense Core, and a more explosive Glass Cannon.',
+      ]
+    },
+  {
       version: '1.4.16',
       label: 'DAMAGE RANGE',
       summary: ['Widen the early damage band to 5-12, add separate boons for top-end damage and floor smoothing, and split crit damage into its own lower-starting capped stat.'],

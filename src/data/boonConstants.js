@@ -29,7 +29,7 @@ export const CHARGE_CAP_MIN_FLAT_PER_TIER = 2;
 export const MAX_CHARGE_CAP_MULT = 2.0;
 export const MAX_DEEP_RESERVE_BONUS = 120;
 
-export const DENSE_CORE_DAMAGE_MULTS = [1.45, 2.0, 2.5, 2.85];
+export const DENSE_CORE_DAMAGE_MULTS = [1.55, 2.15, 2.95, 3.85];
 export const DENSE_CORE_CAP_SCALES = [0.75, 0.5, 0.25, 0.05];
 export const DAMAGE_VARIANCE_BASE_MIN = 0.50;
 export const DAMAGE_VARIANCE_BASE_MAX = 1.20;

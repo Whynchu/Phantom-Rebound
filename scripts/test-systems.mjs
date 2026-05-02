@@ -177,6 +177,7 @@ import {
   TITAN_HP_PCT,
   EXTRA_LIFE_GAINS,
   EXTRA_LIFE_SLOW_PER_TIER,
+  DENSE_CORE_DAMAGE_MULTS,
   MINI_SHOT_SPD_PER_TIER,
   MINI_CRIT_CHANCE_PER_TIER,
   MINI_T3_CRIT_DMG_BONUS,
@@ -430,6 +431,7 @@ test('early-power boon constants match rebalance plan', () => {
   assert.deepEqual(TITAN_HP_PCT, [0.50, 0.30, 0.18, 0.10, 0.05]);
   assert.deepEqual(EXTRA_LIFE_GAINS, [100, 60, 45, 36, 28, 22]);
   assert.equal(EXTRA_LIFE_SLOW_PER_TIER, 0.98);
+  assert.deepEqual(DENSE_CORE_DAMAGE_MULTS, [1.55, 2.15, 2.95, 3.85]);
   assert.equal(MINI_SHOT_SPD_PER_TIER, 0.10);
   assert.equal(MINI_CRIT_CHANCE_PER_TIER, 0.05);
   assert.equal(MINI_T3_CRIT_DMG_BONUS, 0.20);
