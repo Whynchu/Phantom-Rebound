@@ -2916,7 +2916,10 @@ function installCoopInputUplink(armedCoop) {
         } catch (_) {}
       },
       onPickupEvent: ({ x, y }) => {
-        try { sparks(x, y, '#ccc', 5, 40); } catch (_) {}
+        try {
+          sparks(x, y, '#ccc', 5, 40);
+          playRetroSfx('pickup', { intensity: 0.9 });
+        } catch (_) {}
       },
       onEnemyDamage: ({ damage, x, y, ownerSlot }) => {
         try {
@@ -4939,6 +4942,7 @@ function dispatchSimEffects(effects) {
         break;
       case 'grey.absorbEffect':
         sparks(x, y, fx.color || C.ghost, fx.count || 5, fx.size || 45);
+        playRetroSfx('pickup', { intensity: 1.0 });
         break;
       case 'slot.chargeGain':
         break;
@@ -6578,11 +6582,13 @@ function update(dt,ts){
         if(greyResult.kind==='slot0'){
           const s0 = greyResult.slot0;
           gainCharge(s0.absorbGain, 'greyAbsorb');
+          playRetroSfx('pickup', { intensity: Math.max(0.9, s0.absorbGain || 1) });
           if(s0.resonantIncrement){
             slot0Timers.absorbComboTimer=1500;
             slot0Timers.absorbComboCount++;
             if(s0.resonantBonusGain>0){
               gainCharge(s0.resonantBonusGain, 'resonantAbsorb');
+              playRetroSfx('pickup', { intensity: Math.max(1.1, s0.resonantBonusGain || 1) });
               slot0Timers.absorbComboCount=0;
             }
           }
@@ -6605,6 +6611,7 @@ function update(dt,ts){
         } else if(greyResult.kind==='orb'){
           const o = greyResult.orb;
           gainCharge(o.absorbGain, 'orbAbsorb');
+          playRetroSfx('pickup', { intensity: Math.max(0.85, o.absorbGain || 1) });
         }
         bullets.splice(i,1); continue;
       }

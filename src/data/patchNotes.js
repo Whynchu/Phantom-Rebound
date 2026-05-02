@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.13',
+      label: 'PICKUP POP',
+      summary: ['Added a brighter bubbly pickup sound for grey absorbs and orb absorbs.'],
+      highlights: [
+        'Raised the procedural SFX mix so the retro audio reads more clearly in playtests.',
+      ]
+    },
+  {
       version: '1.4.12',
       label: 'LOUDER POP',
       summary: ['Raised the procedural SFX mix after the first playtest.'],

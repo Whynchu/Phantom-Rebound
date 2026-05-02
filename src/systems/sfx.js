@@ -4,6 +4,7 @@ const SOUND_COOLDOWN_MS = {
   bounce: 18,
   hitSplat: 24,
   playerHit: 90,
+  pickup: 18,
 };
 
 let audioCtx = null;
@@ -32,7 +33,7 @@ function getAudioContext() {
     compressor.release.value = 0.12;
 
     masterGain = audioCtx.createGain();
-    masterGain.gain.value = 0.48;
+    masterGain.gain.value = 0.62;
 
     lowpass.connect(compressor);
     compressor.connect(masterGain);
@@ -215,6 +216,20 @@ export function playRetroSfx(kind, opts = {}) {
         noiseGain: opts.contact ? 0.07 : 0.055,
         noiseDuration: opts.contact ? 0.08 : 0.06,
         noiseFilter: opts.contact ? 720 : 1050,
+      });
+      break;
+    case 'pickup':
+      playTone(ctx, {
+        wave: 'triangle',
+        startFreq: 1120 + intensity * 60,
+        endFreq: 520 + intensity * 35,
+        duration: 0.065,
+        gain: 0.07 + intensity * 0.008,
+        attack: 0.001,
+        decay: 0.06,
+        noiseGain: 0.024 + intensity * 0.003,
+        noiseDuration: 0.028,
+        noiseFilter: 2200,
       });
       break;
     default:
