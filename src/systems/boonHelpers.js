@@ -6,6 +6,12 @@ import {
   MAX_CHARGE_CAP_MULT,
   MAX_DEEP_RESERVE_BONUS,
   DENSE_CORE_CAP_SCALES,
+  DAMAGE_VARIANCE_BASE_MIN,
+  DAMAGE_VARIANCE_BASE_MAX,
+  DAMAGE_CEIL_STEP,
+  DAMAGE_FLOOR_STEP,
+  CRIT_DAMAGE_BASE_BONUS,
+  CRIT_DAMAGE_MAX_BONUS,
   KINETIC_FAST_FILL_MAX_PCT,
   KINETIC_FAST_FILL_MIN_PCT,
   KINETIC_FAST_FILL_LOW_CAP,
@@ -64,6 +70,25 @@ function getPayloadBlastRadius(upg, bulletRadius = 4.5) {
   const payloadTier = Math.max(0, upg?.payloadRadiusTier || 0);
   const bulletBonus = Math.max(0, bulletRadius - 4.5) * 2.75;
   return Math.min(PAYLOAD_RADIUS_MAX, PAYLOAD_BASE_RADIUS + bulletBonus + payloadTier * PAYLOAD_RADIUS_PER_TIER);
+}
+
+function getDamageVarianceBounds(upg) {
+  const ceilTier = Math.max(0, upg?.damageCeilTier || 0);
+  const floorTier = Math.max(0, upg?.damageFloorTier || 0);
+  const min = Math.min(
+    DAMAGE_VARIANCE_BASE_MAX,
+    DAMAGE_VARIANCE_BASE_MIN + floorTier * DAMAGE_FLOOR_STEP,
+  );
+  const max = Math.max(
+    min,
+    DAMAGE_VARIANCE_BASE_MAX + ceilTier * DAMAGE_CEIL_STEP,
+  );
+  return { min, max };
+}
+
+function getCritDamageFactor(upg) {
+  const bonus = Math.min(CRIT_DAMAGE_MAX_BONUS, Math.max(0, upg?.critDamageBonus ?? CRIT_DAMAGE_BASE_BONUS));
+  return 1 + bonus;
 }
 
 function syncChargeCapacity(upg) {
@@ -152,7 +177,9 @@ function getDefaultUpgrades() {
     miniTaken:        false,
     miniTier:         0,
     miniShotSpdMult:  1,
-    critDamageBonus:  0,
+    critDamageBonus:  0.5,
+    damageFloorTier:  0,
+    damageCeilTier:   0,
     playerSizeMult:   1,
     playerDamageMult: 1,
     titanSlowMult:    1,
@@ -248,6 +275,8 @@ export {
   getKineticChargeMultiplier,
   getKineticChargeRate,
   getPayloadBlastRadius,
+  getDamageVarianceBounds,
+  getCritDamageFactor,
   syncChargeCapacity,
   getFlatChargeGain,
   getAdrenalSurgeActiveStacks,

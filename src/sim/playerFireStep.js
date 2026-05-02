@@ -8,6 +8,7 @@
 //   - No LOS check (hasObstacleLineBlock unavailable) — distance-only targeting.
 
 import { buildPlayerShotPlan, buildPlayerVolleySpecs } from '../entities/playerFire.js';
+import { getDamageVarianceBounds } from '../systems/boonHelpers.js';
 import { emit } from './effectQueue.js';
 import { pushSimOutputBullet, nextSimRandom } from './simProjectiles.js';
 import { getKineticChargeRate, getLateBloomGrowth } from '../data/boons.js';
@@ -122,6 +123,7 @@ function fireSimSlot(state, slot, targetX, targetY) {
   }
 
   const bloodPactHealCap = 1 + (upg.bloodMoon ? 1 : 0);
+  const varianceBounds = getDamageVarianceBounds(upg);
 
   const volleySpecs = buildPlayerVolleySpecs({
     shots: angs,
@@ -141,6 +143,8 @@ function fireSimSlot(state, slot, targetX, targetY) {
     ownerId: slot.index ?? 0,
     random: () => nextSimRandom(state),
     payloadReady,
+    damageVarianceMin: varianceBounds.min,
+    damageVarianceMax: varianceBounds.max,
   });
 
   volleySpecs.forEach((spec) => pushSimOutputBullet(state, spec));

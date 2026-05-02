@@ -31,6 +31,12 @@ export const MAX_DEEP_RESERVE_BONUS = 120;
 
 export const DENSE_CORE_DAMAGE_MULTS = [1.45, 2.0, 2.5, 2.85];
 export const DENSE_CORE_CAP_SCALES = [0.75, 0.5, 0.25, 0.05];
+export const DAMAGE_VARIANCE_BASE_MIN = 0.50;
+export const DAMAGE_VARIANCE_BASE_MAX = 1.20;
+export const DAMAGE_CEIL_STEP = 0.12;
+export const DAMAGE_FLOOR_STEP = 0.08;
+export const CRIT_DAMAGE_BASE_BONUS = 0.50;
+export const CRIT_DAMAGE_MAX_BONUS = 2.00;
 
 export const CHARGED_ORB_FIRE_INTERVAL_MS = 1400;
 

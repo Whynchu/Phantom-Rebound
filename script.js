@@ -128,6 +128,7 @@ import { renderPatchNotesPanel } from './src/ui/patchNotes.js';
 import { createPanelManager } from './src/ui/panelManager.js';
 import { createPauseController } from './src/ui/pauseController.js';
 import { getLeaderboardVersionPrefix } from './src/data/leaderboardConfig.js';
+import { getDamageVarianceBounds, getCritDamageFactor } from './src/systems/boonHelpers.js';
 import { simRng, parseSeedParam, setRngState } from './src/systems/seededRng.js';
 import { createSimState, createSlot } from './src/sim/simState.js';
 import { showGameOverScreen, renderScoreBreakdown } from './src/ui/gameOver.js';
@@ -882,7 +883,6 @@ const PHASE_WALK_MAX_OVERLAP_MS = 1000;
 const PHASE_WALK_IDLE_EJECT_MS = 120;
 const PLAYER_SHOT_LIFE_MS = 1100;
 const DENSE_DESPERATION_BONUS = 2.4;
-const CRIT_DAMAGE_FACTOR = 2.4;
 const MIRROR_SHIELD_DAMAGE_FACTOR = 0.60;
 const AEGIS_NOVA_DAMAGE_FACTOR = 0.55;
 const VOLATILE_ORB_COOLDOWN = 8;
@@ -4702,6 +4702,7 @@ function firePlayer(slot, tx, ty) {
   const volleyTotalDamageMult = getVolleyTotalDamageMultiplier(availableShots);
   const volleyPerBulletDamageMult = volleyTotalDamageMult / availableShots;
   const payloadReady = Boolean(upg.payload && payloadCooldownMs <= 0);
+  const varianceBounds = getDamageVarianceBounds(upg);
   
   // Overload converts the full bank into one scaled volley worth the charge it burns.
   let overloadBonus = 1;
@@ -4732,6 +4733,8 @@ function firePlayer(slot, tx, ty) {
     now,
     ownerId,
     payloadReady,
+    damageVarianceMin: varianceBounds.min,
+    damageVarianceMax: varianceBounds.max,
   });
   volleySpecs.forEach((spec) => pushOutputBullet({ bullets, ...spec }));
   playRetroSfx('ghostFire', {
@@ -6892,13 +6895,13 @@ function update(dt,ts){
         if(b.hitIds.has(e.eid)) continue;
         if(Math.hypot(b.x-e.x,b.y-e.y)<b.r+e.r){
           b.hitIds.add(e.eid);
-          const hitResolution = resolveOutputEnemyHit({
+      const hitResolution = resolveOutputEnemyHit({
             bullet: b,
             enemyHp: e.hp,
             hp,
             maxHp,
             upgrades: UPG,
-            critDamageFactor: CRIT_DAMAGE_FACTOR * (1 + (UPG.critDamageBonus || 0)),
+            critDamageFactor: getCritDamageFactor(UPG),
             bloodPactBaseHealCap: BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET,
           });
           e.hp = hitResolution.enemyHpAfterHit;

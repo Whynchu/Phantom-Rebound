@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.16',
+      label: 'DAMAGE RANGE',
+      summary: ['Widen the early damage band to 5-12, add separate boons for top-end damage and floor smoothing, and split crit damage into its own lower-starting capped stat.'],
+      highlights: [
+        'Widen the early damage band to 5-12, add separate boons for top-end damage and floor smoothing, and split crit damage into its own lower-starting capped stat.',
+      ]
+    },
+  {
       version: '1.4.15',
       label: 'LEADERBOARD FALLBACK',
       summary: ['Retry the legacy leaderboard RPC signature when the new prefix-based function is not yet deployed, so the leaderboard screen falls back cleanly instead of surfacing a 404.'],

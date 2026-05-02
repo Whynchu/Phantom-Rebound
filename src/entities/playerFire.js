@@ -1,4 +1,5 @@
 import { simRng } from '../systems/seededRng.js';
+import { getDamageVarianceBounds } from '../systems/boonHelpers.js';
 
 function createLaneOffsets(count, spacing) {
   return Array.from({ length: count }, (_, idx) => (idx - (count - 1) / 2) * spacing);
@@ -58,20 +59,23 @@ function buildPlayerVolleySpecs({
   now,
   ownerId = 0,
   random = () => simRng.next(),
-  damageVarianceMin = 0.88,
-  damageVarianceMax = 1.14,
+  damageVarianceMin,
+  damageVarianceMax,
   payloadReady = false,
 } = {}) {
   const volleySpecs = [];
   const selectedShots = shots.slice(0, availableShots);
+  const varianceBounds = Number.isFinite(damageVarianceMin) && Number.isFinite(damageVarianceMax)
+    ? { min: damageVarianceMin, max: damageVarianceMax }
+    : getDamageVarianceBounds(upg);
   let payloadAssigned = false;
   for(const shot of selectedShots) {
     const angle = shot.angle;
     const sideX = Math.cos(angle + Math.PI / 2) * shot.offset;
     const sideY = Math.sin(angle + Math.PI / 2) * shot.offset;
     const crit = random() < (upg.critChance || 0);
-    const varianceSpan = Math.max(0, damageVarianceMax - damageVarianceMin);
-    const damageVariance = damageVarianceMin + random() * varianceSpan;
+    const varianceSpan = Math.max(0, varianceBounds.max - varianceBounds.min);
+    const damageVariance = varianceBounds.min + random() * varianceSpan;
     const scaledRadius = baseRadius * overloadSizeScale;
     const hasPayload = Boolean(upg.payload && payloadReady && !payloadAssigned);
     if(hasPayload) payloadAssigned = true;

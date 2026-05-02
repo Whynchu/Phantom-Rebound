@@ -185,6 +185,8 @@ import {
   getAdrenalSurgeActiveStacks,
   getAdrenalSurgeEffectiveSps,
   getAdrenalSurgeDamageMult,
+  getDamageVarianceBounds,
+  getCritDamageFactor,
 } from '../src/systems/boonHelpers.js';
 import { registerBoonHook, runBoonHook, getBoonHookCount } from '../src/systems/boonHooks.js';
 
@@ -433,6 +435,23 @@ test('early-power boon constants match rebalance plan', () => {
   assert.equal(MINI_T3_CRIT_DMG_BONUS, 0.20);
 });
 
+test('damage variance bounds widen with floor and ceiling boons', () => {
+  const upg = getDefaultUpgrades();
+  let bounds = getDamageVarianceBounds(upg);
+  assert.equal(bounds.min, 0.50);
+  assert.equal(bounds.max, 1.20);
+  assert.equal(getCritDamageFactor(upg), 1.5);
+
+  upg.damageFloorTier = 2;
+  upg.damageCeilTier = 3;
+  bounds = getDamageVarianceBounds(upg);
+  assert.equal(bounds.min, 0.66);
+  assert.equal(bounds.max, 1.56);
+
+  upg.critDamageBonus = 2.6;
+  assert.equal(getCritDamageFactor(upg), 3.0);
+});
+
 test('MINI applies speed and crit bonuses while shrinking HP', () => {
   const mini = BOONS.find((boon) => boon.name === 'MINI');
   const upg = getDefaultUpgrades();
@@ -442,7 +461,7 @@ test('MINI applies speed and crit bonuses while shrinking HP', () => {
   assert.equal(upg.miniTier, 1);
   assert.equal(upg.miniShotSpdMult, 1.10);
   assert.equal(upg.critChance, 0.05);
-  assert.equal(upg.critDamageBonus, 0);
+  assert.equal(upg.critDamageBonus, 0.5);
   assert.equal(state.maxHp, 160);
   assert.equal(state.hp, 160);
 
@@ -451,7 +470,7 @@ test('MINI applies speed and crit bonuses while shrinking HP', () => {
   assert.equal(upg.miniTier, 3);
   assert.equal(upg.miniShotSpdMult, 1.30);
   assert.ok(Math.abs(upg.critChance - 0.15) < 1e-9);
-  assert.equal(upg.critDamageBonus, 0.20);
+  assert.equal(upg.critDamageBonus, 0.7);
 });
 
 test('Titan Heart first tier now grants half current max HP', () => {
@@ -2149,7 +2168,7 @@ test('player fire helpers build lane offsets, shot plan, and volley specs determ
     now: 1000,
     payloadReady: true,
     random: (() => {
-      const neutralDamageRoll = (1 - 0.88) / (1.14 - 0.88);
+      const neutralDamageRoll = (1 - 0.50) / (1.20 - 0.50);
       const rolls = [0.4, neutralDamageRoll, 0.8, neutralDamageRoll, 0.2, neutralDamageRoll];
       let idx = 0;
       return () => rolls[idx++];

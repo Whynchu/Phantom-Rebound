@@ -5,7 +5,7 @@
 // drops on kill. Visual/audio side effects are descriptors only.
 
 import { MAX_BULLETS } from '../data/constants.js';
-import { getRequiredShotCount } from '../systems/boonHelpers.js';
+import { getRequiredShotCount, getCritDamageFactor } from '../systems/boonHelpers.js';
 import { resolveOutputEnemyHit } from '../systems/outputHit.js';
 import { computeKillScore } from '../systems/scoring.js';
 import { emit } from './effectQueue.js';
@@ -15,7 +15,6 @@ import {
 } from './simProjectiles.js';
 import { applyEnemyKillRewards } from './killRewardStep.js';
 
-const CRIT_DAMAGE_FACTOR = 2.4;
 const BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET = 1;
 const GLOBAL_SPEED_LIFT = 1.55;
 
@@ -50,7 +49,7 @@ function resolveOutputHits(state, opts = {}) {
         hp: ownerMetrics.hp || 0,
         maxHp: ownerMetrics.maxHp || 1,
         upgrades: ownerUpg,
-        critDamageFactor: opts.critDamageFactor ?? (CRIT_DAMAGE_FACTOR * (1 + (ownerUpg.critDamageBonus || 0))),
+        critDamageFactor: opts.critDamageFactor ?? getCritDamageFactor(ownerUpg),
         bloodPactBaseHealCap: opts.bloodPactBaseHealCap ?? BLOOD_PACT_BASE_HEAL_CAP_PER_BULLET,
       });
 
