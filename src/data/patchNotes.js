@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.14',
+      label: 'LEADERBOARD COHORT',
+      summary: ['Keep 1.4.x leaderboard entries together so 1.4.8 scores remain visible after later experimental updates.'],
+      highlights: [
+        'Keep 1.4.x leaderboard entries together so 1.4.8 scores remain visible after later experimental updates.',
+      ]
+    },
+  {
       version: '1.4.13',
       label: 'PICKUP POP',
       summary: ['Added a brighter bubbly pickup sound for grey absorbs and orb absorbs.'],

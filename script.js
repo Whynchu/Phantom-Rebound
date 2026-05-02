@@ -127,6 +127,7 @@ import { iconHTML } from './src/ui/iconRenderer.js';
 import { renderPatchNotesPanel } from './src/ui/patchNotes.js';
 import { createPanelManager } from './src/ui/panelManager.js';
 import { createPauseController } from './src/ui/pauseController.js';
+import { getLeaderboardVersionPrefix } from './src/data/leaderboardConfig.js';
 import { simRng, parseSeedParam, setRngState } from './src/systems/seededRng.js';
 import { createSimState, createSlot } from './src/sim/simState.js';
 import { showGameOverScreen, renderScoreBreakdown } from './src/ui/gameOver.js';
@@ -5140,7 +5141,7 @@ function showUpgrades() {
 
 function loadLeaderboard() {
   leaderboard = parseLocalLeaderboardRows(readJson(LB_KEY, []), {
-    gameVersion: VERSION.num,
+    gameVersionPrefix: getLeaderboardVersionPrefix(VERSION.num),
     limit: 500,
   });
 }
@@ -5209,7 +5210,7 @@ async function refreshLeaderboardView() {
     scope: lbScope,
     mode: lbMode,
     playerName,
-    gameVersion: VERSION.num,
+    gameVersionPrefix: getLeaderboardVersionPrefix(VERSION.num),
     limit: 100,
     fetchRemoteLeaderboard,
     beginLeaderboardSync,

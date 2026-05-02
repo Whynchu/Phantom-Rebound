@@ -47,12 +47,12 @@ async function callLeaderboardRpc(fnName, payload) {
   return response.json();
 }
 
-async function fetchRemoteLeaderboard({ period, scope, playerName, gameVersion, limit = 100, mode = 'solo' }) {
+async function fetchRemoteLeaderboard({ period, scope, playerName, gameVersionPrefix = '', limit = 100, mode = 'solo' }) {
   const rows = await callLeaderboardRpc('get_leaderboard', {
     p_period: normalizePeriod(period),
     p_scope: normalizeScope(scope),
     p_player_name: playerName,
-    p_game_version: gameVersion,
+    p_game_version_prefix: gameVersionPrefix,
     p_limit: limit,
     p_run_mode: normalizeRunMode(mode),
   });

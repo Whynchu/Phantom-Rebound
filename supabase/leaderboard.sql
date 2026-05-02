@@ -261,7 +261,7 @@ create or replace function public.get_leaderboard(
   p_period text default 'daily',
   p_scope text default 'everyone',
   p_player_name text default 'RUNNER',
-  p_game_version text default '',
+  p_game_version_prefix text default '',
   p_limit integer default 10,
   p_run_mode text default 'solo'
 )
@@ -293,7 +293,7 @@ as $$
       coalesce(ls.run_mode, 'solo') as run_mode
     from public.leaderboard_scores ls
     where
-      ls.game_version = trim(coalesce(p_game_version, ''))
+      ls.game_version like trim(coalesce(p_game_version_prefix, '')) || '%'
       and (coalesce(p_period, 'daily') <> 'daily' or ls.created_at >= date_trunc('day', now()))
       and (
         coalesce(p_scope, 'everyone') <> 'personal'

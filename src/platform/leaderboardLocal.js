@@ -3,7 +3,9 @@ function sanitizePlayerName(value) {
   return cleaned.slice(0, 14);
 }
 
-function parseLocalLeaderboardRows(rows, { gameVersion, limit = 500 }) {
+function parseLocalLeaderboardRows(rows, { gameVersionPrefix = '', gameVersion = '', limit = 500 }) {
+  const prefix = String(gameVersionPrefix || '').trim();
+  const exact = String(gameVersion || '').trim();
   if(!Array.isArray(rows)) return [];
   return rows
     .filter((entry) => (
@@ -11,7 +13,10 @@ function parseLocalLeaderboardRows(rows, { gameVersion, limit = 500 }) {
       && typeof entry.name === 'string'
       && Number.isFinite(entry.score)
       && Number.isFinite(entry.ts)
-      && entry.version === gameVersion
+      && (
+        (prefix && typeof entry.version === 'string' && entry.version.startsWith(prefix))
+        || (!prefix && exact && entry.version === exact)
+      )
     ))
     .slice(0, limit)
     .sort((a, b) => b.score - a.score || b.ts - a.ts);

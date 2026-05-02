@@ -3,7 +3,7 @@ async function refreshLeaderboardSync({
   period,
   scope,
   playerName,
-  gameVersion,
+  gameVersionPrefix = '',
   limit = 10,
   fetchRemoteLeaderboard,
   beginLeaderboardSync,
@@ -18,7 +18,7 @@ async function refreshLeaderboardSync({
       period,
       scope,
       playerName,
-      gameVersion,
+      gameVersionPrefix,
       limit,
     });
     const applied = applyLeaderboardSyncSuccess(lbSync, requestId, rows);

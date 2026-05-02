@@ -1182,7 +1182,7 @@ test('leaderboard runtime helpers refresh and submit deterministically', async (
     period: 'daily',
     scope: 'everyone',
     playerName: 'RUNNER',
-    gameVersion: '1.0.0',
+    gameVersionPrefix: '1.0.',
     fetchRemoteLeaderboard: async () => [{ name: 'A' }],
     beginLeaderboardSync,
     applyLeaderboardSyncSuccess,
@@ -1199,7 +1199,7 @@ test('leaderboard runtime helpers refresh and submit deterministically', async (
     period: 'daily',
     scope: 'everyone',
     playerName: 'RUNNER',
-    gameVersion: '1.0.0',
+    gameVersionPrefix: '1.0.',
     fetchRemoteLeaderboard: async () => { throw new Error('offline'); },
     beginLeaderboardSync,
     applyLeaderboardSyncSuccess,
@@ -1255,10 +1255,18 @@ test('leaderboard local helpers sanitize, parse, and upsert rows', () => {
     { name: 'B', score: 300, ts: 30, version: '1.0.0' },
     { name: 'C', score: 200, ts: 20, version: '1.0.1' },
     { name: 'D', score: Number.NaN, ts: 40, version: '1.0.0' },
-  ], { gameVersion: '1.0.0', limit: 10 });
-  assert.equal(parsed.length, 2);
+  ], { gameVersionPrefix: '1.0.', limit: 10 });
+  assert.equal(parsed.length, 3);
   assert.equal(parsed[0].name, 'B');
-  assert.equal(parsed[1].name, 'A');
+  assert.equal(parsed[1].name, 'C');
+  assert.equal(parsed[2].name, 'A');
+
+  const exactParsed = parseLocalLeaderboardRows([
+    { name: 'A', score: 100, ts: 10, version: '1.0.0' },
+    { name: 'B', score: 300, ts: 30, version: '1.0.1' },
+  ], { gameVersion: '1.0.0', limit: 10 });
+  assert.equal(exactParsed.length, 1);
+  assert.equal(exactParsed[0].name, 'A');
 
   const next = upsertLocalLeaderboardEntry(parsed, { name: 'E', score: 250, ts: 50, version: '1.0.0' }, 2);
   assert.equal(next.length, 2);
