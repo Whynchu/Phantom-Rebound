@@ -6244,10 +6244,12 @@ function update(dt,ts){
         }
       }
 
+      const playerDamageBase = Math.max(1, getPlayerShotDamageBase(UPG, simNowMs, roomIndex) || 10);
+
       if(UPG.orbitSphereTier > 0){
         // Sync arrays
         syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
-        const orbDamageBonus = (1 + 0.25 * (UPG.orbDamageTier || 0)) * (1 + 0.10 * Math.max(0, UPG.orbitSphereTier - 1));
+        const orbDamageBonus = (1 + 0.15 * (UPG.orbDamageTier || 0)) * (1 + 0.06 * Math.max(0, UPG.orbitSphereTier - 1));
         const orbitContact = applyOrbitSphereContact(e, {
           orbCooldown: _orbCooldown,
           orbitSphereTier: UPG.orbitSphereTier,
@@ -6304,14 +6306,12 @@ function update(dt,ts){
     for(const e of enemies) resolveEntityObstacleCollisions(e);
   }
 
-  const playerDamageBase = Math.max(1, getPlayerShotDamageBase(UPG, simNowMs, roomIndex) || 10);
-
   // ── Charged Orbs: each alive orb fires at nearest enemy every 1.8s
   if(combatActive && UPG.chargedOrbs && UPG.orbitSphereTier>0 && enemies.length>0){
     syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
     for(let si=0;si<UPG.orbitSphereTier;si++){
       const orbFireInterval = CHARGED_ORB_FIRE_INTERVAL_MS * (UPG.orbitalFocus ? ORBITAL_FOCUS_CHARGED_ORB_INTERVAL_MULT : 1);
-      const orbDamageBonus = (1 + 0.25 * (UPG.orbDamageTier || 0)) * (1 + 0.10 * Math.max(0, UPG.orbitSphereTier - 1));
+      const orbDamageBonus = (1 + 0.15 * (UPG.orbDamageTier || 0)) * (1 + 0.06 * Math.max(0, UPG.orbitSphereTier - 1));
       const orbVolley = buildChargedOrbVolleyForSlot({
         slotIndex: si,
         timerMs: _orbFireTimers[si] || 0,
@@ -7421,11 +7421,14 @@ function draw(ts){
 
   // Floating damage numbers
   ctx.save();
-  ctx.font = 'bold 10px "IBM Plex Mono", monospace';
+  ctx.font = 'bold 20px "IBM Plex Mono", monospace';
   ctx.textAlign = 'center';
   for(const d of dmgNumbers){
     ctx.globalAlpha = Math.max(0, d.life * 0.9);
     ctx.fillStyle = d.color;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+    ctx.strokeText(d.text, d.x, d.y);
     ctx.fillText(d.text, d.x, d.y);
   }
   ctx.restore();

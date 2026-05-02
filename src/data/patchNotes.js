@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.7.0',
+      label: 'DAMAGE READOUT',
+      summary: ['Damage numbers now render larger and more readable above enemies and players.'],
+      highlights: [
+        'Charged Orbs were softened so they scale more sanely from the player\'s build.',
+      ]
+    },
+  {
       version: '1.6.2',
       label: 'ORB SAFETY 2',
       summary: ['Fixed the Charged Orbs crash by moving the shared player-damage baseline into the right scope.'],
