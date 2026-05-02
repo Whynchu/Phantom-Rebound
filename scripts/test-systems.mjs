@@ -411,9 +411,12 @@ test('computeFiveRoomCheckpointBonus returns zero for non-clear block', () => {
 });
 
 test('computeProjectileHitDamage matches baseline room scaling', () => {
-  assert.equal(computeProjectileHitDamage({ roomIndex: 0 }), 17);
-  assert.equal(computeProjectileHitDamage({ roomIndex: 10 }), 27);
-  assert.equal(computeProjectileHitDamage({ roomIndex: 50 }), 65);
+  assert.equal(computeProjectileHitDamage({ roomIndex: 0, randomFn: () => 0 }), 10);
+  assert.equal(computeProjectileHitDamage({ roomIndex: 0, randomFn: () => 1 }), 18);
+  assert.equal(computeProjectileHitDamage({ roomIndex: 10, randomFn: () => 0 }), 17);
+  assert.equal(computeProjectileHitDamage({ roomIndex: 10, randomFn: () => 1 }), 30);
+  assert.equal(computeProjectileHitDamage({ roomIndex: 50, randomFn: () => 0 }), 40);
+  assert.equal(computeProjectileHitDamage({ roomIndex: 50, randomFn: () => 1 }), 72);
 });
 
 test('computeProjectileHitDamage applies external multipliers', () => {
@@ -423,8 +426,9 @@ test('computeProjectileHitDamage applies external multipliers', () => {
     damageTakenMultiplier: 1.18,
     lateBloomDamageTakenMultiplier: 0.9,
     multiplier: 0.05,
+    randomFn: () => 0.5,
   });
-  assert.equal(damage, 4);
+  assert.equal(damage, 3);
 });
 
 test('early-power boon constants match rebalance plan', () => {

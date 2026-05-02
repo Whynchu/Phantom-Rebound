@@ -21,6 +21,7 @@ import { emit } from './effectQueue.js';
 import {
   pushSimOutputBullet,
   spawnSimRadialOutputBurst,
+  nextSimRandom,
 } from './simProjectiles.js';
 import { getAdrenalSurgeDamageMult } from '../systems/boonHelpers.js';
 
@@ -153,6 +154,7 @@ function getProjectileDamageForSlot(state, slot, multiplier, opts) {
     damageTakenMultiplier: upg.damageTakenMult || 1,
     lateBloomDamageTakenMultiplier: getLateBloomDamageTakenMultiplier(upg, state.run?.roomIndex || 0),
     multiplier,
+    randomFn: () => nextSimRandom(state),
   });
 }
 

@@ -13,11 +13,14 @@ function computeProjectileHitDamage({
   damageTakenMultiplier = 1,
   lateBloomDamageTakenMultiplier = 1,
   multiplier = 1,
+  randomFn = () => 0.5,
 }) {
   const room = Number.isFinite(roomIndex) ? roomIndex : 0;
   const tierOver = Math.max(0, room - 29);
   const dmgScale = (1 + Math.log(room + 1) * 0.24) * (tierOver > 0 ? 1 + tierOver * 0.04 : 1);
-  const rawDamage = Math.ceil(18 * dmgScale * getProjectileDamageCurve(room));
+  const roll = Math.max(0, Math.min(1, Number(randomFn?.()) || 0));
+  const baseDamage = 11 + roll * 9;
+  const rawDamage = Math.ceil(baseDamage * dmgScale * getProjectileDamageCurve(room));
   const finalDamage = rawDamage * bossDamageMultiplier * damageTakenMultiplier * lateBloomDamageTakenMultiplier * multiplier;
   return Math.max(1, Math.ceil(finalDamage));
 }

@@ -4452,6 +4452,7 @@ function getProjectileHitDamage(multiplier = 1) {
     damageTakenMultiplier: UPG.damageTakenMult || 1,
     lateBloomDamageTakenMultiplier: lateBloomDefenseMods.damageTaken,
     multiplier,
+    randomFn: () => simRng.next(),
   });
 }
 

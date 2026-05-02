@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.18',
+      label: 'ENEMY DAMAGE RANGE',
+      summary: ['Enemy projectile damage now rolls in a visible range before room and boss multipliers are applied, so early hits read more like 10-18 instead of a single fixed number.'],
+      highlights: [
+        'Enemy projectile damage now rolls in a visible range before room and boss multipliers are applied, so early hits read more like 10-18 instead of a single fixed number.',
+      ]
+    },
+  {
       version: '1.4.17',
       label: 'CEILING TUNE',
       summary: ['Retune the main damage ceiling boons so they push top-end damage harder without broadening the floor: stronger Heavy Rounds, sharper Dense Core, and a more explosive Glass Cannon.'],
