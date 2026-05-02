@@ -2,6 +2,22 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.6',
+      label: 'LATE GAME',
+      summary: ['Late-room reinforcement pop-in is gone; pressure shifts into sturdier enemy HP instead.'],
+      highlights: [
+        'Boss escort respawns and reinforcement trickle are disabled in later rooms so pacing stays cleaner.',
+      ]
+    },
+  {
+      version: '1.4.5',
+      label: 'FLAWLESS',
+      summary: ['Flawless rooms now pay out a much larger room-clear bonus.'],
+      highlights: [
+        'Damageless clears are meant to stand out more sharply on the score curve.',
+      ]
+    },
+  {
       version: '1.4.4',
       label: 'DODGE TICK',
       summary: ['Live dodge score now ticks on near-miss instead of waiting for room clear.'],

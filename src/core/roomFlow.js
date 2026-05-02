@@ -88,6 +88,7 @@ function getRoomMaxOnScreen(idx, isBossRoom) {
 }
 
 function getReinforcementIntervalMs(idx) {
+  if(idx >= 40) return Infinity;
   if(idx >= 160) return 280;
   if(idx >= 120) return 360;
   if(idx >= 100) return 440;
@@ -97,6 +98,7 @@ function getReinforcementIntervalMs(idx) {
 }
 
 function getBossEscortRespawnMs(idx) {
+  if(idx >= 40) return Infinity;
   if(idx >= 160) return 2800;
   if(idx >= 120) return 3400;
   if(idx >= 100) return 4200;

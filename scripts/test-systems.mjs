@@ -341,7 +341,7 @@ test('computeRoomClearBonuses: continuous pace curve + HP efficiency', () => {
   assert.equal(fast.clear, 47);             // 15*1.8 + 20
   assert.equal(fast.pace, 98);              // (600/11)*1.8
   assert.equal(fast.efficiency, 0);         // no damage taken → flawless track
-  assert.equal(fast.flawless, 65);          // 25*1.8 + 20
+  assert.equal(fast.flawless, 175);         // 75*1.8 + 40
   assert.equal(fast.boss, 0);
 
   const chipDmg = computeRoomClearBonuses({ room: 10, clearMs: 15000, hpLost: 10, damageless: false, boss: false }, ctx);
@@ -2573,9 +2573,9 @@ test('room flow helpers keep threshold values', () => {
   assert.equal(getRoomMaxOnScreen(25, false), 12);
   assert.equal(getRoomMaxOnScreen(85, false), 18);
   assert.equal(getReinforcementIntervalMs(0), 800);
-  assert.equal(getReinforcementIntervalMs(120), 360);
+  assert.equal(getReinforcementIntervalMs(120), Infinity);
   assert.equal(getBossEscortRespawnMs(0), 9000);
-  assert.equal(getBossEscortRespawnMs(160), 2800);
+  assert.equal(getBossEscortRespawnMs(160), Infinity);
 });
 
 test('room flow generates non-boss and room-100 special boss layouts', () => {

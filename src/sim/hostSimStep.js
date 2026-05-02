@@ -68,6 +68,7 @@ function applyAuthoritativeInputPosition(body, input, world, phaseOpts) {
  *   worldW=state.world.w||state.worldW||800,
  *   worldH=state.world.h||state.worldH||600, margin=16,
  *   phaseWalk=false, phaseWalkMaxOverlapMs=500, phaseWalkIdleEjectMs=250,
+ *   phaseWalkRoomLimit=0,
  *   resolveCollisions=noop, isOverlapping=()=>false, eject=noop.
  */
 export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
@@ -91,6 +92,7 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
     phaseWalk: !!opts.phaseWalk,
     phaseWalkMaxOverlapMs: opts.phaseWalkMaxOverlapMs != null ? opts.phaseWalkMaxOverlapMs : 500,
     phaseWalkIdleEjectMs: opts.phaseWalkIdleEjectMs != null ? opts.phaseWalkIdleEjectMs : 250,
+    phaseWalkRoomLimit: opts.phaseWalkRoomLimit != null ? opts.phaseWalkRoomLimit : 0,
     resolveCollisions: opts.resolveCollisions || NOOP,
     isOverlapping: opts.isOverlapping || FALSE_FN,
     eject: opts.eject || NOOP,

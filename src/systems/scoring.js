@@ -36,7 +36,9 @@ function computeRoomClearBonuses(room, context = {}) {
   const efficiencyCap = Math.round(30 * depthScale + roomNumber);
   const efficiency = hpLost > 0 ? Math.round(hpPctKept * efficiencyCap) : 0;
 
-  const flawless = room.damageless ? Math.round(25 * depthScale + roomNumber * 2) : 0;
+  // Flawless should feel meaningfully stronger than the other room-clear
+  // bonuses because it rewards the cleanest possible room.
+  const flawless = room.damageless ? Math.round(75 * depthScale + roomNumber * 4) : 0;
 
   const boss = room.boss ? Math.round(200 * depthScale + roomNumber * 5) : 0;
 

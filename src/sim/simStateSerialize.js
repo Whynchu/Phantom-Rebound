@@ -144,6 +144,7 @@ export function restoreState(liveState, snapshot) {
         if (snapshotSlot.body.distort !== undefined) liveSlot.body.distort = snapshotSlot.body.distort;
         if (snapshotSlot.body.phaseWalkOverlapMs !== undefined) liveSlot.body.phaseWalkOverlapMs = snapshotSlot.body.phaseWalkOverlapMs;
         if (snapshotSlot.body.phaseWalkIdleMs !== undefined) liveSlot.body.phaseWalkIdleMs = snapshotSlot.body.phaseWalkIdleMs;
+        if (snapshotSlot.body.phaseWalkRoomUses !== undefined) liveSlot.body.phaseWalkRoomUses = snapshotSlot.body.phaseWalkRoomUses;
         if (snapshotSlot.body.coopSpectating !== undefined) liveSlot.body.coopSpectating = snapshotSlot.body.coopSpectating;
         // Death/pop visuals (R0.4 step 8 — GAP 1).
         if (snapshotSlot.body.deadAt !== undefined) liveSlot.body.deadAt = snapshotSlot.body.deadAt;

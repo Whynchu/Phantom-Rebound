@@ -218,6 +218,7 @@ export function createSlot(index, baseHp = DEFAULT_BASE_PLAYER_HP) {
       distort: 0,
       phaseWalkOverlapMs: 0,
       phaseWalkIdleMs: 0,
+      phaseWalkRoomUses: 0,
       coopSpectating: false,
       // Death/pop visual state (R0.4 step 8 — GAP 1 closed). Legacy
       // runState.player carries these on the player body and the renderer
@@ -420,6 +421,7 @@ export function resetSimState(state, { seed = 1, baseHp = DEFAULT_BASE_PLAYER_HP
     slot.body.distort = 0;
     slot.body.phaseWalkOverlapMs = 0;
     slot.body.phaseWalkIdleMs = 0;
+    slot.body.phaseWalkRoomUses = 0;
     slot.body.coopSpectating = false;
     slot.body.deadAt = 0;
     slot.body.popAt = 0;

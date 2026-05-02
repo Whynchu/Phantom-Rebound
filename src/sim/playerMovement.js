@@ -65,7 +65,7 @@ export function computeSubsteps(vx, vy, dt, maxStepPx = 8, maxSteps = 10) {
  * handed to one of three branches:
  *   1. phaseWalk OFF → resolve obstacle collisions every substep.
  *   2. phaseWalk ON, body overlapping obstacle → accumulate overlap/idle
- *      timers and eject when either threshold trips.
+ *      timers, count room breaches, and eject when either threshold trips.
  *   3. phaseWalk ON, body clear → reset overlap/idle timers.
  *
  * @param {object} body                      Mutable body. Reads vx/vy/r;
@@ -79,6 +79,7 @@ export function computeSubsteps(vx, vy, dt, maxStepPx = 8, maxSteps = 10) {
  * @param {boolean} opts.phaseWalk           Whether phaseWalk boon is active.
  * @param {number}  opts.phaseWalkMaxOverlapMs   Eject after this much overlap.
  * @param {number}  opts.phaseWalkIdleEjectMs    Eject after this much idle overlap.
+ * @param {number}  [opts.phaseWalkRoomLimit=0]   Max wall-breach entries per room.
  * @param {(body:object) => void} opts.resolveCollisions
  *                                           Resolves body vs static obstacles.
  * @param {(body:object) => boolean} opts.isOverlapping
@@ -93,6 +94,7 @@ export function tickBodyPosition(body, dt, world, opts) {
   const steps = computeSubsteps(body.vx, body.vy, dt);
   const stepDt = dt / steps;
   const isMoving = Math.hypot(body.vx, body.vy) > 12;
+  const phaseWalkRoomLimit = Math.max(0, opts.phaseWalkRoomLimit || 0);
 
   for (let step = 0; step < steps; step++) {
     body.x = Math.max(M + r, Math.min(W - M - r, body.x + body.vx * stepDt));
@@ -101,7 +103,18 @@ export function tickBodyPosition(body, dt, world, opts) {
       opts.resolveCollisions(body);
       body.phaseWalkOverlapMs = 0;
       body.phaseWalkIdleMs = 0;
+      body.phaseWalkRoomUses = 0;
     } else if (opts.isOverlapping(body)) {
+      if (body.phaseWalkOverlapMs <= 0 && phaseWalkRoomLimit > 0) {
+        const roomUses = Math.max(0, body.phaseWalkRoomUses || 0);
+        if (roomUses >= phaseWalkRoomLimit) {
+          opts.eject(body);
+          body.phaseWalkOverlapMs = 0;
+          body.phaseWalkIdleMs = 0;
+          continue;
+        }
+        body.phaseWalkRoomUses = roomUses + 1;
+      }
       body.phaseWalkOverlapMs += stepDt * 1000;
       if (isMoving) body.phaseWalkIdleMs = 0;
       else body.phaseWalkIdleMs += stepDt * 1000;

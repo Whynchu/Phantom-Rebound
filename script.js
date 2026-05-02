@@ -4045,6 +4045,12 @@ function beginWaveIntro(nextWaveIndex) {
   showRoomIntro(`WAVE ${nextWaveIndex + 1}`, false);
 }
 
+function getPhaseWalkRoomLimit(upg) {
+  if (!upg?.phaseWalk) return 0;
+  const bonusUses = Math.max(0, Number(upg.phaseDashTier) || 0);
+  return 10 + bonusUses * 5;
+}
+
 function startRoom(idx) {
   tookDamageThisRoom = false;
   slot0Timers.vampiricRestoresThisRoom = 0;
@@ -4062,6 +4068,9 @@ function startRoom(idx) {
   roomTimer = 0;
   roomIntroTimer = 0;
   roomPhase = 'intro';
+  player.phaseWalkRoomUses = 0;
+  player.phaseWalkOverlapMs = 0;
+  player.phaseWalkIdleMs = 0;
   currentRoomLayout = getRoomLayout(idx, {
     worldWidth: WORLD_W,
     worldHeight: WORLD_H,
@@ -5703,6 +5712,7 @@ function update(dt,ts){
     phaseWalk: !!UPG.phaseWalk,
     phaseWalkMaxOverlapMs: PHASE_WALK_MAX_OVERLAP_MS,
     phaseWalkIdleEjectMs: PHASE_WALK_IDLE_EJECT_MS,
+    phaseWalkRoomLimit: getPhaseWalkRoomLimit(UPG),
     resolveCollisions: resolveEntityObstacleCollisions,
     isOverlapping: isEntityOverlappingObstacle,
     eject: ejectEntityFromObstacles,
