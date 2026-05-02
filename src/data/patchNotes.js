@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.9',
+      label: 'PERF PROBE',
+      summary: ['Added browser-console performance export for 5-room profiling sessions.'],
+      highlights: [
+        'Reduced repeated enemy flank line-of-sight scans while held path choices are active.',
+      ]
+    },
+  {
       version: '1.4.8',
       label: 'GLOW DRIFT',
       summary: ['Player movement now has slight inertia so control feels less instant and more tense.'],

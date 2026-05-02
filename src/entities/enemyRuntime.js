@@ -97,6 +97,10 @@ function getStableMovementSide(enemy, key, ts, preferredSide, holdMs = 720) {
 }
 
 function pickFlankSide(enemy, player, obstacles, ts, key = 'path') {
+  const sideKey = `${key}Side`;
+  const untilKey = `${key}SideUntil`;
+  if(enemy[untilKey] > ts && enemy[sideKey]) return enemy[sideKey];
+
   const dx = player.x - enemy.x;
   const dy = player.y - enemy.y;
   const distance = Math.max(1, Math.hypot(dx, dy));

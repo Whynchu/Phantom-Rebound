@@ -1414,6 +1414,152 @@ const COOP_DEBUG = (typeof window !== 'undefined' && window.location)
 const COOP_DIAG = (typeof window !== 'undefined' && window.location)
   ? new URLSearchParams(window.location.search).get('coopdiag') === '1'
   : false;
+// `?perf=1` enables console/export performance diagnostics for live browser
+// sessions. Normal play does not pay timing or logging overhead.
+const PERF_DIAG = (typeof window !== 'undefined' && window.location)
+  ? (new URLSearchParams(window.location.search).get('perf') === '1'
+    || new URLSearchParams(window.location.search).get('perflog') === '1')
+  : false;
+function createPerfRoomStats(room) {
+  return {
+    room,
+    startedAt: perfNow(),
+    endedAt: 0,
+    reason: '',
+    frames: 0,
+    simSteps: 0,
+    maxSteps: 0,
+    catchupFrames: 0,
+    slow20Frames: 0,
+    slow33Frames: 0,
+    frameMs: 0,
+    updateMs: 0,
+    drawMs: 0,
+    hudMs: 0,
+    maxFrameMs: 0,
+    maxUpdateMs: 0,
+    maxDrawMs: 0,
+    maxHudMs: 0,
+    peaks: { enemies: 0, bullets: 0, particles: 0, damageNumbers: 0, obstacles: 0, shockwaves: 0 },
+  };
+}
+const perfDiag = {
+  installed: false,
+  current: null,
+  rooms: [],
+  runStartedAt: 0,
+};
+function perfNow() {
+  return (typeof performance !== 'undefined' && performance.now)
+    ? performance.now()
+    : Date.now();
+}
+function summarizePerfRoom(roomStats) {
+  if (!roomStats) return null;
+  const frames = Math.max(1, roomStats.frames);
+  const durationMs = Math.max(1, (roomStats.endedAt || perfNow()) - roomStats.startedAt);
+  return {
+    room: roomStats.room,
+    reason: roomStats.reason || 'active',
+    durationMs: Math.round(durationMs),
+    fps: Math.round((roomStats.frames * 1000) / durationMs),
+    frames: roomStats.frames,
+    avgSteps: +(roomStats.simSteps / frames).toFixed(2),
+    maxSteps: roomStats.maxSteps,
+    catchupFrames: roomStats.catchupFrames,
+    slow20Frames: roomStats.slow20Frames,
+    slow33Frames: roomStats.slow33Frames,
+    avgFrameMs: +(roomStats.frameMs / frames).toFixed(2),
+    maxFrameMs: +roomStats.maxFrameMs.toFixed(2),
+    avgUpdateMs: +(roomStats.updateMs / frames).toFixed(2),
+    maxUpdateMs: +roomStats.maxUpdateMs.toFixed(2),
+    avgDrawMs: +(roomStats.drawMs / frames).toFixed(2),
+    maxDrawMs: +roomStats.maxDrawMs.toFixed(2),
+    avgHudMs: +(roomStats.hudMs / frames).toFixed(2),
+    maxHudMs: +roomStats.maxHudMs.toFixed(2),
+    peaks: { ...roomStats.peaks },
+  };
+}
+function buildPerfExport() {
+  const rooms = perfDiag.rooms.map(summarizePerfRoom).filter(Boolean);
+  const active = perfDiag.current ? summarizePerfRoom(perfDiag.current) : null;
+  return {
+    version: VERSION?.num || '',
+    label: VERSION?.label || '',
+    runDurationMs: Math.round(perfNow() - (perfDiag.runStartedAt || perfNow())),
+    rooms,
+    active,
+  };
+}
+function installPerfDebugApi() {
+  if (!PERF_DIAG || perfDiag.installed || typeof window === 'undefined') return;
+  perfDiag.installed = true;
+  perfDiag.runStartedAt = perfNow();
+  window.PHANTOM_PERF = {
+    export: () => buildPerfExport(),
+    json: () => JSON.stringify(buildPerfExport(), null, 2),
+    log: () => {
+      const payload = buildPerfExport();
+      try { console.table(payload.rooms); } catch (_) {}
+      try { console.log('[perf] export', payload); } catch (_) {}
+      return payload;
+    },
+    copy: async () => {
+      const text = JSON.stringify(buildPerfExport(), null, 2);
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+      else try { console.log(text); } catch (_) {}
+      return text;
+    },
+  };
+  try {
+    console.info('[perf] logging enabled. Run 5 rooms, then use PHANTOM_PERF.log() or await PHANTOM_PERF.copy().');
+  } catch (_) {}
+}
+function beginPerfRoom(room) {
+  if (!PERF_DIAG) return;
+  installPerfDebugApi();
+  if (perfDiag.current && perfDiag.current.room !== room) finishPerfRoom('interrupted');
+  perfDiag.current = createPerfRoomStats(room);
+  try { console.info(`[perf] room ${room} started`); } catch (_) {}
+}
+function finishPerfRoom(reason = 'clear') {
+  if (!PERF_DIAG || !perfDiag.current) return;
+  const roomStats = perfDiag.current;
+  roomStats.reason = reason;
+  roomStats.endedAt = perfNow();
+  perfDiag.rooms.push(roomStats);
+  perfDiag.current = null;
+  const summary = summarizePerfRoom(roomStats);
+  try { console.table([summary]); } catch (_) {}
+  try { console.log('[perf] room summary', summary); } catch (_) {}
+}
+function recordPerfDiag({ frameMs, steps, updateMs, drawMs, hudMs }) {
+  if (!PERF_DIAG) return;
+  installPerfDebugApi();
+  if (!perfDiag.current) beginPerfRoom(roomIndex + 1);
+  const s = perfDiag.current;
+  if (!s) return;
+  s.frames++;
+  s.simSteps += steps;
+  s.maxSteps = Math.max(s.maxSteps, steps);
+  if (steps > 1) s.catchupFrames++;
+  if (frameMs > 20) s.slow20Frames++;
+  if (frameMs > 33) s.slow33Frames++;
+  s.frameMs += frameMs;
+  s.updateMs += updateMs;
+  s.drawMs += drawMs;
+  s.hudMs += hudMs;
+  s.maxFrameMs = Math.max(s.maxFrameMs, frameMs);
+  s.maxUpdateMs = Math.max(s.maxUpdateMs, updateMs);
+  s.maxDrawMs = Math.max(s.maxDrawMs, drawMs);
+  s.maxHudMs = Math.max(s.maxHudMs, hudMs);
+  s.peaks.enemies = Math.max(s.peaks.enemies, enemies.length);
+  s.peaks.bullets = Math.max(s.peaks.bullets, bullets.length);
+  s.peaks.particles = Math.max(s.peaks.particles, particles.length);
+  s.peaks.damageNumbers = Math.max(s.peaks.damageNumbers, dmgNumbers.length);
+  s.peaks.obstacles = Math.max(s.peaks.obstacles, roomObstacles.length);
+  s.peaks.shockwaves = Math.max(s.peaks.shockwaves, shockwaves.length);
+}
 // R3 — Rollback netcode coordinator: always-on for coop sessions.
 // D-series snapshot modules (snapshotBroadcaster, snapshotApplier, etc.)
 // are still required for world-state sync (HP, room phase, score, bullet
@@ -4147,6 +4293,7 @@ function startRoom(idx) {
     spawnEnemy(entry.t, entry.isBoss, entry.bossScale || 1);
   }
   showRoomIntro(currentRoomIsBoss ? 'BOSS!' : 'READY?', false);
+  beginPerfRoom(idx + 1);
 }
 
 function triggerPayloadBlast(bullet, enemies, ts) {
@@ -5395,16 +5542,30 @@ function loop(ts){
     const coopFrozen = checkCoopLivenessGate(frameStartTs);
     if (coopFrozen) {
       simAccumulatorMs = 0;
+      const drawStart = PERF_DIAG ? perfNow() : 0;
       try { draw(simNowMs); } catch (_) {}
+      const drawMsThisFrame = PERF_DIAG ? perfNow() - drawStart : 0;
+      const hudStart = PERF_DIAG ? perfNow() : 0;
       try { hudUpdate(); } catch (_) {}
+      const hudMsThisFrame = PERF_DIAG ? perfNow() - hudStart : 0;
+      recordPerfDiag({
+        frameMs,
+        steps: 0,
+        updateMs: 0,
+        drawMs: drawMsThisFrame,
+        hudMs: hudMsThisFrame,
+      });
       raf = requestAnimationFrame(loop);
       return;
     }
     let steps = 0;
+    let updateMsThisFrame = 0;
     while (simAccumulatorMs >= SIM_STEP_MS && steps < MAX_SIM_STEPS_PER_FRAME) {
       simNowMs += SIM_STEP_MS;
       simTick++;
+      const updateStart = PERF_DIAG ? perfNow() : 0;
       update(SIM_STEP_SEC, simNowMs);
+      if (PERF_DIAG) updateMsThisFrame += perfNow() - updateStart;
       // R1 — rollback coordinator input capture + snapshot (after update()).
       // skipSimStepOnForward=true means the coordinator does NOT re-run movement
       // here; it only records inputs, buffers a post-update snapshot, and checks
@@ -5556,7 +5717,19 @@ function loop(ts){
         try { console.warn('[coop] grey-decay stamp error', decayErr); } catch (_) {}
       }
     }
-    draw(simNowMs); hudUpdate();
+    const drawStart = PERF_DIAG ? perfNow() : 0;
+    draw(simNowMs);
+    const drawMsThisFrame = PERF_DIAG ? perfNow() - drawStart : 0;
+    const hudStart = PERF_DIAG ? perfNow() : 0;
+    hudUpdate();
+    const hudMsThisFrame = PERF_DIAG ? perfNow() - hudStart : 0;
+    recordPerfDiag({
+      frameMs,
+      steps,
+      updateMs: updateMsThisFrame,
+      drawMs: drawMsThisFrame,
+      hudMs: hudMsThisFrame,
+    });
     raf=requestAnimationFrame(loop);
   } catch(error) {
     handleGameLoopCrash(error);
@@ -5565,6 +5738,7 @@ function loop(ts){
 
 // ── UPDATE ────────────────────────────────────────────────────────────────────
 function finalizeRoomClearState(){
+  finishPerfRoom('clear');
   roomPhase = 'clear';
   roomClearTimer = 0;
   bullets.length = 0;
@@ -5590,6 +5764,7 @@ function update(dt,ts){
       if(p.life<=0)particles.splice(i,1);
     }
     if(ts - player.deadAt >= GAME_OVER_ANIM_MS){
+      finishPerfRoom('gameover');
       gstate='gameover';
       cancelAnimationFrame(raf);
       // D15 — coop runs land on the dedicated end screen with REMATCH/LEAVE.
