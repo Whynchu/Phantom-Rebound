@@ -4208,7 +4208,7 @@ function getBossEscortRespawnMs(idx) {
   return getBossEscortRespawnMsValue(idx);
 }
 
-function spawnEnemy(type, isBoss = false, bossScale = 1) {
+function spawnEnemy(type, isBoss = false, bossScale = 1, spawnGraceMs = null) {
   const enemy = createEnemy(type, {
     width: WORLD_W,
     height: WORLD_H,
@@ -4218,6 +4218,7 @@ function spawnEnemy(type, isBoss = false, bossScale = 1) {
     isBoss,
     bossScale,
     hpMultiplier: isOnlineCoopRun() ? ONLINE_COOP_ENEMY_HP_MULT : 1,
+    spawnGraceMs,
   });
   if(enemy.forcePurpleShots) roomPurpleShooterAssigned = true;
   resolveEntityObstacleCollisions(enemy);
@@ -5795,7 +5796,7 @@ function update(dt,ts){
   }
 
   if(roomPhase==='fighting' || roomPhase==='spawning'){
-    ensureShooterPressure();
+  ensureShooterPressure();
 
     // Boss escort trickle respawning
     if(currentRoomIsBoss && bossAlive) {
@@ -5960,7 +5961,9 @@ function update(dt,ts){
       } else if(combatStep.kind === 'rusher'){
         // C2d-1b — route contact damage through the target slot. Host retains
         // the full UPG aftermath path; guests use the simplified helper.
-        if(combatStep.distanceToPlayer<targetBody.r+e.r+2 && targetBody.invincible<=0){
+        if((e.spawnGraceMs || 0) > 0) {
+          // Spawn grace: freshly spawned melee escorts cannot act or deal damage.
+        } else if(combatStep.distanceToPlayer<targetBody.r+e.r+2 && targetBody.invincible<=0){
           if(targetIsHost){
           const rusherHit = resolveRusherContactHit({
             hp,
@@ -6939,8 +6942,9 @@ function draw(ts){
       const prog = Math.max(0, Math.min(1, (e.fT - (e.fRate - WINDUP_MS_DRAW)) / WINDUP_MS_DRAW)); // 0→1 clamped
       drawR = e.r * (1 + prog * 0.12); // max 12% swell — subtle
       // Faint ring only
-      ctx.strokeStyle = `rgba(255,255,255,${0.08 + prog * 0.18})`;
-      ctx.lineWidth = 1.5;
+      const windupAlpha = 0.16 + prog * 0.34;
+      ctx.strokeStyle = `rgba(255,255,255,${windupAlpha})`;
+      ctx.lineWidth = 2.6;
       ctx.beginPath();
       ctx.arc(e.x, e.y, drawR + 4, 0, Math.PI*2);
       ctx.stroke();
@@ -6958,6 +6962,12 @@ function draw(ts){
 
     ctx.shadowColor= e.glowCol;
     ctx.shadowBlur = 16;
+    const spawnGrace = Math.max(0, e.spawnGraceMs || 0);
+    if(spawnGrace > 0) {
+      const blink = (Math.floor(ts / 120) % 2) === 0;
+      ctx.globalAlpha *= blink ? 0.35 : 0.85;
+      ctx.shadowBlur = 8;
+    }
     ctx.fillStyle = e.col;
     if(e.isTriangle){
       const angle = Math.atan2(player.y - e.y, player.x - e.x);

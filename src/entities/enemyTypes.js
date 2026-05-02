@@ -71,7 +71,7 @@ function getEnemyDefinition(type) {
   };
 }
 
-function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBoss = false, bossScale = 1, hpMultiplier = 1 }) {
+function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBoss = false, bossScale = 1, hpMultiplier = 1, spawnGraceMs } = {}) {
   const def = getEnemyDefinition(type);
   const palette = getThreatPalette();
   const effectiveR = isBoss ? def.r * 3 : def.r;
@@ -156,6 +156,7 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
     forcePurpleShots: Boolean(def.forcePurpleShots),
     isBoss,
     isElite,
+    spawnGraceMs: Math.max(0, spawnGraceMs != null ? spawnGraceMs : (type === 'rusher' ? 1000 : 0)),
     eliteStage: 0, // 0=elite hue, 1=advanced hue, 2=danger hue for the current player-color rotation
     // Disruptor cooldown: tracks bullet count for cooldown after 5 shots
     disruptorBulletCount: 0,

@@ -2575,7 +2575,7 @@ test('room flow helpers keep threshold values', () => {
   assert.equal(getReinforcementIntervalMs(0), 800);
   assert.equal(getReinforcementIntervalMs(120), Infinity);
   assert.equal(getBossEscortRespawnMs(0), 9000);
-  assert.equal(getBossEscortRespawnMs(160), Infinity);
+  assert.equal(getBossEscortRespawnMs(160), 2800);
 });
 
 test('room flow generates non-boss and room-100 special boss layouts', () => {

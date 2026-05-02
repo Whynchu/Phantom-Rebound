@@ -250,6 +250,11 @@ function stepRusherEnemy(enemy, {
   margin,
   obstacles = [],
 } = {}) {
+  if ((enemy.spawnGraceMs || 0) > 0) {
+    enemy.spawnGraceMs = Math.max(0, enemy.spawnGraceMs - dt * 1000);
+    clampEnemyToArena(enemy, width, height, margin);
+    return { distanceToPlayer: Math.hypot(player.x - enemy.x, player.y - enemy.y), spawnGrace: true };
+  }
   const dx = player.x - enemy.x;
   const dy = player.y - enemy.y;
   const distance = Math.hypot(dx, dy);

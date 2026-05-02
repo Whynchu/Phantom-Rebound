@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.7',
+      label: 'ESCORT BLINK',
+      summary: ['Boss escorts are back, but melee escorts now blink and stay harmless for their first second.'],
+      highlights: [
+        'The late-room shooter fallback remains intact when only melee pressure is left.',
+      ]
+    },
+  {
       version: '1.4.6',
       label: 'LATE GAME',
       summary: ['Late-room reinforcement pop-in is gone; pressure shifts into sturdier enemy HP instead.'],

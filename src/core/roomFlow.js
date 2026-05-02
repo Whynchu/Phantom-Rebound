@@ -98,7 +98,6 @@ function getReinforcementIntervalMs(idx) {
 }
 
 function getBossEscortRespawnMs(idx) {
-  if(idx >= 40) return Infinity;
   if(idx >= 160) return 2800;
   if(idx >= 120) return 3400;
   if(idx >= 100) return 4200;

@@ -206,6 +206,7 @@ function resolveRusherContactHits(state, opts = {}) {
   for (let i = 0; i < enemies.length; i++) {
     const enemy = enemies[i];
     if (!enemy || !enemy.isRusher || enemy.dead || enemy.alive === false) continue;
+    if ((enemy.spawnGraceMs || 0) > 0) continue;
 
     // Match live-loop target selection: nearest alive non-invincible slot only.
     // (live code only hits the chosen target slot, not all overlapping slots)
