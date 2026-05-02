@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.5.2',
+      label: 'GLASS CANNON',
+      summary: ['Glass Cannon now raises the damage floor too, not just the ceiling.'],
+      highlights: [
+        'First pick is stronger and the damage ladder is more aggressive.',
+      ]
+    },
+  {
       version: '1.5.1',
       label: 'PHASE SHOTBUSTER',
       summary: ['Renamed color-based enemy variants to phase and omega naming.'],
