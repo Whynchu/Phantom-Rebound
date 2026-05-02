@@ -5707,7 +5707,7 @@ function update(dt,ts){
   if(roomPhase === 'fighting' || roomPhase === 'spawning') tickJoystick(joy, dt);
 
   // ── Player movement — virtual joystick (R0.4 chunk 1: extracted to src/sim/playerMovement.js)
-  applyJoystickVelocity(player, joy, BASE_SPD, JOY_DEADZONE, joyMax, roomPhase !== 'intro');
+  applyJoystickVelocity(player, joy, BASE_SPD, JOY_DEADZONE, joyMax, roomPhase !== 'intro', { dt });
   // R0.4 chunk 2: substep position integration with phase-walk obstacle handling.
   tickBodyPosition(player, dt, { W, H, M }, {
     phaseWalk: !!UPG.phaseWalk,

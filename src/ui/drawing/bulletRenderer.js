@@ -88,6 +88,18 @@ export function drawGooBall(ctx, x, y, radius, fillColor, coreColor, wobbleSeed,
   ctx.restore();
 }
 
+function drawSoftGlow(ctx, x, y, radius, color, alpha = 0.18) {
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = radius * 1.7;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 // Draws a single bullet sprite based on state (danger / grey / output).
 // `deps` carries engine state that would otherwise reach back into the game
 // module: decay progress and the current double-bounce palette.
@@ -107,9 +119,10 @@ export function drawBulletSprite(ctx, b, ts, deps) {
       bCol = b.doubleBounce && b.bounceCount === 0 ? doubleBouncePalette.fill : C.danger;
       bCore = b.doubleBounce && b.bounceCount === 0 ? doubleBouncePalette.core : C.dangerCore;
     }
-    ctx.globalAlpha = 0.88;
+    drawSoftGlow(ctx, b.x, b.y, b.r * (b.isTriangle ? 1.65 : 1.9), bCol, b.isTriangle ? 0.14 : 0.18);
+    ctx.globalAlpha = 0.94;
     ctx.shadowColor = bCol;
-    ctx.shadowBlur = 20 * pulse;
+    ctx.shadowBlur = 24 * pulse;
     ctx.fillStyle = bCol;
     if (b.isTriangle) {
       const angle = Math.atan2(b.vy, b.vx);
@@ -160,17 +173,20 @@ export function drawBulletSprite(ctx, b, ts, deps) {
     const greenHex = ownerScheme ? ownerScheme.hex : C.green;
     const ghostHex = ownerScheme ? ownerScheme.light : C.ghost;
     const col = b.crit ? ghostHex : greenHex;
+    const visualRadius = b.r * (b.crit ? 1.18 : 1.14);
+    drawSoftGlow(ctx, b.x, b.y, visualRadius * 2.15, col, b.crit ? 0.24 : 0.20);
+    drawSoftGlow(ctx, b.x, b.y, visualRadius * 1.35, ghostHex, b.crit ? 0.16 : 0.11);
     ctx.shadowColor = col;
-    ctx.shadowBlur = b.crit ? 28 : 18;
+    ctx.shadowBlur = b.crit ? 38 : 26;
     drawGooBall(
       ctx,
       b.x,
       b.y,
-      b.r,
-      b.crit ? C.getRgba(ghostHex, 0.82) : C.getRgba(greenHex, 0.72),
-      b.crit ? 'rgba(255,255,255,0.94)' : C.getRgba(ghostHex, 0.84),
+      visualRadius,
+      b.crit ? C.getRgba(ghostHex, 0.9) : C.getRgba(greenHex, 0.82),
+      b.crit ? 'rgba(255,255,255,0.98)' : C.getRgba(ghostHex, 0.92),
       ts * 0.013 + b.x * 0.09 + b.y * 0.07,
-      0.92,
+      0.97,
     );
     ctx.shadowBlur = 0;
   }

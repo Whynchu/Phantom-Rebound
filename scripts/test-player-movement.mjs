@@ -83,6 +83,20 @@ t('returns true when joystick produces motion', () => {
   const moved = applyJoystickVelocity(body, { active: true, mag: 80, dx: 1, dy: 0 }, 165, 20, 100);
   assert.equal(moved, true);
 });
+t('eases toward target velocity when dt is provided', () => {
+  const body = { vx: 0, vy: 0 };
+  const moved = applyJoystickVelocity(body, { active: true, mag: 100, dx: 1, dy: 0 }, 165, 20, 100, true, { dt: 1 / 60 });
+  assert.equal(moved, true);
+  assert.ok(body.vx > 0 && body.vx < 165, `vx=${body.vx}`);
+  assert.equal(body.vy, 0);
+});
+t('brakes toward zero when dt is provided and input is released', () => {
+  const body = { vx: 100, vy: 0 };
+  const moved = applyJoystickVelocity(body, { active: false, mag: 0, dx: 0, dy: 0 }, 165, 20, 100, true, { dt: 1 / 60 });
+  assert.equal(moved, false);
+  assert.ok(body.vx > 0 && body.vx < 100, `vx=${body.vx}`);
+  assert.equal(body.vy, 0);
+});
 
 console.log('\nplayerMovement — computeSubsteps');
 t('clamps to 1 when stationary', () => {

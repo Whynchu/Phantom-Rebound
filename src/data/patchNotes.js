@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.8',
+      label: 'GLOW DRIFT',
+      summary: ['Player movement now has slight inertia so control feels less instant and more tense.'],
+      highlights: [
+        'Player and danger projectiles have a stronger readability glow, with player shots rendering larger without changing hitboxes.',
+      ]
+    },
+  {
       version: '1.4.7',
       label: 'ESCORT BLINK',
       summary: ['Boss escorts are back, but melee escorts now blink and stay harmless for their first second.'],

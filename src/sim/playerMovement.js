@@ -32,19 +32,45 @@ export function joystickIntensity(mag, deadzone, joyMax) {
  * @param {number} joyMax                       Magnitude that maps to t=1.
  * @param {boolean} [gate=true]                 External gate (e.g. roomPhase !== 'intro').
  *                                              When false, body is forced to (0, 0).
+ * @param {object} [opts]
+ * @param {number} [opts.dt]                    Enables slight acceleration/braking inertia.
+ * @param {number} [opts.accel=20]              Higher values reach target speed faster.
+ * @param {number} [opts.brake=28]              Higher values stop faster after release.
  *
  * Returns true if the joystick produced motion, false if the body was zeroed.
  */
-export function applyJoystickVelocity(body, joy, baseSpeed, deadzone, joyMax, gate = true) {
+export function applyJoystickVelocity(body, joy, baseSpeed, deadzone, joyMax, gate = true, opts = {}) {
+  let targetVx = 0;
+  let targetVy = 0;
+  let moved = false;
+
   if (gate && joy && joy.active && joy.mag > deadzone) {
     const t = joystickIntensity(joy.mag, deadzone, joyMax);
-    body.vx = joy.dx * baseSpeed * t;
-    body.vy = joy.dy * baseSpeed * t;
-    return true;
+    targetVx = joy.dx * baseSpeed * t;
+    targetVy = joy.dy * baseSpeed * t;
+    moved = true;
+  } else if (!gate) {
+    body.vx = 0;
+    body.vy = 0;
+    return false;
   }
-  body.vx = 0;
-  body.vy = 0;
-  return false;
+
+  const dt = Number(opts.dt) || 0;
+  if (dt > 0) {
+    const response = moved ? (opts.accel ?? 20) : (opts.brake ?? 28);
+    const blend = 1 - Math.exp(-Math.max(0, response) * dt);
+    body.vx += (targetVx - body.vx) * blend;
+    body.vy += (targetVy - body.vy) * blend;
+    if (!moved && Math.hypot(body.vx, body.vy) < 0.01) {
+      body.vx = 0;
+      body.vy = 0;
+    }
+    return moved;
+  }
+
+  body.vx = targetVx;
+  body.vy = targetVy;
+  return moved;
 }
 
 /**

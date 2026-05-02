@@ -102,7 +102,7 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
   const slot0 = state.slots && state.slots[0];
   if (slot0 && slot0.body) {
     const joy0 = slot0Input && slot0Input.joy;
-    applyJoystickVelocity(slot0.body, joy0, baseSpeed, deadzone, joyMax, movementGate);
+    applyJoystickVelocity(slot0.body, joy0, baseSpeed, deadzone, joyMax, movementGate, { dt });
     tickBodyPosition(slot0.body, dt, world, phaseOpts);
     applyAuthoritativeInputPosition(slot0.body, slot0Input, world, phaseOpts);
     tickPostMovementTimers(
@@ -131,7 +131,7 @@ export function hostSimStep(state, slot0Input, slot1Input, dt, opts = {}) {
     const slot1Speed = opts.baseSpeedRaw != null
       ? opts.baseSpeedRaw * Math.min(2.5, ((slot1.upg && slot1.upg.speedMult) || 1) * slot1TitanSlow * (slot1.upg?.extraLifeSlowMult || 1))
       : baseSpeed;
-    applyJoystickVelocity(slot1.body, joy1, slot1Speed, deadzone, joyMax, movementGate);
+    applyJoystickVelocity(slot1.body, joy1, slot1Speed, deadzone, joyMax, movementGate, { dt });
     tickBodyPosition(slot1.body, dt, world, phaseOpts);
     applyAuthoritativeInputPosition(slot1.body, slot1Input, world, phaseOpts);
     tickPostMovementTimers(
