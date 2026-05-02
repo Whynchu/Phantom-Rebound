@@ -46,9 +46,9 @@ function resolveOrbitSphereContactHits(state, opts = {}) {
         orbitalFocus: !!upg.orbitalFocus,
         chargeRatio: getChargeRatio(slot),
         orbSphereRadius: getOrbVisualRadius(upg),
-        baseDamage: opts.orbitContactBaseDamage ?? (playerDamageBase * 2),
-        focusDamageBonus: opts.orbitalFocusContactBonus ?? (playerDamageBase * 1.5),
-        focusChargeScale: opts.orbitalFocusChargeScale ?? (playerDamageBase * 0.15),
+        baseDamage: opts.orbitContactBaseDamage ?? (playerDamageBase * 1),
+        focusDamageBonus: opts.orbitalFocusContactBonus ?? (playerDamageBase * 0.75),
+        focusChargeScale: opts.orbitalFocusChargeScale ?? (playerDamageBase * 0.1),
         orbDamageBonus,
       });
 

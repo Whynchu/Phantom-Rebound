@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.8.0',
+      label: 'ORB TUNE',
+      summary: ['Orbit sphere contact damage now tracks the player baseline more closely instead of starting from a doubled value.'],
+      highlights: [
+        'Charged Orb scaling was softened so orbs stay closer to the main gun instead of overtaking it too quickly.',
+      ]
+    },
+  {
       version: '1.7.5',
       label: 'CRIT REWORK',
       summary: ['Glass Cannon now adds flat damage to the floor and ceiling, while taking 20% max HP per pick.'],

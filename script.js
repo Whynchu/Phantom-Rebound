@@ -6261,9 +6261,9 @@ function update(dt,ts){
           orbitalFocus: UPG.orbitalFocus,
           chargeRatio: getChargeRatio(),
           orbSphereRadius: getOrbVisualRadius(),
-          baseDamage: sharedPlayerDamageBase * 2.0,
-          focusDamageBonus: sharedPlayerDamageBase * 1.5,
-          focusChargeScale: sharedPlayerDamageBase * 0.15,
+          baseDamage: sharedPlayerDamageBase * 1.0,
+          focusDamageBonus: sharedPlayerDamageBase * 0.75,
+          focusChargeScale: sharedPlayerDamageBase * 0.10,
           orbDamageBonus,
         });
         if(orbitContact.hit){
