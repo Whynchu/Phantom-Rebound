@@ -1506,8 +1506,16 @@ function installPerfDebugApi() {
     },
     copy: async () => {
       const text = JSON.stringify(buildPerfExport(), null, 2);
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
-      else try { console.log(text); } catch (_) {}
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+          try { console.info('[perf] export copied to clipboard'); } catch (_) {}
+          return text;
+        }
+      } catch (err) {
+        try { console.warn('[perf] clipboard copy blocked; returning JSON and logging it below.', err); } catch (_) {}
+      }
+      try { console.log(text); } catch (_) {}
       return text;
     },
   };

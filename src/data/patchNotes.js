@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.10',
+      label: 'PERF COPY',
+      summary: ['Made performance export copy resilient when the browser blocks clipboard access.'],
+      highlights: [
+        'Made performance export copy resilient when the browser blocks clipboard access.',
+      ]
+    },
+  {
       version: '1.4.9',
       label: 'PERF PROBE',
       summary: ['Added browser-console performance export for 5-room profiling sessions.'],
