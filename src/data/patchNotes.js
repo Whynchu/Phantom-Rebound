@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.4.19',
+      label: 'ENEMY CURVE',
+      summary: ['Slightly soften the enemy damage curve while keeping the new random damage band, so early hits land closer to 17-28 by room 10 and around 40-70 by room 50.'],
+      highlights: [
+        'Slightly soften the enemy damage curve while keeping the new random damage band, so early hits land closer to 17-28 by room 10 and around 40-70 by room 50.',
+      ]
+    },
+  {
       version: '1.4.18',
       label: 'ENEMY DAMAGE RANGE',
       summary: ['Enemy projectile damage now rolls in a visible range before room and boss multipliers are applied, so early hits read more like 10-18 instead of a single fixed number.'],

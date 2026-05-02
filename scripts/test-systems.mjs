@@ -412,11 +412,11 @@ test('computeFiveRoomCheckpointBonus returns zero for non-clear block', () => {
 
 test('computeProjectileHitDamage matches baseline room scaling', () => {
   assert.equal(computeProjectileHitDamage({ roomIndex: 0, randomFn: () => 0 }), 10);
-  assert.equal(computeProjectileHitDamage({ roomIndex: 0, randomFn: () => 1 }), 18);
+  assert.equal(computeProjectileHitDamage({ roomIndex: 0, randomFn: () => 1 }), 17);
   assert.equal(computeProjectileHitDamage({ roomIndex: 10, randomFn: () => 0 }), 17);
-  assert.equal(computeProjectileHitDamage({ roomIndex: 10, randomFn: () => 1 }), 30);
-  assert.equal(computeProjectileHitDamage({ roomIndex: 50, randomFn: () => 0 }), 40);
-  assert.equal(computeProjectileHitDamage({ roomIndex: 50, randomFn: () => 1 }), 72);
+  assert.equal(computeProjectileHitDamage({ roomIndex: 10, randomFn: () => 1 }), 28);
+  assert.equal(computeProjectileHitDamage({ roomIndex: 50, randomFn: () => 0 }), 39);
+  assert.equal(computeProjectileHitDamage({ roomIndex: 50, randomFn: () => 1 }), 67);
 });
 
 test('computeProjectileHitDamage applies external multipliers', () => {
