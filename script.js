@@ -6119,7 +6119,7 @@ function update(dt,ts){
   // ── Enemies
   if(combatActive){
     const WINDUP_MS = 520; // tell duration before firing
-    const playerDamageBase = Math.max(1, getPlayerShotDamageBase(UPG, simNowMs, roomIndex) || 10);
+    const sharedPlayerDamageBase = Math.max(1, getPlayerShotDamageBase(UPG, simNowMs, roomIndex) || 10);
     if(enemies.length > 1){
       resolveEnemySeparation(enemies, {
         width: W,
@@ -6261,9 +6261,9 @@ function update(dt,ts){
           orbitalFocus: UPG.orbitalFocus,
           chargeRatio: getChargeRatio(),
           orbSphereRadius: getOrbVisualRadius(),
-          baseDamage: playerDamageBase * 2.0,
-          focusDamageBonus: playerDamageBase * 1.5,
-          focusChargeScale: playerDamageBase * 0.15,
+          baseDamage: sharedPlayerDamageBase * 2.0,
+          focusDamageBonus: sharedPlayerDamageBase * 1.5,
+          focusChargeScale: sharedPlayerDamageBase * 0.15,
           orbDamageBonus,
         });
         if(orbitContact.hit){
@@ -6325,7 +6325,7 @@ function update(dt,ts){
         originY: player.y,
         enemies,
         getOrbitSlotPosition,
-        playerDamageBase,
+        playerDamageBase: sharedPlayerDamageBase,
         orbTwin: UPG.orbTwin,
         orbitalFocus: UPG.orbitalFocus,
         orbOvercharge: UPG.orbOvercharge,
@@ -6414,7 +6414,7 @@ function update(dt,ts){
         enemies,
         originX: player.x,
         originY: player.y,
-        playerDamageBase,
+        playerDamageBase: sharedPlayerDamageBase,
         aegisBatteryDamageMult: getAegisBatteryDamageMult(),
         shotSpeed: 210 * GLOBAL_SPEED_LIFT,
         now: simNowMs,

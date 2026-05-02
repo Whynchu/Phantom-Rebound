@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.7.3',
+      label: 'ORB CACHE FIX',
+      summary: ['Charged Orbs now use a shared damage baseline name in the live combat loop so stale cached code is less likely to trip the orb fire path.'],
+      highlights: [
+        'Charged Orbs now use a shared damage baseline name in the live combat loop so stale cached code is less likely to trip the orb fire path.',
+      ]
+    },
+  {
       version: '1.7.2',
       label: 'DAMAGE NUMBERS',
       summary: ['Floating damage numbers are smaller again and no longer use the outline pass.'],
