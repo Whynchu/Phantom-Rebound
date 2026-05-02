@@ -6244,8 +6244,6 @@ function update(dt,ts){
         }
       }
 
-      const playerDamageBase = Math.max(1, getPlayerShotDamageBase(UPG, simNowMs, roomIndex) || 10);
-
       if(UPG.orbitSphereTier > 0){
         // Sync arrays
         syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
@@ -6305,6 +6303,8 @@ function update(dt,ts){
     }
     for(const e of enemies) resolveEntityObstacleCollisions(e);
   }
+
+  const playerDamageBase = Math.max(1, getPlayerShotDamageBase(UPG, simNowMs, roomIndex) || 10);
 
   // ── Charged Orbs: each alive orb fires at nearest enemy every 1.8s
   if(combatActive && UPG.chargedOrbs && UPG.orbitSphereTier>0 && enemies.length>0){

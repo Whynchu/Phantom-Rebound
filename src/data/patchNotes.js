@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.6.2',
+      label: 'ORB SAFETY 2',
+      summary: ['Fixed the Charged Orbs crash by moving the shared player-damage baseline into the right scope.'],
+      highlights: [
+        'Orb safety guards remain in place so malformed values won\'t take down the frame.',
+      ]
+    },
+  {
       version: '1.6.1',
       label: 'ORB SAFETY',
       summary: ['Charged Orbs now have extra safety guards so malformed damage values can\'t crash the frame.'],
