@@ -2,6 +2,22 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.5.5',
+      label: 'RELEASE NOTES',
+      summary: [
+        'This is the big 1.4.x-to-1.5.x balance pass: damage now feels wider, crit builds are cleaner, and the whole curve has been rebuilt around stronger floor and ceiling control.',
+        'The reward menu now shows your live combat stats under HP, while movement and shot pacing were raised to make the game feel sharper at the new baseline.',
+      ],
+      highlights: [
+        'Player damage now rolls in a wider band instead of clustering around one narrow number, so weak and strong shots both read more clearly.',
+        'Damage boons now have clearer jobs: some raise the top end, some raise the floor, and Glass Cannon now pushes both.',
+        'Crit now starts at 5% and crit damage is a separate capped stat, so crit builds scale harder without turning every setup into a guaranteed crit machine.',
+        'Enemy shots also roll damage in a range now, and the curve was softened so the early and mid game feel fairer.',
+        'Movement speed is now 225 by default and bullet speed is now 275 by default, which gives the game a tighter, more aggressive feel.',
+        'The color-based enemy names were normalized into Phase and Omega families, including Shotbuster, Phase Shotbuster, and Omega Shotbuster.',
+      ]
+    },
+  {
       version: '1.5.4',
       label: 'BASE SPEEDS',
       summary: ['Raised the player base movement speed to 225 and base shot speed to 275.'],
