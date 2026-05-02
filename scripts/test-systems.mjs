@@ -1140,8 +1140,8 @@ test('generateWeightedWave keeps non-empty waves and fallback pressure', () => {
     sniper: { unlockRoom: 99, spawnValue: 4, ammoPressure: 1, isSiphon: false },
     disruptor: { unlockRoom: 99, spawnValue: 4, ammoPressure: 1, isSiphon: false },
     triangle: { unlockRoom: 99, spawnValue: 4, ammoPressure: 0, isSiphon: false },
-    purple_chaser: { unlockRoom: 99, spawnValue: 4, ammoPressure: 1, isSiphon: false },
-    purple_disruptor: { unlockRoom: 99, spawnValue: 4, ammoPressure: 1, isSiphon: false },
+    phase_buster: { unlockRoom: 99, spawnValue: 4, ammoPressure: 1, isSiphon: false },
+    phase_disruptor: { unlockRoom: 99, spawnValue: 4, ammoPressure: 1, isSiphon: false },
     zoner: { unlockRoom: 99, spawnValue: 4, ammoPressure: 1, isSiphon: false },
   };
   const wave = generateWeightedWave(0, enemyTypes, () => 0.0);
@@ -2560,7 +2560,7 @@ test('enemy fire helper routes burst patterns by enemy type deterministically', 
   };
 
   fireEnemyBurst(
-    { type: 'orange_zoner', burst: 3, isElite: false },
+    { type: 'omega_shotbuster', burst: 3, isElite: false },
     { player: { x: 0, y: 0 }, bulletSpeedScale: () => 1, ...spawners },
   );
   assert.equal(calls.eliteZoner, 3);
@@ -2575,7 +2575,7 @@ test('enemy fire helper routes burst patterns by enemy type deterministically', 
   fireEnemyBurst(disruptor, {
     player: { x: 10, y: 0 },
     bulletSpeedScale: () => 1,
-    canEnemyUsePurpleShots: () => true,
+    canEnemyUsePhaseShots: () => true,
     ...spawners,
   });
   assert.equal(calls.doubleBounce, 2);
@@ -2586,7 +2586,7 @@ test('enemy fire helper routes burst patterns by enemy type deterministically', 
     player: { x: 10, y: 0 },
     bulletSpeedScale: () => 1,
     random: () => 0.5,
-    canEnemyUsePurpleShots: () => false,
+    canEnemyUsePhaseShots: () => false,
     ...spawners,
   });
   assert.equal(calls.eliteBullet, 2);
@@ -2595,7 +2595,7 @@ test('enemy fire helper routes burst patterns by enemy type deterministically', 
   fireEnemyBurst(plainChaser, {
     player: { x: 10, y: 0 },
     bulletSpeedScale: () => 1,
-    canEnemyUsePurpleShots: () => false,
+    canEnemyUsePhaseShots: () => false,
     ...spawners,
   });
   assert.equal(calls.enemyBullet, 1);
@@ -2670,8 +2670,8 @@ test('room flow generates non-boss and room-100 special boss layouts', () => {
   const bossRooms = {
     9: { name: 'MEGA ZONER', bossType: 'zoner', escortType: 'chaser', escortCount: 1, chaos: 0.24 },
     19: { name: 'MEGA TRIANGLE', bossType: 'triangle', escortType: 'rusher', escortCount: 2, chaos: 0.4 },
-    29: { name: 'MEGA DISRUPTOR', bossType: 'purple_disruptor', escortType: 'purple_chaser', escortCount: 2, chaos: 0.5 },
-    39: { name: 'MEGA ZONER II', bossType: 'orange_zoner', escortType: 'sniper', escortCount: 2, chaos: 0.55 },
+    29: { name: 'MEGA PHASE DISRUPTOR', bossType: 'phase_disruptor', escortType: 'phase_buster', escortCount: 2, chaos: 0.5 },
+    39: { name: 'MEGA OMEGA SHOTBUSTER', bossType: 'omega_shotbuster', escortType: 'sniper', escortCount: 2, chaos: 0.55 },
   };
   const generatedWave = [{ t: 'chaser', n: 2, d: 0 }];
   const nonBoss = getRoomDef(3, {

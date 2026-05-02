@@ -71,7 +71,7 @@ function hydrateEnemy(snapEnemy, lerpedX, lerpedY, lerpedVx, lerpedVy, enemyType
     isSiphon: !!def.isSiphon,
     isRusher: !!def.isRusher,
     doubleBounce: !!def.doubleBounce,
-    forcePurpleShots: !!def.forcePurpleShots,
+    forcePhaseShots: !!def.forcePhaseShots,
     spd: def.spd || 0,
     burst: def.burst || 0,
     spread: def.spread || 0,

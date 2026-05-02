@@ -36,7 +36,7 @@ import {
   resolveSafePlayerSpawn,
 } from './src/data/roomLayouts.js';
 import { BOONS, SPS_LADDER, CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, getPayloadBlastRadius, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, pickBoonChoices, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
-import { ENEMY_TYPES, createEnemy, canEnemyUsePurpleShots, getEnemyDefinition } from './src/entities/enemyTypes.js';
+import { ENEMY_TYPES, createEnemy, canEnemyUsePhaseShots, getEnemyDefinition } from './src/entities/enemyTypes.js';
 import {
   resolveEnemySeparation,
   stepEnemyCombatState,
@@ -3009,7 +3009,7 @@ function installCoopInputUplink(armedCoop) {
                   bossScale: bossScale || 1,
                   hpMultiplier: isOnlineCoopRun() ? ONLINE_COOP_ENEMY_HP_MULT : 1,
                 });
-                if (enemy.forcePurpleShots && simState.run) simState.run.roomPurpleShooterAssigned = true;
+                if (enemy.forcePhaseShots && simState.run) simState.run.roomPurpleShooterAssigned = true;
                 resolveEntityObstacleCollisions(enemy);
                 simState.enemies.push(enemy);
               },
@@ -4383,7 +4383,7 @@ function spawnEnemy(type, isBoss = false, bossScale = 1, spawnGraceMs = null) {
     hpMultiplier: isOnlineCoopRun() ? ONLINE_COOP_ENEMY_HP_MULT : 1,
     spawnGraceMs,
   });
-  if(enemy.forcePurpleShots) roomPurpleShooterAssigned = true;
+  if(enemy.forcePhaseShots) roomPurpleShooterAssigned = true;
   resolveEntityObstacleCollisions(enemy);
   enemies.push(enemy);
 }
@@ -6238,7 +6238,7 @@ function update(dt,ts){
             bulletSpeedScale,
             obstacles: roomObstacles,
             random: () => simRng.next(),
-            canEnemyUsePurpleShots: (enemy) => canEnemyUsePurpleShots(enemy, roomIndex),
+            canEnemyUsePhaseShots: (enemy) => canEnemyUsePhaseShots(enemy),
             spawnZoner: (idx, total) => spawnZB(e.x, e.y, idx, total),
             spawnEliteZoner: (idx, total, stage) => spawnEliteZB(e.x, e.y, idx, total, stage),
             spawnDoubleBounce: (angle) => spawnDBB(e.x, e.y, angle, targetBody),

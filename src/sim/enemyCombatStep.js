@@ -142,7 +142,7 @@ function tickEnemyCombat(state, dt, opts = {}) {
       bulletSpeedScale: () => speedScale,
       obstacles: world.obstacles,
       random: () => nextSimRandom(state),
-      canEnemyUsePurpleShots: (e) => !!(e && e.forcePurpleShots),
+      canEnemyUsePhaseShots: (e) => !!(e && e.forcePhaseShots),
       spawnZoner: (idx, total) => {
         const angle = (Math.PI * 2 / total) * idx;
         pushSimDangerBullet(state, { x: enemy.x, y: enemy.y, angle, speed: 125 * speedScale });

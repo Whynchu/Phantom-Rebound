@@ -29,9 +29,9 @@ function getRoomDef(idx, { roomNames, bossRooms, generateWeightedWave }) {
     }
 
     if(roomNumber >= 50) {
-      const strongerEscortType = roomNumber >= 90 ? 'orange_zoner' : 'purple_zoner';
+      const strongerEscortType = roomNumber >= 90 ? 'omega_shotbuster' : 'shotbuster';
       wave.push({ t: strongerEscortType, n: roomNumber >= 90 ? 2 : 1, d: 0 });
-      wave.push({ t: 'purple_disruptor', n: 1 + Math.floor(bossConfig.escortCount / 2), d: 0 });
+      wave.push({ t: 'phase_disruptor', n: 1 + Math.floor(bossConfig.escortCount / 2), d: 0 });
       wave.push({ t: 'triangle', n: roomNumber >= 90 ? 2 : 1, d: 0 });
       wave.push({ t: 'rusher', n: bossConfig.escortCount + 1, d: 0 });
     }
@@ -42,8 +42,8 @@ function getRoomDef(idx, { roomNames, bossRooms, generateWeightedWave }) {
       const secondaryConfig = bossRooms[bossKeys[(ci + 1) % bossKeys.length]];
       wave.push({ t: secondaryConfig.bossType, n: 1, d: 0, isBoss: true, bossScale: 1.8 });
       wave[0].bossScale = 1.8;
-      wave.push({ t: 'orange_zoner', n: 2, d: 0 });
-      wave.push({ t: 'purple_disruptor', n: 2, d: 0 });
+      wave.push({ t: 'omega_shotbuster', n: 2, d: 0 });
+      wave.push({ t: 'phase_disruptor', n: 2, d: 0 });
       wave.push({ t: 'triangle', n: 2, d: 0 });
       wave.push({ t: 'rusher', n: 3, d: 0 });
     }

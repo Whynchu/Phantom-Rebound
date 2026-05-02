@@ -18,10 +18,11 @@ function weightedPick(candidates, randomFn = () => simRng.next()) {
 
 const LATE_PREMIUM_TYPES = new Set([
   'triangle',
-  'purple_chaser',
-  'purple_disruptor',
-  'purple_zoner',
-  'orange_zoner',
+  'phase_buster',
+  'phase_disruptor',
+  'shotbuster',
+  'phase_shotbuster',
+  'omega_shotbuster',
 ]);
 
 function generateWeightedWave(roomIdx, enemyTypes, randomFn = () => simRng.next()) {
@@ -38,31 +39,31 @@ function generateWeightedWave(roomIdx, enemyTypes, randomFn = () => simRng.next(
   const maxTypes = roomIdx >= 60 ? 5 : (roomIdx >= 15 ? 4 : 2);
 
   if(roomIdx === 9) {
-    entries.set('purple_chaser', 1);
-    budget -= enemyTypes.purple_chaser.spawnValue;
+    entries.set('phase_buster', 1);
+    budget -= enemyTypes.phase_buster.spawnValue;
     shooterCount += 1;
   }
   if(roomIdx === 11) {
-    entries.set('purple_chaser', Math.max(1, entries.get('purple_chaser') || 0));
-    budget -= enemyTypes.purple_chaser.spawnValue;
+    entries.set('phase_buster', Math.max(1, entries.get('phase_buster') || 0));
+    budget -= enemyTypes.phase_buster.spawnValue;
     shooterCount += 1;
   }
 
   while(budget >= 2) {
     const candidates = unlocked
-      .filter((type) => roomIdx > 9 || (type !== 'purple_chaser' && type !== 'purple_disruptor'))
-      .filter((type) => type !== 'purple_chaser' || roomIdx >= 11)
-      .filter((type) => type !== 'purple_disruptor' || roomIdx >= 15)
+      .filter((type) => roomIdx > 9 || (type !== 'phase_buster' && type !== 'phase_disruptor'))
+      .filter((type) => type !== 'phase_buster' || roomIdx >= 11)
+      .filter((type) => type !== 'phase_disruptor' || roomIdx >= 15)
       .filter((type) => enemyTypes[type].spawnValue <= budget + 0.5)
       .filter((type) => entries.size < maxTypes || entries.has(type))
       .filter((type) => {
         if(type === 'siphon' && entries.size === 0) return false;
         if(type === 'siphon' && siphonCount >= (roomIdx >= 60 ? 2 : 1)) return false;
-        if(roomIdx >= 12 && roomIdx <= 14 && ['zoner','disruptor','purple_chaser','purple_disruptor'].includes(type) && shooterCount >= 1) {
+        if(roomIdx >= 12 && roomIdx <= 14 && ['zoner','disruptor','phase_buster','phase_disruptor'].includes(type) && shooterCount >= 1) {
           return false;
         }
         if(roomIdx >= 20 && roomIdx < 30 && entries.has('triangle')) {
-          return !['zoner','purple_disruptor','purple_chaser','disruptor'].includes(type);
+          return !['zoner','phase_disruptor','phase_buster','disruptor'].includes(type);
         }
         return true;
       })

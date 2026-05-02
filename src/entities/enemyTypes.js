@@ -10,10 +10,11 @@ const ENEMY_TYPES = {
   siphon:         {colorRole:'siphon',       r:13,hp:3, spd:28, fRate:9999,burst:0,spread:0,  pts:120, isSiphon:true, spawnValue:4, unlockRoom:6, ammoPressure:0},
   disruptor:      {colorRole:'dangerDark',   r:11,hp:4, spd:46, fRate:750, burst:1,spread:.9, pts:60,  flee:true,  fleeRange:100, strafeSpd:0.7, doubleBounce:false, spawnValue:5, unlockRoom:7, ammoPressure:1},
   zoner:          {colorRole:'dangerDark',   r:15,hp:5, spd:24, fRate:2200,burst:8,spread:6.28,pts:80, flee:true,  fleeRange:130, strafeSpd:0.5, doubleBounce:false, spawnValue:6, unlockRoom:4, ammoPressure:8},
-  purple_chaser:  {label:'Phase Buster',     colorRole:'advanced',     r:12,hp:4, spd:55, fRate:1800,burst:1,spread:.22,pts:75,  flee:true, fleeRange:110, strafeSpd:0.6, doubleBounce:true, forcePurpleShots:true, spawnValue:6, unlockRoom:9, ammoPressure:2},
-  purple_disruptor:{colorRole:'advancedDark',r:11,hp:5, spd:46, fRate:780, burst:1,spread:.9, pts:95,  flee:true, fleeRange:100, strafeSpd:0.7, doubleBounce:true, forcePurpleShots:true, spawnValue:9, unlockRoom:11, ammoPressure:2},
-  purple_zoner:   {colorRole:'advancedDark', r:15,hp:6, spd:24, fRate:2200,burst:8,spread:6.28,pts:120, flee:true, fleeRange:130, strafeSpd:0.5, doubleBounce:true, forcePurpleShots:true, spawnValue:10, unlockRoom:21, ammoPressure:4},
-  orange_zoner:   {colorRole:'elite',        r:15,hp:7, spd:24, fRate:2200,burst:8,spread:6.28,pts:130, flee:true, fleeRange:130, strafeSpd:0.5, isElite:true, doubleBounce:false, spawnValue:12, unlockRoom:40, ammoPressure:4},
+  phase_buster:   {label:'Phase Buster',     colorRole:'advanced',     r:12,hp:4, spd:55, fRate:1800,burst:1,spread:.22,pts:75,  flee:true, fleeRange:110, strafeSpd:0.6, doubleBounce:true, forcePhaseShots:true, spawnValue:6, unlockRoom:9, ammoPressure:2},
+  phase_disruptor:{colorRole:'advancedDark', r:11,hp:5, spd:46, fRate:780, burst:1,spread:.9, pts:95,  flee:true, fleeRange:100, strafeSpd:0.7, doubleBounce:true, forcePhaseShots:true, spawnValue:9, unlockRoom:11, ammoPressure:2},
+  shotbuster:     {colorRole:'advancedDark', r:15,hp:6, spd:24, fRate:2200,burst:6,spread:0.04,pts:120, flee:true, fleeRange:130, strafeSpd:0.5, doubleBounce:true, forcePhaseShots:true, spawnValue:10, unlockRoom:21, ammoPressure:4},
+  phase_shotbuster:{colorRole:'advancedDark',r:15,hp:6, spd:24, fRate:2200,burst:6,spread:0.04,pts:120, flee:true, fleeRange:130, strafeSpd:0.5, doubleBounce:true, forcePhaseShots:true, spawnValue:10, unlockRoom:21, ammoPressure:4},
+  omega_shotbuster:{colorRole:'elite',       r:15,hp:7, spd:24, fRate:2200,burst:6,spread:0.04,pts:130, flee:true, fleeRange:130, strafeSpd:0.5, isElite:true, doubleBounce:false, spawnValue:12, unlockRoom:40, ammoPressure:4},
   triangle:       {colorRole:'danger',       r:17,hp:6, spd:52, fRate:2000,burst:1,spread:.18,pts:110, flee:true, fleeRange:100, strafeSpd:0.7, doubleBounce:false, spawnValue:6, unlockRoom:20, ammoPressure:1, isTriangle:true},
 };
 
@@ -47,12 +48,13 @@ function getLateThreatHpMultiplier(type, roomIndex) {
   switch(type) {
     case 'triangle':
       return 1 + Math.min(0.55, 0.18 + lateDepth * 0.012);
-    case 'purple_disruptor':
+    case 'phase_disruptor':
       return 1 + Math.min(0.48, 0.16 + lateDepth * 0.01);
-    case 'purple_zoner':
-    case 'orange_zoner':
+    case 'shotbuster':
+    case 'phase_shotbuster':
+    case 'omega_shotbuster':
       return 1 + Math.min(0.42, 0.14 + lateDepth * 0.009);
-    case 'purple_chaser':
+    case 'phase_buster':
       return 1 + Math.min(0.32, 0.10 + lateDepth * 0.007);
     default:
       return 1;
@@ -153,7 +155,7 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
     pts: isBoss ? def.pts * 5 : def.pts,
     fRate: effectiveFireRate,
     fT: simRng.next() * effectiveFireRate,
-    forcePurpleShots: Boolean(def.forcePurpleShots),
+    forcePhaseShots: Boolean(def.forcePhaseShots),
     isBoss,
     isElite,
     spawnGraceMs: Math.max(0, spawnGraceMs != null ? spawnGraceMs : (type === 'rusher' ? 1000 : 0)),
@@ -164,9 +166,9 @@ function createEnemy(type, { width, height, margin, roomIndex, nextEnemyId, isBo
   };
 }
 
-function canEnemyUsePurpleShots(enemy) {
-  return Boolean(enemy.forcePurpleShots);
+function canEnemyUsePhaseShots(enemy) {
+  return Boolean(enemy.forcePhaseShots);
 }
 
-export { ENEMY_TYPES, PURPLE_BULLET_ROOM_THRESHOLD, createEnemy, canEnemyUsePurpleShots, getEnemyDefinition };
+export { ENEMY_TYPES, PURPLE_BULLET_ROOM_THRESHOLD, createEnemy, canEnemyUsePhaseShots, getEnemyDefinition };
 

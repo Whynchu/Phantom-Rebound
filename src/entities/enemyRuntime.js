@@ -314,7 +314,7 @@ function advanceRangedEnemyCombatState(enemy, {
   if(gravityWell2) speed *= tetherOrbit ? 0.9 : 0.8;
 
   enemy.fT += dt * 1000;
-  const canShootWithoutLos = enemy.type === 'zoner' || enemy.type === 'purple_zoner' || enemy.type === 'orange_zoner';
+  const canShootWithoutLos = enemy.type === 'zoner' || enemy.type === 'shotbuster' || enemy.type === 'phase_shotbuster' || enemy.type === 'omega_shotbuster';
   const hasLos = hasLineOfSightToPlayer(enemy, player, obstacles);
   const isFiringLaneReady = canShootWithoutLos || hasLos;
   const inWindup = enemy.fT >= enemy.fRate - windupMs && isFiringLaneReady;
@@ -472,7 +472,7 @@ function fireEnemyBurst(enemy, {
   bulletSpeedScale,
   obstacles = [],
   random = () => simRng.next(),
-  canEnemyUsePurpleShots = () => false,
+  canEnemyUsePhaseShots = () => false,
   spawnZoner,
   spawnEliteZoner,
   spawnDoubleBounce,
@@ -481,10 +481,12 @@ function fireEnemyBurst(enemy, {
   spawnEliteBullet,
   spawnEnemyBullet,
 } = {}) {
-  if(enemy.type === 'zoner' || enemy.type === 'purple_zoner' || enemy.type === 'orange_zoner') {
-    if(enemy.type === 'orange_zoner') {
+  if(enemy.type === 'zoner' || enemy.type === 'shotbuster' || enemy.type === 'phase_shotbuster' || enemy.type === 'omega_shotbuster') {
+    if(enemy.type === 'omega_shotbuster') {
       for(let i = 0; i < enemy.burst; i++) spawnEliteZoner(i, enemy.burst, 0);
-    } else if(enemy.type === 'purple_zoner') {
+    } else if(enemy.type === 'phase_shotbuster') {
+      for(let i = 0; i < enemy.burst; i++) spawnDoubleBounce();
+    } else if(enemy.type === 'shotbuster') {
       for(let i = 0; i < enemy.burst; i++) spawnDoubleBounce();
     } else if(enemy.isElite) {
       for(let i = 0; i < enemy.burst; i++) spawnEliteZoner(i, enemy.burst, 0);
@@ -503,7 +505,7 @@ function fireEnemyBurst(enemy, {
     return;
   }
 
-  const canShootPurple = canEnemyUsePurpleShots(enemy);
+  const canShootPhase = canEnemyUsePhaseShots(enemy);
   for(let i = 0; i < enemy.burst; i++) {
     if(enemy.isElite) {
       const angleBase = chooseClearShotAngle(enemy, player, {
@@ -514,7 +516,7 @@ function fireEnemyBurst(enemy, {
       const angle = angleBase + (random() - 0.5) * 0.6;
       const speed = (130 + random() * 40) * bulletSpeedScale();
       spawnEliteBullet(angle, speed, 0);
-    } else if(canShootPurple) {
+    } else if(canShootPhase) {
       const angle = chooseClearShotAngle(enemy, player, {
         obstacles,
         baseSpread: 0.22,

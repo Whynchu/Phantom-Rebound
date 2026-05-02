@@ -22,8 +22,8 @@ export function getDangerBounceRingCount(bullet) {
 
 export function getEnemyBounceRingCount(enemy) {
   if (!enemy) return 0;
-  if (enemy.isElite || enemy.type === 'orange_zoner') return 2;
-  if (enemy.forcePurpleShots || enemy.doubleBounce) return 1;
+  if (enemy.isElite || enemy.type === 'omega_shotbuster') return 2;
+  if (enemy.forcePhaseShots || enemy.doubleBounce) return 1;
   if (enemy.dangerBounceBudget > 0) return enemy.dangerBounceBudget;
   return 0;
 }

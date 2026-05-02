@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.5.1',
+      label: 'PHASE SHOTBUSTER',
+      summary: ['Renamed color-based enemy variants to phase and omega naming.'],
+      highlights: [
+        'Added shotbuster family naming and normalized burst helpers.',
+      ]
+    },
+  {
       version: '1.5.0',
       label: 'BOSS SIZE',
       summary: ['Move the release line to 1.5.x and shrink bosses about 10% so they fit the wall structure better.'],
