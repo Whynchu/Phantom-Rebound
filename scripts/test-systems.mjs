@@ -2293,9 +2293,8 @@ test('defense runtime helpers keep orbit and shield state deterministic', () => 
     enemies: [{ x: 30, y: 0 }, { x: 12, y: 0 }],
     originX: 0,
     originY: 0,
-    damageMult: 1.5,
-    denseDamageMult: 2,
-    readyShieldCount: 3,
+    playerDamageBase: 10,
+    aegisBatteryDamageMult: 1.75,
     shotSpeed: 210,
     now: 1000,
     expireMs: 1700,
@@ -2309,7 +2308,7 @@ test('defense runtime helpers keep orbit and shield state deterministic', () => 
   assert.equal(bolt.homing, true);
   assert.equal(bolt.crit, false);
   assert.equal(bolt.expireAt, 2700);
-  assert.ok(Math.abs(bolt.dmg - 5.1) < 1e-9);
+  assert.ok(Math.abs(bolt.dmg - 9.625) < 1e-9);
 
   const reflection = buildMirrorShieldReflectionSpec({
     x: 10,
@@ -2317,8 +2316,7 @@ test('defense runtime helpers keep orbit and shield state deterministic', () => 
     vx: 5,
     vy: 6,
     shotSize: 3,
-    playerDamageMult: 2,
-    denseDamageMult: 1.5,
+    playerDamageBase: 10,
     aegisTitan: true,
     mirrorShieldDamageFactor: 0.8,
     aegisBatteryDamageMult: 1.2,
@@ -2330,7 +2328,7 @@ test('defense runtime helpers keep orbit and shield state deterministic', () => 
   assert.equal(reflection.y, 20);
   assert.equal(reflection.radius, 11.25);
   assert.equal(reflection.expireAt, 3200);
-  assert.ok(Math.abs(reflection.dmg - 5.76) < 1e-9);
+  assert.ok(Math.abs(reflection.dmg - 1.152) < 1e-9);
 
   const shieldBurst = buildShieldBurstSpec({
     x: 5,
@@ -2338,8 +2336,7 @@ test('defense runtime helpers keep orbit and shield state deterministic', () => 
     aegisTitan: true,
     globalSpeedLift: 1.2,
     shotSize: 2.4,
-    playerDamageMult: 1.5,
-    denseDamageMult: 2,
+    playerDamageBase: 10,
     aegisNovaDamageFactor: 0.75,
     aegisBatteryDamageMult: 1.1,
     now: 1000,
@@ -2349,7 +2346,7 @@ test('defense runtime helpers keep orbit and shield state deterministic', () => 
   assert.equal(shieldBurst.count, 8);
   assert.equal(shieldBurst.speed, 276);
   assert.ok(Math.abs(shieldBurst.radius - 10.8) < 1e-9);
-  assert.ok(Math.abs(shieldBurst.dmg - 2.475) < 1e-9);
+  assert.ok(Math.abs(shieldBurst.dmg - 0.45375) < 1e-9);
   assert.equal(shieldBurst.expireAt, 3400);
 
   const volleyNoFire = buildChargedOrbVolleyForSlot({

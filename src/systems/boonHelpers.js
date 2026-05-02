@@ -12,6 +12,9 @@ import {
   DAMAGE_FLOOR_STEP,
   CRIT_DAMAGE_BASE_BONUS,
   CRIT_DAMAGE_MAX_BONUS,
+  ESCALATION_KILL_PCT,
+  ESCALATION_MAX_BONUS,
+  LATE_BLOOM_DAMAGE_PENALTY,
   KINETIC_FAST_FILL_MAX_PCT,
   KINETIC_FAST_FILL_MIN_PCT,
   KINETIC_FAST_FILL_LOW_CAP,
@@ -90,6 +93,34 @@ function getDamageVarianceBounds(upg) {
 function getCritDamageFactor(upg) {
   const bonus = Math.min(CRIT_DAMAGE_MAX_BONUS, Math.max(0, upg?.critDamageBonus ?? CRIT_DAMAGE_BASE_BONUS));
   return 1 + bonus;
+}
+
+function getPlayerShotDamageBase(upg, nowMs = 0, roomIndex = 0) {
+  const snipeScale = 1 + (upg?.snipePower || 0) * 0.35;
+  const predatorBonus = upg?.predatorInstinct && (upg?.predatorKillStreak || 0) >= 2
+    ? 1 + Math.min((upg?.predatorKillStreak || 0) * 0.25, 1.25)
+    : 1;
+  const denseDesperationBonus = (upg?.denseTier > 0 && (upg?.maxCharge || 0) === 1) ? 2.0 : 1;
+  const lateBloomDamage = upg?.lateBloomVariant === 'power'
+    ? getLateBloomGrowth(roomIndex)
+    : (upg?.lateBloomVariant === 'defense' ? LATE_BLOOM_DAMAGE_PENALTY : 1);
+  const escalationBonus = upg?.escalation
+    ? 1 + Math.min((upg?.escalationKills || 0) * ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS)
+    : 1;
+  const sustainedFireBonus = Math.min(1.45, 1 + Math.min(upg?.sustainedFireShots || 0, 15) * 0.03);
+  const spsFireRateScaling = Math.max(0.5, 1 - (upg?.spsTier || 0) * 0.04);
+  return 10
+    * snipeScale
+    * (upg?.playerDamageMult || 1)
+    * getAdrenalSurgeDamageMult(upg, nowMs)
+    * (upg?.denseDamageMult || 1)
+    * (upg?.heavyRoundsDamageMult || 1)
+    * predatorBonus
+    * denseDesperationBonus
+    * lateBloomDamage
+    * escalationBonus
+    * sustainedFireBonus
+    * spsFireRateScaling;
 }
 
 function syncChargeCapacity(upg) {
@@ -278,6 +309,7 @@ export {
   getPayloadBlastRadius,
   getDamageVarianceBounds,
   getCritDamageFactor,
+  getPlayerShotDamageBase,
   syncChargeCapacity,
   getFlatChargeGain,
   getAdrenalSurgeActiveStacks,

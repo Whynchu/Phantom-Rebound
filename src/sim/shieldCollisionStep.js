@@ -53,6 +53,7 @@ function resolveShieldCollisions(state, opts = {}) {
         player: playerView,
         ts,
         UPG: upg,
+        roomIndex: state.run?.roomIndex || 0,
         simNowMs: ts,
         shieldOrbitR: opts.shieldOrbitR ?? SHIELD_ORBIT_R,
         shieldRotationSpd: opts.shieldRotationSpd ?? SHIELD_ROTATION_SPD,

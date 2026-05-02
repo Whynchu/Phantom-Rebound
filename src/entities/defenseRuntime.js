@@ -57,6 +57,11 @@ function countReadyShields(shields) {
   return ready;
 }
 
+const AEGIS_BATTERY_DAMAGE_SCALE = 0.55;
+const MIRROR_SHIELD_REFLECTION_SCALE = 0.06;
+const SHIELD_BURST_DAMAGE_SCALE = 0.055;
+const CHARGED_ORB_DAMAGE_SCALE = 0.60;
+
 function advanceAegisBatteryTimer({
   aegisBattery,
   shieldTier,
@@ -81,10 +86,9 @@ function buildAegisBatteryBoltSpec({
   enemies,
   originX,
   originY,
-  damageMult = 1,
-  denseDamageMult = 1,
-  readyShieldCount = 0,
-  adrenalDamageMult = 1,
+  playerDamageBase = 10,
+  batteryDamageScale = AEGIS_BATTERY_DAMAGE_SCALE,
+  aegisBatteryDamageMult = 1,
   shotSpeed = 210,
   now = 0,
   expireMs = 1700,
@@ -97,7 +101,7 @@ function buildAegisBatteryBoltSpec({
   if(!target) return null;
 
   const aim = Math.atan2(target.enemy.y - originY, target.enemy.x - originX);
-  const batteryDamage = damageMult * denseDamageMult * adrenalDamageMult * (1.1 + readyShieldCount * 0.2);
+  const batteryDamage = playerDamageBase * batteryDamageScale * aegisBatteryDamageMult;
   return {
     x: originX,
     y: originY,
@@ -119,12 +123,11 @@ function buildMirrorShieldReflectionSpec({
   vx,
   vy,
   shotSize = 1,
-  playerDamageMult = 1,
-  denseDamageMult = 1,
+  playerDamageBase = 10,
+  reflectionDamageScale = MIRROR_SHIELD_REFLECTION_SCALE,
   aegisTitan = false,
   mirrorShieldDamageFactor = 1,
   aegisBatteryDamageMult = 1,
-  adrenalDamageMult = 1,
   now = 0,
   playerShotLifeMs = 2000,
   shotLifeMult = 1,
@@ -139,7 +142,7 @@ function buildMirrorShieldReflectionSpec({
     pierceLeft: 0,
     homing: false,
     crit: false,
-    dmg: playerDamageMult * denseDamageMult * (aegisTitan ? mirrorShieldDamageFactor * 2 : mirrorShieldDamageFactor) * aegisBatteryDamageMult * adrenalDamageMult,
+    dmg: playerDamageBase * reflectionDamageScale * (aegisTitan ? mirrorShieldDamageFactor * 2 : mirrorShieldDamageFactor) * aegisBatteryDamageMult,
     expireAt: now + playerShotLifeMs * shotLifeMult,
   };
 }
@@ -150,11 +153,10 @@ function buildShieldBurstSpec({
   aegisTitan = false,
   globalSpeedLift = 1,
   shotSize = 1,
-  playerDamageMult = 1,
-  denseDamageMult = 1,
+  playerDamageBase = 10,
+  shieldBurstDamageScale = SHIELD_BURST_DAMAGE_SCALE,
   aegisNovaDamageFactor = 1,
   aegisBatteryDamageMult = 1,
-  adrenalDamageMult = 1,
   now = 0,
   playerShotLifeMs = 2000,
   shotLifeMult = 1,
@@ -169,7 +171,7 @@ function buildShieldBurstSpec({
     pierceLeft: 0,
     homing: false,
     crit: false,
-    dmg: playerDamageMult * denseDamageMult * aegisNovaDamageFactor * aegisBatteryDamageMult * adrenalDamageMult,
+    dmg: playerDamageBase * shieldBurstDamageScale * aegisNovaDamageFactor * aegisBatteryDamageMult,
     expireAt: now + playerShotLifeMs * shotLifeMult,
   };
 }
@@ -199,7 +201,8 @@ function buildChargedOrbVolleyForSlot({
   focusDamageMult = 1,
   focusChargeScale = 0.8,
   overchargeDamageMult = 1,
-  adrenalDamageMult = 1,
+  playerDamageBase = 10,
+  orbDamageScale = CHARGED_ORB_DAMAGE_SCALE,
   shotSpeed = 220,
   now,
   bloodPactHealCap = 0,
@@ -239,12 +242,11 @@ function buildChargedOrbVolleyForSlot({
     return { nextTimerMs: 0, fired: false, chargeSpent: 0, shotSpecs: [] };
   }
 
-  let totalDamage = 14;
+  let totalDamage = playerDamageBase * orbDamageScale;
   if(orbitalFocus) totalDamage *= focusDamageMult * (1 + chargeRatio * focusChargeScale);
   if(orbOvercharge) totalDamage *= 1 + chargeRatio * overchargeDamageMult;
   if(orbTwin) totalDamage *= twinDamageMult;
   totalDamage *= orbDamageBonus;
-  totalDamage *= adrenalDamageMult;
   const perShotDamage = totalDamage / shotsAvailable;
 
   const shotSpecs = shotAngles.slice(0, shotsAvailable).map((angle) => ({

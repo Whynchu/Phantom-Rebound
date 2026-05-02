@@ -4,12 +4,12 @@ import { getOrbitSlotPosition } from '../entities/defenseRuntime.js';
 import { applyOrbitSphereContact } from '../entities/enemyRuntime.js';
 import { computeKillScore } from '../systems/scoring.js';
 import { resolveOrbitKillEffects } from '../systems/killRewards.js';
+import { getPlayerShotDamageBase } from '../systems/boonHelpers.js';
 import { emit } from './effectQueue.js';
 import { spawnSimGreyDrops } from './simProjectiles.js';
 
 const ORBIT_ROTATION_SPD = 0.003;
 const ORBIT_SPHERE_R = 40;
-const ORBITAL_FOCUS_CONTACT_BONUS = 15;
 
 function resolveOrbitSphereContactHits(state, opts = {}) {
   const enemies = state?.enemies;
@@ -28,6 +28,7 @@ function resolveOrbitSphereContactHits(state, opts = {}) {
     const orbCooldown = syncOrbCooldowns(slot);
     const orbitSphereTier = upg.orbitSphereTier | 0;
     const orbDamageBonus = getOrbDamageBonus(upg);
+    const playerDamageBase = getPlayerShotDamageBase(upg, ts, state.run?.roomIndex || 0);
 
     for (let enemyIndex = enemies.length - 1; enemyIndex >= 0; enemyIndex--) {
       const enemy = enemies[enemyIndex];
@@ -45,9 +46,9 @@ function resolveOrbitSphereContactHits(state, opts = {}) {
         orbitalFocus: !!upg.orbitalFocus,
         chargeRatio: getChargeRatio(slot),
         orbSphereRadius: getOrbVisualRadius(upg),
-        baseDamage: opts.orbitContactBaseDamage ?? 20,
-        focusDamageBonus: opts.orbitalFocusContactBonus ?? ORBITAL_FOCUS_CONTACT_BONUS,
-        focusChargeScale: opts.orbitalFocusChargeScale ?? 1.5,
+        baseDamage: opts.orbitContactBaseDamage ?? (playerDamageBase * 2),
+        focusDamageBonus: opts.orbitalFocusContactBonus ?? (playerDamageBase * 1.5),
+        focusChargeScale: opts.orbitalFocusChargeScale ?? (playerDamageBase * 0.15),
         orbDamageBonus,
       });
 

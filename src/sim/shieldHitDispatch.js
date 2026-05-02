@@ -11,6 +11,7 @@
 //   player:           {x,y,shields:[{cooldown,maxCooldown,hardened,mirrorCooldown?},...]}
 //   ts:               number    — animation timestamp (ms)
 //   UPG:              object    — READ-ONLY boon flags + values
+//   roomIndex:        number    — current room index for Late Bloom scaling
 //   simNowMs:         number    — for mirror reflection expiry
 //   shieldOrbitR:     number    — orbital radius of shields (SHIELD_ORBIT_R)
 //   shieldRotationSpd:number    — angular speed (SHIELD_ROTATION_SPD rad/ms)
@@ -56,7 +57,7 @@ import {
   buildMirrorShieldReflectionSpec,
   buildShieldBurstSpec,
 } from '../entities/defenseRuntime.js';
-import { getAdrenalSurgeDamageMult } from '../systems/boonHelpers.js';
+import { getPlayerShotDamageBase } from '../systems/boonHelpers.js';
 
 /**
  * Detect and describe a danger bullet hitting a player shield plate.
@@ -66,7 +67,7 @@ import { getAdrenalSurgeDamageMult } from '../systems/boonHelpers.js';
  */
 function detectShieldHit(bullet, ctx) {
   const {
-    player, ts, UPG, simNowMs,
+    player, ts, UPG, roomIndex = 0, simNowMs,
     shieldOrbitR, shieldRotationSpd, shieldCooldown,
     aegisBatteryDamageMult, playerShotLifeMs,
     mirrorShieldDamageFactor, aegisNovaDamageFactor,
@@ -79,6 +80,7 @@ function detectShieldHit(bullet, ctx) {
   const bx = bullet.x;
   const by = bullet.y;
   const br = bullet.r || 6;
+  const playerDamageBase = getPlayerShotDamageBase(UPG, simNowMs, roomIndex);
 
   // Quick proximity guard — caller may pre-filter but we re-check for purity.
   if (Math.hypot(bx - player.x, by - player.y) >= shieldOrbitR + 8 + br) {
@@ -122,12 +124,10 @@ function detectShieldHit(bullet, ctx) {
         x: sx, y: sy,
         vx: bullet.vx, vy: bullet.vy,
         shotSize: UPG.shotSize || 1,
-        playerDamageMult: UPG.playerDamageMult || 1,
-        denseDamageMult: UPG.denseDamageMult || 1,
+        playerDamageBase,
         aegisTitan: !!UPG.aegisTitan,
         mirrorShieldDamageFactor,
         aegisBatteryDamageMult: aegisBatteryDamageMult ?? 1,
-        adrenalDamageMult: getAdrenalSurgeDamageMult(UPG, ts),
         now: simNowMs,
         playerShotLifeMs,
         shotLifeMult: UPG.shotLifeMult || 1,
@@ -157,11 +157,9 @@ function detectShieldHit(bullet, ctx) {
         aegisTitan: !!UPG.aegisTitan,
         globalSpeedLift,
         shotSize: UPG.shotSize || 1,
-        playerDamageMult: UPG.playerDamageMult || 1,
-        denseDamageMult: UPG.denseDamageMult || 1,
+        playerDamageBase,
         aegisNovaDamageFactor,
         aegisBatteryDamageMult,
-        adrenalDamageMult: getAdrenalSurgeDamageMult(UPG, ts),
         now: simNowMs,
         playerShotLifeMs,
         shotLifeMult: UPG.shotLifeMult || 1,

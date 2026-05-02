@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.6.0',
+      label: 'ORB READABILITY',
+      summary: ['Charged Orbs now scale from the player\'s real shot damage, but hit a bit lighter than the main gun.'],
+      highlights: [
+        'Orbit spheres now show a readiness ring so their shot timing is readable at a glance.',
+      ]
+    },
+  {
       version: '1.5.5',
       label: 'RELEASE NOTES',
       summary: [

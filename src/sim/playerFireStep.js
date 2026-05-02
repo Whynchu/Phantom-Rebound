@@ -11,17 +11,14 @@ import { buildPlayerShotPlan, buildPlayerVolleySpecs } from '../entities/playerF
 import { getDamageVarianceBounds } from '../systems/boonHelpers.js';
 import { emit } from './effectQueue.js';
 import { pushSimOutputBullet, nextSimRandom } from './simProjectiles.js';
-import { getKineticChargeRate, getLateBloomGrowth } from '../data/boons.js';
-import { LATE_BLOOM_DAMAGE_PENALTY, PLAYER_BASE_BULLET_SPEED, PLAYER_BASE_CRIT_CHANCE } from '../data/boonConstants.js';
-import { getAdrenalSurgeEffectiveSps, getAdrenalSurgeDamageMult } from '../systems/boonHelpers.js';
+import { getKineticChargeRate } from '../data/boons.js';
+import { PLAYER_BASE_BULLET_SPEED, PLAYER_BASE_CRIT_CHANCE } from '../data/boonConstants.js';
+import { getAdrenalSurgeEffectiveSps, getPlayerShotDamageBase } from '../systems/boonHelpers.js';
 
 // ── Module constants (mirror script.js counterparts) ─────────────────────────
 const JOY_DEADZONE = 0.15;
 const PLAYER_SHOT_LIFE_MS = 2800;
 const GLOBAL_SPEED_LIFT = 1.55;
-const DENSE_DESPERATION_BONUS = 2.0;
-const ESCALATION_KILL_PCT = 0.065;
-const ESCALATION_MAX_BONUS = 0.40;
 
 // Volley total-damage scaling table (mirrors script.js VOLLEY_TOTAL_DAMAGE_MULTS).
 const VOLLEY_TOTAL_DAMAGE_MULTS = [1.00, 1.75, 2.40, 2.95, 3.40, 3.75, 4.00];
@@ -80,30 +77,7 @@ function fireSimSlot(state, slot, targetX, targetY) {
   const snipeScale = 1 + (upg.snipePower || 0) * 0.18;
   const bspd = PLAYER_BASE_BULLET_SPEED * Math.min(2.0, upg.shotSpd || 1) * (upg.miniShotSpdMult || 1) * snipeScale;
   const baseRadius = 4.5 * Math.min(2.5, upg.shotSize || 1) * (1 + (upg.snipePower || 0) * 0.15);
-  const predatorBonus = upg.predatorInstinct && upg.predatorKillStreak >= 2
-    ? 1 + Math.min(upg.predatorKillStreak * 0.25, 1.25) : 1;
-  const denseDesperationBonus = (upg.denseTier > 0 && upg.maxCharge === 1)
-    ? DENSE_DESPERATION_BONUS : 1;
-  const lateBloomGrowth = getLateBloomGrowth(state.run?.roomIndex || 0);
-  const lateBloomDamage = upg.lateBloomVariant === 'power'
-    ? lateBloomGrowth
-    : (upg.lateBloomVariant === 'speed' ? 1 : LATE_BLOOM_DAMAGE_PENALTY);
-  const escalationBonus = upg.escalation
-    ? 1 + Math.min((upg.escalationKills || 0) * ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS) : 1;
-  const spsFireRateScaling = Math.max(0.5, 1 - (upg.spsTier || 0) * 0.04);
-  const sustainedFireBonus = Math.min(1.45, 1 + Math.min(upg.sustainedFireShots || 0, 15) * 0.03);
-  const baseDmg = (1 + (upg.snipePower || 0) * 0.35)
-    * (upg.playerDamageMult || 1)
-    * getAdrenalSurgeDamageMult(upg, timeMs)
-    * (upg.denseDamageMult || 1)
-    * (upg.heavyRoundsDamageMult || 1)
-    * predatorBonus
-    * denseDesperationBonus
-    * lateBloomDamage
-    * escalationBonus
-    * sustainedFireBonus
-    * spsFireRateScaling
-    * 10;
+  const baseDmg = getPlayerShotDamageBase(upg, state.timeMs || 0, state.run?.roomIndex || 0);
   const lifeMs = PLAYER_SHOT_LIFE_MS * (upg.shotLifeMult || 1) * (upg.phantomRebound ? 2.0 : 1.0);
   const now = state.timeMs || 0;
   const overchargeBonus = (upg.overchargeVent && metrics.charge >= upg.maxCharge) ? 1.6 : 1;

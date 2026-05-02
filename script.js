@@ -35,7 +35,7 @@ import {
   getRoomLayout,
   resolveSafePlayerSpawn,
 } from './src/data/roomLayouts.js';
-import { BOONS, SPS_LADDER, CHARGED_ORB_FIRE_INTERVAL_MS, ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, getPayloadBlastRadius, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, pickBoonChoices, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
+import { BOONS, SPS_LADDER, CHARGED_ORB_FIRE_INTERVAL_MS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, getPayloadBlastRadius, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, pickBoonChoices, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { PLAYER_BASE_MOVE_SPEED, PLAYER_BASE_BULLET_SPEED } from './src/data/boonConstants.js';
 import { ENEMY_TYPES, createEnemy, canEnemyUsePhaseShots, getEnemyDefinition } from './src/entities/enemyTypes.js';
 import {
@@ -129,7 +129,7 @@ import { renderPatchNotesPanel } from './src/ui/patchNotes.js';
 import { createPanelManager } from './src/ui/panelManager.js';
 import { createPauseController } from './src/ui/pauseController.js';
 import { getLeaderboardVersionPrefix } from './src/data/leaderboardConfig.js';
-import { getDamageVarianceBounds, getCritDamageFactor } from './src/systems/boonHelpers.js';
+import { getDamageVarianceBounds, getCritDamageFactor, getPlayerShotDamageBase } from './src/systems/boonHelpers.js';
 import { simRng, parseSeedParam, setRngState } from './src/systems/seededRng.js';
 import { createSimState, createSlot } from './src/sim/simState.js';
 import { showGameOverScreen, renderScoreBreakdown } from './src/ui/gameOver.js';
@@ -883,7 +883,6 @@ const AIM_TRI_SIDE = 8;
 const PHASE_WALK_MAX_OVERLAP_MS = 1000;
 const PHASE_WALK_IDLE_EJECT_MS = 120;
 const PLAYER_SHOT_LIFE_MS = 1100;
-const DENSE_DESPERATION_BONUS = 2.4;
 const MIRROR_SHIELD_DAMAGE_FACTOR = 0.60;
 const AEGIS_NOVA_DAMAGE_FACTOR = 0.55;
 const VOLATILE_ORB_COOLDOWN = 8;
@@ -4616,7 +4615,6 @@ function drawBulletSprite(b, ts) {
 }
 
 const VOLLEY_TOTAL_DAMAGE_MULTS = [1.00, 1.75, 2.40, 2.95, 3.40, 3.75, 4.00];
-const ORBITAL_FOCUS_CONTACT_BONUS = 15;
 const ORBITAL_FOCUS_CHARGED_ORB_DAMAGE_MULT = 1.6;
 const ORBITAL_FOCUS_CHARGED_ORB_INTERVAL_MULT = 0.65;
 const ORB_TWIN_TOTAL_DAMAGE_MULT = 1.6;
@@ -4686,18 +4684,7 @@ function firePlayer(slot, tx, ty) {
   const snipeScale = 1 + upg.snipePower * 0.18;
   const bspd = PLAYER_BASE_BULLET_SPEED * Math.min(2.0, upg.shotSpd) * (upg.miniShotSpdMult || 1) * snipeScale;
   const baseRadius = 4.5 * Math.min(2.5, upg.shotSize) * (1 + upg.snipePower * 0.15);
-  // Predator's Instinct: apply kill streak damage multiplier (25% per kill, max +125%)
-  const predatorBonus = upg.predatorInstinct && upg.predatorKillStreak >= 2 ? 1 + Math.min(upg.predatorKillStreak * 0.25, 1.25) : 1;
-  // Dense Core desperation bonus: extra damage at critical charge (1 cap)
-  const denseDesperationBonus = (upg.denseTier > 0 && upg.maxCharge === 1) ? DENSE_DESPERATION_BONUS : 1;
-  const lateBloomMods = getLateBloomMods(roomIndex || 0);
-  // Escalation: per-kill damage in current room (max +40%)
-  const escalationBonus = upg.escalation ? 1 + Math.min((upg.escalationKills || 0) * ESCALATION_KILL_PCT, ESCALATION_MAX_BONUS) : 1;
-  // Fire-rate scaling penalty: -4% damage per SPS tier so speed builds trade individual power for volume
-  const spsFireRateScaling = Math.max(0.5, 1 - (upg.spsTier || 0) * 0.04);
-  // Sustained Fire bonus: +3% damage per consecutive shot, max +45%, decays 1s after last shot
-  const sustainedFireBonus = Math.min(1.45, 1 + Math.min(upg.sustainedFireShots || 0, 15) * 0.03);
-  const baseDmg = (1 + upg.snipePower * 0.35) * (upg.playerDamageMult || 1) * getAdrenalSurgeDamageMult(upg, simNowMs) * (upg.denseDamageMult || 1) * (upg.heavyRoundsDamageMult || 1) * predatorBonus * denseDesperationBonus * lateBloomMods.damage * escalationBonus * sustainedFireBonus * spsFireRateScaling * 10;
+  const baseDmg = getPlayerShotDamageBase(UPG, simNowMs, roomIndex);
   const lifeMs = PLAYER_SHOT_LIFE_MS * (upg.shotLifeMult || 1) * (upg.phantomRebound ? 2.0 : 1.0);
   const now = simNowMs;
   const overchargeBonus = (upg.overchargeVent && metrics.charge >= upg.maxCharge) ? 1.6 : 1;
@@ -6257,6 +6244,8 @@ function update(dt,ts){
         }
       }
 
+      const playerDamageBase = getPlayerShotDamageBase(UPG, simNowMs, roomIndex);
+
       if(UPG.orbitSphereTier > 0){
         // Sync arrays
         syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
@@ -6273,9 +6262,9 @@ function update(dt,ts){
           orbitalFocus: UPG.orbitalFocus,
           chargeRatio: getChargeRatio(),
           orbSphereRadius: getOrbVisualRadius(),
-          baseDamage: 20,
-          focusDamageBonus: ORBITAL_FOCUS_CONTACT_BONUS,
-          focusChargeScale: 1.5,
+          baseDamage: playerDamageBase * 2.0,
+          focusDamageBonus: playerDamageBase * 1.5,
+          focusChargeScale: playerDamageBase * 0.15,
           orbDamageBonus,
         });
         if(orbitContact.hit){
@@ -6337,6 +6326,7 @@ function update(dt,ts){
         originY: player.y,
         enemies,
         getOrbitSlotPosition,
+        playerDamageBase,
         orbTwin: UPG.orbTwin,
         orbitalFocus: UPG.orbitalFocus,
         orbOvercharge: UPG.orbOvercharge,
@@ -6348,7 +6338,6 @@ function update(dt,ts){
         focusDamageMult: ORBITAL_FOCUS_CHARGED_ORB_DAMAGE_MULT,
         focusChargeScale: 0.8,
         overchargeDamageMult: ORB_OVERCHARGE_DAMAGE_MULT,
-        adrenalDamageMult: getAdrenalSurgeDamageMult(UPG, simNowMs),
         shotSpeed: 220 * GLOBAL_SPEED_LIFT,
         now: simNowMs,
         bloodPactHealCap: getBloodPactHealCap(),
@@ -6426,10 +6415,8 @@ function update(dt,ts){
         enemies,
         originX: player.x,
         originY: player.y,
-        damageMult: UPG.playerDamageMult || 1,
-        denseDamageMult: UPG.denseDamageMult || 1,
-        readyShieldCount,
-        adrenalDamageMult: getAdrenalSurgeDamageMult(UPG, simNowMs),
+        playerDamageBase,
+        aegisBatteryDamageMult: getAegisBatteryDamageMult(),
         shotSpeed: 210 * GLOBAL_SPEED_LIFT,
         now: simNowMs,
       });
@@ -6692,6 +6679,7 @@ function update(dt,ts){
         player,
         ts,
         UPG,
+        roomIndex,
         simNowMs,
         shieldOrbitR: SHIELD_ORBIT_R,
         shieldRotationSpd: SHIELD_ROTATION_SPD,
@@ -7335,6 +7323,9 @@ function draw(ts){
       const sAngle=Math.PI*2/UPG.orbitSphereTier*si+simNowMs*ORBIT_ROTATION_SPD;
       const sx=player.x+Math.cos(sAngle)*orbR;
       const sy=player.y+Math.sin(sAngle)*orbR;
+      const orbFireInterval = CHARGED_ORB_FIRE_INTERVAL_MS * (UPG.orbitalFocus ? ORBITAL_FOCUS_CHARGED_ORB_INTERVAL_MULT : 1);
+      const orbChargeFrac = Math.max(0, Math.min(1, (_orbFireTimers[si] || 0) / Math.max(1, orbFireInterval)));
+      const orbRingRadius = orbVis + 5;
       if(_orbCooldown[si]>0){
         ctx.save();
         ctx.globalAlpha=0.18;
@@ -7348,6 +7339,12 @@ function draw(ts){
       ctx.fillStyle=C.green;
       ctx.globalAlpha=0.85;
       ctx.beginPath();ctx.arc(sx,sy,orbVis,0,Math.PI*2);ctx.fill();
+      ctx.globalAlpha=0.32;
+      ctx.lineWidth=2.5;
+      ctx.strokeStyle=C.getRgba(C.green, 0.55);
+      ctx.beginPath();
+      ctx.arc(sx, sy, orbRingRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * orbChargeFrac);
+      ctx.stroke();
       ctx.shadowBlur=0;
       ctx.fillStyle=C.getRgba(C.ghost, 0.92);
       ctx.beginPath();ctx.arc(sx,sy,orbInner,0,Math.PI*2);ctx.fill();
