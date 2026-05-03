@@ -45,7 +45,7 @@ const BOONS = [
   {name:'Ring Blast',tag:'OFFENSE',icon:'◎',damageRole:'neutral',desc:'+1 radial shot. Max 8.',apply(upg){upg.ringShots=Math.min(8,upg.ringShots+1);syncChargeCapacity(upg);}},
   {name:'Backshot',tag:'OFFENSE',icon:'↕',damageRole:'neutral',desc:'Adds a rear shot.',apply(upg){upg.dualShot=1;syncChargeCapacity(upg);}},
   {name:'Snipe Shot',tag:'OFFENSE',icon:'🎯',damageRole:'ceiling',desc:'+shot size, speed, and damage. Leans high end.',apply(upg){upg.snipePower=Math.min(3,upg.snipePower+1);raiseDamageFloor(upg);}},
-  {name:'Max Damage',tag:'OFFENSE',icon:'⬆',damageRole:'ceiling',desc:'Raise only the top end of damage. Max 4.',apply(upg){upg.damageCeilTier=Math.min(4,(upg.damageCeilTier||0)+1);raiseDamageFloor(upg);}},
+  {name:'Max Damage',tag:'OFFENSE',icon:'⬆',damageRole:'ceiling',desc:'Raise only the top end of damage. Max 4.',apply(upg){upg.damageCeilTier=Math.min(4,(upg.damageCeilTier||0)+2);}},
   {name:'Damage Floor',tag:'OFFENSE',icon:'⬇',damageRole:'floor',desc:'Raise the low end of damage at 2/3 strength. Max 4.',apply(upg){upg.damageFloorTier=Math.min(4,(upg.damageFloorTier||0)+1);}},
   {name:'Twin Lance',tag:'OFFENSE',icon:'≫',damageRole:'neutral',desc:'+1 forward lane.',apply(upg){upg.forwardShotTier++;syncChargeCapacity(upg);}},
   {name:'Bigger Bullets',tag:'OFFENSE',icon:'🔵',damageRole:'neutral',desc:'Larger shots. Diminishing returns.',apply(upg){upg.biggerBulletsTier++;const scale=getHyperbolicScale(upg.biggerBulletsTier);upg.shotSize=scale*(upg.biggerBulletsTier===1?1.06:1);}},

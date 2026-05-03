@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.9.0',
+      label: 'MAX DAMAGE',
+      summary: ['Max Damage once again stays a pure ceiling pick and now pushes the upper end harder without touching the floor.'],
+      highlights: [
+        'Max Damage once again stays a pure ceiling pick and now pushes the upper end harder without touching the floor.',
+      ]
+    },
+  {
       version: '1.8.1',
       label: 'DAMAGE FLOOR',
       summary: ['Damage-side boons now raise the low end of the damage band a little instead of only pushing the ceiling.'],
