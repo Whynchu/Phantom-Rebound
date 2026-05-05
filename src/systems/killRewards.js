@@ -1,5 +1,5 @@
 import { simRng } from './seededRng.js';
-import { getAdrenalSurgeDamageMult } from './boonHelpers.js';
+import { getAdrenalSurgeDamageMult, getBloodMoonChargeBonus, getCoronaBurstCount } from './boonHelpers.js';
 
 function resolveEnemyKillEffects({
   enemy,
@@ -11,6 +11,11 @@ function resolveEnemyKillEffects({
   vampiricHealPerKill,
   vampiricChargePerKill,
 } = {}) {
+  const bloodMoonWindowActive = Boolean(upgrades.bloodMoon && upgrades.bloodMoonTimer > ts);
+  const currentBloodMoonStacks = bloodMoonWindowActive ? (upgrades.bloodMoonStacks || 0) : 0;
+  const coronaWindowActive = Boolean(upgrades.corona && upgrades.coronaTimer > ts);
+  const currentCoronaStacks = coronaWindowActive ? (upgrades.coronaStacks || 0) : 0;
+  const ringKill = Boolean(bullet.isRing && upgrades.corona);
   const nextUpgradeState = {
     escalationKills: upgrades.escalation ? (upgrades.escalationKills || 0) + 1 : upgrades.escalationKills || 0,
     predatorKillStreak: (upgrades.predatorKillStreak || 0) + 1,
@@ -18,13 +23,24 @@ function resolveEnemyKillEffects({
     bloodRushStacks: upgrades.bloodRush ? Math.min(5, (upgrades.bloodRushStacks || 0) + 1) : (upgrades.bloodRushStacks || 0),
     bloodRushTimer: upgrades.bloodRush ? ts + 3000 : upgrades.bloodRushTimer || 0,
     sanguineKillCount: upgrades.sanguineKillCount || 0,
+    bloodMoonStacks: upgrades.bloodMoon ? Math.min(5, currentBloodMoonStacks + 1) : (upgrades.bloodMoonStacks || 0),
+    bloodMoonTimer: upgrades.bloodMoon ? ts + 4000 : upgrades.bloodMoonTimer || 0,
+    coronaStacks: ringKill
+      ? (Math.min(3, currentCoronaStacks + 1) >= 3 ? 0 : Math.min(3, currentCoronaStacks + 1))
+      : (upgrades.coronaStacks || 0),
+    coronaTimer: ringKill ? ts + 4500 : upgrades.coronaTimer || 0,
   };
 
   const bossRewardHeal = enemy.isBoss ? Math.floor(maxHp * 0.5) : 0;
   const vampiricHeal = upgrades.vampiric ? vampiricHealPerKill : 0;
   const vampiricCharge = upgrades.vampiric ? vampiricChargePerKill : 0;
   const bloodMoonHeal = upgrades.bloodMoon ? 8 : 0;
-  const coronaCharge = bullet.isRing && upgrades.corona ? 1 : 0;
+  const bloodMoonCharge = upgrades.bloodMoon ? getBloodMoonChargeBonus(nextUpgradeState.bloodMoonStacks) : 0;
+  const coronaCharge = ringKill ? 1 : 0;
+  const coronaBurstCount = ringKill && Math.min(3, currentCoronaStacks + 1) >= 3 ? getCoronaBurstCount(upgrades.ringShots || 0) : 0;
+  const coronaBurstDmg = ringKill && coronaBurstCount > 0
+    ? (upgrades.playerDamageMult || 1) * (upgrades.denseDamageMult || 1) * getAdrenalSurgeDamageMult(upgrades, ts) * 0.7
+    : 0;
   const finalFormCharge = upgrades.finalForm && hp <= maxHp * 0.15 ? 0.5 : 0;
 
   let sanguineBurstCount = 0;
@@ -45,7 +61,12 @@ function resolveEnemyKillEffects({
     vampiricHeal,
     vampiricCharge,
     bloodMoonHeal,
+    bloodMoonCharge,
     coronaCharge,
+    coronaBurstCount,
+    coronaBurstDmg,
+    coronaBurstSpeed: coronaBurstCount > 0 ? 220 : 0,
+    coronaBurstRadius: coronaBurstCount > 0 ? 5 : 0,
     finalFormCharge,
     crimsonHarvestGreyDrops: upgrades.crimsonHarvest ? 1 : 0,
     bloodMoonGreyDrops: upgrades.bloodMoon ? 3 : 0,
@@ -76,6 +97,10 @@ function applyKillUpgradeState(upgrades, nextUpgradeState = {}) {
   upgrades.bloodRushStacks = nextUpgradeState.bloodRushStacks;
   upgrades.bloodRushTimer = nextUpgradeState.bloodRushTimer;
   upgrades.sanguineKillCount = nextUpgradeState.sanguineKillCount;
+  upgrades.bloodMoonStacks = nextUpgradeState.bloodMoonStacks;
+  upgrades.bloodMoonTimer = nextUpgradeState.bloodMoonTimer;
+  upgrades.coronaStacks = nextUpgradeState.coronaStacks;
+  upgrades.coronaTimer = nextUpgradeState.coronaTimer;
 }
 
 function buildKillRewardActions({
@@ -146,6 +171,13 @@ function buildKillRewardActions({
       amount: killEffects.bloodMoonHeal,
       source: 'vampiric',
     });
+    if(killEffects.bloodMoonCharge > 0) {
+      actions.push({
+        type: 'gainCharge',
+        amount: killEffects.bloodMoonCharge,
+        source: 'bloodMoon',
+      });
+    }
     for(let bloodMoonDrop = 0; bloodMoonDrop < killEffects.bloodMoonGreyDrops; bloodMoonDrop++) {
       const ang = (Math.PI * 2 / 3) * bloodMoonDrop + random() * 0.3;
       actions.push({
@@ -164,6 +196,26 @@ function buildKillRewardActions({
       type: 'gainCharge',
       amount: killEffects.coronaCharge,
       source: 'corona',
+    });
+  }
+  if(killEffects.coronaBurstCount > 0) {
+    actions.push({
+      type: 'spawnCoronaBurst',
+      x: enemyX,
+      y: enemyY,
+      count: killEffects.coronaBurstCount,
+      speed: killEffects.coronaBurstSpeed,
+      radius: killEffects.coronaBurstRadius,
+      bounceLeft: 0,
+      pierceLeft: 1 + (upgrades.pierceTier || 0),
+      homing: false,
+      crit: false,
+      dmg: killEffects.coronaBurstDmg,
+      expireAt: ts + 1800,
+      extras: {
+        bloodPactHeals: 0,
+        bloodPactHealCap,
+      },
     });
   }
   if(killEffects.finalFormCharge > 0) {

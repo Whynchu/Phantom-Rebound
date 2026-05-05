@@ -15,6 +15,7 @@ import {
   shouldRemoveBulletOutOfBounds,
   resolveDangerBounceState,
   resolveOutputBounceState,
+  applyDangerVoidWalkerField,
 } from '../src/systems/bulletRuntime.js';
 import {
   resolveOutputEnemyHit,
@@ -33,6 +34,7 @@ import {
   resolveSlipstreamNearMiss,
   resolveRusherContactHit,
   convertNearbyDangerBulletsToGrey,
+  getColossusShockwaveStats,
   buildLastStandBurstSpec,
   resolvePostHitAftermath,
 } from '../src/systems/dangerHit.js';
@@ -170,7 +172,7 @@ import {
   getRoomLayout,
   resolveSafePlayerSpawn,
 } from '../src/data/roomLayouts.js';
-import { BOONS, getDefaultUpgrades } from '../src/data/boons.js';
+import { BOONS, getDefaultUpgrades, getActiveBoonEntries } from '../src/data/boons.js';
 import { LEGENDARY_SEQUENCES } from '../src/data/boonDefinitions.js';
 import { ICON_MAP } from '../src/ui/iconRenderer.js';
 import {
@@ -188,6 +190,8 @@ import {
   getAdrenalSurgeDamageMult,
   getDamageVarianceBounds,
   getCritDamageFactor,
+  getCoronaBurstCount,
+  getBloodMoonChargeBonus,
 } from '../src/systems/boonHelpers.js';
 import { registerBoonHook, runBoonHook, getBoonHookCount } from '../src/systems/boonHooks.js';
 
@@ -511,6 +515,22 @@ test('all boon icons resolve to icon-pack sprites', () => {
   assert.ok(seen.size > 0);
 });
 
+test('active boon entries use the shield-first legendary name', () => {
+  const entries = getActiveBoonEntries({
+    aegisTitan: true,
+    ghostFlow: true,
+    corona: true,
+    finalForm: true,
+    bloodMoon: true,
+    bloodMoonStacks: 2,
+  });
+  assert.ok(entries.some((entry) => entry.name === 'BULWARK'));
+  assert.ok(entries.some((entry) => entry.name === 'GHOST FLOW'));
+  assert.ok(entries.some((entry) => entry.name === 'CORONA'));
+  assert.ok(entries.some((entry) => entry.name === 'FINAL FORM'));
+  assert.ok(entries.some((entry) => entry.name === 'BLOOD MOON'));
+});
+
 test('Adrenal Surge boosts effective SPS and damage while stacks are alive', () => {
   const upg = getDefaultUpgrades();
   upg.spsTier = 2;
@@ -761,9 +781,12 @@ test('kill reward helpers derive boss, sustain, and burst side effects determini
       sanguineBurst: true,
       sanguineKillCount: 7,
       rampageEvolved: false,
+      ringShots: 3,
       vampiric: true,
       bloodMoon: true,
       corona: true,
+      coronaStacks: 2,
+      coronaTimer: 6000,
       finalForm: true,
       crimsonHarvest: true,
     },
@@ -780,6 +803,8 @@ test('kill reward helpers derive boss, sustain, and burst side effects determini
   assert.equal(effects.vampiricCharge, 0.25);
   assert.equal(effects.bloodMoonHeal, 8);
   assert.equal(effects.coronaCharge, 1);
+  assert.equal(effects.coronaBurstCount, getCoronaBurstCount(3));
+  assert.ok(effects.coronaBurstDmg > 0);
   assert.equal(effects.finalFormCharge, 0.5);
   assert.equal(effects.crimsonHarvestGreyDrops, 1);
   assert.equal(effects.bloodMoonGreyDrops, 3);
@@ -790,6 +815,8 @@ test('kill reward helpers derive boss, sustain, and burst side effects determini
   assert.equal(effects.nextUpgradeState.bloodRushStacks, 5);
   assert.equal(effects.nextUpgradeState.bloodRushTimer, 8000);
   assert.equal(effects.nextUpgradeState.sanguineKillCount, 0);
+  assert.equal(effects.nextUpgradeState.coronaStacks, 0);
+  assert.equal(effects.nextUpgradeState.coronaTimer, 9500);
 
   const plainEffects = resolveEnemyKillEffects({
     enemy: { isBoss: false },
@@ -846,6 +873,8 @@ test('kill reward helpers derive boss, sustain, and burst side effects determini
     bloodRushStacks: 3,
     bloodRushTimer: 6000,
     sanguineKillCount: 1,
+    coronaStacks: 1,
+    coronaTimer: 6500,
   });
   assert.equal(upgradeState.escalationKills, 4);
   assert.equal(upgradeState.predatorKillStreak, 2);
@@ -853,6 +882,8 @@ test('kill reward helpers derive boss, sustain, and burst side effects determini
   assert.equal(upgradeState.bloodRushStacks, 3);
   assert.equal(upgradeState.bloodRushTimer, 6000);
   assert.equal(upgradeState.sanguineKillCount, 1);
+  assert.equal(upgradeState.coronaStacks, 1);
+  assert.equal(upgradeState.coronaTimer, 6500);
 
   const rewardActions = buildKillRewardActions({
     killEffects: {
@@ -865,6 +896,10 @@ test('kill reward helpers derive boss, sustain, and burst side effects determini
       bloodMoonHeal: 8,
       bloodMoonGreyDrops: 3,
       coronaCharge: 1,
+      coronaBurstCount: 7,
+      coronaBurstDmg: 9.5,
+      coronaBurstSpeed: 220,
+      coronaBurstRadius: 5,
       finalFormCharge: 0.5,
     },
     enemyX: 10,
@@ -887,6 +922,7 @@ test('kill reward helpers derive boss, sustain, and burst side effects determini
   assert.ok(rewardActions.some((action) => action.type === 'sustainHeal' && action.amount === 4));
   assert.ok(rewardActions.some((action) => action.type === 'gainCharge' && action.source === 'vampiric'));
   assert.ok(rewardActions.some((action) => action.type === 'spawnSanguineBurst' && action.count === 6));
+  assert.ok(rewardActions.some((action) => action.type === 'spawnCoronaBurst' && action.count === 7));
   assert.equal(rewardActions.filter((action) => action.type === 'spawnGreyBullet').length, 4);
 });
 
@@ -917,6 +953,26 @@ test('danger hit helpers resolve void block, phase dash, mirror tide, direct hit
     projectileInvulnSeconds: 1,
   });
   assert.equal(voidBlock.kind, 'void-block');
+
+  const voidFieldBullet = {
+    state: 'danger',
+    x: 0,
+    y: 0,
+    vx: 120,
+    vy: 0,
+    r: 5,
+  };
+  applyDangerVoidWalkerField(voidFieldBullet, { x: 0, y: 0 }, 0.5, {
+    voidWalker: true,
+    range: 120,
+    slowMult: 0.65,
+  });
+  assert.ok(Math.hypot(voidFieldBullet.vx, voidFieldBullet.vy) < 120);
+  applyDangerVoidWalkerField(voidFieldBullet, { x: 400, y: 0 }, 0.5, {
+    voidWalker: false,
+    range: 120,
+    slowMult: 0.65,
+  });
 
   const phaseDash = resolveDangerPlayerHit({
     bullet: { x: 0, y: 0, r: 5 },
@@ -1122,6 +1178,16 @@ test('danger hit helpers resolve void block, phase dash, mirror tide, direct hit
   assert.equal(noAftermath.shouldGameOver, true);
   assert.equal(noAftermath.triggerColossusShockwave, false);
   assert.equal(noAftermath.lastStandBurstSpec, null);
+
+  const colossus200 = getColossusShockwaveStats(200);
+  const colossus450 = getColossusShockwaveStats(450);
+  assert.equal(colossus200.radius, 120);
+  assert.equal(colossus200.damage, 10);
+  assert.equal(colossus450.radius > colossus200.radius, true);
+  assert.equal(colossus450.damage > colossus200.damage, true);
+
+  assert.equal(getBloodMoonChargeBonus(0), 0.16);
+  assert.equal(getBloodMoonChargeBonus(5), 0.36);
 });
 
 test('weightedPick uses candidate weights', () => {
@@ -3157,6 +3223,8 @@ test('boon hook registry onTick decrements UPG cooldowns and decays streaks', ()
     voidWalker: true, voidZoneTimer: 100, voidZoneActive: true,
     predatorInstinct: true, predatorKillStreakTime: 50, predatorKillStreak: 5,
     bloodRush: true, bloodRushTimer: 50, bloodRushStacks: 3,
+    bloodMoon: true, bloodMoonTimer: 50, bloodMoonStacks: 4,
+    corona: true, coronaTimer: 50, coronaStacks: 2,
   };
   runBoonHook('onTick', { UPG, dt: 0.1, ts: 1000 }); // ts > expiry for timer-based ones
   assert.equal(UPG.shockwaveCooldown, 400);
@@ -3167,6 +3235,8 @@ test('boon hook registry onTick decrements UPG cooldowns and decays streaks', ()
   assert.equal(UPG.voidZoneActive, false);
   assert.equal(UPG.predatorKillStreak, 0);
   assert.equal(UPG.bloodRushStacks, 0);
+  assert.equal(UPG.bloodMoonStacks, 0);
+  assert.equal(UPG.coronaStacks, 0);
 
   // Inactive boons: cooldowns frozen, streaks retained
   const UPG2 = {
@@ -3182,6 +3252,8 @@ test('boon hook registry onPauseAdjust shifts absolute boon timers forward', () 
   const UPG = {
     predatorKillStreakTime: 1000,
     bloodRushTimer: 2000,
+    bloodMoonTimer: 2500,
+    coronaTimer: 2750,
     voidZoneTimer: 3000,
     sustainedFireLastShotTime: 4000,
     aegisBatteryTimer: 5000,
@@ -3189,6 +3261,8 @@ test('boon hook registry onPauseAdjust shifts absolute boon timers forward', () 
   runBoonHook('onPauseAdjust', { UPG, pauseDuration: 500 });
   assert.equal(UPG.predatorKillStreakTime, 1500);
   assert.equal(UPG.bloodRushTimer, 2500);
+  assert.equal(UPG.bloodMoonTimer, 3000);
+  assert.equal(UPG.coronaTimer, 3250);
   assert.equal(UPG.voidZoneTimer, 3500);
   assert.equal(UPG.sustainedFireLastShotTime, 4500);
   assert.equal(UPG.aegisBatteryTimer, 5500);
@@ -3203,6 +3277,10 @@ test('boon hook registry onRoomStart seeds predator/mirrorTide/phaseDash state',
   const UPG = {
     predatorKillStreak: 7,
     predatorKillStreakTime: 9999,
+    bloodMoonStacks: 3,
+    bloodMoonTimer: 7777,
+    coronaStacks: 2,
+    coronaTimer: 6666,
     mirrorTide: true,
     mirrorTideRoomUses: 3,
     mirrorTideCooldown: 1000,
@@ -3214,6 +3292,10 @@ test('boon hook registry onRoomStart seeds predator/mirrorTide/phaseDash state',
   runBoonHook('onRoomStart', { UPG });
   assert.equal(UPG.predatorKillStreak, 0);
   assert.equal(UPG.predatorKillStreakTime, 0);
+  assert.equal(UPG.bloodMoonStacks, 0);
+  assert.equal(UPG.bloodMoonTimer, 0);
+  assert.equal(UPG.coronaStacks, 0);
+  assert.equal(UPG.coronaTimer, 0);
   assert.equal(UPG.mirrorTideRoomUses, 0);
   assert.equal(UPG.mirrorTideCooldown, 0);
   assert.equal(UPG.phaseDashRoomUses, 0);

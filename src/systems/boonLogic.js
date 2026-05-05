@@ -15,6 +15,8 @@ import {
   getPayloadBlastRadius,
   getLateBloomBonusPct,
   getCritDamageFactor,
+  getConduitArcDamage,
+  getCoronaBurstCount,
 } from './boonHelpers.js';
 
 function boonHasEffect(boon, upg, hp, maxHp) {
@@ -150,9 +152,9 @@ function getActiveBoonEntries(upg) {
   if(upg.shieldBurst) entries.push({ icon: upg.aegisNova?'💠+':'💠', name: upg.aegisNova?'Aegis Nova':'Shield Burst', detail:'Break fires 4-way 55% burst' });
   if(upg.barrierPulse) entries.push({ icon:'⬡', name:'Barrier Pulse', detail:'+2 charge + magnet on break' });
   if(upg.shieldRegenTier>0) entries.push({ icon:'⚡🛡️', name:'Swift Ward', detail:`Shields recharge in ${Math.max(1.5, 4.5-upg.shieldRegenTier*2).toFixed(1)}s` });
-  if(upg.aegisBattery) entries.push({ icon:'🔋', name:'Aegis Battery', detail:'Ready shields boost returns; full set fires bolts' });
+  if(upg.aegisBattery) entries.push({ icon:'🔋', name:'Aegis Battery', detail:'Ready shields boost returns; full shields fire bolts' });
   if(upg.orbitSphereTier > 0) entries.push({ icon:'🔮', name:'Orbit Spheres', detail:`${upg.orbitSphereTier} sphere${upg.orbitSphereTier === 1 ? '' : 's'}` });
-  if(upg.conduit) entries.push({ icon:'⚡', name:'CONDUIT', detail:`${upg.conduitArcDmg || 0} arc damage every ${(upg.conduitArcTickMs || 0)}ms` });
+  if(upg.conduit) entries.push({ icon:'⚡', name:'CONDUIT', detail:`${getConduitArcDamage(upg)} arc dmg every ${(upg.conduitArcTickMs || 0)}ms` });
   if(upg.denseTier > 0) entries.push({ icon:'◈', name:'Dense Core', detail:`Tier ${upg.denseTier} — ×${upg.denseDamageMult.toFixed(2)} dmg, cap: ${upg.maxCharge}` });
   if(upg.heavyRoundsTier > 0) entries.push({ icon:'🔨', name:'Heavy Rounds', detail:`Tier ${upg.heavyRoundsTier} — ×${upg.heavyRoundsDamageMult.toFixed(2)} dmg, ${Math.round((1 - upg.heavyRoundsFireMult) * 100)}% slower` });
   if(upg.slipTier>0) entries.push({icon: upg.fluxState?'〜+':'〜', name: upg.fluxState?'Flux State':'Slipstream', detail:`+${upg.slipChargeGain.toFixed(2)} charge/near-miss`});
@@ -169,12 +171,26 @@ function getActiveBoonEntries(upg) {
   if(upg.echoFire) entries.push({icon:'↺',name:'Echo Fire',detail:'Every 5th shot fires free echo'});
   if(upg.splitShot) entries.push({icon: upg.splitShotEvolved?'⋔+':'⋔', name: upg.splitShotEvolved?'Fracture':'Split Shot', detail:'Bullets split on wall bounce'});
   if(upg.volatileRounds) entries.push({icon: upg.volatileAllTargets?'💢+':'💢', name: upg.volatileAllTargets?'Chain Reaction':'Volatile Rounds', detail:'Pierce shots burst on final hit'});
-  if(upg.aegisTitan) entries.push({icon:'🏛️',name:'AEGIS TITAN',detail:'8-way burst, ×2 reflect, shared cd'});
-  if(upg.ghostFlow) entries.push({icon:'🌊',name:'GHOST FLOW',detail:'Speed-scaled absorb, ×2 near-miss'});
-  if(upg.corona) entries.push({icon:'☀️',name:'CORONA',detail:'Ring pierce +1, kills refund charge'});
-  if(upg.finalForm) entries.push({icon:'💀',name:'FINAL FORM',detail:'Dead Man ≤15% HP ×2.5, kill→charge'});
-  if(upg.colossus) entries.push({icon:'⬡',name:'COLOSSUS',detail:'Hit→shockwave, halved titan slow'});
-  if(upg.bloodMoon) entries.push({icon:'🩸',name:'BLOOD MOON',detail:'Kills restore +8 HP and drop +3 grey bullets'});
+  if(upg.aegisTitan) entries.push({icon:'🏛️',name:'BULWARK',detail:'Shield Burst 8-way; Mirror reflects ×2'});
+  if(upg.ghostFlow) entries.push({icon:'🌊',name:'GHOST FLOW',detail:'Absorb value scales with speed; near-miss charge ×2'});
+  if(upg.corona) {
+    const coronaStacks = Math.max(0, upg.coronaStacks || 0);
+    entries.push({
+      icon:'☀️',
+      name:'CORONA',
+      detail:`Ring pierce +1; flare stacks build on ring kills (${Math.min(3, coronaStacks)}/3); next flare bursts with ${getCoronaBurstCount(upg.ringShots || 0)} shots`,
+    });
+  }
+  if(upg.finalForm) entries.push({icon:'💀',name:'FINAL FORM',detail:'Dead Man at ≤15% HP; low-HP kills add charge'});
+  if(upg.colossus) entries.push({icon:'⬡',name:'COLOSSUS',detail:'Hit shockwave scales with max HP; Titan slow halves'});
+  if(upg.bloodMoon) {
+    const bloodMoonStacks = Math.max(0, upg.bloodMoonStacks || 0);
+    entries.push({
+      icon:'🩸',
+      name:'BLOOD MOON',
+      detail:`Kills restore 8 HP; add charge stacks; drop 3 grey bullets (${Math.min(5, bloodMoonStacks)}/5 stacks)`,
+    });
+  }
   if(upg.volatileOrbs) entries.push({icon:'💥',name:'Volatile Orbs',detail:'Orb detonation has shared cooldown'});
   if(upg.bloodRush) entries.push({icon:'🩸→',name:'Blood Rush',detail:`+${upg.bloodRushStacks||0} stacks (${((upg.bloodRushStacks||0)*10)}% speed)`});
   if(upg.crimsonHarvest) entries.push({icon:'🩸+',name:'Crimson Harvest',detail:'Kills drop extra grey bullet'});
@@ -191,7 +207,7 @@ function getActiveBoonEntries(upg) {
   if(upg.shockwave) entries.push({icon:'⚡',name:'Shockwave',detail:'Full charge → push enemies'});
   if(upg.glassCannonTier > 0) entries.push({icon:'⚗',name:'Glass Cannon',detail:`Tier ${upg.glassCannonTier} — +${upg.damageFloorBonus || 0}/+${upg.damageCeilBonus || 0} damage range, -${Math.round((1 - 0.8) * 100)}% HP`});
   if(upg.adrenalSurgeTier > 0) entries.push({ icon:'🫀', name:'Adrenal Surge', detail:`${Math.min(upg.adrenalSurgeTier, Array.isArray(upg.adrenalStackExpiries) ? upg.adrenalStackExpiries.length : 0)}/${upg.adrenalSurgeTier} active stacks` });
-  if(upg.tetherOrbit) entries.push({icon:'🪢',name:'Tether Orbit',detail:'Orbit ring slows danger bullets'});
+  if(upg.tetherOrbit) entries.push({icon:'🪢',name:'Tether Orbit',detail:'Orbit spheres slow nearby danger bullets'});
 
   if(upg.gravityWell2) entries.push({icon:'⊙+',name:'Gravity Well II',detail:'Field-slow bullets, also slows nearby enemies'});
   else if(upg.gravityWell) entries.push({icon:'⊙',name:'Gravity Well',detail:'Field-slows nearby danger bullets'});
@@ -200,7 +216,7 @@ function getActiveBoonEntries(upg) {
   if(upg.phaseDash) entries.push({icon:'💨',name:'Phase Dash',detail:`5% damage, ${Math.max(0, (upg.phaseDashRoomLimit||0) - (upg.phaseDashRoomUses||0))}/${upg.phaseDashRoomLimit||0} uses, ${Math.max(0, (upg.phaseDashCooldown||0)/1000).toFixed(1)}s cd`});
   if(upg.overload) entries.push({icon:'⚡',name:'Overload',detail:'Full charge converts the whole bank into a 2x-4x giant volley'});
   if(upg.empBurst) entries.push({icon:'💥',name:'EMP Burst',detail:upg.empBurstUsed?'SPENT':'Ready ≤30% HP'});
-  if(upg.voidWalker) entries.push({icon:'🌊',name:'VOID WALKER',detail:'Dashing creates void zone'});
+  if(upg.voidWalker) entries.push({icon:'🌊',name:'VOID WALKER',detail:'Dashing creates a 2s void zone that slows danger bullets'});
   if(upg.chargedOrbs) entries.push({icon:'⚡',name:'Charged Orbs',detail:`Orbs fire shot every ${(CHARGED_ORB_FIRE_INTERVAL_MS / 1000).toFixed(1)}s`});
   if(upg.absorbOrbs) entries.push({icon:'🌀',name:'Absorb Orbs',detail:'Orbs absorb nearby grey bullets'});
   if(upg.orbTwin) entries.push({icon:'⚡≫',name:'Orb Twin',detail:'Charged Orbs fire a 2-shot fork'});
@@ -211,7 +227,7 @@ function getActiveBoonEntries(upg) {
   if((upg.orbSizeMult||1) > 1) entries.push({icon:'🔮+',name:'Massive Orbs',detail:`×${(upg.orbSizeMult||1).toFixed(2)} orb size`});
   if((upg.orbitRadiusBonus||0) > 0) entries.push({icon:'🔮↔',name:'Wide Orbit',detail:`+${upg.orbitRadiusBonus}px orbit distance`});
   if((upg.mobileChargeRate||0.10) > 0.10) entries.push({icon:'🎯+',name:'Steady Aim',detail:`${Math.round((upg.mobileChargeRate||0.10)*100)}% mobile charge rate`});
-  if(upg.phantomRebound) entries.push({icon:'👻',name:'PHANTOM REBOUND',detail:'Last bounce → grey bullet, 2× Long Reach'});
+  if(upg.phantomRebound) entries.push({icon:'👻',name:'PHANTOM REBOUND',detail:'Last bounce becomes a grey bullet; Long Reach doubles'});
   return entries;
 }
 

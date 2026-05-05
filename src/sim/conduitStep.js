@@ -1,4 +1,5 @@
 import { getOrbitSlotPosition } from '../entities/defenseRuntime.js';
+import { getConduitArcDamage } from '../systems/boonHelpers.js';
 import { emit } from './effectQueue.js';
 
 const ORBIT_ROTATION_SPD = 0.003;
@@ -16,6 +17,7 @@ export function resolveConduitArcs(state, opts = {}) {
   const cooldowns = slot?.orbState?.cooldowns || [];
   const ts = Number.isFinite(state.timeMs) ? state.timeMs : 0;
   const radius = (opts.baseOrbitRadius ?? 22) + (upg.orbitRadiusBonus || 0);
+  const arcDamage = getConduitArcDamage(upg);
   const points = [];
   for (let i = 0; i < orbCount; i++) {
     if ((cooldowns[i] || 0) > 0) continue;
@@ -33,10 +35,10 @@ export function resolveConduitArcs(state, opts = {}) {
 
   let hits = 0;
   for (let i = 0; i < points.length - 1; i++) {
-    hits += applyConduitSegment(state, points[i], points[i + 1], upg, ts, opts);
+    hits += applyConduitSegment(state, points[i], points[i + 1], arcDamage, upg, ts, opts);
   }
   if (points.length >= 3) {
-    hits += applyConduitSegment(state, points[points.length - 1], points[0], upg, ts, opts);
+    hits += applyConduitSegment(state, points[points.length - 1], points[0], arcDamage, upg, ts, opts);
   }
   if (hits > 0) {
     emitEffect(state, opts, 'conduit.arcPulse', {
@@ -46,7 +48,7 @@ export function resolveConduitArcs(state, opts = {}) {
   return hits;
 }
 
-function applyConduitSegment(state, a, b, upg, ts, opts) {
+function applyConduitSegment(state, a, b, arcDamage, upg, ts, opts) {
   let hits = 0;
   for (let i = state.enemies.length - 1; i >= 0; i--) {
     const enemy = state.enemies[i];
@@ -55,7 +57,7 @@ function applyConduitSegment(state, a, b, upg, ts, opts) {
     const lastHit = enemy.lastConduitHit ?? -Infinity;
     if (ts - lastHit < (upg.conduitArcTickMs || 120)) continue;
     enemy.lastConduitHit = ts;
-    enemy.hp -= upg.conduitArcDmg || 0;
+    enemy.hp -= arcDamage || 0;
     hits++;
     if (enemy.hp <= 0) {
       state.enemies.splice(i, 1);

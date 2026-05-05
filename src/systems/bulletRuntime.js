@@ -178,6 +178,56 @@ function applyDangerGravityWell(bullet, target, dt, opts = {}) {
   return true;
 }
 
+/**
+ * Apply Void Walker zone slow to a single danger bullet. Pure helper —
+ * mutates bullet.vx, bullet.vy, and bullet.voidWalkerBaseSpeed in place.
+ * The zone is centered on the player and only active while the void-zone
+ * timer is live. This mirrors the slow-field behavior used for Gravity Well:
+ * bullets inside the field decelerate toward a reduced speed, and recover
+ * toward their captured baseline after leaving the field.
+ *
+ * @param {object} bullet              - bullet object (mutated)
+ * @param {{x:number,y:number}} target - reference body (player)
+ * @param {number} dt                  - timestep, seconds
+ * @param {object} opts
+ * @param {boolean} [opts.voidWalker=false]
+ * @param {number}  [opts.range=112]
+ * @param {number}  [opts.slowMult=0.65]
+ * @returns {boolean} true if processed, false if skipped
+ */
+function applyDangerVoidWalkerField(bullet, target, dt, opts = {}) {
+  if (!bullet || bullet.state !== 'danger') return false;
+  if (!target) return false;
+
+  const voidWalker = !!opts.voidWalker;
+  const range = opts.range != null ? opts.range : 112;
+  const slowMult = opts.slowMult != null ? opts.slowMult : 0.65;
+
+  const vdist = Math.hypot(bullet.x - target.x, bullet.y - target.y);
+  const inField = voidWalker && vdist < range;
+  const currentSpeed = Math.hypot(bullet.vx, bullet.vy);
+
+  if (inField && !bullet.voidWalkerBaseSpeed) {
+    bullet.voidWalkerBaseSpeed = Math.max(40, currentSpeed);
+  }
+
+  if ((inField || bullet.voidWalkerBaseSpeed) && currentSpeed > 0.0001) {
+    const targetSpeed = inField
+      ? Math.max(40, bullet.voidWalkerBaseSpeed * slowMult)
+      : Math.max(40, bullet.voidWalkerBaseSpeed);
+    const pull = 1 - Math.pow(inField ? 0.16 : 0.08, dt);
+    const nextSpeed = currentSpeed + (targetSpeed - currentSpeed) * pull;
+    bullet.vx = (bullet.vx / currentSpeed) * nextSpeed;
+    bullet.vy = (bullet.vy / currentSpeed) * nextSpeed;
+    if (!inField && Math.abs(nextSpeed - targetSpeed) < 2) {
+      delete bullet.voidWalkerBaseSpeed;
+    }
+  } else if (!inField && bullet.voidWalkerBaseSpeed) {
+    delete bullet.voidWalkerBaseSpeed;
+  }
+  return true;
+}
+
 // R0.4 step 4c: sub-stepped bullet integration + wall bounce.
 // Pure helper extracted from script.js update() bullet loop.
 // Advances bullet position via sub-steps to prevent tunneling on long frames,
@@ -248,6 +298,7 @@ export {
   resolveOutputBounceState,
   applyBulletHoming,
   applyDangerGravityWell,
+  applyDangerVoidWalkerField,
   advanceBulletWithSubsteps,
   detectBulletNearMiss,
   tickGreyBulletDecay,

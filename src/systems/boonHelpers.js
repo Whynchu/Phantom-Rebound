@@ -78,6 +78,20 @@ function getPayloadBlastRadius(upg, bulletRadius = 4.5) {
   return Math.min(PAYLOAD_RADIUS_MAX, PAYLOAD_BASE_RADIUS + bulletBonus + payloadTier * PAYLOAD_RADIUS_PER_TIER);
 }
 
+function getConduitArcDamage(upg) {
+  const orbCount = Math.max(0, Number(upg?.orbitSphereTier) || 0);
+  return 6 + Math.max(0, orbCount - 2) * 2;
+}
+
+function getBloodMoonChargeBonus(bloodMoonStacks = 0) {
+  const stacks = Math.max(0, Math.min(5, Number(bloodMoonStacks) || 0));
+  return 0.16 + stacks * 0.04;
+}
+
+function getCoronaBurstCount(ringShots = 0) {
+  return Math.min(8, 4 + Math.max(0, Number(ringShots) || 0));
+}
+
 function getDamageVarianceBounds(upg) {
   const ceilTier = Math.max(0, upg?.damageCeilTier || 0);
   const floorTier = Math.max(0, upg?.damageFloorTier || 0);
@@ -291,7 +305,8 @@ function getDefaultUpgrades() {
     bloodRush: false, bloodRushStacks: 0, bloodRushTimer: 0,
     crimsonHarvest: false,
     sanguineBurst: false, sanguineKillCount: 0, rampageEvolved: false,
-    bloodMoon: false,
+    bloodMoon: false, bloodMoonStacks: 0, bloodMoonTimer: 0,
+    coronaStacks: 0, coronaTimer: 0,
     lateBloomVariant: '',
     escalation: false, escalationKills: 0,
     spreadShot: false,
@@ -343,6 +358,9 @@ export {
   getKineticChargeMultiplier,
   getKineticChargeRate,
   getPayloadBlastRadius,
+  getConduitArcDamage,
+  getBloodMoonChargeBonus,
+  getCoronaBurstCount,
   getDamageVarianceBounds,
   getCritDamageFactor,
   getCritChanceFromTier,

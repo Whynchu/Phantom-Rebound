@@ -77,7 +77,9 @@ import {
 import {
   getAdrenalSurgeEffectiveSps,
   getAdrenalSurgeDamageMult,
+  getConduitArcDamage,
 } from './src/systems/boonHelpers.js';
+import { getColossusShockwaveStats } from './src/systems/dangerHit.js';
 import {
   syncOrbRuntimeArrays,
   getOrbitSlotPosition,
@@ -232,6 +234,7 @@ import {
   resolveOutputBounceState,
   applyBulletHoming,
   applyDangerGravityWell,
+  applyDangerVoidWalkerField,
   advanceBulletWithSubsteps,
   detectBulletNearMiss,
   tickGreyBulletDecay,
@@ -4349,6 +4352,7 @@ function triggerPayloadBlast(bullet, enemies, ts) {
           else if(action.type === 'gainCharge'){ gainCharge(action.amount, action.source); }
           else if(action.type === 'spawnGreyBullet'){ pushGreyBullet({ bullets, x:action.x, y:action.y, vx:action.vx, vy:action.vy, radius:action.radius, decayStart:action.decayStart }); }
           else if(action.type === 'spawnSanguineBurst'){ spawnRadialOutputBurst({ bullets, x:action.x, y:action.y, count:action.count, speed:action.speed, radius:action.radius, bounceLeft:action.bounceLeft, pierceLeft:action.pierceLeft, homing:action.homing, crit:action.crit, dmg:action.dmg, expireAt:action.expireAt, extras:action.extras }); }
+          else if(action.type === 'spawnCoronaBurst'){ spawnRadialOutputBurst({ bullets, x:action.x, y:action.y, count:action.count, speed:action.speed, radius:action.radius, bounceLeft:action.bounceLeft, pierceLeft:action.pierceLeft, homing:action.homing, crit:action.crit, dmg:action.dmg, expireAt:action.expireAt, extras:action.extras }); }
         }
         enemies.splice(j, 1);
       }
@@ -6195,15 +6199,23 @@ function update(dt,ts){
           });
           if(rusherAftermath.triggerColossusShockwave){
             slot0Timers.colossusShockwaveCd = rusherAftermath.nextColossusShockwaveCd;
+            const colossusStats = getColossusShockwaveStats(player.maxHp || maxHp || 200);
+            for(let ei = enemies.length - 1; ei >= 0; ei--){
+              const enemy = enemies[ei];
+              if(!enemy || enemy.hp <= 0) continue;
+              if(Math.hypot(enemy.x - player.x, enemy.y - player.y) > colossusStats.radius + (enemy.r || 0)) continue;
+              enemy.hp -= colossusStats.damage;
+              if(enemy.hp <= 0) enemies.splice(ei, 1);
+            }
             convertNearbyDangerBulletsToGrey({
               bullets,
               originX: player.x,
               originY: player.y,
-              radius: 120,
+              radius: colossusStats.radius,
               ts,
             });
             sparks(player.x,player.y,getThreatPalette().advanced.hex,14,120);
-            shockwaves.push({ x: player.x, y: player.y, r: 10, maxR: 180, life: 1, color: '#a78bfa' });
+            shockwaves.push({ x: player.x, y: player.y, r: 10, maxR: colossusStats.radius, life: 1, color: '#a78bfa' });
           }
           if(rusherAftermath.shouldApplyLifelineState){
             UPG.lifelineTriggerCount = rusherAftermath.nextLifelineTriggerCount;
@@ -6357,6 +6369,8 @@ function update(dt,ts){
 
   if(combatActive && UPG.conduit && UPG.orbitSphereTier >= 2){
     syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
+    const conduitArcDamage = getConduitArcDamage(UPG);
+    UPG.conduitArcDmg = conduitArcDamage;
     const conduitPoints = [];
     for(let si = 0; si < UPG.orbitSphereTier; si++){
       if((_orbCooldown[si] || 0) > 0) continue;
@@ -6376,7 +6390,7 @@ function update(dt,ts){
         if(pointToSegmentDistance(e.x, e.y, a.x, a.y, z.x, z.y) > e.r + 6) continue;
         if(ts - (e.lastConduitHit ?? -Infinity) < (UPG.conduitArcTickMs || 120)) continue;
         e.lastConduitHit = ts;
-        e.hp -= UPG.conduitArcDmg || 0;
+        e.hp -= conduitArcDamage;
         if(e.hp <= 0){
           score += e.pts;
           enemies.splice(ei, 1);
@@ -6463,6 +6477,12 @@ function update(dt,ts){
       applyDangerGravityWell(b, player, dt, {
         gravityWell: !!UPG.gravityWell,
         range: 96,
+      });
+      // Void Walker shares the same field-style slow/recovery pattern.
+      applyDangerVoidWalkerField(b, player, dt, {
+        voidWalker: !!(UPG.voidWalker && UPG.voidZoneActive && UPG.voidZoneTimer > simNowMs),
+        range: 112,
+        slowMult: 0.65,
       });
     }
 
@@ -6843,11 +6863,19 @@ function update(dt,ts){
         });
         if(directHitAftermath.triggerColossusShockwave){
           slot0Timers.colossusShockwaveCd = directHitAftermath.nextColossusShockwaveCd;
+          const colossusStats = getColossusShockwaveStats(player.maxHp || maxHp || 200);
+          for(let ei = enemies.length - 1; ei >= 0; ei--){
+            const enemy = enemies[ei];
+            if(!enemy || enemy.hp <= 0) continue;
+            if(Math.hypot(enemy.x - player.x, enemy.y - player.y) > colossusStats.radius + (enemy.r || 0)) continue;
+            enemy.hp -= colossusStats.damage;
+            if(enemy.hp <= 0) enemies.splice(ei, 1);
+          }
           convertNearbyDangerBulletsToGrey({
             bullets,
             originX: player.x,
             originY: player.y,
-            radius: 120,
+            radius: colossusStats.radius,
             ts,
           });
           sparks(player.x,player.y,getThreatPalette().advanced.hex,14,120);

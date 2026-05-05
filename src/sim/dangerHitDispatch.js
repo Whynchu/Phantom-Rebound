@@ -15,6 +15,7 @@ import {
   resolveRusherContactHit,
   resolvePostHitAftermath,
   convertNearbyDangerBulletsToGrey,
+  getColossusShockwaveStats,
 } from '../systems/dangerHit.js';
 import { computeDodgeScore } from '../systems/scoring.js';
 import { emit } from './effectQueue.js';
@@ -384,14 +385,22 @@ function applyAftermath(state, slot, hit, { enableShockwave, shouldTriggerLastSt
 
   if (after.triggerColossusShockwave) {
     timers.colossusShockwaveCd = after.nextColossusShockwaveCd;
+    const colossusStats = getColossusShockwaveStats(metrics.maxHp || 200);
+    for (let i = state.enemies.length - 1; i >= 0; i--) {
+      const enemy = state.enemies[i];
+      if (!enemy || enemy.hp <= 0) continue;
+      if (Math.hypot(enemy.x - body.x, enemy.y - body.y) > colossusStats.radius + (enemy.r || 0)) continue;
+      enemy.hp -= colossusStats.damage;
+      if (enemy.hp <= 0) state.enemies.splice(i, 1);
+    }
     convertNearbyDangerBulletsToGrey({
       bullets: state.bullets,
       originX: body.x,
       originY: body.y,
-      radius: 120,
+      radius: colossusStats.radius,
       ts,
     });
-    emitEffect(state, opts, 'danger.colossusShockwave', { x: body.x, y: body.y, radius: 120 });
+    emitEffect(state, opts, 'danger.colossusShockwave', { x: body.x, y: body.y, radius: colossusStats.radius });
   }
 
   if (after.shouldApplyLifelineState) {

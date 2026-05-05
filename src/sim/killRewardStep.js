@@ -100,6 +100,23 @@ function applyAction(state, slot, action, opts) {
         extras: action.extras,
       });
       break;
+    case 'spawnCoronaBurst':
+      spawnSimRadialOutputBurst(state, {
+        x: action.x,
+        y: action.y,
+        count: action.count,
+        speed: action.speed,
+        radius: action.radius,
+        bounceLeft: action.bounceLeft,
+        pierceLeft: action.pierceLeft,
+        homing: action.homing,
+        crit: action.crit,
+        dmg: action.dmg,
+        expireAt: action.expireAt,
+        ownerId: slot.index ?? 0,
+        extras: action.extras,
+      });
+      break;
   }
 }
 

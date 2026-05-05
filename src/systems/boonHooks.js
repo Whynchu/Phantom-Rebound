@@ -102,6 +102,22 @@ registerBoonHook('onTick', (ctx) => {
 
 registerBoonHook('onTick', (ctx) => {
   const { UPG, ts } = ctx;
+  if (UPG && UPG.bloodMoon && UPG.bloodMoonTimer && ts > UPG.bloodMoonTimer) {
+    UPG.bloodMoonStacks = 0;
+    UPG.bloodMoonTimer = 0;
+  }
+});
+
+registerBoonHook('onTick', (ctx) => {
+  const { UPG, ts } = ctx;
+  if (UPG && UPG.corona && UPG.coronaTimer && ts > UPG.coronaTimer) {
+    UPG.coronaStacks = 0;
+    UPG.coronaTimer = 0;
+  }
+});
+
+registerBoonHook('onTick', (ctx) => {
+  const { UPG, ts } = ctx;
   if (UPG && UPG.predatorInstinct && UPG.predatorKillStreakTime > 0 && ts > UPG.predatorKillStreakTime) {
     UPG.predatorKillStreak = 0;
   }
@@ -122,6 +138,8 @@ registerBoonHook('onPauseAdjust', (ctx) => {
   if (!UPG) return;
   if (UPG.predatorKillStreakTime) UPG.predatorKillStreakTime += pauseDuration;
   if (UPG.bloodRushTimer) UPG.bloodRushTimer += pauseDuration;
+  if (UPG.bloodMoonTimer) UPG.bloodMoonTimer += pauseDuration;
+  if (UPG.coronaTimer) UPG.coronaTimer += pauseDuration;
   if (UPG.voidZoneTimer) UPG.voidZoneTimer += pauseDuration;
   if (UPG.sustainedFireLastShotTime) UPG.sustainedFireLastShotTime += pauseDuration;
   if (UPG.aegisBatteryTimer) UPG.aegisBatteryTimer += pauseDuration;
@@ -135,6 +153,10 @@ registerBoonHook('onRoomStart', (ctx) => {
   if (!UPG) return;
   UPG.predatorKillStreak = 0;
   UPG.predatorKillStreakTime = 0;
+  UPG.bloodMoonStacks = 0;
+  UPG.bloodMoonTimer = 0;
+  UPG.coronaStacks = 0;
+  UPG.coronaTimer = 0;
 });
 
 registerBoonHook('onRoomStart', (ctx) => {

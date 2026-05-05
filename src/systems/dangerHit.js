@@ -186,6 +186,15 @@ function convertNearbyDangerBulletsToGrey({
   return converted;
 }
 
+function getColossusShockwaveStats(maxHp = 200) {
+  const hp = Math.max(1, Number(maxHp) || 200);
+  const bonusHp = Math.max(0, hp - 200);
+  return {
+    radius: Math.min(220, 120 + Math.floor(bonusHp / 25) * 5),
+    damage: Math.min(45, 8 + Math.floor(hp / 75)),
+  };
+}
+
 function buildLastStandBurstSpec({
   x,
   y,
@@ -274,6 +283,7 @@ export {
   resolveSlipstreamNearMiss,
   resolveRusherContactHit,
   convertNearbyDangerBulletsToGrey,
+  getColossusShockwaveStats,
   buildLastStandBurstSpec,
   resolvePostHitAftermath,
 };

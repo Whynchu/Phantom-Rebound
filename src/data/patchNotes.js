@@ -2,6 +2,14 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.10.0',
+      label: 'BOON SIGNALS',
+      summary: ['Tightened boon copy, clarified legendary identities, and added live feedback groundwork for harder-to-read effects.'],
+      highlights: [
+        'Version bump updated the build stamp and cache-bust strings for release.',
+      ]
+    },
+  {
       version: '1.9.0',
       label: 'MAX DAMAGE',
       summary: ['Max Damage once again stays a pure ceiling pick and now pushes the upper end harder without touching the floor.'],

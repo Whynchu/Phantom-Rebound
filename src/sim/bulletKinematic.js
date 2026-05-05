@@ -13,7 +13,7 @@
  *         bullet.bounceLeft, bullet.wallBounces; splices expired/removed entries;
  *         pushes new bullets (split siblings, triangle burst) via simProjectiles
  */
-import { advanceBulletWithSubsteps } from '../systems/bulletRuntime.js';
+import { advanceBulletWithSubsteps, applyDangerVoidWalkerField } from '../systems/bulletRuntime.js';
 import { dispatchBulletBounce } from './bulletBounceDispatch.js';
 import { pushSimOutputBullet, pushSimDangerBullet } from './simProjectiles.js';
 import { getOrbitSlotPosition } from '../entities/defenseRuntime.js';
@@ -91,6 +91,14 @@ export function tickBulletsKinematic(state, dt) {
       if (!inTetherRing) {
         delete b.tetherOrbitBaseSpeed;
       }
+    }
+
+    if (b.state === 'danger' && slot0Body) {
+      applyDangerVoidWalkerField(b, slot0Body, dt, {
+        voidWalker: !!(slot0Upg.voidWalker && slot0Upg.voidZoneActive && slot0Upg.voidZoneTimer > ts),
+        range: 112,
+        slowMult: 0.65,
+      });
     }
 
     // Advance position (wall bounce handled inside advanceBulletWithSubsteps)
