@@ -176,4 +176,41 @@ registerBoonHook('onRoomStart', (ctx) => {
   }
 });
 
+// ── 1.11.0 OVERFLOW PROTOCOL — overflow consumption flavors.
+// ctx: { UPG, claim }. First hook to set `claim` wins (priority via
+// registration order: Snipe > Rapid > Orb > baseline). Claim shape:
+//   { kind: 'damage', mult, flavor }      — multiply volley baseDmg by `mult`
+//   { kind: 'extraShot', count, flavor }  — append `count` extra projectiles
+// If no hook claims, firePlayer applies a baseline damage 1.25 multiplier.
+// Sim mirror in src/sim/playerFireStep.js encodes the same priority inline
+// (sim runs deterministic — no hook indirection there).
+
+registerBoonHook('onOverflowConsume', (ctx) => {
+  if (!ctx || ctx.claim) return;
+  const { UPG } = ctx;
+  if (UPG && (UPG.snipePower || 0) > 0) {
+    ctx.claim = { kind: 'damage', mult: 1.5, flavor: 'snipe' };
+  }
+});
+
+registerBoonHook('onOverflowConsume', (ctx) => {
+  if (!ctx || ctx.claim) return;
+  const { UPG } = ctx;
+  if (UPG && (UPG.spsTier || 0) >= 1) {
+    ctx.claim = { kind: 'extraShot', count: 1, flavor: 'rapid' };
+  }
+});
+
+registerBoonHook('onOverflowConsume', (ctx) => {
+  if (!ctx || ctx.claim) return;
+  const { UPG } = ctx;
+  // Orb flavor requires Charged Orbs to be meaningful — without it we'd
+  // just be tickling enemies with collision pulses. Fall through to baseline
+  // otherwise.
+  if (UPG && (UPG.orbitSphereTier || 0) > 0 && UPG.chargedOrbs) {
+    ctx.claim = { kind: 'orbPulse', flavor: 'orb' };
+    UPG.overflowOrbPulse = true;
+  }
+});
+
 export { registerBoonHook, runBoonHook, clearBoonHooks, getBoonHookCount };

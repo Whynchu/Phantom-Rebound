@@ -1,7 +1,9 @@
 import { LEADERBOARD_REMOTE_CONFIG, hasRemoteLeaderboardConfig } from '../data/leaderboardConfig.js';
 
 function normalizePeriod(period) {
-  return period === 'daily' ? 'daily' : 'all';
+  if (period === 'daily') return 'daily';
+  if (period === 'weekly') return 'weekly';
+  return 'all';
 }
 
 function normalizeScope(scope) {

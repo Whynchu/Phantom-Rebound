@@ -532,6 +532,7 @@ body.compact-viewport #wrap {
   border: 1px solid var(--border2);
   border-radius: 999px;
   overflow: hidden;
+  position: relative;
 }
 #charge-fill {
   width: 0%;
@@ -540,6 +541,20 @@ body.compact-viewport #wrap {
   background: linear-gradient(90deg, rgba(var(--accent-rgb),0.5), rgba(var(--ghost-rgb),0.95));
   box-shadow: 0 0 14px rgba(var(--accent-rgb),0.28);
   transition: width .08s linear;
+}
+/* 1.11.0 OVERFLOW PROTOCOL — buffer overlay riding above the main charge fill.
+   Amber gradient distinguishes overflow capacity from baseline charge. */
+#charge-buffer-fill {
+  position: absolute;
+  top: 0;
+  left: 0%;
+  width: 0%;
+  height: 100%;
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(90deg, rgba(255,170,60,0.55), rgba(255,210,90,0.95));
+  box-shadow: 0 0 10px rgba(255,180,70,0.45);
+  transition: width .08s linear, left .08s linear;
+  pointer-events: none;
 }
 #sps-box { text-align:center; min-width:52px; }
 #sps-num { font-family:'Syne',sans-serif; font-weight:800; font-size:22px; color:var(--accent); line-height:1; }

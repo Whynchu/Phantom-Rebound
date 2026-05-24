@@ -295,6 +295,7 @@ as $$
     where
       ls.game_version like trim(coalesce(p_game_version_prefix, '')) || '%'
       and (coalesce(p_period, 'daily') <> 'daily' or ls.created_at >= date_trunc('day', now()))
+      and (coalesce(p_period, 'daily') <> 'weekly' or ls.created_at >= now() - interval '7 days')
       and (
         coalesce(p_scope, 'everyone') <> 'personal'
         or ls.player_name = upper(trim(coalesce(p_player_name, 'RUNNER')))

@@ -40,7 +40,7 @@ export const CRIT_DAMAGE_BASE_BONUS = 0.50;
 export const CRIT_DAMAGE_TIER_BONUS = [0.50, 0.30, 0.20, 0.12];
 export const CRIT_DAMAGE_MAX_BONUS = 2.00;
 
-export const CHARGED_ORB_FIRE_INTERVAL_MS = 1400;
+export const CHARGED_ORB_FIRE_INTERVAL_MS = 1100;
 
 export const ESCALATION_KILL_PCT = 0.03;
 export const ESCALATION_MAX_BONUS = 0.60;

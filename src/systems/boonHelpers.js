@@ -183,6 +183,13 @@ function syncChargeCapacity(upg) {
     const denseScale = DENSE_CORE_CAP_SCALES[Math.min(DENSE_CORE_CAP_SCALES.length - 1, upg.denseTier - 1)];
     upg.maxCharge = Math.max(1, Math.floor(upg.maxCharge * denseScale));
   }
+  // 1.11.0 OVERFLOW PROTOCOL: buffer capacity tracks maxCharge so deeper banks
+  // also get bigger overflow headroom. Buffer holds excess that would otherwise
+  // be wasted; consumed on fire / decays out of combat / auto-vents when idle.
+  upg.overflowBufferMax = Math.max(2, Math.floor(upg.maxCharge * 0.5));
+  if ((upg.overflowBuffer || 0) > upg.overflowBufferMax) {
+    upg.overflowBuffer = upg.overflowBufferMax;
+  }
   return upg.maxCharge;
 }
 
@@ -220,6 +227,8 @@ function getDefaultUpgrades() {
     dualShot:         0,
     snipePower:       0,
     maxCharge:        BASE_CHARGE_CAP,
+    overflowBuffer:   0,
+    overflowBufferMax: Math.max(2, Math.floor(BASE_CHARGE_CAP * 0.5)),
     chargeCapMult:    1,
     chargeCapFlatBonus: 0,
     chargeCapFlatTier: 0,

@@ -16,6 +16,7 @@ const ENEMY_TYPES = {
   phase_shotbuster:{colorRole:'advancedDark',r:15,hp:6, spd:24, fRate:2200,burst:6,spread:0.04,pts:120, flee:true, fleeRange:130, strafeSpd:0.5, doubleBounce:true, forcePhaseShots:true, spawnValue:10, unlockRoom:21, ammoPressure:4},
   omega_shotbuster:{colorRole:'elite',       r:15,hp:7, spd:24, fRate:2200,burst:6,spread:0.04,pts:130, flee:true, fleeRange:130, strafeSpd:0.5, isElite:true, doubleBounce:false, spawnValue:12, unlockRoom:40, ammoPressure:4},
   triangle:       {colorRole:'danger',       r:17,hp:6, spd:52, fRate:2000,burst:1,spread:.18,pts:110, flee:true, fleeRange:100, strafeSpd:0.7, doubleBounce:false, spawnValue:6, unlockRoom:20, ammoPressure:1, isTriangle:true},
+  jammer:         {label:'Jammer',           colorRole:'advancedDark', r:11,hp:3, spd:30, fRate:9999,burst:0,spread:0,  pts:140, isJammer:true, spawnValue:5, unlockRoom:10, ammoPressure:0},
 };
 
 const PURPLE_BULLET_ROOM_THRESHOLD = 9;

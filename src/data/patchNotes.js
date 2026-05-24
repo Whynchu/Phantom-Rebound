@@ -2,6 +2,17 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.11.0',
+      label: 'OVERFLOW PROTOCOL',
+      summary: ['Overflow Buffer: charge past the cap now banks into a small bank instead of being silently wasted. Decays out of combat, auto-vents a weak shot when idle in fight.'],
+      highlights: [
+        'Build-flavored overflow: Snipe Shot empowers the next shot, Rapid Fire fires a free extra bullet, Orbit Spheres + Charged Orbs trigger an immediate orb pulse.',
+        'Charged Orb pass: orb damage scale 0.30 -> 0.45 and fire interval 1400ms -> 1100ms so the orb branch actually competes.',
+        'New enemy: Jammer. Slow drifter whose aura suppresses your overflow buffer and drains it while you stay inside. Forces movement.',
+        'Leaderboard: new This Week tab so non-top runs have a board to compete on. Requires rerunning supabase/leaderboard.sql.',
+      ]
+    },
+  {
       version: '1.10.0',
       label: 'BOON SIGNALS',
       summary: ['Tightened boon copy, clarified legendary identities, and added live feedback groundwork for harder-to-read effects.'],

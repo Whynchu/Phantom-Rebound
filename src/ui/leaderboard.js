@@ -6,9 +6,18 @@ function isSameLocalDay(ts, nowTs = Date.now()) {
     && a.getDate() === b.getDate();
 }
 
+// 1.11.0 — rolling 7-day window for the "This Week" leaderboard tab.
+// Local-clock based to match the visible "Daily" filter; server-side
+// `get_leaderboard` mirrors the same 7-day cutoff for remote rows.
+function isWithinRollingWeek(ts, nowTs = Date.now()) {
+  const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  return (nowTs - ts) <= WEEK_MS && ts <= nowTs;
+}
+
 function getVisibleLeaderboardRows(leaderboard, lbPeriod, lbScope, playerName, lbMode = 'solo') {
   let rows = Array.isArray(leaderboard) ? leaderboard.slice() : [];
   if(lbPeriod === 'daily') rows = rows.filter((row) => isSameLocalDay(row.ts));
+  else if(lbPeriod === 'weekly') rows = rows.filter((row) => isWithinRollingWeek(row.ts));
   if(lbScope === 'personal') rows = rows.filter((row) => row.name === playerName);
   rows = rows.filter((row) => (row.runMode === 'coop' ? 'coop' : 'solo') === lbMode);
   rows.sort((a, b) => b.score - a.score || b.ts - a.ts);
@@ -62,7 +71,9 @@ function renderLeaderboard({
   lbScopeBtns,
   lbModeBtns,
 }) {
-  const periodLabel = lbPeriod === 'daily' ? 'DAILY' : 'ALL TIME';
+  const periodLabel = lbPeriod === 'daily'
+    ? 'DAILY'
+    : (lbPeriod === 'weekly' ? 'THIS WEEK' : 'ALL TIME');
   const scopeLabel = lbScope === 'personal' ? 'PERSONAL' : 'EVERYONE';
   const modeLabel = lbMode === 'coop' ? 'CO-OP' : 'SOLO';
   lbCurrent.textContent = `RUNNER: ${playerName} · ${periodLabel} · ${scopeLabel} · ${modeLabel}`;

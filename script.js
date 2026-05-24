@@ -476,6 +476,7 @@ const roomCounterEl = document.getElementById('room-label');
 const scoreTextEl = document.getElementById('score-txt');
 const chargeFillEl = document.getElementById('charge-fill');
 const chargeBadgeEl = document.getElementById('charge-badge');
+const chargeBufferFillEl = document.getElementById('charge-buffer-fill');
 const spsNumberEl = document.getElementById('sps-num');
 
 function setMenuChromeVisible(isVisible) {
@@ -4010,6 +4011,10 @@ const {
   recordDangerBulletSpawn,
   recordChargeGain,
   recordChargeWasted,
+  recordChargeBuffered,
+  recordOverflowConsumed,
+  recordOverflowDecayed,
+  recordOverflowAutoVented,
   recordHeal,
   recordPlayerDamage,
   recordShotSpend,
@@ -4086,13 +4091,30 @@ function getViewportModeLabel() {
 
 // gainCharge / healPlayer live here because they mutate actual game state
 // (charge, hp) in addition to calling the telemetry recorders.
+//
+// 1.11.0 OVERFLOW PROTOCOL: anything that would overflow `maxCharge` first
+// fills `UPG.overflowBuffer` (cap = `UPG.overflowBufferMax`). True waste is
+// only what doesn't fit in either. Buffer is consumed on fire / auto-vent /
+// decay (handled elsewhere in the tick loop).
 function gainCharge(amount, source) {
   if (amount <= 0) return 0;
   const before = charge;
   charge = Math.min(UPG.maxCharge, charge + amount);
   const gained = charge - before;
-  const wasted = amount - gained;
-  if (wasted > 0) recordChargeWasted(wasted);
+  let overflow = amount - gained;
+  if (overflow > 0) {
+    const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const jammed = (UPG.bufferJammedUntil || 0) > nowMs;
+    const bufferMax = UPG.overflowBufferMax || 0;
+    const bufferRoom = jammed ? 0 : Math.max(0, bufferMax - (UPG.overflowBuffer || 0));
+    const toBuffer = Math.min(overflow, bufferRoom);
+    if (toBuffer > 0) {
+      UPG.overflowBuffer = (UPG.overflowBuffer || 0) + toBuffer;
+      recordChargeBuffered(toBuffer);
+      overflow -= toBuffer;
+    }
+    if (overflow > 0) recordChargeWasted(overflow);
+  }
   return recordChargeGain(source, gained);
 }
 
@@ -4682,13 +4704,43 @@ function firePlayer(slot, tx, ty) {
     upg,
   });
 
-  const availableShots = Math.min(Math.floor(metrics.charge), angs.length);
+  const baseShotCount = Math.min(Math.floor(metrics.charge), angs.length);
+  if (baseShotCount <= 0) return;
+
+  // 1.11.0 OVERFLOW PROTOCOL: drain 1 buffer per fire. A boon-flavored
+  // consumer (Snipe/Rapid/Orb) can claim the overflow via the
+  // onOverflowConsume hook; otherwise we apply baseline +25% volley damage.
+  let extraShotCount = 0;
+  let overflowBonus = 1;
+  let overflowClaim = null;
+  if ((upg.overflowBuffer || 0) >= 1 && !((upg.bufferJammedUntil || 0) > simNowMs)) {
+    const overflowCtx = { UPG: upg, claim: null };
+    runBoonHook('onOverflowConsume', overflowCtx);
+    overflowClaim = overflowCtx.claim;
+    upg.overflowBuffer -= 1;
+    recordOverflowConsumed(1);
+
+    if (overflowClaim && overflowClaim.kind === 'damage') {
+      overflowBonus = overflowClaim.mult;
+    } else if (overflowClaim && overflowClaim.kind === 'extraShot') {
+      extraShotCount = overflowClaim.count;
+      for (let i = 0; i < extraShotCount; i += 1) angs.push(aim.angle || 0);
+    } else if (overflowClaim && overflowClaim.kind === 'orbPulse') {
+      // Orb flavor: baseline +25% damage AND zeros the orb timers next tick
+      // (UPG.overflowOrbPulse flag handled by the orb update loop).
+      overflowBonus = 1.25;
+    } else {
+      overflowBonus = 1.25;
+    }
+  }
+
+  const availableShots = Math.min(baseShotCount + extraShotCount, angs.length);
   if (availableShots <= 0) return;
 
   const snipeScale = 1 + upg.snipePower * 0.18;
   const bspd = PLAYER_BASE_BULLET_SPEED * Math.min(2.0, upg.shotSpd) * (upg.miniShotSpdMult || 1) * snipeScale;
   const baseRadius = 4.5 * Math.min(2.5, upg.shotSize) * (1 + upg.snipePower * 0.15);
-  const baseDmg = getPlayerShotDamageBase(UPG, simNowMs, roomIndex);
+  const baseDmg = getPlayerShotDamageBase(UPG, simNowMs, roomIndex) * overflowBonus;
   const lifeMs = PLAYER_SHOT_LIFE_MS * (upg.shotLifeMult || 1) * (upg.phantomRebound ? 2.0 : 1.0);
   const now = simNowMs;
   const overchargeBonus = (upg.overchargeVent && metrics.charge >= upg.maxCharge) ? 1.6 : 1;
@@ -4700,9 +4752,11 @@ function firePlayer(slot, tx, ty) {
   // Overload converts the full bank into one scaled volley worth the charge it burns.
   let overloadBonus = 1;
   let overloadSizeScale = 1;
-  let chargeSpent = availableShots;
+  // 1.11.0: extra shots granted by overflow buffer (Rapid flavor) are free —
+  // charge cost is the original baseShotCount, not the inflated availableShots.
+  let chargeSpent = baseShotCount;
   if (upg.overload && upg.overloadActive && metrics.charge >= upg.maxCharge) {
-    chargeSpent = Math.max(availableShots, Math.floor(metrics.charge));
+    chargeSpent = Math.max(baseShotCount, Math.floor(metrics.charge));
     overloadBonus = chargeSpent / availableShots;
     overloadSizeScale = getOverloadSizeScale(chargeSpent);
     upg.overloadActive = false;
@@ -4738,6 +4792,9 @@ function firePlayer(slot, tx, ty) {
   const shotsVolleyRoom = telemetryController.getCurrentRoom();
   if (shotsVolleyRoom) shotsVolleyRoom.shotsFired = (shotsVolleyRoom.shotsFired || 0) + volleySpecs.length;
   metrics.charge = Math.max(0, metrics.charge - chargeSpent);
+  // 1.11.0 OVERFLOW PROTOCOL: stamp last-fire timestamp so the decay tick
+  // grants ~1s of grace before buffer starts draining.
+  upg.lastFireMs = simNowMs;
   recordShotSpend(chargeSpent);
   sparks(body.x, body.y, C.green, 4 + Math.min(6, availableShots + Math.floor((chargeSpent - availableShots) / Math.max(1, availableShots))), 55);
   
@@ -5936,6 +5993,22 @@ function update(dt,ts){
   // above is behavior-irrelevant (verified in src/systems/boonHooks.js).
   tickShieldCooldowns(player.shields, dt, UPG.shieldTempered);
   runBoonHook('onTick', { UPG, dt, ts, slot: playerSlots[0] || null });
+
+  // 1.11.0 OVERFLOW PROTOCOL — buffer decay tick.
+  // After ~1.2s without firing, drain the buffer at 1.0/sec so sitting on
+  // overflow out of combat doesn't snowball. Drain is reported as
+  // bufferDecayed so we can see in telemetry how much overflow was actually
+  // useful vs lost. Only applies to local UPG; coop guest decay handled in
+  // the sim mirror (src/sim/playerFireStep.js).
+  if ((UPG.overflowBuffer || 0) > 0) {
+    const sinceFireMs = ts - (UPG.lastFireMs || 0);
+    if (sinceFireMs > 1200) {
+      const drainPerSec = 1.0;
+      const drain = Math.min(UPG.overflowBuffer, drainPerSec * dt);
+      UPG.overflowBuffer = Math.max(0, UPG.overflowBuffer - drain);
+      recordOverflowDecayed(drain);
+    }
+  }
   // ── Room state machine
   roomTimer += dt*1000;
   if(gstate === 'playing') runElapsedMs += dt * 1000;
@@ -6088,6 +6161,37 @@ function update(dt,ts){
     playerAimHasTarget = false;
   }
 
+  // 1.11.0 OVERFLOW PROTOCOL — auto-vent: when buffer >= 2 AND idle in combat
+  // for >= 1.2s with enemies on screen, drain 1 buffer and spit out a single
+  // 50%-damage shot at the nearest enemy. Keeps overflow feeling active
+  // instead of stagnating on top of the main bar. Local-player only —
+  // coop remote slots rely on natural firing to drain.
+  if (combatActive
+      && enemies.length > 0
+      && autoTarget
+      && (UPG.overflowBuffer || 0) >= 2
+      && !((UPG.bufferJammedUntil || 0) > simNowMs)
+      && simNowMs - (UPG.lastFireMs || 0) > 1200) {
+    const ventDmg = getPlayerShotDamageBase(UPG, simNowMs, roomIndex) * 0.5;
+    const ventSpeed = PLAYER_BASE_BULLET_SPEED * 0.85;
+    const ventAngle = Math.atan2(autoTarget.e.y - player.y, autoTarget.e.x - player.x);
+    pushOutputBullet({
+      bullets,
+      x: player.x,
+      y: player.y,
+      vx: Math.cos(ventAngle) * ventSpeed,
+      vy: Math.sin(ventAngle) * ventSpeed,
+      radius: 3.6,
+      dmg: ventDmg,
+      expireAt: simNowMs + PLAYER_SHOT_LIFE_MS,
+      ownerId: (getLocalSlot(playerSlots) || playerSlots[0] || { id: 0 }).id,
+    });
+    UPG.overflowBuffer -= 1;
+    UPG.lastFireMs = simNowMs;
+    recordOverflowAutoVented(1);
+    sparks(player.x, player.y, '#ffb84a', 4, 45);
+  }
+
   if(combatActive && charge >= 1){
     const effectiveSps = getAdrenalSurgeEffectiveSps(UPG, simNowMs);
     const interval = 1 / (effectiveSps * 2 * (UPG.heavyRoundsFireMult || 1));
@@ -6160,6 +6264,26 @@ function update(dt,ts){
           const newCharge = Math.max(0, (targetSlot?.metrics.charge || 0) - 2.8*dt);
           if(targetSlot) targetSlot.metrics.charge = newCharge;
           sparks(targetBody.x, targetBody.y, C.siphon, 1, 35);
+        }
+      } else if(combatStep.kind === 'jammer'){
+        // 1.11.0 OVERFLOW PROTOCOL — Jammer aura suppresses host overflow buffer.
+        // While the local player is in the jam ring: tag UPG.bufferJammedUntil
+        // so gainCharge() refuses to bank and firePlayer() skips the consume,
+        // and actively drain the existing buffer over time.
+        if(combatStep.inJamRange && targetIsHost){
+          UPG.bufferJammedUntil = ts + 220;
+          if((UPG.overflowBuffer || 0) > 0){
+            const drain = 3 * dt;
+            const before = UPG.overflowBuffer;
+            UPG.overflowBuffer = Math.max(0, before - drain);
+            const lost = before - UPG.overflowBuffer;
+            if(lost > 0 && typeof recordOverflowDecayed === 'function'){
+              recordOverflowDecayed(lost);
+            }
+          }
+          if((ts % 180) < 30){
+            sparks(player.x, player.y, '#c4b5fd', 1, 28);
+          }
         }
       } else if(combatStep.kind === 'rusher'){
         // C2d-1b — route contact damage through the target slot. Host retains
@@ -6320,6 +6444,15 @@ function update(dt,ts){
   // ── Charged Orbs: each alive orb fires at nearest enemy every 1.8s
   if(combatActive && UPG.chargedOrbs && UPG.orbitSphereTier>0 && enemies.length>0){
     syncOrbRuntimeArrays(_orbFireTimers, _orbCooldown, UPG.orbitSphereTier);
+    // 1.11.0 OVERFLOW PROTOCOL — orb-flavored overflow consume: zero all orb
+    // timers/cooldowns so every orb fires immediately. Consumed once per pulse.
+    if (UPG.overflowOrbPulse) {
+      for (let si = 0; si < UPG.orbitSphereTier; si++) {
+        _orbFireTimers[si] = CHARGED_ORB_FIRE_INTERVAL_MS;
+        _orbCooldown[si] = 0;
+      }
+      UPG.overflowOrbPulse = false;
+    }
     for(let si=0;si<UPG.orbitSphereTier;si++){
       const orbFireInterval = CHARGED_ORB_FIRE_INTERVAL_MS * (UPG.orbitalFocus ? ORBITAL_FOCUS_CHARGED_ORB_INTERVAL_MULT : 1);
       const orbDamageBonus = (1 + 0.15 * (UPG.orbDamageTier || 0)) * (1 + 0.06 * Math.max(0, UPG.orbitSphereTier - 1));
@@ -7183,7 +7316,7 @@ function draw(ts){
     ctx.save();
 
     // Windup tell: very subtle swell + faint ring
-    const inWindup = !e.isRusher && !e.isSiphon && e.fT >= e.fRate - WINDUP_MS_DRAW;
+    const inWindup = !e.isRusher && !e.isSiphon && !e.isJammer && e.fT >= e.fRate - WINDUP_MS_DRAW;
     let drawR = e.r;
     if(inWindup){
       const prog = Math.max(0, Math.min(1, (e.fT - (e.fRate - WINDUP_MS_DRAW)) / WINDUP_MS_DRAW)); // 0→1 clamped
@@ -7195,6 +7328,20 @@ function draw(ts){
       ctx.beginPath();
       ctx.arc(e.x, e.y, drawR + 4, 0, Math.PI*2);
       ctx.stroke();
+    }
+
+    if(e.isJammer){
+      const dd=Math.hypot(e.x-player.x,e.y-player.y);
+      const aa=dd<96?.18+.10*Math.sin(ts*.008):.05;
+      const g=ctx.createRadialGradient(e.x,e.y,0,e.x,e.y,96);
+      g.addColorStop(0,`rgba(167,139,250,${aa * 0.55})`);
+      g.addColorStop(1,'rgba(167,139,250,0)');
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(e.x,e.y,96,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle=`rgba(167,139,250,${0.30 + 0.20*Math.sin(ts*.008)})`;
+      ctx.lineWidth=1.4;
+      ctx.setLineDash([6,5]);
+      ctx.beginPath();ctx.arc(e.x,e.y,96,0,Math.PI*2);ctx.stroke();
+      ctx.setLineDash([]);
     }
 
     if(e.isSiphon){
@@ -7584,6 +7731,8 @@ function hudUpdate(){
   const localCharge = slotMetrics ? slotMetrics.charge : charge;
   const localMaxCharge = (slotUpg && slotUpg.maxCharge) || UPG.maxCharge;
   const localSps = getAdrenalSurgeEffectiveSps(slotUpg || UPG, simNowMs) * ((slotUpg && slotUpg.heavyRoundsFireMult) || 1);
+  const localOverflowBuffer = (slotUpg && slotUpg.overflowBuffer) || UPG.overflowBuffer || 0;
+  const localOverflowBufferMax = (slotUpg && slotUpg.overflowBufferMax) || UPG.overflowBufferMax || 0;
   renderHud({
     roomIndex,
     runElapsedMs,
@@ -7591,10 +7740,13 @@ function hudUpdate(){
     charge: localCharge,
     maxCharge: localMaxCharge,
     sps: localSps,
+    overflowBuffer: localOverflowBuffer,
+    overflowBufferMax: localOverflowBufferMax,
     elements: {
       roomCounter: roomCounterEl,
       scoreText: scoreTextEl,
       chargeFill: chargeFillEl,
+      chargeBufferFill: chargeBufferFillEl,
       chargeBadge: chargeBadgeEl,
       spsNumber: spsNumberEl,
     },

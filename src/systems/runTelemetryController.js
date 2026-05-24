@@ -103,6 +103,34 @@ export function createRunTelemetryController({
     );
   }
 
+  // 1.11.0 OVERFLOW PROTOCOL telemetry: track buffer routing/consumption so we
+  // can verify on the next leaderboard window that the 71.7% waste from 1.10.0
+  // actually shifted into useful buckets.
+  function recordChargeBuffered(amount) {
+    if (!currentRoomTelemetry || amount <= 0) return;
+    currentRoomTelemetry.charge.buffered = roundTelemetryValue(
+      (currentRoomTelemetry.charge.buffered || 0) + amount,
+    );
+  }
+  function recordOverflowConsumed(amount) {
+    if (!currentRoomTelemetry || amount <= 0) return;
+    currentRoomTelemetry.charge.bufferConsumed = roundTelemetryValue(
+      (currentRoomTelemetry.charge.bufferConsumed || 0) + amount,
+    );
+  }
+  function recordOverflowDecayed(amount) {
+    if (!currentRoomTelemetry || amount <= 0) return;
+    currentRoomTelemetry.charge.bufferDecayed = roundTelemetryValue(
+      (currentRoomTelemetry.charge.bufferDecayed || 0) + amount,
+    );
+  }
+  function recordOverflowAutoVented(amount = 1) {
+    if (!currentRoomTelemetry || amount <= 0) return;
+    currentRoomTelemetry.charge.bufferAutoVented = roundTelemetryValue(
+      (currentRoomTelemetry.charge.bufferAutoVented || 0) + amount,
+    );
+  }
+
   function recordHeal(source, amount) {
     if (!currentRoomTelemetry || amount <= 0) return 0;
     const delta = roundTelemetryValue(amount);
@@ -248,6 +276,10 @@ export function createRunTelemetryController({
     recordDangerBulletSpawn,
     recordChargeGain,
     recordChargeWasted,
+    recordChargeBuffered,
+    recordOverflowConsumed,
+    recordOverflowDecayed,
+    recordOverflowAutoVented,
     recordHeal,
     recordPlayerDamage,
     recordShotSpend,

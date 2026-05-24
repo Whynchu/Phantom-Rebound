@@ -70,6 +70,7 @@ function hydrateEnemy(snapEnemy, lerpedX, lerpedY, lerpedVx, lerpedVy, enemyType
     isTriangle: !!def.isTriangle,
     isSiphon: !!def.isSiphon,
     isRusher: !!def.isRusher,
+    isJammer: !!def.isJammer,
     doubleBounce: !!def.doubleBounce,
     forcePhaseShots: !!def.forcePhaseShots,
     spd: def.spd || 0,

@@ -245,6 +245,42 @@ function stepSiphonEnemy(enemy, {
   };
 }
 
+// 1.11.0 OVERFLOW PROTOCOL — Jammer enemy. Slow drifter that periodically
+// nudges toward the player; when the player is within JAMMER_AURA_RADIUS,
+// the overflow buffer is suppressed (no new buffering, no consumption,
+// active drain). Forces the player off "sit and accumulate" play.
+function stepJammerEnemy(enemy, {
+  ts,
+  dt,
+  width,
+  height,
+  margin,
+  player,
+  obstacles = [],
+} = {}) {
+  // Mix lazy drift with a weak pull toward the player so it eventually
+  // closes on a stationary target — but slowly enough to be killable.
+  const dx = player.x - enemy.x;
+  const dy = player.y - enemy.y;
+  const dist = Math.max(1, Math.hypot(dx, dy));
+  const pullX = dx / dist;
+  const pullY = dy / dist;
+  const driftX = Math.sin(ts * 0.0008 + enemy.y * 0.5);
+  const driftY = Math.cos(ts * 0.0010 + enemy.x * 0.5);
+  const steer = getObstacleSteeringVector(enemy, {
+    obstacles,
+    influenceRadius: 60,
+  });
+  const ix = pullX * 0.55 + driftX * 0.45 + steer.x * 0.9;
+  const iy = pullY * 0.55 + driftY * 0.45 + steer.y * 0.9;
+  moveEnemyWithIntent(enemy, ix, iy, enemy.spd || 30, dt);
+  clampEnemyToArena(enemy, width, height, margin);
+  return {
+    distanceToPlayer: dist,
+    inJamRange: dist < 96,
+  };
+}
+
 function stepRusherEnemy(enemy, {
   player,
   ts,
@@ -418,6 +454,23 @@ function stepEnemyCombatState(enemy, {
     return {
       kind: 'siphon',
       shouldDrainCharge: siphonStep.shouldDrainCharge,
+    };
+  }
+
+  if(enemy.isJammer) {
+    const jammerStep = stepJammerEnemy(enemy, {
+      ts,
+      dt,
+      width,
+      height,
+      margin,
+      player,
+      obstacles,
+    });
+    return {
+      kind: 'jammer',
+      distanceToPlayer: jammerStep.distanceToPlayer,
+      inJamRange: jammerStep.inJamRange,
     };
   }
 

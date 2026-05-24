@@ -70,14 +70,33 @@ function fireSimSlot(state, slot, targetX, targetY) {
   }
 
   const angs = buildPlayerShotPlan({ tx: targetX, ty: targetY, player: body, upg });
-  const availableShots = Math.min(Math.floor(metrics.charge), angs.length);
+  const baseShotCount = Math.min(Math.floor(metrics.charge), angs.length);
+  if (baseShotCount <= 0) return;
+
+  // 1.11.0 OVERFLOW PROTOCOL (rollback-safe mirror of firePlayer): drain
+  // 1 buffer per fire, then apply Snipe > Rapid > Orb > baseline priority.
+  // This MUST match the script.js onOverflowConsume hooks exactly for
+  // sim determinism.
+  let extraShotCount = 0;
+  let overflowBonus = 1;
+  if ((upg.overflowBuffer || 0) >= 1) {
+    upg.overflowBuffer -= 1;
+    if ((upg.snipePower || 0) > 0) overflowBonus = 1.5;
+    else if ((upg.spsTier || 0) >= 1) {
+      extraShotCount = 1;
+      angs.push(metrics.aimAngle || 0);
+    }
+    else if ((upg.orbitSphereTier || 0) > 0) overflowBonus = 1.35;
+    else overflowBonus = 1.25;
+  }
+  const availableShots = Math.min(baseShotCount + extraShotCount, angs.length);
   if (availableShots <= 0) return;
 
   // Damage computation (mirrors firePlayer).
   const snipeScale = 1 + (upg.snipePower || 0) * 0.18;
   const bspd = PLAYER_BASE_BULLET_SPEED * Math.min(2.0, upg.shotSpd || 1) * (upg.miniShotSpdMult || 1) * snipeScale;
   const baseRadius = 4.5 * Math.min(2.5, upg.shotSize || 1) * (1 + (upg.snipePower || 0) * 0.15);
-  const baseDmg = getPlayerShotDamageBase(upg, state.timeMs || 0, state.run?.roomIndex || 0);
+  const baseDmg = getPlayerShotDamageBase(upg, state.timeMs || 0, state.run?.roomIndex || 0) * overflowBonus;
   const lifeMs = PLAYER_SHOT_LIFE_MS * (upg.shotLifeMult || 1) * (upg.phantomRebound ? 2.0 : 1.0);
   const now = state.timeMs || 0;
   const overchargeBonus = (upg.overchargeVent && metrics.charge >= upg.maxCharge) ? 1.6 : 1;
@@ -87,9 +106,10 @@ function fireSimSlot(state, slot, targetX, targetY) {
   const payloadReady = Boolean(upg.payload && (timers.payloadCooldownMs || 0) <= 0);
 
   // Overload: spend full bank, scale damage + size.
-  let overloadBonus = 1, overloadSizeScale = 1, chargeSpent = availableShots;
+  // 1.11.0: extra shots from overflow buffer (Rapid flavor) are free.
+  let overloadBonus = 1, overloadSizeScale = 1, chargeSpent = baseShotCount;
   if (upg.overload && upg.overloadActive && metrics.charge >= upg.maxCharge) {
-    chargeSpent = Math.max(availableShots, Math.floor(metrics.charge));
+    chargeSpent = Math.max(baseShotCount, Math.floor(metrics.charge));
     overloadBonus = chargeSpent / availableShots;
     overloadSizeScale = getOverloadSizeScale(chargeSpent);
     upg.overloadActive = false;
@@ -123,6 +143,8 @@ function fireSimSlot(state, slot, targetX, targetY) {
 
   volleySpecs.forEach((spec) => pushSimOutputBullet(state, spec));
   metrics.charge = Math.max(0, metrics.charge - chargeSpent);
+  // 1.11.0 OVERFLOW PROTOCOL: timestamp last-fire for buffer decay grace.
+  upg.lastFireMs = state.timeMs || 0;
 
   // Visual effects via effectQueue.
   emit(state, 'playerFire.sparks', {
@@ -220,7 +242,17 @@ export function tickPlayerFire(state, slot0Input, slot1Input, dt, opts = {}) {
       if ((upg.moveChargeRate || 0) > 0 && combatActive) {
         const maxCharge = upg.maxCharge || 1;
         const kineticRate = getKineticChargeRate(upg, metrics.charge || 0) * (upg.fluxState ? 2 : 1);
-        metrics.charge = Math.min(maxCharge, (metrics.charge || 0) + kineticRate * dt);
+        const before = metrics.charge || 0;
+        const requested = before + kineticRate * dt;
+        const newCharge = Math.min(maxCharge, requested);
+        metrics.charge = newCharge;
+        // 1.11.0 OVERFLOW PROTOCOL: route kinetic overflow into buffer (mirrors
+        // gainCharge in script.js for sim determinism).
+        const overflow = requested - newCharge;
+        if (overflow > 0 && (upg.overflowBufferMax || 0) > 0) {
+          const room = Math.max(0, (upg.overflowBufferMax || 0) - (upg.overflowBuffer || 0));
+          upg.overflowBuffer = (upg.overflowBuffer || 0) + Math.min(overflow, room);
+        }
       }
     } else {
       // Still: accumulate still timer.

@@ -60,7 +60,7 @@ function countReadyShields(shields) {
 const AEGIS_BATTERY_DAMAGE_SCALE = 0.55;
 const MIRROR_SHIELD_REFLECTION_SCALE = 0.06;
 const SHIELD_BURST_DAMAGE_SCALE = 0.055;
-const CHARGED_ORB_DAMAGE_SCALE = 0.30;
+const CHARGED_ORB_DAMAGE_SCALE = 0.45;
 
 function advanceAegisBatteryTimer({
   aegisBattery,
