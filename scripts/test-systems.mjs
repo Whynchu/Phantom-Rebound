@@ -44,6 +44,16 @@ import {
   buildSpawnQueue,
 } from '../src/systems/spawnBudget.js';
 import {
+  needsShooterSupport,
+} from '../src/entities/enemyTypes.js';
+import {
+  assignAnomalyAnchor,
+  createRoomAnomalyState,
+  getHunterSealAura,
+  resolveAnomalyAnchorDeath,
+  shouldRollAnomalyRoom,
+} from '../src/systems/anomalyRooms.js';
+import {
   createLeaderboardSyncState,
   beginLeaderboardSync,
   applyLeaderboardSyncSuccess,
@@ -1214,6 +1224,59 @@ test('generateWeightedWave keeps non-empty waves and fallback pressure', () => {
   assert.ok(Array.isArray(wave) && wave.length > 0);
   const byType = Object.fromEntries(wave.map((entry) => [entry.t, entry.n]));
   assert.ok(byType.chaser >= 1);
+});
+
+test('needsShooterSupport includes all non-projectile pressure enemies', () => {
+  assert.equal(needsShooterSupport({ isRusher: true }), true);
+  assert.equal(needsShooterSupport({ isSiphon: true }), true);
+  assert.equal(needsShooterSupport({ isJammer: true }), true);
+  assert.equal(needsShooterSupport({ ammoPressure: 1 }), false);
+  assert.equal(needsShooterSupport(null), false);
+});
+
+test('anomaly rooms gate by room and boss state', () => {
+  assert.equal(shouldRollAnomalyRoom({ roomIndex: 11, random: () => 0 }), false);
+  assert.equal(shouldRollAnomalyRoom({ roomIndex: 12, isBossRoom: true, random: () => 0 }), false);
+  assert.equal(shouldRollAnomalyRoom({ roomIndex: 12, random: () => 0 }), true);
+  assert.equal(shouldRollAnomalyRoom({ roomIndex: 12, random: () => 0.99 }), false);
+});
+
+test('anomaly anchor assignment skips bosses and marks one enemy', () => {
+  const anomaly = createRoomAnomalyState({ roomIndex: 12, random: () => 0 });
+  const enemies = [
+    { eid: 1, isBoss: true, x: 10, y: 10, hp: 10 },
+    { eid: 2, x: 20, y: 20, hp: 10 },
+  ];
+  const next = assignAnomalyAnchor(enemies, anomaly, { random: () => 0 });
+  assert.equal(next.assigned, true);
+  assert.equal(next.anchorId, 2);
+  assert.equal(enemies[0].isAnomalyAnchor, undefined);
+  assert.equal(enemies[1].isAnomalyAnchor, true);
+});
+
+test('hunter seal aura only affects nearby non-anchor enemies', () => {
+  const anchor = { eid: 1, x: 100, y: 100, hp: 10, isAnomalyAnchor: true };
+  const near = { eid: 2, x: 150, y: 100, hp: 10, r: 10 };
+  const far = { eid: 3, x: 400, y: 100, hp: 10, r: 10 };
+  assert.ok(getHunterSealAura(near, anchor).fireAccel > 0);
+  assert.equal(getHunterSealAura(anchor, anchor), null);
+  assert.equal(getHunterSealAura(far, anchor), null);
+});
+
+test('anomaly anchor reward clears nearby danger bullets once', () => {
+  const anomaly = { active: true, kind: 'hunterSeal', anchorId: 7, assigned: true, rewardClaimed: false };
+  const anchor = { eid: 7, x: 100, y: 100, hp: 0, isAnomalyAnchor: true };
+  const bullets = [
+    { state: 'danger', x: 110, y: 100, r: 4 },
+    { state: 'danger', x: 400, y: 100, r: 4 },
+    { state: 'output', x: 105, y: 100, r: 4 },
+  ];
+  const reward = resolveAnomalyAnchorDeath(anomaly, anchor, bullets);
+  assert.equal(reward.triggered, true);
+  assert.deepEqual(reward.clearedBulletIndexes, [0]);
+  assert.equal(reward.chargeGain, 2);
+  const second = resolveAnomalyAnchorDeath(reward.nextAnomaly, anchor, bullets);
+  assert.equal(second.triggered, false);
 });
 
 test('buildSpawnQueue preserves wave order and spawn timing', () => {

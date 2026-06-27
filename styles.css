@@ -1327,6 +1327,8 @@ body.menu-chrome-visible:not(.compact-viewport) #hats-panel .settings-copy {
   font-family:'Syne',sans-serif; font-weight:800; font-size:28px;
   color:#fff; letter-spacing:.18em; text-transform:uppercase;
   text-shadow:0 0 22px rgba(255,255,255,0.22);
+  white-space: pre-line;
+  line-height: 1.18;
 }
 #room-intro.go #room-intro-txt {
   color:var(--accent);

@@ -37,7 +37,7 @@ import {
 } from './src/data/roomLayouts.js';
 import { BOONS, SPS_LADDER, CHARGED_ORB_FIRE_INTERVAL_MS, getActiveBoonEntries, getDefaultUpgrades, getRequiredShotCount, getKineticChargeRate, getPayloadBlastRadius, syncChargeCapacity, getEvolvedBoon, checkLegendarySequences, pickBoonChoices, getLateBloomGrowth, LATE_BLOOM_SPEED_PENALTY, LATE_BLOOM_DAMAGE_TAKEN_PENALTY, LATE_BLOOM_DAMAGE_PENALTY } from './src/data/boons.js';
 import { PLAYER_BASE_MOVE_SPEED, PLAYER_BASE_BULLET_SPEED } from './src/data/boonConstants.js';
-import { ENEMY_TYPES, createEnemy, canEnemyUsePhaseShots, getEnemyDefinition } from './src/entities/enemyTypes.js';
+import { ENEMY_TYPES, createEnemy, canEnemyUsePhaseShots, getEnemyDefinition, needsShooterSupport } from './src/entities/enemyTypes.js';
 import {
   resolveEnemySeparation,
   stepEnemyCombatState,
@@ -79,6 +79,13 @@ import {
   getAdrenalSurgeDamageMult,
   getConduitArcDamage,
 } from './src/systems/boonHelpers.js';
+import {
+  assignAnomalyAnchor,
+  createInactiveAnomalyState,
+  createRoomAnomalyState,
+  getAnomalyPressure,
+  resolveAnomalyAnchorDeath,
+} from './src/systems/anomalyRooms.js';
 import { getColossusShockwaveStats } from './src/systems/dangerHit.js';
 import {
   syncOrbRuntimeArrays,
@@ -1227,6 +1234,7 @@ let roomClearTimer = 0;
 let roomPurpleShooterAssigned = false;
 let roomIntroTimer = 0;
 let roomObstacles = [];
+let roomAnomaly = createInactiveAnomalyState();
 let currentRoomLayout = null;
 const ROOM_NAMES = ROOM_SCRIPTS.map((room) => room.name);
 const BASE_CONTACT_INVULN_S = 1.0;
@@ -4231,6 +4239,13 @@ function beginWaveIntro(nextWaveIndex) {
   showRoomIntro(`WAVE ${nextWaveIndex + 1}`, false);
 }
 
+function getRoomIntroText(baseText) {
+  if(roomAnomaly?.active) {
+    return `ANOMALY: HUNTER SEAL\nKILL THE MARKED TARGET`;
+  }
+  return baseText;
+}
+
 function getPhaseWalkRoomLimit(upg) {
   if (!upg?.phaseWalk) return 0;
   const bonusUses = Math.max(0, Number(upg.phaseDashTier) || 0);
@@ -4272,6 +4287,11 @@ function startRoom(idx) {
   payloadCooldownMs = 0;
   // Boss room state
   currentRoomIsBoss = Boolean(def.isBossRoom);
+  roomAnomaly = createRoomAnomalyState({
+    roomIndex,
+    isBossRoom: currentRoomIsBoss,
+    random: () => simRng.next(),
+  });
   bossAlive = currentRoomIsBoss;
   currentBossDamageMultiplier = def.bossDamageMultiplier || 1;
   escortType = def.escortType || '';
@@ -4332,7 +4352,7 @@ function startRoom(idx) {
     const entry = spawnQueue.shift();
     spawnEnemy(entry.t, entry.isBoss, entry.bossScale || 1);
   }
-  showRoomIntro(currentRoomIsBoss ? 'BOSS!' : 'READY?', false);
+  showRoomIntro(getRoomIntroText(currentRoomIsBoss ? 'BOSS!' : 'READY?'), false);
   beginPerfRoom(idx + 1);
 }
 
@@ -4376,6 +4396,7 @@ function triggerPayloadBlast(bullet, enemies, ts) {
           else if(action.type === 'spawnSanguineBurst'){ spawnRadialOutputBurst({ bullets, x:action.x, y:action.y, count:action.count, speed:action.speed, radius:action.radius, bounceLeft:action.bounceLeft, pierceLeft:action.pierceLeft, homing:action.homing, crit:action.crit, dmg:action.dmg, expireAt:action.expireAt, extras:action.extras }); }
           else if(action.type === 'spawnCoronaBurst'){ spawnRadialOutputBurst({ bullets, x:action.x, y:action.y, count:action.count, speed:action.speed, radius:action.radius, bounceLeft:action.bounceLeft, pierceLeft:action.pierceLeft, homing:action.homing, crit:action.crit, dmg:action.dmg, expireAt:action.expireAt, extras:action.extras }); }
         }
+        resolveRoomAnomalyAnchorKill(e, ts);
         enemies.splice(j, 1);
       }
     }
@@ -4412,6 +4433,38 @@ function spawnEnemy(type, isBoss = false, bossScale = 1, spawnGraceMs = null) {
   if(enemy.forcePhaseShots) roomPurpleShooterAssigned = true;
   resolveEntityObstacleCollisions(enemy);
   enemies.push(enemy);
+  tryAssignRoomAnomalyAnchor();
+}
+
+function tryAssignRoomAnomalyAnchor() {
+  roomAnomaly = assignAnomalyAnchor(enemies, roomAnomaly, { random: () => simRng.next() });
+}
+
+function resolveRoomAnomalyAnchorKill(enemy, ts) {
+  const reward = resolveAnomalyAnchorDeath(roomAnomaly, enemy, bullets);
+  if(!reward.triggered) return;
+
+  roomAnomaly = reward.nextAnomaly;
+  for(let i = reward.clearedBulletIndexes.length - 1; i >= 0; i--) {
+    const bulletIndex = reward.clearedBulletIndexes[i];
+    const bullet = bullets[bulletIndex];
+    if(bullet) sparks(bullet.x, bullet.y, '#67e8f9', 5, 90);
+    bullets.splice(bulletIndex, 1);
+  }
+  if(reward.chargeGain > 0) gainCharge(reward.chargeGain, 'anomalyAnchor');
+  shockwaves.push({
+    x: enemy.x,
+    y: enemy.y,
+    r: 12,
+    maxR: reward.rewardRadius,
+    life: 1,
+    color: '#67e8f9',
+  });
+  sparks(enemy.x, enemy.y, '#67e8f9', 24, 150);
+  if(reward.clearedBulletIndexes.length > 0) {
+    spawnDmgNumber(enemy.x, enemy.y - enemy.r - 10, reward.clearedBulletIndexes.length, '#67e8f9');
+  }
+  playRetroSfx('pickup', { intensity: 1.25 });
 }
 
 function pickFallbackShooterType() {
@@ -4424,7 +4477,7 @@ function pickFallbackShooterType() {
 function ensureShooterPressure() {
   const onlyDryEnemiesRemain = enemies.length > 0
     && bullets.length === 0
-    && enemies.every((enemy) => enemy.isRusher || enemy.isSiphon);
+    && enemies.every((enemy) => needsShooterSupport(enemy));
   if(!onlyDryEnemiesRemain) return;
   if(roomTimer - lastStallSpawnAt < STALL_SPAWN_COOLDOWN_MS) return;
   spawnEnemy(pickFallbackShooterType());
@@ -5724,7 +5777,7 @@ function loop(ts){
               if (_guestPrevRoomPhase !== _nowPhase) {
                 if (_nowPhase === 'intro') {
                   // New room: show READY? overlay.
-                  try { showRoomIntro('READY?', false); } catch (_) {}
+                  try { showRoomIntro(getRoomIntroText('READY?'), false); } catch (_) {}
                 } else if (_guestPrevRoomPhase === 'intro' && _nowPhase !== 'intro') {
                   // intro → spawning/fighting: GO! flash then hide.
                   try { showRoomIntro('GO!', true); } catch (_) {}
@@ -6239,6 +6292,10 @@ function update(dt,ts){
     }
     for(let ei=enemies.length-1;ei>=0;ei--){
       const e=enemies[ei];
+      const anomalyPressure = getAnomalyPressure(e, enemies, roomAnomaly);
+      if(anomalyPressure && !e.isRusher && !e.isSiphon && !e.isJammer && e.fRate < 9000) {
+        e.fT += dt * 1000 * anomalyPressure.fireAccel;
+      }
       // C2d — pick target once per enemy per frame so movement, contact,
       // siphon, and fire aftermath all reference the same slot.
       const targetSlot = getEnemyTargetSlot(e) || playerSlots[0] || null;
@@ -6329,7 +6386,10 @@ function update(dt,ts){
               if(!enemy || enemy.hp <= 0) continue;
               if(Math.hypot(enemy.x - player.x, enemy.y - player.y) > colossusStats.radius + (enemy.r || 0)) continue;
               enemy.hp -= colossusStats.damage;
-              if(enemy.hp <= 0) enemies.splice(ei, 1);
+              if(enemy.hp <= 0) {
+                resolveRoomAnomalyAnchorKill(enemy, ts);
+                enemies.splice(ei, 1);
+              }
             }
             convertNearbyDangerBulletsToGrey({
               bullets,
@@ -6424,6 +6484,7 @@ function update(dt,ts){
           if(orbitKillEffects.shouldGrantFinalFormCharge){
             gainCharge(orbitKillEffects.finalFormChargeGain, 'finalForm');
           }
+          resolveRoomAnomalyAnchorKill(e, ts);
           enemies.splice(ei,1);
           continue;
         }
@@ -6526,6 +6587,7 @@ function update(dt,ts){
         e.hp -= conduitArcDamage;
         if(e.hp <= 0){
           score += e.pts;
+          resolveRoomAnomalyAnchorKill(e, ts);
           enemies.splice(ei, 1);
         }
       }
@@ -7002,7 +7064,10 @@ function update(dt,ts){
             if(!enemy || enemy.hp <= 0) continue;
             if(Math.hypot(enemy.x - player.x, enemy.y - player.y) > colossusStats.radius + (enemy.r || 0)) continue;
             enemy.hp -= colossusStats.damage;
-            if(enemy.hp <= 0) enemies.splice(ei, 1);
+            if(enemy.hp <= 0) {
+              resolveRoomAnomalyAnchorKill(enemy, ts);
+              enemies.splice(ei, 1);
+            }
           }
           convertNearbyDangerBulletsToGrey({
             bullets,
@@ -7153,6 +7218,7 @@ function update(dt,ts){
                 });
               }
             }
+            resolveRoomAnomalyAnchorKill(e, ts);
             enemies.splice(j,1);
           }
           if(b.hasPayload){
@@ -7352,6 +7418,29 @@ function draw(ts){
       g.addColorStop(0,C.getRgba(threat.siphon.hex, aa * 4));
       g.addColorStop(1,C.getRgba(threat.siphon.hex, 0));
       ctx.fillStyle=g;ctx.beginPath();ctx.arc(e.x,e.y,72,0,Math.PI*2);ctx.fill();
+    }
+
+    if(e.isAnomalyAnchor){
+      const pulse = 0.5 + 0.5 * Math.sin(ts * 0.006);
+      const ringR = e.r + 9 + pulse * 4;
+      ctx.strokeStyle = `rgba(103,232,249,${0.42 + pulse * 0.24})`;
+      ctx.lineWidth = 2.2;
+      ctx.setLineDash([8, 4]);
+      ctx.beginPath();ctx.arc(e.x,e.y,ringR,0,Math.PI*2);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = `rgba(103,232,249,${0.18 + pulse * 0.12})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();ctx.arc(e.x,e.y,132,0,Math.PI*2);ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = `rgba(103,232,249,${0.78 + pulse * 0.16})`;
+      ctx.font = 'bold 8px IBM Plex Mono,monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('ANCHOR', e.x, e.y - e.r - 15);
+    } else if(getAnomalyPressure(e, enemies, roomAnomaly)) {
+      const pulse = 0.5 + 0.5 * Math.sin(ts * 0.007 + (e.eid || 0));
+      ctx.strokeStyle = `rgba(103,232,249,${0.14 + pulse * 0.12})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();ctx.arc(e.x,e.y,e.r + 5,0,Math.PI*2);ctx.stroke();
     }
 
     ctx.shadowColor= e.glowCol;

@@ -1,4 +1,4 @@
-const VERSION = { num: '1.11.0', label: 'OVERFLOW PROTOCOL' };
+const VERSION = { num: '1.12.0', label: 'HUNTER SEAL' };
 
 function formatVersionTag(version = VERSION) {
   return `// prototype v${version.num} - ${version.label}`;

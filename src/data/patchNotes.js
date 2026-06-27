@@ -2,6 +2,16 @@
 
 const PATCH_NOTES_RECENT = [
   {
+      version: '1.12.0',
+      label: 'HUNTER SEAL',
+      summary: ['Anomaly rooms can now appear after room 12 with a marked Hunter Seal Anchor that changes target priority.'],
+      highlights: [
+        'Anomaly rooms now announce the Hunter Seal event at room start and label the marked Anchor during combat.',
+        'Killing the Anchor clears nearby enemy projectiles and grants charge, creating a visible room turning point.',
+        'Jammers now count as support enemies for fallback shooter pressure, fixing dead last-enemy rooms.',
+      ]
+    },
+  {
       version: '1.11.0',
       label: 'OVERFLOW PROTOCOL',
       summary: ['Overflow Buffer: charge past the cap now banks into a small bank instead of being silently wasted. Decays out of combat, auto-vents a weak shot when idle in fight.'],

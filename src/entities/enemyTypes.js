@@ -171,5 +171,16 @@ function canEnemyUsePhaseShots(enemy) {
   return Boolean(enemy.forcePhaseShots);
 }
 
-export { ENEMY_TYPES, PURPLE_BULLET_ROOM_THRESHOLD, createEnemy, canEnemyUsePhaseShots, getEnemyDefinition };
+function needsShooterSupport(enemy) {
+  return Boolean(enemy?.isRusher || enemy?.isSiphon || enemy?.isJammer);
+}
+
+export {
+  ENEMY_TYPES,
+  PURPLE_BULLET_ROOM_THRESHOLD,
+  createEnemy,
+  canEnemyUsePhaseShots,
+  getEnemyDefinition,
+  needsShooterSupport,
+};
 
